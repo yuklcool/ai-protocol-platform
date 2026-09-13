@@ -1,0 +1,109 @@
+name: Local Express Mode fix
+
+on:
+  push:
+    paths:
+      - ".github/workflows/local-express-mode-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch LOCAL_MODE Gemini routing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          agent_path = Path("backend/adk/agent.py")
+          text = agent_path.read_text()
+          old = '''    if provider == "google":
+              # Vertex region/endpoint availability is not uniform across Gemini
+              # generations. Registry metadata is authoritative when available.
+              if entry is not None and entry.location:
+                  return RegionalGemini(model=resolved, location=entry.location)
+              if entry is not None and entry.residency == "global":
+                  return RegionalGemini(model=resolved, location="global")
+              return Gemini(model=resolved)
+          '''
+          new = '''    if provider == "google":
+              # Gemini Express Mode (GOOGLE_GENAI_USE_VERTEXAI=false) must never
+              # instantiate RegionalGemini: that class intentionally hard-pins
+              # vertexai=True and would turn the zero-GCP LOCAL_MODE path back into
+              # a Vertex request. Region/residency metadata applies only to Vertex.
+              use_vertex = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "true").strip().lower() in {
+                  "1",
+                  "true",
+                  "yes",
+                  "on",
+              }
+              if not use_vertex:
+                  return Gemini(model=resolved)
+              # Vertex region/endpoint availability is not uniform across Gemini
+              # generations. Registry metadata is authoritative when available.
+              if entry is not None and entry.location:
+                  return RegionalGemini(model=resolved, location=entry.location)
+              if entry is not None and entry.residency == "global":
+                  return RegionalGemini(model=resolved, location="global")
+              return Gemini(model=resolved)
+          '''
+          import textwrap
+          old = textwrap.dedent(old)
+          new = textwrap.dedent(new)
+          if new not in text:
+              if old not in text:
+                  raise SystemExit("Google provider block drifted; refusing unsafe replacement")
+              text = text.replace(old, new, 1)
+          agent_path.write_text(text)
+
+          script_path = Path("scripts/dev-local.sh")
+          script = script_path.read_text()
+          anchor = '''export AITANA_LOCAL_SESSION=memory
+          '''
+          addition = '''export AITANA_LOCAL_SESSION=memory
+
+          # LOCAL_MODE is a development baseline. The registry's production-safe
+          # default is eu-strict, which rejects global/us API providers before a
+          # turn starts. Default local runs to unrestricted while preserving an
+          # explicit operator override from the shell or backend/.env.
+          if [ -z "${MODEL_RESIDENCY_POLICY:-}" ]; then
+              export MODEL_RESIDENCY_POLICY=unrestricted
+          fi
+          '''
+          anchor = textwrap.dedent(anchor)
+          addition = textwrap.dedent(addition)
+          if "export MODEL_RESIDENCY_POLICY=unrestricted" not in script:
+              if anchor not in script:
+                  raise SystemExit("dev-local session anchor drifted; refusing unsafe replacement")
+              script = script.replace(anchor, addition, 1)
+          script_path.write_text(script)
+
+          yaml_path = Path("backend/config/models.yaml")
+          models = yaml_path.read_text()
+          models = models.replace(
+              "\n# OpenAI-compatible self-host examples (copy one into this registry and\n",
+              "\n  # OpenAI-compatible self-host examples (copy one into this registry and\n",
+              1,
+          )
+          yaml_path.write_text(models)
+          PY
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/adk/agent.py scripts/dev-local.sh backend/config/models.yaml
+          if git diff --cached --quiet; then
+            echo "No changes needed."
+            exit 0
+          fi
+          git commit -m "fix(local): preserve zero-GCP Gemini Express Mode"
+          git push origin HEAD:main
