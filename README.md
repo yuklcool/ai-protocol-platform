@@ -23,9 +23,51 @@ Google ADK Agent Runtime
         └── A2A
 ```
 
-## Self-hosted local baseline
+## Docker Compose quick start
 
-The first milestone of this fork is a reproducible **LOCAL_MODE** baseline that runs the core platform without Firestore, Firebase Auth, Vertex Session/Memory, GCS or Cloud Trace credentials.
+The current self-host baseline packages the three existing application services:
+
+```text
+frontend      :3456
+backend       :1956
+mcp-sandbox   :3457
+```
+
+Start from a clean host with Docker + Compose v2:
+
+```bash
+cp .env.selfhost.example .env
+# edit .env and set GEMINI_API_KEY
+
+docker compose up -d --build
+```
+
+Then open:
+
+```text
+http://localhost:3456
+```
+
+Check status and logs:
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+Stop while retaining local state:
+
+```bash
+docker compose down
+```
+
+The Compose baseline runs `LOCAL_MODE=1`, persists supported local Firestore state in a named Docker volume, builds the frontend with LOCAL_MODE enabled, and keeps MCP Apps on its separate sandbox origin.
+
+See [SELFHOST.md](./SELFHOST.md) for Linux deployment, persistence, reverse-proxy and security notes.
+
+## Source-development LOCAL_MODE baseline
+
+The same core platform can be run directly from source without Firestore, Firebase Auth, Vertex Session/Memory, GCS or Cloud Trace credentials.
 
 ### 1. Install dependencies
 
@@ -69,7 +111,7 @@ Next.js -> FastAPI -> Google ADK -> Skill -> Tool/MCP -> AG-UI -> A2UI
 
 ### 4. Run the reusable smoke test
 
-With `make dev-local` still running in another terminal:
+With the stack running:
 
 ```bash
 bash scripts/smoke-selfhost.sh
