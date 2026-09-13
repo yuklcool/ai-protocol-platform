@@ -13,6 +13,7 @@ on:
       - backend/adk/agent.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/db/clients.py
       - backend/db/persistence.py
       - backend/db/repository.py
       - backend/db/repositories/**
@@ -23,6 +24,7 @@ on:
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
+      - backend/tests/unit/test_clients.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -37,6 +39,7 @@ on:
       - backend/adk/agent.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/db/clients.py
       - backend/db/persistence.py
       - backend/db/repository.py
       - backend/db/repositories/**
@@ -47,6 +50,7 @@ on:
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
+      - backend/tests/unit/test_clients.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -92,9 +96,9 @@ jobs:
         run: |
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
-            backend uv run pytest -q tests/unit/test_admin_audit.py
+            backend uv run pytest -q tests/unit/test_admin_audit.py tests/unit/test_clients.py
           docker compose run --rm --no-deps \
-            backend uv run python -c "from skills import skill_config; from admin import audit; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
