@@ -59,8 +59,9 @@ jobs:
       - name: Test OpenAI-compatible provider routing
         run: |
           docker compose build backend
-          docker compose run --rm --no-deps backend \
-            uv run pytest -q tests/model_tests/test_openai_compatible_routing.py
+          docker compose run --rm --no-deps \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/model_tests/test_openai_compatible_routing.py
 
       - name: Build self-host images
         run: docker compose build --pull
