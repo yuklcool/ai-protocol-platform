@@ -161,6 +161,7 @@ class PostgresRepository:
         filters: list[Filter] | None = None,
         order_by: str | None = None,
         order_direction: str = "DESCENDING",
+        start_after_id: str | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
         async def op():
@@ -182,6 +183,7 @@ class PostgresRepository:
             filters=filters,
             order_by=order_by,
             order_direction=order_direction,
+            start_after_id=start_after_id,
             limit=limit,
         )
 
