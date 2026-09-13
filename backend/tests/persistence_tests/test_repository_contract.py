@@ -1,10 +1,22 @@
-"""Backend-neutral persistence contract tests."""
+"""Backend-neutral persistence contract tests.
 
+The backend-wide conftest intentionally replaces ``db.firestore._client`` with
+a MagicMock to prevent accidental GCP calls.  Repository contract tests must
+therefore inject a real InMemoryFirestoreClient explicitly; otherwise
+LOCAL_MODE makes MemoryRepository reuse the global mocked singleton and the
+contract test verifies the mock rather than the repository.
+"""
+
+from db.firestore_inmemory import InMemoryFirestoreClient
 from db.repositories.memory import MemoryRepository
 
 
+def _memory_repo() -> MemoryRepository:
+    return MemoryRepository(client=InMemoryFirestoreClient())
+
+
 def test_memory_repository_crud_and_merge():
-    repo = MemoryRepository()
+    repo = _memory_repo()
     repo.set_document("skills", "s1", {"name": "A", "count": 1})
     assert repo.get_document("skills", "s1") == {"name": "A", "count": 1}
 
@@ -23,7 +35,7 @@ def test_memory_repository_crud_and_merge():
 
 
 def test_memory_repository_query_semantics():
-    repo = MemoryRepository()
+    repo = _memory_repo()
     repo.set_document("skills", "a", {"ownerId": "u1", "score": 2, "tags": ["demo"]})
     repo.set_document("skills", "b", {"ownerId": "u1", "score": 5, "tags": ["prod"]})
     repo.set_document("skills", "c", {"ownerId": "u2", "score": 9, "tags": ["demo", "prod"]})
@@ -42,11 +54,11 @@ def test_memory_repository_query_semantics():
 
 
 def test_memory_repository_increment_is_numeric_and_atomic_at_contract_level():
-    repo = MemoryRepository()
+    repo = _memory_repo()
     repo.set_document("usage", "x", {"count": 3})
     repo.increment_field("usage", "x", "count", 4)
     assert repo.get_document("usage", "x")["count"] == 7
 
 
 def test_memory_repository_healthcheck():
-    assert MemoryRepository().healthcheck() is True
+    assert _memory_repo().healthcheck() is True
