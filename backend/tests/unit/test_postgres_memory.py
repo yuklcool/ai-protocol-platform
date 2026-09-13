@@ -6,7 +6,16 @@ from google.adk.sessions import Session
 from google.genai import types
 
 from adk.postgres_memory import PostgresMemoryService
+from db.firestore_inmemory import InMemoryFirestoreClient
 from db.repositories.memory import MemoryRepository
+
+
+def _repository() -> MemoryRepository:
+    # backend/tests/conftest.py intentionally replaces db.firestore._client
+    # with a MagicMock to prevent accidental GCP calls. These tests need a real
+    # repository because they exercise persistence semantics, so inject the
+    # isolated in-memory Firestore implementation explicitly.
+    return MemoryRepository(client=InMemoryFirestoreClient())
 
 
 def _event(text: str, *, author: str = "user") -> Event:
@@ -19,7 +28,7 @@ def _event(text: str, *, author: str = "user") -> Event:
 
 @pytest.mark.asyncio
 async def test_memory_survives_service_reconstruction_with_same_repository():
-    repository = MemoryRepository()
+    repository = _repository()
     first = PostgresMemoryService(repository=repository)
     session = Session(
         id="session-1",
@@ -45,7 +54,7 @@ async def test_memory_survives_service_reconstruction_with_same_repository():
 
 @pytest.mark.asyncio
 async def test_memory_is_user_scoped():
-    repository = MemoryRepository()
+    repository = _repository()
     service = PostgresMemoryService(repository=repository)
 
     await service.add_session_to_memory(
@@ -77,7 +86,7 @@ async def test_memory_is_user_scoped():
 
 @pytest.mark.asyncio
 async def test_add_events_is_idempotent_by_event_id():
-    repository = MemoryRepository()
+    repository = _repository()
     service = PostgresMemoryService(repository=repository)
     event = _event("remember this controller id")
 
@@ -104,7 +113,7 @@ async def test_add_events_is_idempotent_by_event_id():
 
 @pytest.mark.asyncio
 async def test_unicode_substring_recall_supports_chinese_text():
-    repository = MemoryRepository()
+    repository = _repository()
     service = PostgresMemoryService(repository=repository)
     await service.add_session_to_memory(
         Session(
