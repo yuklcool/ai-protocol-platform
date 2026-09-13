@@ -51,6 +51,21 @@ def test_memory_repository_query_semantics():
     assert {doc["__id"] for doc in demo} == {"a", "c"}
 
 
+def test_memory_repository_cursor_starts_after_document_in_sorted_result():
+    repo = _memory_repo()
+    repo.set_document("sessions", "new", {"lastMessageAt": "2026-09-13T12:00:00+00:00"})
+    repo.set_document("sessions", "middle", {"lastMessageAt": "2026-09-13T11:00:00+00:00"})
+    repo.set_document("sessions", "old", {"lastMessageAt": "2026-09-13T10:00:00+00:00"})
+    docs = repo.query_documents(
+        "sessions",
+        order_by="lastMessageAt",
+        order_direction="DESCENDING",
+        start_after_id="middle",
+        limit=2,
+    )
+    assert [doc["__id"] for doc in docs] == ["old"]
+
+
 def test_memory_repository_increment_is_numeric_and_atomic_at_contract_level():
     repo = _memory_repo()
     repo.set_document("usage", "x", {"count": 3})
