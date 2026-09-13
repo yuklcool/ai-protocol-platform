@@ -56,10 +56,11 @@ jobs:
           npm ci --no-audit --no-fund
           npm run test:run -- src/__tests__/next-public-env-declared.test.ts
 
-      - name: Build self-host images
-        run: docker compose build --pull
-
       - name: Test OpenAI-compatible provider routing
         run: |
+          docker compose build backend
           docker compose run --rm --no-deps backend \
             uv run pytest -q tests/model_tests/test_openai_compatible_routing.py
+
+      - name: Build self-host images
+        run: docker compose build --pull
