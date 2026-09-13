@@ -1,17 +1,8 @@
-"""Append-only admin audit trail (v6.9.0 / 9.1).
+"""Append-only admin audit trail.
 
-Every ``/api/admin`` mutation records who did what, to which target, with the
-before/after, in an append-only ``admin_audit`` Firestore collection (one doc
-per action, uuid id). Stays inside the GCP project edge (CLAUDE.md security
-rule) — no content egress, just access-decision metadata.
-
-Best-effort on write: a failed audit write is logged at ERROR (observable in
-Cloud Logging) but never raises into the caller — an audit-store blip must not
-fail a legitimate admin action. Losses are therefore OBSERVABLE, not silent.
-
-v6.16.0 Phase 4 adds the READ side (:func:`list_admin_actions`), scoped by
-tenant. Until then the trail was write-only, which meant the accountability it
-was built to provide was never actually available to the admins it concerns.
+Audit persistence is backend-neutral: memory, Firestore, and PostgreSQL all use
+the same document contract through ``db.persistence``. Writes remain best-effort
+so an audit-store outage is observable but does not fail the admin mutation.
 """
 
 from __future__ import annotations
@@ -21,7 +12,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from db.firestore import query_documents, set_document
+from db.persistence import query_documents, set_document
 
 logger = logging.getLogger(__name__)
 
@@ -37,19 +28,7 @@ def record_admin_action(
     before: Any = None,
     after: Any = None,
 ) -> None:
-    """Append one audit record for an admin mutation.
-
-    Args:
-        actor_uid: The admin's Firebase uid (or SA email for service callers).
-        action: A stable verb, e.g. ``"grant_group_tag"`` / ``"upsert_client"``.
-        target: What was mutated, e.g. an email, domain, or skill id.
-        actor_email: The admin's email, when known (nice-to-have for the trail).
-        before: State before the mutation (JSON-serialisable), or None.
-        after: State after the mutation (JSON-serialisable), or None.
-
-    Best-effort — logs and swallows any write error so the mutation still
-    succeeds; the failure is visible in Cloud Logging.
-    """
+    """Append one audit record for an admin mutation."""
     record = {
         "actorUid": actor_uid,
         "actorEmail": actor_email,
@@ -77,52 +56,25 @@ def list_admin_actions(
     limit: int = 100,
     action: str | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Read the audit trail, scoped to ``domains``.
-
-    v6.16.0 Phase 4. This module was **write-only** until now: every admin
-    mutation was recorded and none of it was readable in-product, so the
-    accountability promise that justified building the trail was never
-    discharged for the people it concerns.
-
-    Args:
-        domains: ``None`` for platform scope (everything). Otherwise the exact
-            domains the caller administers.
-        limit: Max rows returned, newest first.
-        action: Optional exact-match filter on the action verb.
-
-    Returns:
-        ``(rows, scanned)``. ``scanned`` is the true pre-filter count so the
-        caller can say "showing N of M" rather than implying the trail is empty
-        when it is merely out of scope.
-
-    Scoping derives the tenant from the row's ``target`` via
-    :func:`admin.scope.domain_of_key`, because audit rows are keyed by whatever
-    the mutation touched — an email, a domain, a doc id, or a global registry id.
-    A row whose target belongs to **no** tenant (the wildcard tool-permission
-    doc, the group-tag registry, the platform preamble) is a platform-level
-    action and is therefore visible only to platform scope: showing a tenant
-    admin a change they cannot attribute to their own tenant would leak the
-    existence of platform configuration they have no part in.
-    """
+    """Read the audit trail scoped to the caller's administered domains."""
     from admin.scope import domain_of_key
 
     try:
         raw = query_documents(_COLLECTION, order_by="ts", order_direction="DESCENDING", limit=None)
-    except Exception as exc:  # inspection surface — degrade visibly, never 500
+    except Exception as exc:
         logger.error("admin_audit read FAILED: %s", exc)
         return [], 0
 
     scanned = len(raw)
     rows: list[dict[str, Any]] = []
-    for r in raw:
-        if action and str(r.get("action") or "") != action:
+    for row in raw:
+        if action and str(row.get("action") or "") != action:
             continue
         if domains is not None:
-            target_domain = domain_of_key(str(r.get("target") or ""))
-            # Fail closed: a blank target domain is a platform-level action.
+            target_domain = domain_of_key(str(row.get("target") or ""))
             if not target_domain or target_domain not in domains:
                 continue
-        rows.append(r)
+        rows.append(row)
         if len(rows) >= limit:
             break
     return rows, scanned
