@@ -1,10 +1,9 @@
 """In-memory repository used by LOCAL_MODE and persistence contract tests.
 
-In LOCAL_MODE this adapter deliberately wraps the *existing*
-``InMemoryFirestoreClient`` singleton used by the fixture seeder.  That keeps
-seeded Skills/users/documents visible while business modules move from
-``db.firestore`` to ``db.persistence``.  Outside LOCAL_MODE it creates an
-isolated in-memory client, which is convenient for contract tests.
+In LOCAL_MODE this adapter deliberately wraps the existing
+``InMemoryFirestoreClient`` singleton used by the fixture seeder. That keeps
+seeded data visible while business modules migrate from ``db.firestore`` to
+``db.persistence``.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ class MemoryRepository:
         if client is not None:
             self._client = client
         elif is_local_mode():
-            # Reuse the singleton seeded by db.local_fixture.
             from db.firestore import get_client
 
             self._client = get_client()
@@ -86,6 +84,31 @@ class MemoryRepository:
         if not isinstance(current, (int, float)):
             raise TypeError(f"field {field!r} on {collection}/{doc_id} is not numeric")
         ref.update({field: current + amount})
+
+    def array_union_field(
+        self,
+        collection: str,
+        doc_id: str,
+        field: str,
+        values: list[Any],
+    ) -> None:
+        if not values:
+            return
+        ref = self._client.collection(collection).document(doc_id)
+        snapshot = ref.get()
+        if not snapshot.exists:
+            raise KeyError(f"document {collection}/{doc_id} does not exist")
+        data = snapshot.to_dict() or {}
+        current = data.get(field, [])
+        if current is None:
+            current = []
+        if not isinstance(current, list):
+            raise TypeError(f"field {field!r} on {collection}/{doc_id} is not an array")
+        merged = list(current)
+        for value in values:
+            if value not in merged:
+                merged.append(value)
+        ref.update({field: merged})
 
     def healthcheck(self) -> bool:
         return True
