@@ -22,6 +22,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    command:
+      - sh
+      - -c
+      - >-
+        uv run python scripts/seed_selfhost_persistence.py &&
+        uv run uvicorn fast_api_app:app --host 0.0.0.0 --port 1956 --workers 1
     environment:
       PORT: "1956"
       LOCAL_MODE: "1"
