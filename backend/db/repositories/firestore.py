@@ -72,8 +72,17 @@ class FirestoreRepository:
     def increment_field(self, collection: str, doc_id: str, field: str, amount: int = 1) -> None:
         self._client.collection(collection).document(doc_id).update({field: firestore.Increment(amount)})
 
+    def array_union_field(
+        self,
+        collection: str,
+        doc_id: str,
+        field: str,
+        values: list[Any],
+    ) -> None:
+        if not values:
+            return
+        self._client.collection(collection).document(doc_id).update({field: firestore.ArrayUnion(values)})
+
     def healthcheck(self) -> bool:
-        # Avoid creating/deleting sentinel documents. Reading a bounded query is
-        # enough to prove credentials/project/connectivity for readiness checks.
         next(iter(self._client.collection("__persistence_health").limit(1).stream()), None)
         return True
