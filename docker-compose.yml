@@ -8,11 +8,17 @@ services:
     environment:
       PORT: "1956"
       LOCAL_MODE: "1"
-      LOCAL_MODE_PERSIST: "1"
+      LOCAL_MODE_PERSIST: "${LOCAL_MODE_PERSIST:-1}"
       AITANA_LOCAL_SESSION: "memory"
       OTEL_SDK_DISABLED: "true"
       GOOGLE_GENAI_USE_VERTEXAI: "false"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}"
+      # Configure either Gemini, OpenAI, or an OpenAI-compatible endpoint.
+      # Empty values are intentional: provider/model selection happens in the
+      # model registry and a deployment does not need every provider key.
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_API_BASE: "${OPENAI_API_BASE:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       GROUP_AUTH_SIGNING_SECRET: "${GROUP_AUTH_SIGNING_SECRET:-local-mode-anon-group-dev-secret-DO-NOT-USE-IN-PROD}"
       ALLOW_ORIGINS: "http://localhost:3456"
     ports:
