@@ -23,7 +23,9 @@ on:
       - backend/skills/skill_config.py
       - backend/admin/audit.py
       - backend/admin/clients.py
+      - backend/admin/tool_permissions_routes.py
       - backend/tests/api_tests/test_admin_clients.py
+      - backend/tests/api_tests/test_admin_tool_permissions.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
@@ -54,7 +56,9 @@ on:
       - backend/skills/skill_config.py
       - backend/admin/audit.py
       - backend/admin/clients.py
+      - backend/admin/tool_permissions_routes.py
       - backend/tests/api_tests/test_admin_clients.py
+      - backend/tests/api_tests/test_admin_tool_permissions.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
@@ -111,9 +115,10 @@ jobs:
               tests/unit/test_clients.py \
               tests/unit/test_permissions.py \
               tests/unit/test_skill_config.py \
-              tests/api_tests/test_admin_clients.py
+              tests/api_tests/test_admin_clients.py \
+              tests/api_tests/test_admin_tool_permissions.py
           docker compose run --rm --no-deps \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients; from auth import permissions; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
