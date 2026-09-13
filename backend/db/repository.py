@@ -1,13 +1,9 @@
 """Backend-neutral persistence contract.
 
 Business/domain modules should depend on :class:`Repository`, not on the
-Firestore SDK.  The first contract deliberately mirrors the small document
-operations the platform already uses so migration can happen domain-by-domain
-without a flag-day rewrite.
-
-The contract is intentionally synchronous because the existing Skill/Admin/
-Tenant persistence call sites are synchronous today.  Backends own their
-connection/pooling strategy behind this boundary.
+Firestore SDK. The contract mirrors the document operations the platform uses
+while preserving concurrency-sensitive semantics such as atomic increments and
+array unions across memory, Firestore, and PostgreSQL backends.
 """
 
 from __future__ import annotations
@@ -47,5 +43,13 @@ class Repository(Protocol):
     ) -> list[dict[str, Any]]: ...
 
     def increment_field(self, collection: str, doc_id: str, field: str, amount: int = 1) -> None: ...
+
+    def array_union_field(
+        self,
+        collection: str,
+        doc_id: str,
+        field: str,
+        values: list[Any],
+    ) -> None: ...
 
     def healthcheck(self) -> bool: ...
