@@ -1,62 +1,155 @@
-# Sunholo AI Protocol Platform v6
+# AI Protocol Platform
 
-Open-source AI protocol platform — Skills + AG-UI + A2UI + MCP Apps + A2A on Google ADK.
+Open-source Agent Application Platform built on Google ADK with **Skills + AG-UI + A2UI + MCP + MCP Apps + A2A**.
 
-> 🚀 **New here?** Start with [**WORKSHOP.md**](./WORKSHOP.md) — clone, set
-> `LOCAL_MODE=1`, run `make dev`, working chat UI in under 30 minutes with
-> zero GCP credentials. Use this for university courses, workshop attendees,
-> or quick exploration of the protocol stack.
-
-## What's New in v6
-
-- **Skills replace Assistants** — clearer user-facing abstraction
-- **Google ADK** — native agent orchestration (replaces Sunholo framework)
-- **Protocol-native** — AG-UI, A2UI, MCP Apps, A2A, MCP
-- **Three model providers** — Gemini, Claude, OpenAI
-- **OpenTelemetry** — native observability from ADK
-
-## Quick Start
-
-### Backend
-```bash
-cd backend
-make install
-make dev          # API on port 1956
-make playground   # ADK dev UI on port 8501
-```
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev       # Next.js on port 3000
-```
-
-## API Reference
-
-The backend exposes a self-documenting API:
-
-- **Interactive docs**: http://localhost:1956/docs (Swagger UI — all routes, try them live)
-- **OpenAPI JSON**: http://localhost:1956/openapi.json — pipe to `jq '.paths | keys'` to list all routes
-- **Skill invocation** (AG-UI streaming): `POST /api/skill/{skill_id}/stream`
-- **Bare ADK routes** (dev only): exposed by `get_fast_api_app(web=True)` — use the skill route above in production
-
-> **ADK `app_name` gotcha:** The canonical app name is `aitana_platform` (the `APP_NAME` constant in
-> `backend/adk/agui.py`). The dev UI's `/list-apps` historically returned filesystem directory names —
-> this version returns the correct `APP_NAME`. Never derive `app_name` from `/list-apps` paths in code;
-> always import the `APP_NAME` constant.
+This fork is being evolved toward a production-friendly, self-hostable platform while preserving the upstream protocol architecture. The implementation roadmap and architectural decisions are documented in [HANDOFF.md](./HANDOFF.md).
 
 ## Architecture
 
-```
-platform/
-├── frontend/     # Next.js 14 + React 18 + AG-UI + A2UI + MCP Apps
-├── backend/      # FastAPI + Google ADK
-├── cli/          # `aiplatform` CLI
-├── docs/         # Design documents
-└── firestore.rules
+```text
+Web Frontend (Next.js / React)
+        │
+        │ AG-UI
+        ▼
+FastAPI Backend
+        │
+        ▼
+Google ADK Agent Runtime
+        │
+        ├── Runtime Skills / SKILL.md
+        ├── Native Tools
+        ├── MCP / MCP Apps
+        ├── A2UI
+        └── A2A
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
+## Self-hosted local baseline
 
-See [docs/design/v5.0.0/migration-to-v6.md](docs/design/v5.0.0/migration-to-v6.md) for the full migration plan.
+The first milestone of this fork is a reproducible **LOCAL_MODE** baseline that runs the core platform without Firestore, Firebase Auth, Vertex Session/Memory, GCS or Cloud Trace credentials.
+
+### 1. Install dependencies
+
+Install the repository prerequisites described in [WORKSHOP.md](./WORKSHOP.md), including Python/`uv`, Node.js/npm and the frontend/backend dependencies.
+
+### 2. Configure one model key
+
+The current Phase-0 zero-GCP reference path uses Gemini Express Mode:
+
+```bash
+cp .env.selfhost.example backend/.env
+```
+
+Then edit `backend/.env` and set:
+
+```bash
+GEMINI_API_KEY=your-key
+```
+
+> Generic OpenAI-compatible endpoint support (custom Base URL + arbitrary model names such as `deepseek-chat`) is part of Roadmap Issue #2 and should not be confused with the Phase-0 baseline.
+
+### 3. Start LOCAL_MODE
+
+```bash
+make dev-local
+```
+
+Expected services:
+
+| Service | URL | Purpose |
+| --- | --- | --- |
+| Frontend | http://localhost:3456 | Next.js / AG-UI / A2UI renderer |
+| Backend | http://localhost:1956 | FastAPI + Google ADK runtime |
+| MCP Apps sandbox | http://localhost:3457 | isolated MCP App rendering |
+
+LOCAL_MODE uses in-memory/local substitutes for cloud infrastructure but keeps the real protocol/runtime path:
+
+```text
+Next.js -> FastAPI -> Google ADK -> Skill -> Tool/MCP -> AG-UI -> A2UI
+```
+
+### 4. Run the reusable smoke test
+
+With `make dev-local` still running in another terminal:
+
+```bash
+bash scripts/smoke-selfhost.sh
+```
+
+The automated smoke test verifies:
+
+- backend `/health`
+- `LOCAL_MODE=1` runtime status
+- FastAPI/OpenAPI route registration
+- Skill streaming API registration
+- MCP-related API surface
+- frontend reachability
+- MCP Apps sandbox reachability
+
+It then prints the manual acceptance checklist for the real model-dependent flows:
+
+- normal Chat
+- Runtime Skill
+- `Workspace Demo` A2UI surface
+- A2UI action round-trip
+- MCP Tool call
+- MCP App iframe/sandbox rendering
+
+Issue #1 should only be closed after those model-dependent checks have also been completed successfully on a real development machine.
+
+## Cloud/development mode
+
+The upstream cloud-oriented development flow remains available:
+
+### Backend
+
+```bash
+cd backend
+make install
+make dev
+```
+
+Backend API: http://localhost:1956
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+For the integrated repository launcher, see the root `Makefile` and [WORKSHOP.md](./WORKSHOP.md).
+
+## API reference
+
+- Swagger UI: http://localhost:1956/docs
+- OpenAPI JSON: http://localhost:1956/openapi.json
+- Skill invocation (AG-UI streaming): `POST /api/skill/{skill_id}/stream`
+- LOCAL_MODE status: `GET /api/local-mode-status`
+
+The canonical ADK app name is currently `aitana_platform` (`APP_NAME` in `backend/adk/agui.py`). This is an upstream/internal compatibility identifier; fork branding should not infer routing from filesystem names.
+
+## Roadmap
+
+The self-hosting roadmap is tracked in GitHub Issues and summarized in [HANDOFF.md](./HANDOFF.md):
+
+1. LOCAL_MODE reproducible baseline and smoke tests
+2. provider-driven OpenAI-compatible model routing
+3. Docker Compose one-command deployment
+4. PostgreSQL persistence abstraction
+5. persistent Session/Memory abstraction
+6. S3/MinIO object storage
+7. JWT/OIDC/Keycloak authentication
+8. optionalize remaining GCP-only capabilities
+9. explicit tenant isolation and quotas
+10. model provider configuration center
+11. self-hosted MCP server management
+12. Chinese i18n and configurable branding
+13. GHCR/versioned self-host CI/CD
+14. upstream synchronization strategy
+
+The long-term goal is to add self-hosting adapters rather than delete Google Cloud support, keeping the platform usable in both deployment models.
+
+## License
+
+Apache License 2.0. See [LICENSE](./LICENSE).
