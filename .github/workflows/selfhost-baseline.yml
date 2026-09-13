@@ -13,7 +13,12 @@ on:
       - backend/adk/agent.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/db/persistence.py
+      - backend/db/repository.py
+      - backend/db/repositories/**
+      - backend/db/migrations/**
       - backend/tests/model_tests/test_openai_compatible_routing.py
+      - backend/tests/persistence_tests/**
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -28,7 +33,12 @@ on:
       - backend/adk/agent.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/db/persistence.py
+      - backend/db/repository.py
+      - backend/db/repositories/**
+      - backend/db/migrations/**
       - backend/tests/model_tests/test_openai_compatible_routing.py
+      - backend/tests/persistence_tests/**
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -38,7 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Image builds and unit tests do not make a real LLM request.
       GEMINI_API_KEY: ci-placeholder-not-a-real-key
       OPENAI_API_KEY: ci-placeholder-not-a-real-key
       SKIP_QUALITY_CHECKS: "false"
@@ -56,12 +65,28 @@ jobs:
           npm ci --no-audit --no-fund
           npm run test:run -- src/__tests__/next-public-env-declared.test.ts
 
+      - name: Build backend
+        run: docker compose build backend
+
       - name: Test OpenAI-compatible provider routing
         run: |
-          docker compose build backend
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/model_tests/test_openai_compatible_routing.py
+
+      - name: Test persistence repository contract
+        run: |
+          docker compose run --rm --no-deps \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/persistence_tests/test_repository_contract.py
+
+      - name: Verify PostgreSQL repository against real Postgres
+        run: |
+          docker compose up -d postgres
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.healthcheck(); r.set_document('ci','probe',{'ok': True}); assert r.get_document('ci','probe')['ok'] is True; r.delete_document('ci','probe'); print('postgres repository OK')"
 
       - name: Build self-host images
         run: docker compose build --pull
