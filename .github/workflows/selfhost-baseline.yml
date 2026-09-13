@@ -17,6 +17,7 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
@@ -40,6 +41,7 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
@@ -94,13 +96,21 @@ jobs:
           docker compose run --rm --no-deps \
             backend uv run python -c "from skills import skill_config; from admin import audit; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
-      - name: Verify PostgreSQL repository against real Postgres
+      - name: Verify PostgreSQL repository and fixture seed
         run: |
           docker compose up -d postgres
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.healthcheck(); r.set_document('ci','probe',{'ok': True}); assert r.get_document('ci','probe')['ok'] is True; r.delete_document('ci','probe'); print('postgres repository OK')"
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python scripts/seed_selfhost_persistence.py
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python -c "from db.persistence import get_repository; docs=get_repository().query_documents('skills', limit=1); assert docs, 'self-host seed did not create skills'; print('postgres skill seed OK')"
 
       - name: Build self-host images
         run: docker compose build --pull
