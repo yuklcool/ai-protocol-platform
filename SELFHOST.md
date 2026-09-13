@@ -1,8 +1,8 @@
 # Self-hosting guide
 
-This document describes the current Phase-0/Phase-1 self-hosted baseline for `ai-protocol-platform`.
+This document describes the current self-hosted baseline for `ai-protocol-platform`.
 
-The goal is deliberately narrow: run the existing protocol stack with Docker Compose before replacing every Google Cloud dependency with PostgreSQL, MinIO and OIDC. Those adapters remain separate roadmap items.
+The design principle is simple: **use as few infrastructure components as possible**. PostgreSQL is reused for platform data, ADK Session, and durable Memory. Redis, MinIO, Keycloak, a separate Session database, and a separate Memory database are not part of the default stack.
 
 ## What runs
 
@@ -19,22 +19,24 @@ backend :1956
   ├── Runtime Skills
   ├── AG-UI / A2UI
   ├── MCP
-  └── MCP Apps integration
+  ├── MCP Apps integration
+  ├── ADK Session ─────┐
+  └── durable Memory ──┼──> PostgreSQL :5432
+                       │
+platform persistence ──┘
 
 mcp-sandbox :3457
   └── separate-origin iframe host
 ```
 
-The backend runs with `LOCAL_MODE=1`:
+Default Docker services:
 
-- Firestore is replaced by the local/in-memory implementation.
-- Firebase authentication is replaced by the LOCAL_MODE stub identity.
-- ADK sessions use in-memory mode.
-- Cloud Trace / Cloud Logging exporters are disabled.
-- GCS artifacts and Vertex Search are not required for startup.
-- local Firestore state is mounted at `/root/.aitana-local` and persisted in a named Docker volume.
+- frontend
+- backend
+- PostgreSQL
+- MCP Apps sandbox (kept separate because MCP Apps require an isolated browser origin)
 
-This is a self-hosted development/single-node baseline, not yet the final multi-node production architecture.
+The backend still uses `LOCAL_MODE=1` for the current stub-auth / no-GCP development boundary, but durable self-host persistence is no longer in-memory by default.
 
 ## Requirements
 
@@ -45,7 +47,7 @@ A Linux server needs:
 - outbound HTTPS access to the configured model provider
 - ports 3456, 1956 and 3457 available, or equivalent reverse-proxy mappings
 
-No GCP project or Firebase credentials are required for the baseline.
+No GCP project, Firebase project, Vertex Agent Engine, Redis, MinIO, or Keycloak is required for the current baseline.
 
 ## Quick start
 
@@ -55,61 +57,123 @@ cd ai-protocol-platform
 cp .env.selfhost.example .env
 ```
 
-Configure at least one model provider in `.env`. For the shortest zero-GCP path:
+Configure at least one model provider in `.env`.
+
+Gemini Express Mode:
 
 ```env
 GEMINI_API_KEY=your-key
 ```
 
-For OpenAI:
+OpenAI:
 
 ```env
 OPENAI_API_KEY=your-key
 OPENAI_API_BASE=https://api.openai.com/v1
 ```
 
-For an OpenAI-compatible service such as DeepSeek, Qwen gateway, vLLM, LiteLLM Proxy, OneAPI/NewAPI, or an internal gateway:
+Any OpenAI-compatible endpoint:
 
 ```env
 OPENAI_API_KEY=your-key-or-local-placeholder
 OPENAI_API_BASE=http://model-gateway.example:8000/v1
 ```
 
-Then build and start:
+Then start:
 
 ```bash
 docker compose up -d --build
 ```
 
-Check service state:
+Check status:
 
 ```bash
 docker compose ps
 ```
 
-Expected browser endpoint:
+Endpoints:
 
 ```text
-http://SERVER_IP:3456
+Frontend:         http://SERVER_IP:3456
+Backend API:      http://SERVER_IP:1956/docs
+MCP Apps sandbox: http://SERVER_IP:3457/sandbox.html
 ```
 
-Backend API:
+## Persistence defaults
+
+The Docker self-host path defaults to:
+
+```env
+DATA_BACKEND=postgres
+SESSION_BACKEND=postgres
+MEMORY_BACKEND=postgres
+DATABASE_URL=postgresql://aip:...@postgres:5432/aip
+```
+
+One PostgreSQL instance therefore carries three responsibilities:
 
 ```text
-http://SERVER_IP:1956/docs
+PostgreSQL
+├── platform/domain documents
+├── ADK Session + events/state
+└── durable ADK Memory
 ```
 
-MCP Apps sandbox:
+### Session
 
-```text
-http://SERVER_IP:3457/sandbox.html
+`SESSION_BACKEND=postgres` reuses Google ADK's own `DatabaseSessionService`. The platform does not maintain a second custom SQL Session implementation.
+
+The configured PostgreSQL URL is normalized to the async SQLAlchemy/asyncpg form required by ADK. Existing alternatives remain available:
+
+```env
+SESSION_BACKEND=memory
+SESSION_BACKEND=vertex
 ```
+
+### Memory
+
+Google ADK 1.31.1 does not provide a generic SQL MemoryService, so this fork supplies a small `PostgresMemoryService` using the platform's existing Repository/PostgreSQL layer.
+
+Its current behavior deliberately mirrors the simple semantics of ADK's in-memory memory service:
+
+- stores ADK events durably;
+- scopes memory by application + user;
+- survives backend restart/service reconstruction;
+- supports keyword/text recall, including substring recall for Chinese text;
+- does not require embeddings, Redis, or a vector database.
+
+`MEMORY_SEARCH_SCAN_LIMIT` caps the number of recent per-user rows scanned by a recall. If semantic vector recall is needed later, PostgreSQL + pgvector should be evaluated before adding a dedicated vector database.
+
+Existing alternatives remain available:
+
+```env
+MEMORY_BACKEND=memory
+MEMORY_BACKEND=vertex
+```
+
+### Source-only local development
+
+`make dev-local` may continue using memory backends for the shortest developer loop. To explicitly request that behavior:
+
+```env
+DATA_BACKEND=memory
+SESSION_BACKEND=memory
+MEMORY_BACKEND=memory
+```
+
+The Docker self-host baseline is different: it defaults to PostgreSQL so a backend restart does not discard sessions and memory.
+
+## File / Artifact storage
+
+The minimal-component roadmap uses a backend-mounted persistent local volume as the default file store, with S3-compatible storage optional later. That work is tracked separately in Issue #6.
+
+At the current implementation stage, GCS compatibility and the existing in-memory artifact fallback remain present. Do not yet treat Artifact/file persistence as completed merely because Session/Memory are durable.
 
 ## OpenAI-compatible model registry
 
-Provider routing is registry-driven. The backend no longer requires an OpenAI-compatible model name to begin with `gpt-`.
+Provider routing is registry-driven. An OpenAI-compatible model name does not need to begin with `gpt-`.
 
-Add the model to `backend/config/models.yaml` using the exact model name exposed by the endpoint. Example:
+Example registry entry:
 
 ```yaml
 models:
@@ -121,32 +185,22 @@ models:
     supports_reasoning: false
     supports_responses_api: false
     residency: global
-    context_window: 128000       # replace with the real provider/model limit
-    max_output_tokens: 8192      # replace with the real provider/model limit
+    context_window: 128000
+    max_output_tokens: 8192
     description: "DeepSeek through an OpenAI-compatible endpoint"
 ```
 
-Then configure a Skill to use the registry ID:
+Then configure a Skill with:
 
 ```yaml
 model: deepseek-v3
 ```
 
-The same mechanism works for Qwen, vLLM-served models and proxy aliases. `api_name` is opaque to the platform; `provider: openai` selects LiteLLM's OpenAI-compatible transport.
+The same mechanism works for Qwen, vLLM-served models, LiteLLM Proxy, OneAPI/NewAPI, and internal OpenAI-compatible gateways.
 
-Capabilities are explicit:
+## Smoke / persistence tests
 
-- `supports_tools`: the endpoint/model is expected to support tool/function calling.
-- `supports_reasoning`: send a reasoning effort parameter.
-- `supports_responses_api`: enable the Responses-API reasoning bridge used by compatible OpenAI reasoners.
-
-For a Chat-Completions-only compatible endpoint, leave `supports_responses_api: false`. A model can declare `supports_reasoning: true` with `supports_responses_api: false`; in that case the backend sends reasoning effort without enabling the Responses bridge.
-
-Legacy raw official names such as `gpt-*`, `o1*`, `o3*`, `o4*`, `gemini-*` and `claude-*` remain supported for backward compatibility. Non-standard raw names should be registered explicitly so provider and capability behavior is deterministic.
-
-## Smoke test
-
-From the repository directory:
+Basic self-host smoke:
 
 ```bash
 BACKEND_URL=http://127.0.0.1:1956 \
@@ -155,9 +209,16 @@ SANDBOX_URL=http://127.0.0.1:3457 \
 bash scripts/smoke-selfhost.sh
 ```
 
-The script verifies process/API reachability and prints the remaining real-model protocol acceptance checklist.
+The self-host GitHub Actions workflow additionally starts a real PostgreSQL container and verifies that:
 
-Before treating a build as a valid baseline, manually verify:
+1. the platform Repository can read/write PostgreSQL;
+2. self-host fixture data is seeded;
+3. an ADK Session is created and receives an event;
+4. the SessionService is reconstructed and the same session/event is restored;
+5. Memory is persisted;
+6. the MemoryService is reconstructed and still recalls the stored content.
+
+Before treating a release as fully accepted, manually verify the real protocol path as well:
 
 1. a normal Chat turn;
 2. a Runtime Skill turn;
@@ -166,71 +227,50 @@ Before treating a build as a valid baseline, manually verify:
 5. at least one MCP Tool executes;
 6. at least one MCP App renders inside the separate sandbox origin.
 
-For an OpenAI-compatible deployment, also verify one tool-calling turn using the configured non-`gpt-*` model name. This is the live acceptance step that unit tests cannot replace.
-
-## Persistence
-
-Compose enables:
-
-```env
-LOCAL_MODE_PERSIST=1
-```
-
-and mounts:
-
-```text
-ai-protocol-platform-local-state -> /root/.aitana-local
-```
-
-This preserves the local Firestore fixture/state supported by the current LOCAL_MODE implementation. Session and artifact persistence are still separate roadmap items; do not treat this volume as the final PostgreSQL/MinIO persistence layer.
-
-To remove the stack while keeping the volume:
-
-```bash
-docker compose down
-```
-
-To remove the stack and the local state volume:
-
-```bash
-docker compose down -v
-```
-
 ## Reverse proxy / TLS
 
-For an internet-facing server, place Caddy, Nginx, Traefik or another TLS reverse proxy in front of the frontend. The browser-facing frontend and MCP sandbox must remain different origins because MCP Apps are intentionally isolated from the host application.
+For an internet-facing server, place Caddy, Nginx, Traefik, or another TLS reverse proxy in front of the frontend.
 
-For example, use separate hostnames:
-
-```text
-https://ai.example.com      -> frontend:8080
-https://mcp.example.com     -> mcp-sandbox:8080
-```
-
-When changing origins, also update the frontend build arguments and sandbox `ALLOWED_HOST_ORIGINS`. Do not collapse the MCP App sandbox onto the same origin merely to simplify proxying.
-
-## Security boundary of this baseline
-
-`LOCAL_MODE` intentionally uses a stub identity. It is suitable for local development and controlled single-user/self-host testing. The backend contains a safety guard that refuses LOCAL_MODE when common Cloud Run/App Engine/Kubernetes deployment markers are present, but that guard is not a substitute for real production authentication.
-
-Before exposing the platform to untrusted users, complete the roadmap work for:
-
-- JWT/OIDC/Keycloak authentication;
-- explicit tenant isolation;
-- persistent database-backed authorization data;
-- secret management;
-- rate limits and quotas;
-- audit retention.
-
-## Next infrastructure phases
-
-The Compose file is intentionally kept to the three existing application services first. Planned additions are staged behind their adapters:
+The browser-facing frontend and MCP sandbox should remain different origins. Example:
 
 ```text
-Phase 0/1   frontend + backend + mcp-sandbox
-Phase 2     + PostgreSQL
-Phase 2     + MinIO/S3
-Phase 2     + OIDC/Keycloak (optional profile)
+https://ai.example.com  -> frontend:8080
+https://mcp.example.com -> mcp-sandbox:8080
 ```
 
-This preserves the upstream architecture and gives each infrastructure replacement an independently testable migration path.
+When changing origins, update the frontend build arguments and sandbox `ALLOWED_HOST_ORIGINS` as well.
+
+## Security boundary
+
+`LOCAL_MODE` still uses a stub identity. PostgreSQL persistence does **not** turn the current baseline into a production authentication system.
+
+The intended minimal production path is:
+
+```text
+PostgreSQL
+├── users / tenants / roles / permissions
+└── FastAPI built-in JWT
+```
+
+with standard OIDC/Firebase kept as optional adapters. Keycloak is not a default service. This work is tracked in Issue #7.
+
+## Minimal-component roadmap
+
+```text
+Current
+  frontend
+  backend
+  postgres
+  mcp-sandbox (isolated origin)
+
+Next
+  #5 finish Session/Memory recovery semantics
+  #6 LocalStorage + persistent file volume
+  #7 built-in JWT + PostgreSQL identity
+  #8 remove remaining mandatory GCP assumptions
+
+Optional adapters only when required
+  GCS / S3-compatible / Firebase / OIDC / Vertex / pgvector
+```
+
+The project should not add Redis, MinIO, Keycloak, a dedicated vector database, or a queue merely because those components are common in larger deployments. Add them only after a concrete workload requires them.
