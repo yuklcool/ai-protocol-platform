@@ -2,8 +2,8 @@
 
 Business/domain modules should depend on :class:`Repository`, not on the
 Firestore SDK. The contract mirrors the document operations the platform uses
-while preserving concurrency-sensitive semantics such as atomic increments and
-array unions across memory, Firestore, and PostgreSQL backends.
+while preserving concurrency-sensitive semantics and cursor pagination across
+memory, Firestore, and PostgreSQL backends.
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ class Repository(Protocol):
         filters: list[Filter] | None = None,
         order_by: str | None = None,
         order_direction: str = "DESCENDING",
+        start_after_id: str | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]: ...
 
