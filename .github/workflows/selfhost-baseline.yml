@@ -14,6 +14,7 @@ on:
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/db/chat_sessions.py
       - backend/db/clients.py
       - backend/db/persistence.py
       - backend/db/repository.py
@@ -26,6 +27,8 @@ on:
       - backend/admin/tool_permissions_routes.py
       - backend/tests/api_tests/test_admin_clients.py
       - backend/tests/api_tests/test_admin_tool_permissions.py
+      - backend/tests/api_tests/test_sessions_recent.py
+      - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
@@ -47,6 +50,7 @@ on:
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/db/chat_sessions.py
       - backend/db/clients.py
       - backend/db/persistence.py
       - backend/db/repository.py
@@ -59,6 +63,8 @@ on:
       - backend/admin/tool_permissions_routes.py
       - backend/tests/api_tests/test_admin_clients.py
       - backend/tests/api_tests/test_admin_tool_permissions.py
+      - backend/tests/api_tests/test_sessions_recent.py
+      - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
@@ -116,9 +122,11 @@ jobs:
               tests/unit/test_permissions.py \
               tests/unit/test_skill_config.py \
               tests/api_tests/test_admin_clients.py \
-              tests/api_tests/test_admin_tool_permissions.py
+              tests/api_tests/test_admin_tool_permissions.py \
+              tests/api_tests/test_sessions_recent.py \
+              tests/api_tests/test_sessions_route.py
           docker compose run --rm --no-deps \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import chat_sessions, clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
@@ -126,7 +134,7 @@ jobs:
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
-            backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.healthcheck(); r.set_document('ci','probe',{'ok': True}); assert r.get_document('ci','probe')['ok'] is True; r.delete_document('ci','probe'); print('postgres repository OK')"
+            backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.healthcheck(); r.set_document('ci','probe',{'ok': True}); assert r.get_document('ci','probe')['ok'] is True; r.array_union_field('ci','probe','items',['a','b','a']); assert r.get_document('ci','probe')['items']==['a','b']; r.delete_document('ci','probe'); print('postgres repository OK')"
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
