@@ -1,10 +1,8 @@
 """ADK service factories — env-var-driven backend selection.
 
 Returns Vertex AI Agent Engine backends when ``AGENT_ENGINE_ID`` is set,
-in-memory backends otherwise. Local dev points at the **dev Agent Engine**
-(same pattern as Firebase/Firestore: laptop talks to real cloud resources via
-ADC) so chat history survives uvicorn auto-reloads and is observable in the
-same place as Cloud Run dev.
+in-memory backends otherwise. Self-hosted deployments may explicitly select
+PostgreSQL for durable Session / Memory without adding Redis or another service.
 
 Service URI helpers are used by get_fast_api_app() which accepts URI strings.
 Direct service constructors are available for testing and custom wiring.
@@ -17,8 +15,8 @@ import os
 
 from google.adk.apps.app import EventsCompactionConfig
 from google.adk.artifacts import GcsArtifactService, InMemoryArtifactService
-from google.adk.memory import InMemoryMemoryService, VertexAiMemoryBankService
-from google.adk.sessions import InMemorySessionService, VertexAiSessionService
+from google.adk.memory import BaseMemoryService, InMemoryMemoryService, VertexAiMemoryBankService
+from google.adk.sessions import BaseSessionService, InMemorySessionService, VertexAiSessionService
 
 from config.gcp import require_gcp_project
 
@@ -324,29 +322,66 @@ def _normalize_agent_engine_id(value: str) -> str:
 
 
 def _force_in_memory_session() -> bool:
-    """Local-dev escape hatch — force InMemory* services even when
-    AGENT_ENGINE_ID is set.
+    """Legacy local-dev escape hatch.
 
-    Why: from a laptop the Vertex Agent Engine session-service round-trip
-    to europe-west1 dominates per-turn TTFT (~5.7s of a 9s first-token
-    time, per docs/design/v6.1.0/ttft-optimization.md M1 baseline).
-    Cloud Run in europe-west1 pays only ~120ms for the same call, so
-    production behaviour is unaffected — this flag is for laptops.
-
-    Set ``AITANA_LOCAL_SESSION=memory`` in a developer's shell or
-    ``backend/.env`` to opt in. Any other value (including unset) keeps
-    Vertex when ``AGENT_ENGINE_ID`` is set, matching the historical
-    default.
-
-    The flag intentionally affects BOTH session AND memory services —
-    they share the same ``AGENT_ENGINE_ID`` and the same per-turn
-    round-trip pattern. Artifact service (GCS) is left alone; it's
-    touched on document upload, not on every chat turn.
+    Explicit ``SESSION_BACKEND`` / ``MEMORY_BACKEND`` now take precedence.  This
+    keeps existing developer environments compatible while allowing the
+    self-hosted Compose path to choose PostgreSQL even when older env files still
+    contain ``AITANA_LOCAL_SESSION=memory``.
     """
     return os.environ.get("AITANA_LOCAL_SESSION", "").strip().lower() == "memory"
 
 
-_session_service_singleton: InMemorySessionService | VertexAiSessionService | None = None
+def _backend_from_env(name: str) -> str | None:
+    value = os.environ.get(name, "").strip().lower()
+    if not value:
+        return None
+    if value not in {"memory", "postgres", "vertex"}:
+        raise RuntimeError(f"Unsupported {name}={value!r}; expected memory, postgres, or vertex")
+    return value
+
+
+def session_backend_name() -> str:
+    """Resolve the active Session backend without constructing it."""
+    explicit = _backend_from_env("SESSION_BACKEND")
+    if explicit:
+        return explicit
+    if _force_in_memory_session():
+        return "memory"
+    return "vertex" if os.environ.get("AGENT_ENGINE_ID") else "memory"
+
+
+def memory_backend_name() -> str:
+    """Resolve the active Memory backend without constructing it."""
+    explicit = _backend_from_env("MEMORY_BACKEND")
+    if explicit:
+        return explicit
+    if _force_in_memory_session():
+        return "memory"
+    return "vertex" if os.environ.get("AGENT_ENGINE_ID") else "memory"
+
+
+def _database_url(env_name: str) -> str:
+    value = (os.environ.get(env_name) or os.environ.get("DATABASE_URL") or "").strip()
+    if not value:
+        raise RuntimeError(f"DATABASE_URL is required when {env_name.replace('_DATABASE_URL', '_BACKEND')}=postgres")
+    return value
+
+
+def _adk_postgres_url() -> str:
+    """Return an async SQLAlchemy URL for ADK DatabaseSessionService."""
+    value = _database_url("SESSION_DATABASE_URL")
+    if value.startswith("postgresql+asyncpg://"):
+        return value
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if value.startswith("postgres://"):
+        return value.replace("postgres://", "postgresql+asyncpg://", 1)
+    raise RuntimeError("SESSION_BACKEND=postgres requires a PostgreSQL DATABASE_URL")
+
+
+_session_service_singleton: BaseSessionService | None = None
+_memory_service_singleton: BaseMemoryService | None = None
 
 
 def _reset_session_service_for_tests() -> None:
@@ -355,55 +390,75 @@ def _reset_session_service_for_tests() -> None:
     _session_service_singleton = None
 
 
-def get_session_service() -> InMemorySessionService | VertexAiSessionService:
-    """Get session service — Vertex AI Agent Engine or in-memory.
+def _reset_memory_service_for_tests() -> None:
+    """Reset the memory singleton so tests can switch backends safely."""
+    global _memory_service_singleton
+    _memory_service_singleton = None
 
-    Returns a module-level singleton so all callers (skill_processor, messages
-    endpoint) share the same in-memory store in local dev. In prod the Vertex
-    AI service is stateless so multiple instances would be fine, but a
-    singleton is still cheaper to construct.
-    """
+
+def get_session_service() -> BaseSessionService:
+    """Get the configured durable/in-memory ADK SessionService singleton."""
     global _session_service_singleton
-    if _session_service_singleton is None:
+    if _session_service_singleton is not None:
+        return _session_service_singleton
+
+    backend = session_backend_name()
+    if backend == "postgres":
+        # google-adk 1.31.1 already ships this implementation. Reusing it keeps
+        # ADK's event/state schema, concurrency locking and future migrations in
+        # the SDK instead of maintaining a second home-grown session store.
+        from google.adk.sessions import DatabaseSessionService
+
+        _session_service_singleton = DatabaseSessionService(db_url=_adk_postgres_url())
+        logger.info("session-service: PostgreSQL (ADK DatabaseSessionService)")
+        return _session_service_singleton
+
+    if backend == "vertex":
         agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
-        if agent_engine_id and not _force_in_memory_session():
-            # ResilientVertexSessionService (not the bare parent): the standalone
-            # Vertex write path had no retry/loud-failure, so a transient error
-            # silently dropped a conversation while the Firestore mirror kept
-            # counting turns (issue #30). Import here to keep the module import
-            # light and avoid a cycle.
-            from adk.resilient_session import ResilientVertexSessionService
+        if not agent_engine_id:
+            raise RuntimeError("AGENT_ENGINE_ID is required when SESSION_BACKEND=vertex")
+        from adk.resilient_session import ResilientVertexSessionService
 
-            _session_service_singleton = ResilientVertexSessionService(
-                project=require_gcp_project(),
-                location=os.environ["GOOGLE_CLOUD_LOCATION"],
-                agent_engine_id=_normalize_agent_engine_id(agent_engine_id),
-            )
-            # Log the active backend ONCE per instance so "were sessions even
-            # going to Vertex on this instance?" is answerable from logs (the
-            # #30 divergence gave no such signal).
-            logger.info("session-service: Vertex Agent Engine (resilient), engine=%s", agent_engine_id)
-        else:
-            _session_service_singleton = InMemorySessionService()
-            logger.warning(
-                "session-service: IN-MEMORY (AGENT_ENGINE_ID=%s, force_in_memory=%s) — "
-                "sessions are NOT durable on this instance; a restart/scale loses them",
-                bool(agent_engine_id),
-                _force_in_memory_session(),
-            )
-    return _session_service_singleton
-
-
-def get_memory_service() -> InMemoryMemoryService | VertexAiMemoryBankService:
-    """Get memory service — Vertex AI Agent Engine or in-memory."""
-    agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
-    if agent_engine_id and not _force_in_memory_session():
-        return VertexAiMemoryBankService(
+        _session_service_singleton = ResilientVertexSessionService(
             project=require_gcp_project(),
             location=os.environ["GOOGLE_CLOUD_LOCATION"],
             agent_engine_id=_normalize_agent_engine_id(agent_engine_id),
         )
-    return InMemoryMemoryService()
+        logger.info("session-service: Vertex Agent Engine (resilient), engine=%s", agent_engine_id)
+        return _session_service_singleton
+
+    _session_service_singleton = InMemorySessionService()
+    logger.warning("session-service: IN-MEMORY — sessions are NOT durable on this instance")
+    return _session_service_singleton
+
+
+def get_memory_service() -> BaseMemoryService:
+    """Get the configured ADK MemoryService singleton."""
+    global _memory_service_singleton
+    if _memory_service_singleton is not None:
+        return _memory_service_singleton
+
+    backend = memory_backend_name()
+    if backend == "postgres":
+        from adk.postgres_memory import PostgresMemoryService
+
+        _memory_service_singleton = PostgresMemoryService(_database_url("MEMORY_DATABASE_URL"))
+        logger.info("memory-service: PostgreSQL (platform repository)")
+        return _memory_service_singleton
+
+    if backend == "vertex":
+        agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
+        if not agent_engine_id:
+            raise RuntimeError("AGENT_ENGINE_ID is required when MEMORY_BACKEND=vertex")
+        _memory_service_singleton = VertexAiMemoryBankService(
+            project=require_gcp_project(),
+            location=os.environ["GOOGLE_CLOUD_LOCATION"],
+            agent_engine_id=_normalize_agent_engine_id(agent_engine_id),
+        )
+        return _memory_service_singleton
+
+    _memory_service_singleton = InMemoryMemoryService()
+    return _memory_service_singleton
 
 
 _artifact_service_singleton: InMemoryArtifactService | GcsArtifactService | None = None
@@ -436,9 +491,14 @@ def get_artifact_service() -> InMemoryArtifactService | GcsArtifactService:
 
 
 def get_session_service_uri() -> str | None:
-    """Get session service URI for get_fast_api_app(). None = in-memory."""
-    agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
-    if agent_engine_id and not _force_in_memory_session():
+    """Return the ADK FastAPI SessionService URI for the selected backend."""
+    backend = session_backend_name()
+    if backend == "postgres":
+        return _adk_postgres_url()
+    if backend == "vertex":
+        agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
+        if not agent_engine_id:
+            raise RuntimeError("AGENT_ENGINE_ID is required when SESSION_BACKEND=vertex")
         return f"agentengine://{_normalize_agent_engine_id(agent_engine_id)}"
     return None
 
@@ -452,8 +512,15 @@ def get_artifact_service_uri() -> str | None:
 
 
 def get_memory_service_uri() -> str | None:
-    """Get memory service URI for get_fast_api_app(). None = in-memory."""
-    agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
-    if agent_engine_id and not _force_in_memory_session():
+    """Return the ADK FastAPI MemoryService URI for the selected backend."""
+    backend = memory_backend_name()
+    if backend == "postgres":
+        # Registered in backend/services.py. Keep credentials out of the URI so
+        # ADK's startup logs never print DATABASE_URL secrets.
+        return "aip-postgres-memory://default"
+    if backend == "vertex":
+        agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
+        if not agent_engine_id:
+            raise RuntimeError("AGENT_ENGINE_ID is required when MEMORY_BACKEND=vertex")
         return f"agentengine://{_normalize_agent_engine_id(agent_engine_id)}"
     return None
