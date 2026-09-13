@@ -1,4 +1,4 @@
-"""Provider-driven OpenAI-compatible routing regression tests."""
+"""Provider-driven model routing regression tests."""
 
 import pytest
 
@@ -92,6 +92,32 @@ def test_reasoning_without_responses_stays_on_chat_compatible_path(monkeypatch):
     assert seen["reasoning_effort"] == "medium"
     assert "reasoning" not in seen
     assert "allowed_openai_params" not in seen
+
+
+def test_gemini_express_mode_never_uses_regional_vertex_client(monkeypatch):
+    entry = _entry(
+        id="gemini-local",
+        api_name="gemini-3.5-flash-lite",
+        provider="google",
+        residency="global",
+    )
+    _patch_registry(monkeypatch, entry)
+    seen = {}
+
+    class FakeGemini:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    class ForbiddenRegionalGemini:
+        def __init__(self, **_kwargs):
+            raise AssertionError("Express Mode must not construct RegionalGemini/Vertex")
+
+    monkeypatch.setattr(agent, "Gemini", FakeGemini)
+    monkeypatch.setattr(agent, "RegionalGemini", ForbiddenRegionalGemini)
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "false")
+
+    agent.resolve_model("gemini-local")
+    assert seen["model"] == "gemini-3.5-flash-lite"
 
 
 def test_unregistered_nonstandard_name_fails_with_registry_hint(monkeypatch):
