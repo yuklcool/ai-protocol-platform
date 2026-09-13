@@ -18,7 +18,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from google.adk.events import Event
-from google.adk.memory import BaseMemoryService, SearchMemoryResponse
+from google.adk.memory import BaseMemoryService
+from google.adk.memory.base_memory_service import SearchMemoryResponse
 from google.adk.memory.memory_entry import MemoryEntry
 from typing_extensions import override
 
@@ -34,7 +35,7 @@ _COLLECTION_PREFIX = "adk_memory_events"
 def _scope_collection(app_name: str, user_id: str) -> str:
     """Return a stable per-app/per-user collection partition.
 
-    ``PostgresRepository`` stores documents by (collection, doc_id).  Partitioning
+    ``PostgresRepository`` stores documents by (collection, doc_id). Partitioning
     memory at the collection level means a recall only scans this user's rows,
     rather than every tenant/user memory row in the deployment.
     """
@@ -54,7 +55,7 @@ def _event_text(event: Event) -> str:
 
 
 def _words(text: str) -> set[str]:
-    # Unicode-aware ``\w`` keeps this usable for non-English text too.  The
+    # Unicode-aware ``\w`` keeps this usable for non-English text too. The
     # substring fallback in _matches covers languages without whitespace word
     # boundaries (for example Chinese).
     return {word.casefold() for word in re.findall(r"\w+", text, flags=re.UNICODE)}
@@ -84,7 +85,7 @@ def _format_timestamp(value: float | None) -> str | None:
 class PostgresMemoryService(BaseMemoryService):
     """ADK ``BaseMemoryService`` persisted in the platform PostgreSQL database.
 
-    A Repository may be injected by tests.  Runtime construction uses the same
+    A Repository may be injected by tests. Runtime construction uses the same
     ``DATABASE_URL`` and ``PostgresRepository`` already used by the platform,
     so this feature adds no infrastructure component.
     """
