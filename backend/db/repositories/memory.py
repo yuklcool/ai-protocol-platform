@@ -1,24 +1,38 @@
-"""In-memory repository used by LOCAL_MODE and persistence contract tests."""
+"""In-memory repository used by LOCAL_MODE and persistence contract tests.
+
+In LOCAL_MODE this adapter deliberately wraps the *existing*
+``InMemoryFirestoreClient`` singleton used by the fixture seeder.  That keeps
+seeded Skills/users/documents visible while business modules move from
+``db.firestore`` to ``db.persistence``.  Outside LOCAL_MODE it creates an
+isolated in-memory client, which is convenient for contract tests.
+"""
 
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
+from config.local_mode import is_local_mode
 from db.repositories._document_ops import apply_query
 from db.repository import Filter
 
 
 class MemoryRepository:
-    def __init__(self) -> None:
-        self._collections: dict[str, dict[str, dict[str, Any]]] = {}
+    def __init__(self, client: Any | None = None) -> None:
+        if client is not None:
+            self._client = client
+        elif is_local_mode():
+            # Reuse the singleton seeded by db.local_fixture.
+            from db.firestore import get_client
 
-    def _collection(self, name: str) -> dict[str, dict[str, Any]]:
-        return self._collections.setdefault(name, {})
+            self._client = get_client()
+        else:
+            from db.firestore_inmemory import InMemoryFirestoreClient
+
+            self._client = InMemoryFirestoreClient()
 
     def get_document(self, collection: str, doc_id: str) -> dict[str, Any] | None:
-        value = self._collection(collection).get(doc_id)
-        return deepcopy(value) if value is not None else None
+        doc = self._client.collection(collection).document(doc_id).get()
+        return doc.to_dict() if doc.exists else None
 
     def set_document(
         self,
@@ -28,20 +42,16 @@ class MemoryRepository:
         *,
         merge: bool = False,
     ) -> None:
-        target = self._collection(collection)
-        if merge and doc_id in target:
-            target[doc_id] = {**target[doc_id], **deepcopy(data)}
-        else:
-            target[doc_id] = deepcopy(data)
+        self._client.collection(collection).document(doc_id).set(data, merge=merge)
 
     def update_document(self, collection: str, doc_id: str, data: dict[str, Any]) -> None:
-        target = self._collection(collection)
-        if doc_id not in target:
+        ref = self._client.collection(collection).document(doc_id)
+        if not ref.get().exists:
             raise KeyError(f"document {collection}/{doc_id} does not exist")
-        target[doc_id].update(deepcopy(data))
+        ref.update(data)
 
     def delete_document(self, collection: str, doc_id: str) -> None:
-        self._collection(collection).pop(doc_id, None)
+        self._client.collection(collection).document(doc_id).delete()
 
     def query_documents(
         self,
@@ -52,11 +62,12 @@ class MemoryRepository:
         order_direction: str = "DESCENDING",
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        docs = []
-        for doc_id, value in self._collection(collection).items():
-            data = deepcopy(value)
-            data["__id"] = doc_id
-            docs.append(data)
+        docs: list[dict[str, Any]] = []
+        for snapshot in self._client.collection(collection).stream():
+            data = snapshot.to_dict()
+            if data is not None:
+                data["__id"] = snapshot.id
+                docs.append(data)
         return apply_query(
             docs,
             filters=filters,
@@ -66,13 +77,15 @@ class MemoryRepository:
         )
 
     def increment_field(self, collection: str, doc_id: str, field: str, amount: int = 1) -> None:
-        target = self._collection(collection)
-        if doc_id not in target:
+        ref = self._client.collection(collection).document(doc_id)
+        snapshot = ref.get()
+        if not snapshot.exists:
             raise KeyError(f"document {collection}/{doc_id} does not exist")
-        current = target[doc_id].get(field, 0)
+        data = snapshot.to_dict() or {}
+        current = data.get(field, 0)
         if not isinstance(current, (int, float)):
             raise TypeError(f"field {field!r} on {collection}/{doc_id} is not numeric")
-        target[doc_id][field] = current + amount
+        ref.update({field: current + amount})
 
     def healthcheck(self) -> bool:
         return True
