@@ -45,9 +45,11 @@ class FirestoreRepository:
         filters: list[Filter] | None = None,
         order_by: str | None = None,
         order_direction: str = "DESCENDING",
+        start_after_id: str | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        query = self._client.collection(collection)
+        collection_ref = self._client.collection(collection)
+        query = collection_ref
         if filters:
             for field, op, value in filters:
                 query = query.where(filter=firestore.FieldFilter(field, op, value))
@@ -58,6 +60,10 @@ class FirestoreRepository:
                 else firestore.Query.ASCENDING
             )
             query = query.order_by(order_by, direction=direction)
+        if start_after_id:
+            cursor = collection_ref.document(start_after_id).get()
+            if cursor.exists:
+                query = query.start_after(cursor)
         if limit is not None:
             query = query.limit(limit)
 
