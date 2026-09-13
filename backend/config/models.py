@@ -32,6 +32,12 @@ class ModelEntry(BaseModel):
     context_window: int
     max_output_tokens: int
     description: str
+    # Provider/model capabilities. These are deliberately explicit rather than
+    # inferred from model-name prefixes: self-hosted OpenAI-compatible models
+    # such as `deepseek-chat` and `qwen3` do not start with `gpt-`.
+    supports_tools: bool = True
+    supports_reasoning: bool = False
+    supports_responses_api: bool = False
     # MODEL-RELIABILITY M3: where this model's inference egresses. Default
     # "us" is deliberate fail-safe — an untagged entry never passes eu-strict.
     residency: Literal["eu", "us", "global"] = "us"
@@ -208,6 +214,27 @@ def api_name_for(ref: str) -> str:
     if entry is not None:
         return entry.api_name
     return ref
+
+
+def provider_for(ref: str) -> Literal["google", "anthropic", "openai"] | None:
+    """Return the provider for a model reference.
+
+    Registry entries and logical tiers are authoritative and therefore support
+    arbitrary provider model names (for example ``deepseek-chat`` on an
+    OpenAI-compatible endpoint). Prefix inference exists only as a backward-
+    compatibility path for legacy raw API names that are not registered.
+    """
+    entry = entry_for(ref)
+    if entry is not None:
+        return entry.provider
+    api = api_name_for(ref)
+    if api.startswith("gemini-"):
+        return "google"
+    if api.startswith("claude-"):
+        return "anthropic"
+    if api.startswith("gpt-") or api.startswith(("o1", "o3", "o4")):
+        return "openai"
+    return None
 
 
 def gemini_api_name_for(ref: str) -> str:
