@@ -1,0 +1,63 @@
+name: ai-protocol-platform
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      PORT: "1956"
+      LOCAL_MODE: "1"
+      AITANA_LOCAL_SESSION: "memory"
+      OTEL_SDK_DISABLED: "true"
+      GOOGLE_GENAI_USE_VERTEXAI: "false"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}"
+      GROUP_AUTH_SIGNING_SECRET: "${GROUP_AUTH_SIGNING_SECRET:-local-mode-anon-group-dev-secret-DO-NOT-USE-IN-PROD}"
+      ALLOW_ORIGINS: "http://localhost:3456"
+    ports:
+      - "1956:1956"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:1956/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  mcp-sandbox:
+    build:
+      context: ./infrastructure/mcp-sandbox
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+      ALLOWED_HOST_ORIGINS: "http://localhost:3456"
+    ports:
+      - "3457:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_LOCAL_MODE: "1"
+        NEXT_PUBLIC_BACKEND_URL: "http://localhost:1956"
+        NEXT_PUBLIC_MCP_SANDBOX_URL: "http://localhost:3457"
+        NEXT_PUBLIC_FRONTEND_URL: "http://localhost:3456"
+        NEXT_PUBLIC_BRAND_APP_NAME: "${APP_NAME:-AI Protocol Platform}"
+        SKIP_QUALITY_CHECKS: "${SKIP_QUALITY_CHECKS:-false}"
+    environment:
+      PORT: "8080"
+      BACKEND_URL: "http://backend:1956"
+    ports:
+      - "3456:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+      mcp-sandbox:
+        condition: service_started
+    restart: unless-stopped
+
+networks:
+  default:
+    name: ai-protocol-platform
