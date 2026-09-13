@@ -59,6 +59,7 @@ def apply_query(
     filters: list[Filter] | None = None,
     order_by: str | None = None,
     order_direction: str = "DESCENDING",
+    start_after_id: str | None = None,
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
     result = [doc for doc in docs if matches_filters(doc, filters)]
@@ -67,6 +68,11 @@ def apply_query(
             key=lambda doc: sort_key(doc.get(order_by)),
             reverse=order_direction.upper() == "DESCENDING",
         )
+    if start_after_id:
+        for idx, doc in enumerate(result):
+            if str(doc.get("__id", "")) == start_after_id:
+                result = result[idx + 1 :]
+                break
     if limit is not None:
         result = result[:limit]
     return result
