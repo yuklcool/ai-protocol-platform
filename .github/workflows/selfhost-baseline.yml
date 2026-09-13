@@ -117,18 +117,27 @@ jobs:
       - name: Test OpenAI-compatible provider routing
         run: |
           docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/model_tests/test_openai_compatible_routing.py
 
       - name: Test persistence repository contract
         run: |
           docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/persistence_tests/test_repository_contract.py
 
       - name: Test PostgreSQL Session and Memory factories
         run: |
           docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/unit/test_session_factories.py \
@@ -138,6 +147,9 @@ jobs:
       - name: Test migrated persistence domains
         run: |
           docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/unit/test_admin_audit.py \
@@ -149,6 +161,9 @@ jobs:
               tests/api_tests/test_sessions_recent.py \
               tests/api_tests/test_sessions_route.py
           docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
             backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import chat_sessions, clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
