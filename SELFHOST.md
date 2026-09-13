@@ -55,10 +55,24 @@ cd ai-protocol-platform
 cp .env.selfhost.example .env
 ```
 
-Edit `.env` and set:
+Configure at least one model provider in `.env`. For the shortest zero-GCP path:
 
 ```env
 GEMINI_API_KEY=your-key
+```
+
+For OpenAI:
+
+```env
+OPENAI_API_KEY=your-key
+OPENAI_API_BASE=https://api.openai.com/v1
+```
+
+For an OpenAI-compatible service such as DeepSeek, Qwen gateway, vLLM, LiteLLM Proxy, OneAPI/NewAPI, or an internal gateway:
+
+```env
+OPENAI_API_KEY=your-key-or-local-placeholder
+OPENAI_API_BASE=http://model-gateway.example:8000/v1
 ```
 
 Then build and start:
@@ -91,6 +105,45 @@ MCP Apps sandbox:
 http://SERVER_IP:3457/sandbox.html
 ```
 
+## OpenAI-compatible model registry
+
+Provider routing is registry-driven. The backend no longer requires an OpenAI-compatible model name to begin with `gpt-`.
+
+Add the model to `backend/config/models.yaml` using the exact model name exposed by the endpoint. Example:
+
+```yaml
+models:
+  deepseek-v3:
+    api_name: "deepseek-chat"
+    provider: openai
+    tier: default
+    supports_tools: true
+    supports_reasoning: false
+    supports_responses_api: false
+    residency: global
+    context_window: 128000       # replace with the real provider/model limit
+    max_output_tokens: 8192      # replace with the real provider/model limit
+    description: "DeepSeek through an OpenAI-compatible endpoint"
+```
+
+Then configure a Skill to use the registry ID:
+
+```yaml
+model: deepseek-v3
+```
+
+The same mechanism works for Qwen, vLLM-served models and proxy aliases. `api_name` is opaque to the platform; `provider: openai` selects LiteLLM's OpenAI-compatible transport.
+
+Capabilities are explicit:
+
+- `supports_tools`: the endpoint/model is expected to support tool/function calling.
+- `supports_reasoning`: send a reasoning effort parameter.
+- `supports_responses_api`: enable the Responses-API reasoning bridge used by compatible OpenAI reasoners.
+
+For a Chat-Completions-only compatible endpoint, leave `supports_responses_api: false`. A model can declare `supports_reasoning: true` with `supports_responses_api: false`; in that case the backend sends reasoning effort without enabling the Responses bridge.
+
+Legacy raw official names such as `gpt-*`, `o1*`, `o3*`, `o4*`, `gemini-*` and `claude-*` remain supported for backward compatibility. Non-standard raw names should be registered explicitly so provider and capability behavior is deterministic.
+
 ## Smoke test
 
 From the repository directory:
@@ -112,6 +165,8 @@ Before treating a build as a valid baseline, manually verify:
 4. an A2UI action reaches the Agent and produces a follow-up result;
 5. at least one MCP Tool executes;
 6. at least one MCP App renders inside the separate sandbox origin.
+
+For an OpenAI-compatible deployment, also verify one tool-calling turn using the configured non-`gpt-*` model name. This is the live acceptance step that unit tests cannot replace.
 
 ## Persistence
 
@@ -166,12 +221,6 @@ Before exposing the platform to untrusted users, complete the roadmap work for:
 - secret management;
 - rate limits and quotas;
 - audit retention.
-
-## Model provider note
-
-The current zero-GCP Compose baseline uses Gemini Express Mode through `GEMINI_API_KEY`.
-
-Roadmap Issue #2 is responsible for turning `provider: openai` into a truly generic OpenAI-compatible path with arbitrary model names and `OPENAI_API_BASE` (DeepSeek, Qwen, vLLM, OneAPI/NewAPI, LiteLLM Proxy, etc.). Until that change is completed and tested, do not document those endpoints as fully supported by the self-host baseline.
 
 ## Next infrastructure phases
 
