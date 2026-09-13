@@ -10,6 +10,10 @@ on:
       - frontend/Dockerfile
       - frontend/src/__tests__/next-public-env-declared.test.ts
       - backend/Dockerfile
+      - backend/adk/agent.py
+      - backend/config/models.py
+      - backend/config/models.yaml
+      - backend/tests/model_tests/test_openai_compatible_routing.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -21,6 +25,10 @@ on:
       - frontend/Dockerfile
       - frontend/src/__tests__/next-public-env-declared.test.ts
       - backend/Dockerfile
+      - backend/adk/agent.py
+      - backend/config/models.py
+      - backend/config/models.yaml
+      - backend/tests/model_tests/test_openai_compatible_routing.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -30,9 +38,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Used only to satisfy Compose interpolation. Image builds do not make an
-      # LLM request, so no real provider secret is required in CI.
+      # Image builds and unit tests do not make a real LLM request.
       GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
       SKIP_QUALITY_CHECKS: "false"
 
     steps:
@@ -50,3 +58,8 @@ jobs:
 
       - name: Build self-host images
         run: docker compose build --pull
+
+      - name: Test OpenAI-compatible provider routing
+        run: |
+          docker compose run --rm --no-deps backend \
+            uv run pytest -q tests/model_tests/test_openai_compatible_routing.py
