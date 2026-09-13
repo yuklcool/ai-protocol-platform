@@ -8,6 +8,7 @@ services:
     environment:
       PORT: "1956"
       LOCAL_MODE: "1"
+      LOCAL_MODE_PERSIST: "1"
       AITANA_LOCAL_SESSION: "memory"
       OTEL_SDK_DISABLED: "true"
       GOOGLE_GENAI_USE_VERTEXAI: "false"
@@ -16,6 +17,8 @@ services:
       ALLOW_ORIGINS: "http://localhost:3456"
     ports:
       - "1956:1956"
+    volumes:
+      - local-state:/root/.aitana-local
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:1956/health"]
       interval: 10s
@@ -33,6 +36,18 @@ services:
       ALLOWED_HOST_ORIGINS: "http://localhost:3456"
     ports:
       - "3457:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/sandbox.html').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
 
   frontend:
@@ -55,8 +70,24 @@ services:
       backend:
         condition: service_healthy
       mcp-sandbox:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
+
+volumes:
+  local-state:
+    name: ai-protocol-platform-local-state
 
 networks:
   default:
