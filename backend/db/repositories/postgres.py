@@ -1,11 +1,9 @@
 """PostgreSQL implementation of the backend-neutral document repository.
 
 The self-hosted schema stores platform documents as JSONB under the same
-collection/doc-id identity used by the Firestore implementation.  The public
-Repository contract is synchronous because existing domain call sites are
-synchronous; internally this adapter owns one asyncpg connection pool on a
-private event-loop thread so it can reuse the asyncpg dependency already shipped
-by the backend without nested-event-loop failures inside FastAPI.
+collection/doc-id identity used by the Firestore implementation. The public
+Repository contract is synchronous; internally this adapter owns one asyncpg
+connection pool on a private event-loop thread.
 """
 
 from __future__ import annotations
@@ -41,7 +39,7 @@ class _LoopRunner:
         loop.run_forever()
 
     def run(self, coro: Coroutine[Any, Any, _T]) -> _T:
-        if self._loop is None:  # pragma: no cover - constructor waits for readiness
+        if self._loop is None:  # pragma: no cover
             raise RuntimeError("PostgreSQL repository event loop did not start")
         future: Future[_T] = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
@@ -203,6 +201,50 @@ class PostgresRepository:
                     if not isinstance(current, (int, float)):
                         raise TypeError(f"field {field!r} on {collection}/{doc_id} is not numeric")
                     data[field] = current + amount
+                    await conn.execute(
+                        """
+                        UPDATE platform_documents
+                        SET data = $1::jsonb, updated_at = now()
+                        WHERE collection = $2 AND doc_id = $3
+                        """,
+                        json.dumps(data),
+                        collection,
+                        doc_id,
+                    )
+
+        self._runner.run(op())
+
+    def array_union_field(
+        self,
+        collection: str,
+        doc_id: str,
+        field: str,
+        values: list[Any],
+    ) -> None:
+        if not values:
+            return
+
+        async def op():
+            async with self._pool.acquire() as conn:
+                async with conn.transaction():
+                    row = await conn.fetchrow(
+                        "SELECT data FROM platform_documents WHERE collection = $1 AND doc_id = $2 FOR UPDATE",
+                        collection,
+                        doc_id,
+                    )
+                    if not row:
+                        raise KeyError(f"document {collection}/{doc_id} does not exist")
+                    data = self._decode_json(row["data"])
+                    current = data.get(field, [])
+                    if current is None:
+                        current = []
+                    if not isinstance(current, list):
+                        raise TypeError(f"field {field!r} on {collection}/{doc_id} is not an array")
+                    merged = list(current)
+                    for value in values:
+                        if value not in merged:
+                            merged.append(value)
+                    data[field] = merged
                     await conn.execute(
                         """
                         UPDATE platform_documents
