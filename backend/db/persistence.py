@@ -1,4 +1,4 @@
-"""Persistence backend selection and backend-neutral CRUD facade.
+"""Persistence backend selection and backend-neutral document facade.
 
 Selection rules preserve today's behavior:
 - explicit ``DATA_BACKEND`` always wins;
@@ -95,6 +95,7 @@ def query_documents(
     filters: list[Filter] | None = None,
     order_by: str | None = None,
     order_direction: str = "DESCENDING",
+    start_after_id: str | None = None,
     limit: int | None = None,
 ) -> list[dict[str, Any]]:
     return get_repository().query_documents(
@@ -102,6 +103,7 @@ def query_documents(
         filters=filters,
         order_by=order_by,
         order_direction=order_direction,
+        start_after_id=start_after_id,
         limit=limit,
     )
 
