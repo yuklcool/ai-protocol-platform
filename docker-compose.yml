@@ -1,6 +1,23 @@
 name: ai-protocol-platform
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-aip}"
+      POSTGRES_USER: "${POSTGRES_USER:-aip}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-aip-local-change-me}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/db/migrations/001_postgres_documents.sql:/docker-entrypoint-initdb.d/001_postgres_documents.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aip} -d ${POSTGRES_DB:-aip}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -11,15 +28,12 @@ services:
       LOCAL_MODE_PERSIST: "${LOCAL_MODE_PERSIST:-1}"
       AITANA_LOCAL_SESSION: "memory"
       OTEL_SDK_DISABLED: "true"
-      # LOCAL_MODE is a development/self-host baseline. Defaulting it to the
-      # production fail-safe `eu-strict` would reject most non-Google gateways
-      # before the first turn. Production deployments should set their policy
-      # explicitly when LOCAL_MODE is removed.
+      DATA_BACKEND: "${DATA_BACKEND:-memory}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://aip:aip-local-change-me@postgres:5432/aip}"
+      POSTGRES_POOL_MIN_SIZE: "${POSTGRES_POOL_MIN_SIZE:-1}"
+      POSTGRES_POOL_MAX_SIZE: "${POSTGRES_POOL_MAX_SIZE:-10}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
       GOOGLE_GENAI_USE_VERTEXAI: "false"
-      # Configure either Gemini, OpenAI, or an OpenAI-compatible endpoint.
-      # Empty values are intentional: provider/model selection happens in the
-      # model registry and a deployment does not need every provider key.
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_API_BASE: "${OPENAI_API_BASE:-}"
@@ -30,6 +44,9 @@ services:
       - "1956:1956"
     volumes:
       - local-state:/root/.aitana-local
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:1956/health"]
       interval: 10s
@@ -99,6 +116,8 @@ services:
 volumes:
   local-state:
     name: ai-protocol-platform-local-state
+  postgres-data:
+    name: ai-protocol-platform-postgres-data
 
 networks:
   default:
