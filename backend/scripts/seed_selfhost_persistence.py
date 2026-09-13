@@ -1,12 +1,10 @@
 """Seed repository-backed LOCAL_MODE data needed by self-hosted persistence.
 
 The historical LOCAL_MODE fixture writes through the Firestore-compatible raw
-client because many legacy domains still depend on that SDK surface. Once a
-domain is migrated to ``db.persistence`` (Skills are the first one), a
-PostgreSQL deployment must seed that domain in PostgreSQL as well.
-
-This script is intentionally narrow and idempotent. It runs before uvicorn in
-the Docker Compose backend and does nothing unless DATA_BACKEND=postgres.
+client because some legacy domains still depend on that SDK surface. Domains
+migrated to ``db.persistence`` must therefore be seeded in the selected
+repository as well. This script runs before uvicorn in Docker Compose and is
+idempotent.
 """
 
 from __future__ import annotations
@@ -31,17 +29,32 @@ def main() -> None:
         return
 
     repo = get_repository()
-    existing = repo.query_documents("skills", limit=1)
-    if existing:
+
+    # SkillConfig now reads through db.persistence. Seed the same bundled demo
+    # skills that the legacy LOCAL_MODE Firestore-compatible fixture exposes.
+    if not repo.query_documents("skills", limit=1):
+        now = time.time()
+        skills = _demo_skills(now)
+        for skill in skills:
+            repo.set_document("skills", skill["skillId"], skill)
+        log.info("Seeded %d LOCAL_MODE demo skills into PostgreSQL", len(skills))
+    else:
         log.info("PostgreSQL skills collection already seeded; no changes")
-        return
 
-    now = time.time()
-    skills = _demo_skills(now)
-    for skill in skills:
-        repo.set_document("skills", skill["skillId"], skill)
-
-    log.info("Seeded %d LOCAL_MODE demo skills into PostgreSQL", len(skills))
+    # auth.permissions is repository-backed as well. LOCAL_MODE is a
+    # single-user sandbox, so mirror the existing in-memory wildcard grant.
+    if repo.get_document("tool_permissions", "*") is None:
+        repo.set_document(
+            "tool_permissions",
+            "*",
+            {
+                "type": "wildcard",
+                "tools": ["*"],
+                "denied": [],
+                "note": "LOCAL_MODE wildcard — single-user sandbox; allow everything.",
+            },
+        )
+        log.info("Seeded LOCAL_MODE wildcard tool permission into PostgreSQL")
 
 
 if __name__ == "__main__":
