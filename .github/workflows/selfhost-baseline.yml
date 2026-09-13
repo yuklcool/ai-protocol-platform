@@ -17,8 +17,11 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/skills/skill_config.py
+      - backend/admin/audit.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
+      - backend/tests/unit/test_admin_audit.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -37,8 +40,11 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/skills/skill_config.py
+      - backend/admin/audit.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
+      - backend/tests/unit/test_admin_audit.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -79,6 +85,14 @@ jobs:
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/persistence_tests/test_repository_contract.py
+
+      - name: Test migrated persistence domains
+        run: |
+          docker compose run --rm --no-deps \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/unit/test_admin_audit.py
+          docker compose run --rm --no-deps \
+            backend uv run python -c "from skills import skill_config; from admin import audit; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository against real Postgres
         run: |
