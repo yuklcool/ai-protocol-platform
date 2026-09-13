@@ -105,6 +105,7 @@ from config.models import (
     api_name_for,
     entry_for,
     load_models_config,
+    provider_for,
 )
 from config.thinking import ThinkDepth, thinking_config_for
 from db.models import DelegateRule, FallbackConfig, SkillConfig
@@ -143,123 +144,77 @@ def _claude_uses_adaptive_thinking(resolved_model: str) -> bool:
 
 
 def resolve_model(model_id: str) -> Gemini | LiteLlm:
-    """Create the correct ADK model wrapper for the given model reference.
+    """Create the correct ADK model wrapper for a model reference.
 
-    Accepts a logical tier name, a registry id, or a raw provider api name
-    (see config.models.api_name_for). After collapsing to an api name:
-
-    - `gemini-*` -> `Gemini(model=...)` (Vertex AI via ADC)
-    - `claude-*` -> `LiteLlm(model="anthropic/...")` (direct Anthropic API; not Vertex)
-    - `gpt-*` / `o3*` -> `LiteLlm(model="openai/...")` (requires OPENAI_API_KEY)
-
-    Raises:
-        ValueError: If the reference does not resolve to a known provider prefix.
+    Registry entries are routed by ``ModelEntry.provider``. Model names are
+    deliberately opaque: an OpenAI-compatible model may be called
+    ``deepseek-chat``, ``qwen3`` or anything else. Prefix inference is kept
+    only for legacy *raw* API names that are not registered.
     """
-    resolved = api_name_for(model_id)
-    if resolved.startswith("gemini-"):
-        # Vertex region/endpoint availability is NOT uniform across Gemini
-        # generations (verified per-model via live probes — see
-        # config/models.yaml comments). An entry with an explicit `location`
-        # (e.g. a Gemini 3.x model whose only EU option is the jurisdictional
-        # multi-region endpoint, location="eu", not a europe-west* region)
-        # is pinned there. Failing that, `residency: global` entries (404 on
-        # the default region-pinned client, GOOGLE_CLOUD_LOCATION=europe-west1)
-        # route through location="global". Note: global endpoint = NOT
-        # EU-resident; eu-strict deployments reject these at
-        # resolve_model_chain before this branch matters.
-        entry = entry_for(model_id)
+    entry = entry_for(model_id)
+    resolved = entry.api_name if entry is not None else api_name_for(model_id)
+    provider = provider_for(model_id)
+    if provider is None:
+        raise ValueError(
+            f"Unsupported model: {model_id!r} (resolved to {resolved!r}). "
+            "Register non-standard model names in config/models.yaml with an explicit provider."
+        )
+
+    if provider == "google":
+        # Vertex region/endpoint availability is not uniform across Gemini
+        # generations. Registry metadata is authoritative when available.
         if entry is not None and entry.location:
             return RegionalGemini(model=resolved, location=entry.location)
         if entry is not None and entry.residency == "global":
             return RegionalGemini(model=resolved, location="global")
         return Gemini(model=resolved)
-    if resolved.startswith("claude-"):
-        # Direct Anthropic API (via LiteLLM), NOT Vertex Model Garden. We use
-        # the direct API because the Claude models WE PIN (claude-opus-4-8,
-        # claude-sonnet-5, claude-haiku-4-5) are not in Vertex Model Garden for
-        # this project — verified 2026-07-21. Note the earlier "not served in
-        # ANY region" was too strong: Vertex europe-west1 DOES serve older
-        # Claude (claude-3-opus, claude-sonnet-4-5), just not our current
-        # flagships — so this is a model-GENERATION gap, not a provider gap, and
-        # an EU-resident Claude path becomes possible once a pinned flagship
-        # lands in europe-west1. Requires ANTHROPIC_API_KEY. The direct API is a
-        # US-egress path, so reserve Claude tiers for reasoning that does not
-        # stream restricted customer content off the EU edge. See CLAUDE.md
-        # privacy boundary.
-        #
-        # Adaptive thinking (MODEL-RELIABILITY M4, live-verified 2026-07-10):
-        # litellm forwards `thinking` to Anthropic and streams the summarized
-        # reasoning as reasoning_content deltas -> ADK thought parts ->
-        # REASONING events -> ThinkingPanel. `display: summarized` is
-        # mandatory on Opus 4.7+ (default `omitted` streams EMPTY thinking
-        # text — the v5 keep-alive-via-thinking-tokens trick silently dies
-        # without it). Haiku rejects adaptive with a 400 (live-verified), so
-        # it stays bare. CLAUDE_ADAPTIVE_THINKING=off is the kill switch if
-        # TTFT/eval regresses (sprint plan M4 assumption).
+
+    if provider == "anthropic":
+        # Direct Anthropic API via LiteLLM. Adaptive-thinking transport is
+        # still generation-specific, but provider selection no longer is.
         kwargs: dict = {}
-        if os.environ.get("CLAUDE_ADAPTIVE_THINKING", "on").strip().lower() != "off" and "haiku" not in resolved:
+        if (
+            os.environ.get("CLAUDE_ADAPTIVE_THINKING", "on").strip().lower() != "off"
+            and "haiku" not in resolved
+        ):
             _EFFORT = {"smart": "high", "default": "medium", "fast": "low"}
-            entry = entry_for(model_id)
             effort = _EFFORT.get(getattr(entry, "tier", None) or "", "high")
             if _claude_uses_adaptive_thinking(resolved):
-                # Claude 5 family (sonnet-5, fable-5, …) REMOVED the old thinking
-                # API: `thinking={type:"enabled", budget_tokens:N}` returns a hard
-                # 400 ("use thinking.type.adaptive and output_config.effort").
-                # litellm 1.82.6 only rewrites reasoning_effort→output_config for
-                # 4.6 models (AnthropicConfig._is_claude_4_6_model); for a `-5`
-                # model it still emits the removed enabled+budget shape → every
-                # handoff to a sonnet-5 delegate RUN_ERRORed (live 2026-07-24).
-                # So send the NEW shape ourselves — litellm forwards both `thinking`
-                # and `output_config` to Anthropic verbatim (transformation.py
-                # param=="thinking" passthrough + output_config handling). `display:
-                # summarized` keeps the ThinkingPanel fed (default `omitted` streams
-                # empty thinking text).
                 kwargs["thinking"] = {"type": "adaptive", "display": "summarized"}
                 kwargs["output_config"] = {"effort": effort}
             else:
-                # Pre-5 Claude (opus-4-8/4-7/4-6, sonnet-4-6, …): reasoning_effort
-                # works — litellm maps it to the shape each accepts (4.6 →
-                # output_config; opus-4-x → enabled+budget). Do NOT switch these to
-                # the adaptive shape in this fix: opus-4-8 is the working default
-                # and destabilising it belongs in its own change. Haiku has no
-                # extended thinking, so it stays bare (excluded above).
                 kwargs["reasoning_effort"] = effort
         return LiteLlm(model=f"anthropic/{resolved}", **kwargs)
-    if resolved.startswith("gpt-") or resolved.startswith("o3"):
-        # For REASONING models (gpt-5.x, o-series) pass reasoning_effort
-        # explicitly (mirrors the Claude `thinking` branch above) for TWO reasons:
-        #   1. Tools + reasoning: gpt-5.4+ with BOTH function tools AND
-        #      reasoning_effort is rejected on /v1/chat/completions ("use
-        #      /v1/responses"). LiteLLM auto-bridges such calls to the Responses
-        #      API — but ONLY when reasoning_effort is present at call time
-        #      (main.py::responses_api_bridge_check requires `reasoning_effort is
-        #      not None`); it does NOT add a default before that check. So a bare
-        #      LiteLlm(model="openai/…") sends tools to chat/completions and
-        #      RUN_ERRORs on every tool-using turn (live 2026-07-16, gpt-5.6-sol).
-        #      Passing reasoning_effort routes to /v1/responses where tools +
-        #      reasoning coexist.
-        #   2. It sets the thinking depth per tier (the point of a reasoner skill).
-        # A non-reasoning model (e.g. gpt-4o) would REJECT reasoning_effort, so
-        # only pass it to reasoning-capable models.
-        if resolved.startswith("gpt-5") or resolved.startswith(("o1", "o3", "o4")):
-            _EFFORT = {"smart": "high", "default": "medium", "fast": "low"}
-            entry = entry_for(model_id)
-            effort = _EFFORT.get(getattr(entry, "tier", None) or "", "medium")
-            # reasoning_effort triggers the Responses-API bridge + sets depth (see
-            # above). reasoning={"summary":"auto"} makes the Responses API RETURN
-            # the reasoning summary so it streams to the ThinkingPanel — without it
-            # the model reasons but the summary is dark (verified 2026-07-16).
-            # allowed_openai_params keeps litellm from dropping `reasoning` as an
-            # unsupported chat param before it reaches the responses bridge.
-            return LiteLlm(
-                model=f"openai/{resolved}",
-                reasoning_effort=effort,
-                reasoning={"summary": "auto"},
-                allowed_openai_params=["reasoning"],
-            )
-        return LiteLlm(model=f"openai/{resolved}")
-    raise ValueError(f"Unsupported model: {model_id!r} (resolved to {resolved!r})")
 
+    if provider == "openai":
+        # ``openai/<model>`` is LiteLLM's generic OpenAI-compatible route.
+        # OPENAI_API_BASE lets the same code target OpenAI, DeepSeek/Qwen
+        # gateways, vLLM, LiteLLM Proxy, OneAPI/NewAPI, or an internal
+        # compatible endpoint without changing Python source.
+        kwargs: dict = {}
+        api_base = os.environ.get("OPENAI_API_BASE", "").strip()
+        if api_base:
+            kwargs["api_base"] = api_base
+
+        # Registry capabilities are authoritative. Legacy raw official
+        # OpenAI names preserve the historical heuristic for compatibility.
+        legacy_reasoner = entry is None and (
+            resolved.startswith("gpt-5") or resolved.startswith(("o1", "o3", "o4"))
+        )
+        supports_reasoning = entry.supports_reasoning if entry is not None else legacy_reasoner
+        supports_responses = entry.supports_responses_api if entry is not None else legacy_reasoner
+        if supports_reasoning:
+            _EFFORT = {"smart": "high", "default": "medium", "fast": "low"}
+            effort = _EFFORT.get(getattr(entry, "tier", None) or "", "medium")
+            kwargs["reasoning_effort"] = effort
+            if supports_responses:
+                # LiteLLM uses reasoning_effort + reasoning to bridge
+                # tool-using OpenAI reasoners onto /v1/responses.
+                kwargs["reasoning"] = {"summary": "auto"}
+                kwargs["allowed_openai_params"] = ["reasoning"]
+        return LiteLlm(model=f"openai/{resolved}", **kwargs)
+
+    raise ValueError(f"Unsupported provider {provider!r} for model {model_id!r}")
 
 # --- MODEL-RELIABILITY M3: residency-gated fallback chains -------------------
 
@@ -309,13 +264,11 @@ def _residency_of(ref_or_api: str) -> str:
 _PROVIDER_KEY_ENVS = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
 
 
-def _provider_key_missing(api_name: str) -> str | None:
-    """Env var name if the api's provider key is required but not mounted."""
-    if api_name.startswith("claude-"):
-        needed = "ANTHROPIC_API_KEY"
-    elif api_name.startswith("gpt-") or api_name.startswith("o3"):
-        needed = "OPENAI_API_KEY"
-    else:
+def _provider_key_missing(model_ref: str) -> str | None:
+    """Env var name when a registered/raw provider requires an API key."""
+    provider = provider_for(model_ref)
+    needed = _PROVIDER_KEY_ENVS.get(provider or "")
+    if needed is None:
         return None
     return None if os.environ.get(needed) else needed
 
@@ -391,7 +344,7 @@ def resolve_model_chain(model_ref: str, fallback: FallbackConfig | None = None) 
                 model_ref,
             )
             continue
-        missing_key = _provider_key_missing(link_api)
+        missing_key = _provider_key_missing(link.id)
         if missing_key:
             logger.warning(
                 "fallback %s skipped: %s not mounted on this deployment (chain for %s)",

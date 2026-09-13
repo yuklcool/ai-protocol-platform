@@ -312,9 +312,31 @@ models:
   # ADK wiring: LiteLlm("openai/gpt-5.4") etc.
   # GPT-5.4 has a 1M context window; GPT-5.1 variants are 400K.
 
+# OpenAI-compatible self-host examples (copy one into this registry and
+  # adjust limits/residency for the deployment; names do NOT need a gpt-* prefix):
+  #
+  # deepseek-v3:
+  #   api_name: "deepseek-chat"
+  #   provider: openai
+  #   tier: default
+  #   supports_tools: true
+  #   supports_reasoning: false
+  #   supports_responses_api: false
+  #   residency: global
+  #   context_window: 128_000
+  #   max_output_tokens: 8_192
+  #   description: "DeepSeek via an OpenAI-compatible endpoint"
+  #
+  # The same shape works for Qwen, vLLM, LiteLLM Proxy and
+  # OneAPI/NewAPI: set api_name to the exact model name exposed by
+  # that endpoint and configure OPENAI_API_BASE + OPENAI_API_KEY.
+  #
   gpt-5-4:
     api_name: "gpt-5.4"
     provider: openai
+    supports_tools: true
+    supports_reasoning: true
+    supports_responses_api: true
     tier: smart
     residency: us
     fallbacks: [gpt-5-6-sol, gpt-5-6-luna, gemini-flash-lite]   # v6.13.0: same-provider ladder + gemini cross-provider last (sanitizer handles the tool-id crossing)
@@ -328,6 +350,9 @@ models:
   gpt-5-6-sol:
     api_name: "gpt-5.6-sol"
     provider: openai
+    supports_tools: true
+    supports_reasoning: true
+    supports_responses_api: true
     tier: smart
     residency: us
     fallbacks: [gpt-5-6-terra, gpt-5-6-luna, gemini-flash-lite]   # v6.13.0: same-provider ladder + gemini cross-provider last (sanitizer handles the tool-id crossing)
@@ -338,6 +363,9 @@ models:
   gpt-5-6-terra:
     api_name: "gpt-5.6-terra"
     provider: openai
+    supports_tools: true
+    supports_reasoning: true
+    supports_responses_api: true
     tier: default
     residency: us
     fallbacks: [gpt-5-6-luna, gemini-flash-lite]   # v6.13.0: same-provider ladder + gemini cross-provider last (sanitizer handles the tool-id crossing)
@@ -348,6 +376,9 @@ models:
   gpt-5-6-luna:
     api_name: "gpt-5.6-luna"
     provider: openai
+    supports_tools: true
+    supports_reasoning: true
+    supports_responses_api: true
     tier: fast
     residency: us
     fallbacks: [gemini-flash-lite]   # v6.13.0: same-provider ladder + gemini cross-provider last (sanitizer handles the tool-id crossing)
@@ -358,6 +389,9 @@ models:
   gpt-5-1-instant:
     api_name: "gpt-5.1-chat-latest"
     provider: openai
+    supports_tools: true
+    supports_reasoning: true
+    supports_responses_api: true
     tier: default
     residency: us
     fallbacks: [gpt-5-6-luna, gemini-flash-lite]   # v6.13.0: same-provider ladder + gemini cross-provider last (sanitizer handles the tool-id crossing)
