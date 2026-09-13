@@ -312,7 +312,7 @@ models:
   # ADK wiring: LiteLlm("openai/gpt-5.4") etc.
   # GPT-5.4 has a 1M context window; GPT-5.1 variants are 400K.
 
-# OpenAI-compatible self-host examples (copy one into this registry and
+  # OpenAI-compatible self-host examples (copy one into this registry and
   # adjust limits/residency for the deployment; names do NOT need a gpt-* prefix):
   #
   # deepseek-v3:

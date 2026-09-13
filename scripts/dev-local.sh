@@ -35,6 +35,14 @@ export NEXT_PUBLIC_LOCAL_MODE=1
 # TTFT from a laptop. See docs/design/v6.1.0/ttft-optimization.md.
 export AITANA_LOCAL_SESSION=memory
 
+# LOCAL_MODE is a development baseline. The registry's production-safe
+# default is eu-strict, which rejects global/us API providers before a
+# turn starts. Default local runs to unrestricted while preserving an
+# explicit operator override from the shell or backend/.env.
+if [ -z "${MODEL_RESIDENCY_POLICY:-}" ]; then
+    export MODEL_RESIDENCY_POLICY=unrestricted
+fi
+
 # Sprint 2.11 — anonymous group-ID auth requires a signing secret.
 # In LOCAL_MODE we set a known dev-only value so the workshop demo
 # works out of the box without per-developer setup. The string is

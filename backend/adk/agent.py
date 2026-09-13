@@ -161,6 +161,18 @@ def resolve_model(model_id: str) -> Gemini | LiteLlm:
         )
 
     if provider == "google":
+        # Gemini Express Mode (GOOGLE_GENAI_USE_VERTEXAI=false) must never
+        # instantiate RegionalGemini: that class intentionally hard-pins
+        # vertexai=True and would turn the zero-GCP LOCAL_MODE path back into
+        # a Vertex request. Region/residency metadata applies only to Vertex.
+        use_vertex = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not use_vertex:
+            return Gemini(model=resolved)
         # Vertex region/endpoint availability is not uniform across Gemini
         # generations. Registry metadata is authoritative when available.
         if entry is not None and entry.location:
