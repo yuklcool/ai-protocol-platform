@@ -37,7 +37,7 @@ def test_non_gpt_name_routes_by_provider(monkeypatch):
 
     class FakeLiteLlm:
         def __init__(self, **kwargs):
-  seen.update(kwargs)
+            seen.update(kwargs)
 
     monkeypatch.setattr(agent, "LiteLlm", FakeLiteLlm)
     monkeypatch.setenv("OPENAI_API_BASE", "http://model-gateway:8000/v1")
@@ -61,7 +61,7 @@ def test_reasoning_capabilities_control_responses_bridge(monkeypatch):
 
     class FakeLiteLlm:
         def __init__(self, **kwargs):
-  seen.update(kwargs)
+            seen.update(kwargs)
 
     monkeypatch.setattr(agent, "LiteLlm", FakeLiteLlm)
     agent.resolve_model("reasoner")
@@ -69,6 +69,29 @@ def test_reasoning_capabilities_control_responses_bridge(monkeypatch):
     assert seen["model"] == "openai/custom-reasoner"
     assert seen["reasoning_effort"] == "high"
     assert seen["reasoning"] == {"summary": "auto"}
+    assert seen["allowed_openai_params"] == ["reasoning"]
+
+
+def test_reasoning_without_responses_stays_on_chat_compatible_path(monkeypatch):
+    entry = _entry(
+        id="chat-reasoner",
+        api_name="chat-reasoner",
+        supports_reasoning=True,
+        supports_responses_api=False,
+    )
+    _patch_registry(monkeypatch, entry)
+    seen = {}
+
+    class FakeLiteLlm:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    monkeypatch.setattr(agent, "LiteLlm", FakeLiteLlm)
+    agent.resolve_model("chat-reasoner")
+
+    assert seen["reasoning_effort"] == "medium"
+    assert "reasoning" not in seen
+    assert "allowed_openai_params" not in seen
 
 
 def test_unregistered_nonstandard_name_fails_with_registry_hint(monkeypatch):
