@@ -25,6 +25,7 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
+      - backend/tests/unit/test_skill_config.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -51,6 +52,7 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
+      - backend/tests/unit/test_skill_config.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/selfhost-baseline.yml
@@ -96,7 +98,7 @@ jobs:
         run: |
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
-            backend uv run pytest -q tests/unit/test_admin_audit.py tests/unit/test_clients.py
+            backend uv run pytest -q tests/unit/test_admin_audit.py tests/unit/test_clients.py tests/unit/test_skill_config.py
           docker compose run --rm --no-deps \
             backend uv run python -c "from skills import skill_config; from admin import audit; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
