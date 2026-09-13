@@ -1,0 +1,52 @@
+name: Self-host baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - SELFHOST.md
+      - frontend/Dockerfile
+      - frontend/src/__tests__/next-public-env-declared.test.ts
+      - backend/Dockerfile
+      - infrastructure/mcp-sandbox/**
+      - scripts/smoke-selfhost.sh
+      - .github/workflows/selfhost-baseline.yml
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - SELFHOST.md
+      - frontend/Dockerfile
+      - frontend/src/__tests__/next-public-env-declared.test.ts
+      - backend/Dockerfile
+      - infrastructure/mcp-sandbox/**
+      - scripts/smoke-selfhost.sh
+      - .github/workflows/selfhost-baseline.yml
+
+jobs:
+  compose-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Used only to satisfy Compose interpolation. Image builds do not make an
+      # LLM request, so no real provider secret is required in CI.
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      SKIP_QUALITY_CHECKS: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Verify frontend public env declarations
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run test:run -- src/__tests__/next-public-env-declared.test.ts
+
+      - name: Build self-host images
+        run: docker compose build --pull
