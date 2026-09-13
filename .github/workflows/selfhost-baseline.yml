@@ -11,6 +11,7 @@ on:
       - frontend/src/__tests__/next-public-env-declared.test.ts
       - backend/Dockerfile
       - backend/adk/agent.py
+      - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
       - backend/db/clients.py
@@ -25,6 +26,7 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
+      - backend/tests/unit/test_permissions.py
       - backend/tests/unit/test_skill_config.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
@@ -38,6 +40,7 @@ on:
       - frontend/src/__tests__/next-public-env-declared.test.ts
       - backend/Dockerfile
       - backend/adk/agent.py
+      - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
       - backend/db/clients.py
@@ -52,6 +55,7 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
+      - backend/tests/unit/test_permissions.py
       - backend/tests/unit/test_skill_config.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
@@ -98,9 +102,9 @@ jobs:
         run: |
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
-            backend uv run pytest -q tests/unit/test_admin_audit.py tests/unit/test_clients.py tests/unit/test_skill_config.py
+            backend uv run pytest -q tests/unit/test_admin_audit.py tests/unit/test_clients.py tests/unit/test_permissions.py tests/unit/test_skill_config.py
           docker compose run --rm --no-deps \
-            backend uv run python -c "from skills import skill_config; from admin import audit; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit; from auth import permissions; from db import clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
@@ -116,7 +120,7 @@ jobs:
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
-            backend uv run python -c "from db.persistence import get_repository; docs=get_repository().query_documents('skills', limit=1); assert docs, 'self-host seed did not create skills'; print('postgres skill seed OK')"
+            backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.query_documents('skills', limit=1), 'self-host seed did not create skills'; p=r.get_document('tool_permissions','*'); assert p and '*' in p.get('tools', []), 'self-host seed did not create wildcard permission'; print('postgres self-host seed OK')"
 
       - name: Build self-host images
         run: docker compose build --pull
