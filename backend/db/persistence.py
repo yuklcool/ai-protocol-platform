@@ -110,5 +110,12 @@ def increment_field(collection: str, doc_id: str, field: str, amount: int = 1) -
     get_repository().increment_field(collection, doc_id, field, amount)
 
 
+def array_union_field(collection: str, doc_id: str, field: str, values: list[Any]) -> None:
+    """Atomically append unique values to an array/list field."""
+    if not values:
+        return
+    get_repository().array_union_field(collection, doc_id, field, values)
+
+
 def persistence_healthcheck() -> bool:
     return get_repository().healthcheck()
