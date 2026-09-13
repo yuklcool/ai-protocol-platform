@@ -1,7 +1,8 @@
-"""Skill configuration — Firestore CRUD for skills collection.
+"""Skill configuration — backend-neutral CRUD for the skills collection.
 
-All reads go through an in-memory cache (60s TTL) for hot skills.
-Writes always go to Firestore and invalidate the cache entry.
+All reads go through an in-memory cache (60s TTL) for hot skills. Persistence
+is selected by ``db.persistence`` (memory / Firestore / PostgreSQL), so Skill
+management no longer hard-depends on Firestore.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import time
 import uuid
 from typing import Any
 
-from db import firestore as fs
+from db import persistence as fs
 from db.models import SkillConfig
 
 logger = logging.getLogger(__name__)
@@ -30,18 +31,18 @@ _cache: dict[str, tuple[float, SkillConfig]] = {}
 
 
 def _to_firestore(config: SkillConfig) -> dict[str, Any]:
-    """Serialize a SkillConfig to a Firestore-compatible dict."""
+    """Serialize a SkillConfig to a document-store-compatible dict."""
     return config.model_dump(by_alias=True)
 
 
 def _from_firestore(data: dict[str, Any]) -> SkillConfig:
-    """Deserialize a Firestore document to a SkillConfig."""
+    """Deserialize a persisted skill document to a SkillConfig."""
     data.pop("__id", None)
     return SkillConfig.model_validate(data)
 
 
 def _configs_from_docs(docs: list[dict[str, Any]]) -> list[SkillConfig]:
-    """Deserialize a batch of Firestore docs, skipping any that fail validation.
+    """Deserialize a batch of skill docs, skipping any that fail validation.
 
     A list read must never let one malformed document 500 the whole endpoint —
     that blanks the SkillsBar switcher for every user (see deploy-skill Trap 22).
@@ -55,7 +56,6 @@ def _configs_from_docs(docs: list[dict[str, Any]]) -> list[SkillConfig]:
         try:
             configs.append(_from_firestore(doc))
         except Exception as exc:
-            # One bad doc must not sink the whole list — skip + log loudly.
             logger.warning("skill_config: skipping invalid skill doc %s: %s", skill_id, exc)
     return configs
 
@@ -75,10 +75,6 @@ def _cache_set(skill_id: str, config: SkillConfig) -> None:
 
 def _cache_invalidate(skill_id: str) -> None:
     _cache.pop(skill_id, None)
-    # Any create/update/delete can flip a skill's public visibility, so
-    # drop the A2A card snapshot and re-sync the MCP tool registry.
-    # Function-local imports keep the skills package independent of
-    # the protocols package at import time.
     from protocols.a2a import invalidate_cache as _invalidate_a2a_card
     from protocols.mcp_server import rebuild_tools as _rebuild_mcp_tools
 
@@ -97,7 +93,7 @@ def create_skill(
     owner_id: str = "",
     **kwargs: Any,
 ) -> SkillConfig:
-    """Create a new skill and persist to Firestore."""
+    """Create a new skill and persist it through the selected backend."""
     skill_id = str(uuid.uuid4())
     now = time.time()
     config = SkillConfig(
@@ -113,8 +109,6 @@ def create_skill(
     )
     fs.set_document(COLLECTION, skill_id, _to_firestore(config))
     _cache_set(skill_id, config)
-    # New public skills must appear in /.well-known/agent.json and /mcp
-    # tools/list immediately — not after the 60s TTL.
     from protocols.a2a import invalidate_cache as _invalidate_a2a_card
     from protocols.mcp_server import rebuild_tools as _rebuild_mcp_tools
 
@@ -139,12 +133,7 @@ def get_skill(skill_id: str) -> SkillConfig | None:
 
 
 def find_by_slug(owner_id: str, slug: str) -> SkillConfig | None:
-    """Resolve (owner_id, slug) -> SkillConfig via the composite index.
-
-    Returns None if no skill with that slug exists in the owner's namespace.
-    Caches the resolved config under its skill_id, so a follow-up `get_skill`
-    after a slug-resolved fetch hits the cache.
-    """
+    """Resolve (owner_id, slug) -> SkillConfig via the repository query API."""
     docs = fs.query_documents(
         COLLECTION,
         filters=[("ownerId", "==", owner_id), ("slug", "==", slug)],
@@ -158,25 +147,7 @@ def find_by_slug(owner_id: str, slug: str) -> SkillConfig | None:
 
 
 def resolve_skill_ref(ref: str, caller_uid: str | None = None) -> SkillConfig | None:
-    """Resolve a skill reference that may be a canonical id OR a friendly slug.
-
-    CLAUDE.md #9: any route that takes an id must accept the friendly form and
-    resolve friendly→id, never the reverse. This is the recurring bug class —
-    the deployed doc-id is a UUID while the local fixture uses slug-as-doc-id,
-    so a caller that passes a slug works locally and 404s deployed. That is
-    exactly how ``POST /api/skill/skill-authoring-assistant/stream`` returned
-    404 "Skill not found" on test (2026-08-05) while the same UI worked for
-    one-assistant, which happened to hold the UUID.
-
-    Resolution order, most specific first:
-      1. canonical doc id
-      2. the caller's own namespace, by slug
-      3. the platform namespace, by slug
-
-    Returns None only when the ref matches nothing. Access is NOT checked here
-    — the caller decides, so "doesn't exist" stays distinguishable from
-    "not allowed" in the logs.
-    """
+    """Resolve a skill reference that may be a canonical id OR a friendly slug."""
     skill = get_skill(ref)
     if skill is not None:
         return skill
@@ -188,7 +159,7 @@ def resolve_skill_ref(ref: str, caller_uid: str | None = None) -> SkillConfig | 
             continue
         try:
             found = find_by_slug(owner, ref)
-        except Exception as exc:  # a slug lookup must never mask the 404
+        except Exception as exc:
             logger.warning("slug resolution failed for %r in %s: %s", ref, owner, exc)
             continue
         if found is not None:
@@ -198,18 +169,10 @@ def resolve_skill_ref(ref: str, caller_uid: str | None = None) -> SkillConfig | 
 
 
 def find_jobs(owner_id: str) -> list[SkillConfig]:
-    """All skills in ``owner_id``'s namespace tagged as jobs (metadata.job=True).
-
-    Used by delegation discovery (v6.8.0 8.3): a door with
-    ``delegation.discover_jobs`` offers these to the user, access-filtered at
-    agent-build time (``_resolve_accessible_delegates``). Filtering on the nested
-    ``job`` flag in Python keeps discovery index-free — the platform skill set is
-    small and this is called once per agent build, behind the same cache warmth
-    as ``get_skill``. Malformed docs are skipped, not fatal (fail-open on read is
-    safe: an unreadable skill just isn't offered)."""
+    """All skills in ``owner_id``'s namespace tagged as jobs (metadata.job=True)."""
     docs = fs.query_documents(COLLECTION, filters=[("ownerId", "==", owner_id)])
     jobs: list[SkillConfig] = []
-    for cfg in _configs_from_docs(docs):  # skips malformed docs, logs loudly
+    for cfg in _configs_from_docs(docs):
         if cfg.skill_metadata.job:
             _cache_set(cfg.skill_id, cfg)
             jobs.append(cfg)
@@ -223,20 +186,12 @@ def update_skill(skill_id: str, updates: dict[str, Any]) -> SkillConfig | None:
         return None
 
     updates["updatedAt"] = time.time()
-
-    # Validate the MERGED result before writing. `fs.update_document` is a raw
-    # partial field write with no schema check, so an over-cap field (e.g.
-    # instructions past the length limit, pushed by a SKILL.md refresh) would
-    # silently land in Firestore and then 500 every later read via
-    # `_from_firestore`. Failing loudly here keeps the corruption out of the
-    # store instead of turning a stored doc into a landmine. (deploy Trap 22)
     merged = {**_to_firestore(existing), **updates}
     SkillConfig.model_validate(merged)
 
     fs.update_document(COLLECTION, skill_id, updates)
     _cache_invalidate(skill_id)
 
-    # Re-read to get consistent state
     data = fs.get_document(COLLECTION, skill_id)
     if data is None:
         return None
@@ -283,12 +238,7 @@ def list_skills(
 
 
 def list_marketplace(limit: int = 50) -> list[SkillConfig]:
-    """List public skills for the marketplace, ordered by usage.
-
-    System agents are dropped post-query (Firestore has no "array does not
-    contain" filter) — locally they're seeded `public`, and a copilot in the
-    marketplace top-10 makes no sense anywhere.
-    """
+    """List public skills for the marketplace, ordered by usage."""
     docs = fs.query_documents(
         COLLECTION,
         filters=[("accessControl.type", "==", "public")],
