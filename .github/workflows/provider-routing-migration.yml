@@ -1,0 +1,272 @@
+name: Provider routing migration
+
+on:
+  push:
+    paths:
+      - ".github/workflows/provider-routing-migration.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply provider-driven routing patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          agent_path = Path("backend/adk/agent.py")
+          text = agent_path.read_text()
+
+          old_import = "    entry_for,\n    load_models_config,\n)"
+          new_import = "    entry_for,\n    load_models_config,\n    provider_for,\n)"
+          if old_import not in text and new_import not in text:
+              raise SystemExit("config.models import block changed; refusing unsafe migration")
+          text = text.replace(old_import, new_import, 1)
+
+          resolve_model = '''def resolve_model(model_id: str) -> Gemini | LiteLlm:
+              """Create the correct ADK model wrapper for a model reference.
+
+              Registry entries are routed by ``ModelEntry.provider``. Model names are
+              deliberately opaque: an OpenAI-compatible model may be called
+              ``deepseek-chat``, ``qwen3`` or anything else. Prefix inference is kept
+              only for legacy *raw* API names that are not registered.
+              """
+              entry = entry_for(model_id)
+              resolved = entry.api_name if entry is not None else api_name_for(model_id)
+              provider = provider_for(model_id)
+              if provider is None:
+                  raise ValueError(
+                      f"Unsupported model: {model_id!r} (resolved to {resolved!r}). "
+                      "Register non-standard model names in config/models.yaml with an explicit provider."
+                  )
+
+              if provider == "google":
+                  # Vertex region/endpoint availability is not uniform across Gemini
+                  # generations. Registry metadata is authoritative when available.
+                  if entry is not None and entry.location:
+                      return RegionalGemini(model=resolved, location=entry.location)
+                  if entry is not None and entry.residency == "global":
+                      return RegionalGemini(model=resolved, location="global")
+                  return Gemini(model=resolved)
+
+              if provider == "anthropic":
+                  # Direct Anthropic API via LiteLLM. Adaptive-thinking transport is
+                  # still generation-specific, but provider selection no longer is.
+                  kwargs: dict = {}
+                  if (
+                      os.environ.get("CLAUDE_ADAPTIVE_THINKING", "on").strip().lower() != "off"
+                      and "haiku" not in resolved
+                  ):
+                      _EFFORT = {"smart": "high", "default": "medium", "fast": "low"}
+                      effort = _EFFORT.get(getattr(entry, "tier", None) or "", "high")
+                      if _claude_uses_adaptive_thinking(resolved):
+                          kwargs["thinking"] = {"type": "adaptive", "display": "summarized"}
+                          kwargs["output_config"] = {"effort": effort}
+                      else:
+                          kwargs["reasoning_effort"] = effort
+                  return LiteLlm(model=f"anthropic/{resolved}", **kwargs)
+
+              if provider == "openai":
+                  # ``openai/<model>`` is LiteLLM's generic OpenAI-compatible route.
+                  # OPENAI_API_BASE lets the same code target OpenAI, DeepSeek/Qwen
+                  # gateways, vLLM, LiteLLM Proxy, OneAPI/NewAPI, or an internal
+                  # compatible endpoint without changing Python source.
+                  kwargs: dict = {}
+                  api_base = os.environ.get("OPENAI_API_BASE", "").strip()
+                  if api_base:
+                      kwargs["api_base"] = api_base
+
+                  # Registry capabilities are authoritative. Legacy raw official
+                  # OpenAI names preserve the historical heuristic for compatibility.
+                  legacy_reasoner = entry is None and (
+                      resolved.startswith("gpt-5") or resolved.startswith(("o1", "o3", "o4"))
+                  )
+                  supports_reasoning = entry.supports_reasoning if entry is not None else legacy_reasoner
+                  supports_responses = entry.supports_responses_api if entry is not None else legacy_reasoner
+                  if supports_reasoning:
+                      _EFFORT = {"smart": "high", "default": "medium", "fast": "low"}
+                      effort = _EFFORT.get(getattr(entry, "tier", None) or "", "medium")
+                      kwargs["reasoning_effort"] = effort
+                      if supports_responses:
+                          # LiteLLM uses reasoning_effort + reasoning to bridge
+                          # tool-using OpenAI reasoners onto /v1/responses.
+                          kwargs["reasoning"] = {"summary": "auto"}
+                          kwargs["allowed_openai_params"] = ["reasoning"]
+                  return LiteLlm(model=f"openai/{resolved}", **kwargs)
+
+              raise ValueError(f"Unsupported provider {provider!r} for model {model_id!r}")'''
+          # Dedent the embedded function without depending on textwrap formatting
+          # of this workflow's YAML indentation.
+          import textwrap
+          resolve_model = textwrap.dedent(resolve_model)
+          pattern = re.compile(
+              r"def resolve_model\(model_id: str\) -> Gemini \| LiteLlm:\n.*?\n\n# --- MODEL-RELIABILITY M3:",
+              re.S,
+          )
+          text, count = pattern.subn(resolve_model + "\n\n# --- MODEL-RELIABILITY M3:", text, count=1)
+          if count != 1:
+              raise SystemExit(f"resolve_model replacement count={count}; refusing unsafe migration")
+
+          provider_key_fn = '''def _provider_key_missing(model_ref: str) -> str | None:
+              """Env var name when a registered/raw provider requires an API key."""
+              provider = provider_for(model_ref)
+              needed = _PROVIDER_KEY_ENVS.get(provider or "")
+              if needed is None:
+                  return None
+              return None if os.environ.get(needed) else needed
+          '''
+          provider_key_fn = textwrap.dedent(provider_key_fn).rstrip()
+          pattern = re.compile(
+              r"def _provider_key_missing\(api_name: str\) -> str \| None:\n.*?\n\n\ndef _resolve_link",
+              re.S,
+          )
+          text, count = pattern.subn(provider_key_fn + "\n\n\ndef _resolve_link", text, count=1)
+          if count != 1:
+              raise SystemExit(f"_provider_key_missing replacement count={count}; refusing unsafe migration")
+          text = text.replace("missing_key = _provider_key_missing(link_api)", "missing_key = _provider_key_missing(link.id)", 1)
+          agent_path.write_text(text)
+
+          yaml_path = Path("backend/config/models.yaml")
+          models = yaml_path.read_text()
+          start = models.index("  # ─── OpenAI")
+          end = models.index("# ─── Provider defaults", start)
+          section = models[start:end]
+          if "supports_responses_api:" not in section:
+              section = section.replace(
+                  "    provider: openai\n",
+                  "    provider: openai\n"
+                  "    supports_tools: true\n"
+                  "    supports_reasoning: true\n"
+                  "    supports_responses_api: true\n",
+              )
+          example_anchor = "  gpt-5-4:\n"
+          if "OpenAI-compatible self-host examples" not in section:
+              examples = '''  # OpenAI-compatible self-host examples (copy one into this registry and
+              # adjust limits/residency for the deployment; names do NOT need a gpt-* prefix):
+              #
+              # deepseek-v3:
+              #   api_name: "deepseek-chat"
+              #   provider: openai
+              #   tier: default
+              #   supports_tools: true
+              #   supports_reasoning: false
+              #   supports_responses_api: false
+              #   residency: global
+              #   context_window: 128_000
+              #   max_output_tokens: 8_192
+              #   description: "DeepSeek via an OpenAI-compatible endpoint"
+              #
+              # The same shape works for Qwen, vLLM, LiteLLM Proxy and
+              # OneAPI/NewAPI: set api_name to the exact model name exposed by
+              # that endpoint and configure OPENAI_API_BASE + OPENAI_API_KEY.
+              #
+          '''
+              section = section.replace(example_anchor, textwrap.dedent(examples) + example_anchor, 1)
+          models = models[:start] + section + models[end:]
+          yaml_path.write_text(models)
+
+          test_path = Path("backend/tests/model_tests/test_openai_compatible_routing.py")
+          test_path.parent.mkdir(parents=True, exist_ok=True)
+          test_path.write_text('''"""Provider-driven OpenAI-compatible routing regression tests."""
+
+          import pytest
+
+          import adk.agent as agent
+          from config.models import ModelEntry
+
+
+          def _entry(**overrides):
+              data = dict(
+                  id="deepseek-v3",
+                  api_name="deepseek-chat",
+                  provider="openai",
+                  tier="default",
+                  residency="global",
+                  context_window=128_000,
+                  max_output_tokens=8_192,
+                  description="test compatible model",
+                  supports_tools=True,
+                  supports_reasoning=False,
+                  supports_responses_api=False,
+              )
+              data.update(overrides)
+              return ModelEntry(**data)
+
+
+          def _patch_registry(monkeypatch, entry):
+              monkeypatch.setattr(agent, "entry_for", lambda _ref: entry)
+              monkeypatch.setattr(agent, "api_name_for", lambda _ref: entry.api_name)
+              monkeypatch.setattr(agent, "provider_for", lambda _ref: entry.provider)
+
+
+          def test_non_gpt_name_routes_by_provider(monkeypatch):
+              entry = _entry()
+              _patch_registry(monkeypatch, entry)
+              seen = {}
+
+              class FakeLiteLlm:
+                  def __init__(self, **kwargs):
+                      seen.update(kwargs)
+
+              monkeypatch.setattr(agent, "LiteLlm", FakeLiteLlm)
+              monkeypatch.setenv("OPENAI_API_BASE", "http://model-gateway:8000/v1")
+              agent.resolve_model("deepseek-v3")
+
+              assert seen["model"] == "openai/deepseek-chat"
+              assert seen["api_base"] == "http://model-gateway:8000/v1"
+              assert "reasoning_effort" not in seen
+
+
+          def test_reasoning_capabilities_control_responses_bridge(monkeypatch):
+              entry = _entry(
+                  id="reasoner",
+                  api_name="custom-reasoner",
+                  supports_reasoning=True,
+                  supports_responses_api=True,
+                  tier="smart",
+              )
+              _patch_registry(monkeypatch, entry)
+              seen = {}
+
+              class FakeLiteLlm:
+                  def __init__(self, **kwargs):
+                      seen.update(kwargs)
+
+              monkeypatch.setattr(agent, "LiteLlm", FakeLiteLlm)
+              agent.resolve_model("reasoner")
+
+              assert seen["model"] == "openai/custom-reasoner"
+              assert seen["reasoning_effort"] == "high"
+              assert seen["reasoning"] == {"summary": "auto"}
+
+
+          def test_unregistered_nonstandard_name_fails_with_registry_hint(monkeypatch):
+              monkeypatch.setattr(agent, "entry_for", lambda _ref: None)
+              monkeypatch.setattr(agent, "api_name_for", lambda ref: ref)
+              monkeypatch.setattr(agent, "provider_for", lambda _ref: None)
+              with pytest.raises(ValueError, match="Register non-standard model names"):
+                  agent.resolve_model("deepseek-chat")
+          '''.replace("          ", ""))
+          PY
+
+      - name: Commit migration result
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/adk/agent.py backend/config/models.yaml backend/tests/model_tests/test_openai_compatible_routing.py
+          if git diff --cached --quiet; then
+            echo "No migration changes needed."
+            exit 0
+          fi
+          git commit -m "feat(models): route OpenAI-compatible models by provider"
+          git push origin HEAD:main
