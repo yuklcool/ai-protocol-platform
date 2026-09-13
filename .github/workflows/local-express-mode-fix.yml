@@ -21,19 +21,13 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+          import textwrap
 
           agent_path = Path("backend/adk/agent.py")
           text = agent_path.read_text()
-          old = '''    if provider == "google":
-              # Vertex region/endpoint availability is not uniform across Gemini
-              # generations. Registry metadata is authoritative when available.
-              if entry is not None and entry.location:
-                  return RegionalGemini(model=resolved, location=entry.location)
-              if entry is not None and entry.residency == "global":
-                  return RegionalGemini(model=resolved, location="global")
-              return Gemini(model=resolved)
-          '''
-          new = '''    if provider == "google":
+          new_google = textwrap.indent(textwrap.dedent('''
+          if provider == "google":
               # Gemini Express Mode (GOOGLE_GENAI_USE_VERTEXAI=false) must never
               # instantiate RegionalGemini: that class intentionally hard-pins
               # vertexai=True and would turn the zero-GCP LOCAL_MODE path back into
@@ -53,20 +47,21 @@ jobs:
               if entry is not None and entry.residency == "global":
                   return RegionalGemini(model=resolved, location="global")
               return Gemini(model=resolved)
-          '''
-          import textwrap
-          old = textwrap.dedent(old)
-          new = textwrap.dedent(new)
-          if new not in text:
-              if old not in text:
-                  raise SystemExit("Google provider block drifted; refusing unsafe replacement")
-              text = text.replace(old, new, 1)
+          ''').strip("\n"), "    ")
+
+          if "use_vertex = os.environ.get(\"GOOGLE_GENAI_USE_VERTEXAI\"" not in text:
+              pattern = re.compile(
+                  r'^    if provider == "google":\n.*?(?=^    if provider == "anthropic":)',
+                  re.M | re.S,
+              )
+              text, count = pattern.subn(new_google + "\n\n", text, count=1)
+              if count != 1:
+                  raise SystemExit(f"Google provider replacement count={count}; refusing unsafe migration")
           agent_path.write_text(text)
 
           script_path = Path("scripts/dev-local.sh")
           script = script_path.read_text()
-          anchor = '''export AITANA_LOCAL_SESSION=memory
-          '''
+          anchor = "export AITANA_LOCAL_SESSION=memory\n"
           addition = '''export AITANA_LOCAL_SESSION=memory
 
           # LOCAL_MODE is a development baseline. The registry's production-safe
@@ -77,7 +72,6 @@ jobs:
               export MODEL_RESIDENCY_POLICY=unrestricted
           fi
           '''
-          anchor = textwrap.dedent(anchor)
           addition = textwrap.dedent(addition)
           if "export MODEL_RESIDENCY_POLICY=unrestricted" not in script:
               if anchor not in script:
