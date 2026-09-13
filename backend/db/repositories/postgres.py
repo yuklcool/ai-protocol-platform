@@ -1,53 +1,89 @@
 """PostgreSQL implementation of the backend-neutral document repository.
 
-The first self-hosted schema stores each platform document as JSONB under the
-same collection/doc-id identity used by the existing Firestore code.  This is
-intentional: it lets domain modules move behind the Repository boundary first,
-then lets hot domains become normalized SQL tables later without a flag-day
-migration.
+The self-hosted schema stores platform documents as JSONB under the same
+collection/doc-id identity used by the Firestore implementation.  The public
+Repository contract is synchronous because existing domain call sites are
+synchronous; internally this adapter owns one asyncpg connection pool on a
+private event-loop thread so it can reuse the asyncpg dependency already shipped
+by the backend without nested-event-loop failures inside FastAPI.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
-from contextlib import contextmanager
-from typing import Any, Iterator
+import os
+import threading
+from concurrent.futures import Future
+from typing import Any, Coroutine, TypeVar
 
 from db.repositories._document_ops import apply_query
 from db.repository import Filter
+
+_T = TypeVar("_T")
+
+
+class _LoopRunner:
+    """Run asyncpg coroutines on one dedicated event loop from sync callers."""
+
+    def __init__(self) -> None:
+        self._ready = threading.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread = threading.Thread(target=self._run_loop, name="postgres-repository", daemon=True)
+        self._thread.start()
+        self._ready.wait()
+
+    def _run_loop(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop = loop
+        self._ready.set()
+        loop.run_forever()
+
+    def run(self, coro: Coroutine[Any, Any, _T]) -> _T:
+        if self._loop is None:  # pragma: no cover - constructor waits for readiness
+            raise RuntimeError("PostgreSQL repository event loop did not start")
+        future: Future[_T] = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
 
 
 class PostgresRepository:
     def __init__(self, database_url: str) -> None:
         if not database_url:
             raise ValueError("DATABASE_URL is required when DATA_BACKEND=postgres")
-        self._database_url = database_url
+        self._database_url = database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+        self._runner = _LoopRunner()
+        self._pool = self._runner.run(self._create_pool())
+
+    async def _create_pool(self):
+        import asyncpg
+
+        min_size = max(1, int(os.environ.get("POSTGRES_POOL_MIN_SIZE", "1")))
+        max_size = max(min_size, int(os.environ.get("POSTGRES_POOL_MAX_SIZE", "10")))
+        return await asyncpg.create_pool(
+            dsn=self._database_url,
+            min_size=min_size,
+            max_size=max_size,
+            command_timeout=float(os.environ.get("POSTGRES_COMMAND_TIMEOUT", "30")),
+        )
 
     @staticmethod
-    def _driver():
-        try:
-            import psycopg
-            from psycopg.rows import dict_row
-        except ImportError as exc:  # pragma: no cover - startup guard covers this in packaged builds
-            raise RuntimeError(
-                "PostgreSQL persistence requires psycopg. Install the locked backend dependencies."
-            ) from exc
-        return psycopg, dict_row
-
-    @contextmanager
-    def _connect(self):
-        psycopg, dict_row = self._driver()
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
-            yield conn
+    def _decode_json(value: Any) -> dict[str, Any]:
+        if isinstance(value, str):
+            value = json.loads(value)
+        return dict(value or {})
 
     def get_document(self, collection: str, doc_id: str) -> dict[str, Any] | None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT data FROM platform_documents WHERE collection = %s AND doc_id = %s",
-                (collection, doc_id),
-            )
-            row = cur.fetchone()
-            return dict(row["data"]) if row else None
+        async def op():
+            async with self._pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT data FROM platform_documents WHERE collection = $1 AND doc_id = $2",
+                    collection,
+                    doc_id,
+                )
+                return self._decode_json(row["data"]) if row else None
+
+        return self._runner.run(op())
 
     def set_document(
         self,
@@ -58,52 +94,67 @@ class PostgresRepository:
         merge: bool = False,
     ) -> None:
         payload = json.dumps(data)
-        with self._connect() as conn, conn.cursor() as cur:
-            if merge:
-                cur.execute(
-                    """
-                    INSERT INTO platform_documents (collection, doc_id, data)
-                    VALUES (%s, %s, %s::jsonb)
-                    ON CONFLICT (collection, doc_id) DO UPDATE
-                    SET data = platform_documents.data || EXCLUDED.data,
-                        updated_at = now()
-                    """,
-                    (collection, doc_id, payload),
-                )
-            else:
-                cur.execute(
-                    """
-                    INSERT INTO platform_documents (collection, doc_id, data)
-                    VALUES (%s, %s, %s::jsonb)
-                    ON CONFLICT (collection, doc_id) DO UPDATE
-                    SET data = EXCLUDED.data, updated_at = now()
-                    """,
-                    (collection, doc_id, payload),
-                )
-            conn.commit()
+
+        async def op():
+            async with self._pool.acquire() as conn:
+                if merge:
+                    await conn.execute(
+                        """
+                        INSERT INTO platform_documents (collection, doc_id, data)
+                        VALUES ($1, $2, $3::jsonb)
+                        ON CONFLICT (collection, doc_id) DO UPDATE
+                        SET data = platform_documents.data || EXCLUDED.data,
+                            updated_at = now()
+                        """,
+                        collection,
+                        doc_id,
+                        payload,
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        INSERT INTO platform_documents (collection, doc_id, data)
+                        VALUES ($1, $2, $3::jsonb)
+                        ON CONFLICT (collection, doc_id) DO UPDATE
+                        SET data = EXCLUDED.data, updated_at = now()
+                        """,
+                        collection,
+                        doc_id,
+                        payload,
+                    )
+
+        self._runner.run(op())
 
     def update_document(self, collection: str, doc_id: str, data: dict[str, Any]) -> None:
         payload = json.dumps(data)
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE platform_documents
-                SET data = data || %s::jsonb, updated_at = now()
-                WHERE collection = %s AND doc_id = %s
-                """,
-                (payload, collection, doc_id),
-            )
-            if cur.rowcount == 0:
-                raise KeyError(f"document {collection}/{doc_id} does not exist")
-            conn.commit()
+
+        async def op():
+            async with self._pool.acquire() as conn:
+                status = await conn.execute(
+                    """
+                    UPDATE platform_documents
+                    SET data = data || $1::jsonb, updated_at = now()
+                    WHERE collection = $2 AND doc_id = $3
+                    """,
+                    payload,
+                    collection,
+                    doc_id,
+                )
+                if status.endswith(" 0"):
+                    raise KeyError(f"document {collection}/{doc_id} does not exist")
+
+        self._runner.run(op())
 
     def delete_document(self, collection: str, doc_id: str) -> None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM platform_documents WHERE collection = %s AND doc_id = %s",
-                (collection, doc_id),
-            )
-            conn.commit()
+        async def op():
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM platform_documents WHERE collection = $1 AND doc_id = $2",
+                    collection,
+                    doc_id,
+                )
+
+        self._runner.run(op())
 
     def query_documents(
         self,
@@ -114,21 +165,20 @@ class PostgresRepository:
         order_direction: str = "DESCENDING",
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        # Phase-2 correctness-first implementation: collection isolation and ID
-        # selection happen in SQL, while Firestore-compatible filter/order
-        # semantics are evaluated by the shared document helper. This avoids
-        # subtly different JSONB casting behavior while domains are still being
-        # migrated. Hot queries can gain explicit SQL indexes as they stabilize.
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT doc_id, data FROM platform_documents WHERE collection = %s",
-                (collection,),
-            )
-            docs = []
-            for row in cur.fetchall():
-                data = dict(row["data"])
-                data["__id"] = row["doc_id"]
-                docs.append(data)
+        async def op():
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT doc_id, data FROM platform_documents WHERE collection = $1",
+                    collection,
+                )
+                docs: list[dict[str, Any]] = []
+                for row in rows:
+                    data = self._decode_json(row["data"])
+                    data["__id"] = row["doc_id"]
+                    docs.append(data)
+                return docs
+
+        docs = self._runner.run(op())
         return apply_query(
             docs,
             filters=filters,
@@ -138,31 +188,37 @@ class PostgresRepository:
         )
 
     def increment_field(self, collection: str, doc_id: str, field: str, amount: int = 1) -> None:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT data FROM platform_documents WHERE collection = %s AND doc_id = %s FOR UPDATE",
-                (collection, doc_id),
-            )
-            row = cur.fetchone()
-            if not row:
-                raise KeyError(f"document {collection}/{doc_id} does not exist")
-            data = dict(row["data"])
-            current = data.get(field, 0)
-            if not isinstance(current, (int, float)):
-                raise TypeError(f"field {field!r} on {collection}/{doc_id} is not numeric")
-            data[field] = current + amount
-            cur.execute(
-                """
-                UPDATE platform_documents
-                SET data = %s::jsonb, updated_at = now()
-                WHERE collection = %s AND doc_id = %s
-                """,
-                (json.dumps(data), collection, doc_id),
-            )
-            conn.commit()
+        async def op():
+            async with self._pool.acquire() as conn:
+                async with conn.transaction():
+                    row = await conn.fetchrow(
+                        "SELECT data FROM platform_documents WHERE collection = $1 AND doc_id = $2 FOR UPDATE",
+                        collection,
+                        doc_id,
+                    )
+                    if not row:
+                        raise KeyError(f"document {collection}/{doc_id} does not exist")
+                    data = self._decode_json(row["data"])
+                    current = data.get(field, 0)
+                    if not isinstance(current, (int, float)):
+                        raise TypeError(f"field {field!r} on {collection}/{doc_id} is not numeric")
+                    data[field] = current + amount
+                    await conn.execute(
+                        """
+                        UPDATE platform_documents
+                        SET data = $1::jsonb, updated_at = now()
+                        WHERE collection = $2 AND doc_id = $3
+                        """,
+                        json.dumps(data),
+                        collection,
+                        doc_id,
+                    )
+
+        self._runner.run(op())
 
     def healthcheck(self) -> bool:
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT 1 AS ok")
-            row = cur.fetchone()
-            return bool(row and row["ok"] == 1)
+        async def op():
+            async with self._pool.acquire() as conn:
+                return await conn.fetchval("SELECT 1") == 1
+
+        return bool(self._runner.run(op()))
