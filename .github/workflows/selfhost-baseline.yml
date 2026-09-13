@@ -10,7 +10,10 @@ on:
       - frontend/Dockerfile
       - frontend/src/__tests__/next-public-env-declared.test.ts
       - backend/Dockerfile
+      - backend/services.py
       - backend/adk/agent.py
+      - backend/adk/session.py
+      - backend/adk/postgres_memory.py
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
@@ -29,11 +32,15 @@ on:
       - backend/tests/api_tests/test_admin_tool_permissions.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
+      - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
       - backend/tests/unit/test_permissions.py
+      - backend/tests/unit/test_postgres_memory.py
+      - backend/tests/unit/test_postgres_session_memory_factories.py
+      - backend/tests/unit/test_session_factories.py
       - backend/tests/unit/test_skill_config.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
@@ -46,7 +53,10 @@ on:
       - frontend/Dockerfile
       - frontend/src/__tests__/next-public-env-declared.test.ts
       - backend/Dockerfile
+      - backend/services.py
       - backend/adk/agent.py
+      - backend/adk/session.py
+      - backend/adk/postgres_memory.py
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
@@ -65,11 +75,15 @@ on:
       - backend/tests/api_tests/test_admin_tool_permissions.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
+      - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
       - backend/tests/unit/test_permissions.py
+      - backend/tests/unit/test_postgres_memory.py
+      - backend/tests/unit/test_postgres_session_memory_factories.py
+      - backend/tests/unit/test_session_factories.py
       - backend/tests/unit/test_skill_config.py
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
@@ -112,6 +126,15 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/persistence_tests/test_repository_contract.py
 
+      - name: Test PostgreSQL Session and Memory factories
+        run: |
+          docker compose run --rm --no-deps \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+              tests/unit/test_session_factories.py \
+              tests/unit/test_postgres_session_memory_factories.py \
+              tests/unit/test_postgres_memory.py
+
       - name: Test migrated persistence domains
         run: |
           docker compose run --rm --no-deps \
@@ -143,6 +166,16 @@ jobs:
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.query_documents('skills', limit=1), 'self-host seed did not create skills'; p=r.get_document('tool_permissions','*'); assert p and '*' in p.get('tools', []), 'self-host seed did not create wildcard permission'; print('postgres self-host seed OK')"
+
+      - name: Verify ADK Session and Memory survive PostgreSQL reconstruction
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e SESSION_BACKEND=postgres \
+            -e MEMORY_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/integration/test_postgres_adk_session_memory.py
 
       - name: Build self-host images
         run: docker compose build --pull
