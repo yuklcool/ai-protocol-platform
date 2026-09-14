@@ -87,7 +87,9 @@ jobs:
 
       - name: Verify no-GCP provider routing and local storage regressions
         run: |
-          docker compose run --rm --no-deps backend uv run pytest -q \
+          docker compose run --rm --no-deps \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
             tests/model_tests/test_openai_compatible_routing.py \
             tests/storage_tests/test_object_storage.py \
             tests/storage_tests/test_tenant_object_storage.py \
@@ -112,7 +114,9 @@ jobs:
 
       - name: Verify PostgreSQL Session Memory and A2UI resume in formal Self-host mode
         run: |
-          docker compose run --rm backend uv run pytest -q \
+          docker compose run --rm \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
             tests/integration/test_postgres_adk_session_memory.py \
             tests/integration/test_postgres_a2ui_resume.py
 
