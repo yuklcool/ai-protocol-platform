@@ -4,14 +4,8 @@ All business routes should continue importing ``get_current_user`` from this
 module. The active verifier is selected by ``AUTH_BACKEND`` and every provider
 returns the same trusted ``User`` / ``AccessContext`` shape.
 
-Supported backends:
-- ``stub``: LOCAL_MODE only, backwards-compatible development identity.
-- ``firebase``: existing Firebase/Identity Platform verification.
-- ``local-jwt``: built-in Repository/PostgreSQL accounts + signed JWT.
-- ``oidc``: reserved for the optional enterprise adapter; fail-loud until wired.
-
-Anonymous group-ID tokens remain a token-shape sub-mode for the historical
-workshop/group flow and are still signature-verified by ``group_id_auth``.
+Provider SDKs are imported lazily so Self-host/local-JWT startup does not pull
+Firebase Admin into the core identity path.
 """
 
 import logging
@@ -21,11 +15,10 @@ import jwt
 from fastapi import HTTPException, Request
 
 from auth.access_context import AccessContext, build_access_context, can_access
-from auth.firebase_auth import User
-from auth.firebase_auth import get_current_user as _firebase_get_current_user
 from auth.group_id_auth import AUTH_MODE as _GROUP_AUTH_MODE
 from auth.group_id_auth import AnonymousGroupAuth, GroupRevoked, InvalidGroupToken
 from auth.identity import auth_backend
+from auth.models import User
 from auth.permissions import ToolPermissionDenied, can_use_tool
 from config.local_mode import is_local_mode
 
@@ -126,7 +119,6 @@ async def _resolve_user(request: Request) -> User:
         return await get_current_user_local_jwt(request)
 
     if backend == "oidc":
-        # Explicitly fail closed until the optional enterprise provider exists.
         raise HTTPException(status_code=503, detail="OIDC identity provider is not configured")
 
     auth_header = request.headers.get("Authorization", "")
@@ -134,8 +126,6 @@ async def _resolve_user(request: Request) -> User:
     if auth_header.startswith("Bearer "):
         token = auth_header[len("Bearer ") :].strip()
 
-    # Anonymous group tokens remain valid in both historical auth deployments,
-    # but only after their dedicated verifier validates the signature.
     if token and _peek_token_auth_mode(token) == _GROUP_AUTH_MODE:
         return await _group_auth_get_current_user(request, token)
 
@@ -144,8 +134,10 @@ async def _resolve_user(request: Request) -> User:
 
         return await get_current_user_local_mode(request)
 
-    # Remaining configured backend is Firebase.
-    return await _firebase_get_current_user(request)
+    # Provider-specific SDK stays outside the Self-host startup path.
+    from auth.firebase_auth import get_current_user as firebase_get_current_user
+
+    return await firebase_get_current_user(request)
 
 
 __all__ = [
