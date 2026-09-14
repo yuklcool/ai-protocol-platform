@@ -1,17 +1,12 @@
-"""FastAPI routes for user document folders — /api/folders and /api/sessions context.
-
-User-facing document organization layer. Distinct from the storage-ACL
-bucket/folder system in backend/buckets/ which manages GCS namespace config.
-
-These folders group user uploads within their per-client GCS bucket, keyed
-by the user's email domain (see db/clients.py).
-"""
+"""FastAPI routes for user folders and provider-neutral document access."""
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -19,39 +14,136 @@ from pydantic import BaseModel
 import db.folders as folders_db
 from auth import User, get_current_user
 from db.clients import resolve_documents_bucket
-from db.firestore import delete_document as _delete_firestore_doc
-from db.firestore import get_document as _get_firestore_doc
-from db.firestore import set_document as _set_firestore_doc
+from db.persistence import delete_document as _delete_document_record
+from db.persistence import get_document as _get_document_record
+from db.persistence import set_document as _set_document_record
+from object_storage import get_object_storage, object_storage_backend_name
+from object_storage.gcs import GcsObjectStorage, LegacyGcsObjectStorage
+from object_storage.local import LocalObjectStorage
 
 log = logging.getLogger(__name__)
-
 router = APIRouter(tags=["doc-folders"])
-
 _CurrentUser = Annotated[User, Depends(get_current_user)]
 _ACCESS_DENIED = "Access denied"
+_PARSED_DOCS_COLLECTION = "parsed_documents"
 
 
 def _content_disposition(disposition: str, filename: str) -> str:
-    """Build an RFC 6266 ``Content-Disposition`` value that is safe for ANY
-    filename.
-
-    HTTP header values are serialised as latin-1 by Starlette/uvicorn, so a raw
-    ``filename="..."`` containing a non-latin-1 character (an en/em dash
-    U+2013/U+2014, a curly quote, accented or CJK text) raises
-    ``UnicodeEncodeError`` when the response is sent, surfacing as an opaque
-    **500**. (This bit a real upload whose name held an en-dash between the trip
-    dates; the preview route 500'd on it.)
-
-    We emit an ASCII-only ``filename=`` fallback plus an RFC 5987
-    ``filename*=UTF-8''`` param carrying the true name percent-encoded, so modern
-    browsers show the correct name and the header always encodes.
-    """
     from urllib.parse import quote
 
     ascii_fallback = filename.encode("ascii", "ignore").decode("ascii").strip()
-    # Neutralise quoted-string delimiters in the fallback; default to a name.
     ascii_fallback = ascii_fallback.replace("\\", "_").replace('"', "_") or "document"
     return f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(filename, safe='')}"
+
+
+def _tenant_namespace(user: User) -> str:
+    domain = (getattr(user, "domain", None) or "").strip().lower()
+    if not domain:
+        email = (getattr(user, "email", None) or "").strip().lower()
+        if "@" in email:
+            domain = email.rsplit("@", 1)[1]
+    return domain or f"user-{user.uid}"
+
+
+def _owned_document(doc_id: str, user: User) -> dict:
+    doc = _get_document_record(_PARSED_DOCS_COLLECTION, doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.get("userId") != user.uid:
+        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
+    tenant_id = doc.get("tenantId")
+    if tenant_id and tenant_id != _tenant_namespace(user):
+        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
+    doc.setdefault("id", doc_id)
+    return doc
+
+
+def _storage_binding(doc: dict, user: User):
+    """Return (storage, tenant_id, key, backend) for new and legacy documents."""
+    tenant_id = doc.get("tenantId") or _tenant_namespace(user)
+    key = (doc.get("storagePath") or "").strip()
+    source_url = (doc.get("sourceUrl") or "").strip()
+    backend = (doc.get("storageBackend") or "").strip().lower()
+
+    if not key and source_url.startswith("gs://"):
+        parsed = urlparse(source_url)
+        key = parsed.path.lstrip("/")
+    if not key:
+        raise HTTPException(status_code=404, detail="Document has no stored binary")
+
+    if backend == "local":
+        root = os.environ.get("OBJECT_STORAGE_LOCAL_ROOT", "/data/objects").strip() or "/data/objects"
+        return LocalObjectStorage(root), tenant_id, key, backend
+
+    if backend == "gcs":
+        parsed = urlparse(source_url) if source_url.startswith("gs://") else None
+        bucket = parsed.netloc if parsed and parsed.netloc else resolve_documents_bucket(user)
+        return GcsObjectStorage(bucket), tenant_id, key, backend
+
+    if backend == "s3":
+        if object_storage_backend_name() != "s3":
+            raise HTTPException(status_code=503, detail="Document storage backend s3 is not configured")
+        return get_object_storage(), tenant_id, key, backend
+
+    # Legacy records pre-date storageBackend/tenantId and stored GCS objects at
+    # users/<uid>/docs/... without the tenant prefix. Keep this compatibility in
+    # the adapter layer rather than leaking provider calls into business routes.
+    if source_url.startswith("gs://"):
+        parsed = urlparse(source_url)
+        if not parsed.netloc:
+            raise HTTPException(status_code=500, detail="Malformed sourceUrl on document")
+        return LegacyGcsObjectStorage(parsed.netloc), tenant_id, key, "gcs-legacy"
+
+    # New local records always carry storageBackend, but this fallback keeps
+    # partially-migrated self-host metadata readable when storagePath exists.
+    if object_storage_backend_name() == "local":
+        return get_object_storage(), tenant_id, key, "local"
+
+    raise HTTPException(status_code=503, detail="Document storage backend is unknown")
+
+
+def _content_type_for(doc: dict) -> str:
+    if doc.get("contentType"):
+        return str(doc["contentType"])
+    source_format = (doc.get("sourceFormat") or "").lower().lstrip(".")
+    return {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "html": "text/html",
+        "htm": "text/html",
+        "md": "text/markdown",
+        "csv": "text/csv",
+        "txt": "text/plain",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+    }.get(source_format, "application/octet-stream")
+
+
+def _stream_document(doc: dict, user: User, *, disposition: str):
+    from fastapi.responses import StreamingResponse
+
+    storage, tenant_id, key, _ = _storage_binding(doc, user)
+    try:
+        if not storage.exists(tenant_id, key):
+            raise HTTPException(status_code=404, detail="Stored document binary not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error("document exists check failed tenant=%s key=%s: %s", tenant_id, key, exc)
+        raise HTTPException(status_code=502, detail="Could not access document storage") from exc
+
+    filename = doc.get("originalFilename") or "document"
+    return StreamingResponse(
+        storage.iter_bytes(tenant_id, key),
+        media_type=_content_type_for(doc),
+        headers={
+            "Content-Disposition": _content_disposition(disposition, filename),
+            "Cache-Control": "private, max-age=300" if disposition == "inline" else "private, no-store",
+        },
+    )
 
 
 class _CreateFolderRequest(BaseModel):
@@ -76,8 +168,7 @@ class _DocumentsListResponse(BaseModel):
 
 @router.post("/api/folders", status_code=201)
 def create_folder(body: _CreateFolderRequest, user: _CurrentUser) -> _FolderResponse:
-    result = folders_db.create_folder(user_id=user.uid, name=body.name)
-    return _FolderResponse(**result)
+    return _FolderResponse(**folders_db.create_folder(user_id=user.uid, name=body.name))
 
 
 @router.get("/api/folders")
@@ -93,161 +184,55 @@ def list_folder_documents(folder_id: str, user: _CurrentUser) -> _DocumentsListR
         raise HTTPException(status_code=404, detail="Folder not found")
     if folder.get("userId") != user.uid:
         raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
-    docs = folders_db.list_folder_documents(user_id=user.uid, folder_id=folder_id)
-    return _DocumentsListResponse(documents=docs)
-
-
-_PARSED_DOCS_COLLECTION = "parsed_documents"
+    return _DocumentsListResponse(documents=folders_db.list_folder_documents(user_id=user.uid, folder_id=folder_id))
 
 
 @router.get("/api/documents/{doc_id}")
 def get_document(doc_id: str, user: _CurrentUser) -> dict:
-    """Fetch a single parsed document by ID.
-
-    Returns the full document record including blocks for frontend rendering.
-    """
-    doc = _get_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if doc.get("userId") != user.uid:
-        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
-    doc.setdefault("id", doc_id)
-    return doc
+    return _owned_document(doc_id, user)
 
 
 @router.get("/api/documents/{doc_id}/preview")
 def preview_document(doc_id: str, user: _CurrentUser):
-    """Stream the original document bytes for inline browser preview.
+    """Authenticated streaming preview for local, GCS and future adapters."""
+    return _stream_document(_owned_document(doc_id, user), user, disposition="inline")
 
-    Returns the binary content with the correct Content-Type so an
-    ``<iframe>`` can render PDFs natively (and browsers can download or
-    side-render any other supported format). The doc's source GCS URL is
-    fetched server-side using the backend SA — the frontend never sees
-    bucket credentials.
 
-    Access: same as ``GET /api/documents/{doc_id}`` — caller must own the
-    record (``userId == request.auth.uid``). Returns 403 otherwise.
-
-    Why a proxy instead of signed URLs: signed URLs require the backend SA
-    to have ``iam.serviceAccountTokenCreator`` on itself, which adds infra
-    surface. For demo-scale traffic on the 5 ONE PPAs this proxy is fine;
-    a signed-URL variant can ship later for high-throughput cases.
-    """
-    from fastapi.responses import StreamingResponse
-
-    doc = _get_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if doc.get("userId") != user.uid:
-        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
-
-    source_url = doc.get("sourceUrl") or ""
-    if not source_url.startswith("gs://"):
-        raise HTTPException(status_code=404, detail="No GCS source URL on this document")
-
-    bucket_name, _, blob_name = source_url[len("gs://") :].partition("/")
-    if not bucket_name or not blob_name:
-        raise HTTPException(status_code=500, detail="Malformed sourceUrl on document")
-
-    # Lazy import — keeps tests fast and avoids loading google.cloud.storage
-    # at module load time.
-    from google.cloud import storage
-
-    client = storage.Client()
-    blob = client.bucket(bucket_name).blob(blob_name)
-    try:
-        data = blob.download_as_bytes()
-    except Exception as exc:
-        log.error("preview_document: GCS download failed for %s: %s", source_url, exc)
-        raise HTTPException(status_code=502, detail="Could not fetch document bytes") from exc
-
-    # Resolve Content-Type from the doc's recorded format (best signal) and
-    # fall back to a generic application/octet-stream. PDFs render inline in
-    # all major browsers when Content-Disposition is inline.
-    source_format = (doc.get("sourceFormat") or "").lower().lstrip(".")
-    content_type_map = {
-        "pdf": "application/pdf",
-        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "html": "text/html",
-        "htm": "text/html",
-        "md": "text/markdown",
-        "csv": "text/csv",
-        "txt": "text/plain",
-    }
-    content_type = content_type_map.get(source_format, "application/octet-stream")
-
-    filename = doc.get("originalFilename") or f"document.{source_format or 'bin'}"
-
-    def _iter():
-        yield data
-
-    return StreamingResponse(
-        _iter(),
-        media_type=content_type,
-        headers={
-            # Inline so the browser renders rather than downloads. RFC 6266
-            # encoding — a raw non-latin-1 filename here 500s the response.
-            "Content-Disposition": _content_disposition("inline", filename),
-            "Cache-Control": "private, max-age=300",
-        },
-    )
+@router.get("/api/documents/{doc_id}/download")
+def download_document(doc_id: str, user: _CurrentUser):
+    """Authenticated attachment download; local storage never exposes a file URL."""
+    return _stream_document(_owned_document(doc_id, user), user, disposition="attachment")
 
 
 @router.get("/api/documents/{doc_id}/thumbnail")
 def thumbnail_document(doc_id: str, user: _CurrentUser, width: int = 600):
-    """Render an imported document (PDF first page or image) to a PNG thumbnail.
-
-    Standardised preview image for imported docs — the same renderer + cache the
-    bucket thumbnail route uses, so document lists / hover previews look
-    identical whether the doc is a bucket reference or an owned upload.
-
-    Access: same as ``GET /api/documents/{doc_id}`` — caller must own the record
-    (``userId == uid``), 403 otherwise. Bytes are rendered server-side and the
-    PNG streamed through this authenticated route — never a public URL, so
-    private-content thumbnails stay behind the user's Firebase bearer.
-    """
     from fastapi.responses import Response
-
     from tools.documents.thumbnail import cache_get, cache_put, is_thumbnailable, render_thumbnail_png
 
     width = max(64, min(1600, int(width)))
-
-    doc = _get_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if doc.get("userId") != user.uid:
-        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
-
-    source_url = doc.get("sourceUrl") or ""
-    source_format = doc.get("sourceFormat") or doc.get("originalFilename") or source_url
-    if not source_url.startswith("gs://"):
-        raise HTTPException(status_code=404, detail="No GCS source URL on this document")
+    doc = _owned_document(doc_id, user)
+    source_format = doc.get("sourceFormat") or doc.get("originalFilename") or ""
     if not is_thumbnailable(source_format):
         raise HTTPException(status_code=415, detail="Thumbnails are only rendered for PDFs and images")
 
-    cache_key = f"doc:{doc_id}:{width}"
+    cache_key = f"doc:{doc_id}:{doc.get('updatedAt', '')}:{width}"
     cached = cache_get(cache_key)
     if cached is not None:
         return Response(content=cached, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
-    bucket_name, _, blob_name = source_url[len("gs://") :].partition("/")
-    if not bucket_name or not blob_name:
-        raise HTTPException(status_code=500, detail="Malformed sourceUrl on document")
-
-    from google.cloud import storage
-
+    storage, tenant_id, key, _ = _storage_binding(doc, user)
     try:
-        data = storage.Client().bucket(bucket_name).blob(blob_name).download_as_bytes()
+        data = storage.get_bytes(tenant_id, key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Stored document binary not found") from exc
     except Exception as exc:
-        log.error("thumbnail_document: GCS download failed for %s: %s", source_url, exc)
+        log.error("thumbnail storage read failed tenant=%s key=%s: %s", tenant_id, key, exc)
         raise HTTPException(status_code=502, detail="Could not fetch document bytes") from exc
 
     try:
         png = render_thumbnail_png(data, source_format, target_width=width)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Could not render thumbnail: {e}") from e
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Could not render thumbnail: {exc}") from exc
 
     cache_put(cache_key, png)
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
@@ -255,29 +240,25 @@ def thumbnail_document(doc_id: str, user: _CurrentUser, width: int = 600):
 
 @router.post("/api/documents/{doc_id}/reparse")
 async def reparse_document(doc_id: str, user: _CurrentUser) -> dict:
-    """Re-run AILANG Parse on an existing document using its stored GCS URL.
-
-    Use this to populate blocks for documents uploaded before the AI pipeline
-    was wired, or to retry a failed parse after a transient AILANG error.
-    Returns the updated parseStatus and blockCount.
-    """
+    """Re-run parsing from ObjectStorage bytes, independent of provider URI."""
     from tools.documents.upload import _run_parse
 
-    doc = _get_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if doc.get("userId") != user.uid:
-        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
+    doc = _owned_document(doc_id, user)
+    storage, tenant_id, key, backend = _storage_binding(doc, user)
+    try:
+        data = storage.get_bytes(tenant_id, key)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Stored document binary not found") from exc
+    except Exception as exc:
+        log.error("reparse storage read failed tenant=%s key=%s: %s", tenant_id, key, exc)
+        raise HTTPException(status_code=502, detail="Could not fetch document bytes") from exc
 
-    gs_url: str | None = doc.get("sourceUrl")
-    if not gs_url:
-        raise HTTPException(status_code=422, detail="Document has no GCS source URL — cannot reparse")
-
-    log.info("Reparsing doc %s from %s", doc_id, gs_url)
-    status, blocks, elapsed_ms, error = await _run_parse(gs_url)
+    filename = doc.get("originalFilename") or key.rsplit("/", 1)[-1]
+    source_ref = doc.get("sourceUrl") or f"{backend}:{tenant_id}/{key}"
+    status, blocks, elapsed_ms, error = await _run_parse(data, filename, source_ref=source_ref)
 
     now = datetime.now(UTC)
-    update: dict = {
+    update = {
         "parseStatus": status,
         "status": status,
         "blocks": blocks if status == "parsed" else [],
@@ -290,31 +271,66 @@ async def reparse_document(doc_id: str, user: _CurrentUser) -> dict:
         "parsedAt": now.isoformat() if status == "parsed" else None,
         "updatedAt": now.isoformat(),
     }
-    _set_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id, update, merge=True)
-    log.info("Reparse complete for doc %s: status=%s blocks=%d", doc_id, status, len(blocks))
+    _set_document_record(_PARSED_DOCS_COLLECTION, doc_id, update, merge=True)
     return {"docId": doc_id, "parseStatus": status, "blockCount": len(blocks), "parseError": error}
 
 
 @router.delete("/api/documents/{doc_id}", status_code=204)
 async def delete_document(doc_id: str, user: _CurrentUser) -> None:
-    """Delete a document: removes the Firestore record and the GCS file."""
-    doc = _get_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if doc.get("userId") != user.uid:
-        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
+    """Delete bytes and metadata with a recoverable deletion state."""
+    doc = _owned_document(doc_id, user)
+    storage, tenant_id, key, backend = _storage_binding(doc, user)
+    now = datetime.now(UTC).isoformat()
 
-    # Delete GCS file — best-effort, don't fail the whole request if it's missing
-    storage_path: str | None = doc.get("storagePath")
-    if storage_path:
+    # Mark first so a storage failure leaves a durable retry signal instead of
+    # silently deleting metadata while bytes remain orphaned.
+    _set_document_record(
+        _PARSED_DOCS_COLLECTION,
+        doc_id,
+        {"deletionStatus": "deleting", "deletionBackend": backend, "updatedAt": now},
+        merge=True,
+    )
+    try:
+        storage.delete(tenant_id, key)
+    except Exception as exc:
+        log.error("document binary delete failed tenant=%s key=%s: %s", tenant_id, key, exc)
+        _set_document_record(
+            _PARSED_DOCS_COLLECTION,
+            doc_id,
+            {"deletionStatus": "failed", "deletionError": str(exc), "updatedAt": datetime.now(UTC).isoformat()},
+            merge=True,
+        )
+        raise HTTPException(status_code=502, detail="Could not delete document binary") from exc
+
+    try:
+        _delete_document_record(_PARSED_DOCS_COLLECTION, doc_id)
+    except Exception as exc:
+        log.error("document metadata delete failed after binary removal for %s: %s", doc_id, exc)
         try:
-            from google.cloud import storage as gcs
+            _set_document_record(
+                _PARSED_DOCS_COLLECTION,
+                doc_id,
+                {
+                    "deletionStatus": "binary_deleted_metadata_pending",
+                    "deletionError": str(exc),
+                    "updatedAt": datetime.now(UTC).isoformat(),
+                },
+                merge=True,
+            )
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail="Document binary deleted but metadata cleanup failed") from exc
 
-            bucket_name = resolve_documents_bucket(user)
-            gcs.Client().bucket(bucket_name).blob(storage_path).delete()
-            log.info("Deleted GCS object gs://%s/%s", bucket_name, storage_path)
+    folder_id = doc.get("folderId")
+    if folder_id:
+        try:
+            folders_db.update_folder_counts(
+                user.uid,
+                folder_id,
+                doc_delta=-1,
+                parsed_delta=-1 if doc.get("parseStatus") == "parsed" else 0,
+            )
         except Exception as exc:
-            log.warning("GCS delete failed for %s (continuing): %s", storage_path, exc)
+            log.warning("Failed to decrement folder counts for %s: %s", folder_id, exc)
 
-    _delete_firestore_doc(_PARSED_DOCS_COLLECTION, doc_id)
-    log.info("Deleted document %s", doc_id)
+    log.info("Deleted document %s via %s tenant=%s key=%s", doc_id, backend, tenant_id, key)
