@@ -1,6 +1,6 @@
-"""MCP toolset registry — loads McpToolset instances from Firestore server configs.
+"""MCP toolset registry — loads McpToolset instances from persisted server configs.
 
-Firestore schema: mcp_servers/{server_id}
+Repository schema: mcp_servers/{server_id}
   url:       str  — HTTP or SSE endpoint URL
   transport: str  — "http" (default) | "sse"
   headers:   dict — optional HTTP headers (e.g. Authorization). A value of the
@@ -9,15 +9,10 @@ Firestore schema: mcp_servers/{server_id}
   name:      str  — human-readable label
 
 Secret-bearing headers (v6.23.0 MAPS-GROUNDING):
-  Every server seeded before Maps Grounding Lite had ``headers: {}`` — none
-  needed a credential, because they were either loopback sidecars or unauthed.
-  Grounding Lite is the first that does (``X-Goog-Api-Key``), and a raw API key
-  must NOT sit in a Firestore document: ``mcp_servers/*`` is readable by anything
-  holding the runtime SA, it lands in seed-script source (and therefore git), and
-  it survives in Firestore backups. So a header VALUE may be written as
-  ``"${MAPS_GROUNDING_API_KEY}"`` and is resolved from the environment (mounted
-  from Secret Manager via ``--set-secrets`` on Cloud Run) when the toolset is
-  built. Firestore stores the NAME of the secret; only the process holds it.
+  A raw API key must NOT sit in a persisted registry document. A header VALUE may
+  be written as ``"${MAPS_GROUNDING_API_KEY}"`` and is resolved from the process
+  environment at toolset-build time. The configured Repository stores only the
+  NAME of the secret; only the process holds its value.
 
   An unresolved reference is a HARD failure (``_build_toolset`` returns None →
   the server is reported missing → ``resolve_mcp_tools_strict`` raises). It must
@@ -67,34 +62,31 @@ from google.adk.tools.mcp_tool.mcp_session_manager import (
 )
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
 
-from db.firestore import get_document
+from db.persistence import get_document
 
 log = logging.getLogger(__name__)
 
 _MCP_COLLECTION = "mcp_servers"
 
 # --- Config-doc cache (v6.14.0 cold-start / build-cost) ----------------------
-# The agent-build path reads mcp_servers/{id} from Firestore for EVERY declared
-# server on EVERY turn (no agent cache previously). A short module TTL removes
-# those per-turn round-trips. Caches BOTH a found config and a `None` miss (so a
-# not-yet-seeded server like ext-apps-map isn't re-read every turn). The seed
-# writes Firestore directly, so the TTL is the invalidation — a freshly-seeded
-# server resolves within one TTL window (matches the "wait ~a minute" after a
-# seed). Firestore errors are NOT cached (they re-raise to the caller).
+# The agent-build path reads mcp_servers/{id} from the configured Repository for
+# every declared server on a cold cache. A short module TTL removes repeated
+# database reads. Caches BOTH a found config and a `None` miss (so a not-yet-
+# seeded server isn't re-read every turn). Repository errors are NOT cached.
 _CONFIG_CACHE_TTL = 60.0
 _config_cache: dict[str, tuple[float, dict | None]] = {}
 
 
 def clear_registry_cache() -> None:
-    """Drop the mcp_servers config cache (tests / after a re-seed)."""
+    """Drop the mcp_servers config cache (tests / after a registry change)."""
     _config_cache.clear()
 
 
 def _cached_server_config(server_id: str) -> dict | None:
-    """Firestore mcp_servers/{id} read, memoised for ``_CONFIG_CACHE_TTL``.
+    """Read ``mcp_servers/{id}`` through the Repository with a short TTL cache.
 
-    Raises on a Firestore error (not cached) — the caller classifies it as
-    missing, same as before this cache existed.
+    Raises on a persistence error (not cached) — the caller classifies it as
+    missing, preserving the previous fail-loud behavior.
     """
     now = time.time()
     entry = _config_cache.get(server_id)
@@ -125,7 +117,7 @@ def derive_in_process_mcp_base_url() -> str:
 
     Surfaced by the gde-ap-agent fork (2026-06-06) as "Tool
     'lookup_vendor' not found" on the deployed service. Root cause:
-    the seed wrote the public Cloud Run URL into Firestore.
+    the seed wrote the public Cloud Run URL into the persistent registry.
 
     Returns ``http://127.0.0.1:<PORT>`` where PORT is taken from the
     ``PORT`` env var (Cloud Run sets this) or falls back to 1956 (the
@@ -166,14 +158,6 @@ class TaggedMcpToolset(McpToolset):
     gives observability callbacks a clean way to recover the server_id.
     """
 
-    # Per-instance cache of the resolved tool list. `get_tools()` otherwise opens
-    # a fresh MCP session + `tools/list` handshake to the server on EVERY call —
-    # and ADK calls it once per request (invocation_context.canonical_tools_cache
-    # is per-request). Once the agent cache (v6.14.0) keeps this toolset instance
-    # alive across turns, this memo means the ~network handshake happens once per
-    # instance per TTL, not once per turn. The tool CALL still opens its own
-    # session; only the schema LISTING is cached. MCP tool lists are context-
-    # independent, so caching across readonly_contexts is safe.
     _TOOLS_CACHE_TTL = 300.0
 
     def __init__(self, *, server_id: str, **kwargs: Any) -> None:
@@ -202,43 +186,24 @@ class TaggedMcpToolset(McpToolset):
 def get_mcp_tools(server_ids: list[str]) -> list[McpToolset]:
     """Return McpToolset instances for the given server IDs.
 
-    Reads each server's config from Firestore `mcp_servers/{server_id}`.
-    Servers not found in Firestore are logged and skipped.
+    Reads each server's config from the configured Repository under
+    ``mcp_servers/{server_id}``. Missing configs are logged and skipped.
 
     NOTE: this function preserves the legacy "silently skip missing"
     behaviour because some callers (admin scripts, test fixtures) rely
     on it. The agent-build path goes through ``resolve_mcp_tools_strict``
     (in ``backend/adk/tools.py``) which fails loudly when a SKILL.md
     declares servers that don't resolve — see G42 / template-mcp-strict-resolution.md.
-
-    Args:
-        server_ids: List of Firestore document IDs under mcp_servers/.
-
-    Returns:
-        List of McpToolset instances ready to add to an agent's tools list.
     """
     resolved, _missing = get_mcp_tools_with_status(server_ids)
     return resolved
 
 
 def get_mcp_tools_with_status(server_ids: list[str]) -> tuple[list[McpToolset], list[str]]:
-    """Resolve server IDs to toolsets AND track which ones failed.
+    """Resolve server IDs to toolsets and track which ones failed.
 
-    G42 (template-mcp-strict-resolution.md): the agent-build path needs
-    to know whether every declared MCP server actually resolved. The
-    silently-skip behaviour of ``get_mcp_tools`` masks the most common
-    MCP misconfiguration — a SKILL.md that declares `mcp.servers:
-    ["vendor-master"]` against a Firestore that has no such row.
-    Pre-G42 the agent built with zero MCP tools and silently misbehaved;
-    post-G42 the strict resolver raises with a clear diff.
-
-    Returns:
-        A tuple ``(resolved_toolsets, missing_server_ids)`` where
-        ``missing_server_ids`` includes any server_id that:
-          * raised an exception when fetched from Firestore, OR
-          * returned None (no document under mcp_servers/{id}), OR
-          * had a config that `_build_toolset` couldn't honour
-            (e.g. no `url` field).
+    ``missing_server_ids`` includes any id that raised while reading from the
+    configured Repository, has no document, or has an unusable config.
     """
     resolved: list[McpToolset] = []
     missing: list[str] = []
@@ -251,13 +216,12 @@ def get_mcp_tools_with_status(server_ids: list[str]) -> tuple[list[McpToolset], 
             continue
 
         if config is None:
-            log.warning("mcp_registry: server %r not found in Firestore; skipping", server_id)
+            log.warning("mcp_registry: server %r not found in persistence backend; skipping", server_id)
             missing.append(server_id)
             continue
 
         toolset = _build_toolset(server_id, config)
         if toolset is None:
-            # _build_toolset already logged the reason (missing url, etc).
             missing.append(server_id)
             continue
         resolved.append(toolset)
@@ -269,23 +233,11 @@ class UnresolvedHeaderSecret(Exception):
     """A ``${ENV_VAR}`` header reference had no value in the environment."""
 
 
-# Matches a header value that is EXACTLY one env reference: "${MAPS_KEY}".
-# Deliberately not a substring substitution — a credential header is the whole
-# value in every real case, and partial interpolation invites a half-built
-# Authorization header that fails in a much more confusing way.
 _ENV_REF = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 
 def _resolve_header_secrets(server_id: str, headers: dict) -> dict:
-    """Resolve ``${ENV_VAR}`` header values from the environment.
-
-    Non-matching values pass through untouched, so existing servers with plain
-    headers are unaffected.
-
-    Raises:
-        UnresolvedHeaderSecret: if a referenced env var is unset or empty. See
-            the module docstring — failing loudly here is the whole point.
-    """
+    """Resolve ``${ENV_VAR}`` header values from the environment."""
     resolved = {}
     for key, value in headers.items():
         match = _ENV_REF.match(value) if isinstance(value, str) else None
@@ -307,9 +259,7 @@ def _resolve_header_secrets(server_id: str, headers: dict) -> dict:
 
 
 def _merge_ui_capability_header(headers: dict) -> dict:
-    """Return headers dict with the UI capability header set, unless the
-    operator already supplied their own value (which wins).
-    """
+    """Return headers with the UI capability marker unless already supplied."""
     merged = dict(headers) if headers else {}
     if UI_CAPABILITY_HEADER not in merged:
         merged[UI_CAPABILITY_HEADER] = UI_CAPABILITY_MIME_TYPE
@@ -317,13 +267,7 @@ def _merge_ui_capability_header(headers: dict) -> dict:
 
 
 def _build_toolset(server_id: str, config: dict) -> McpToolset | None:
-    """Build a McpToolset from a Firestore server config dict.
-
-    Always declares UI extension capability via ``UI_CAPABILITY_HEADER`` so
-    spec-compliant servers know they can return UI resources. See module
-    docstring for why this is the workaround path rather than the canonical
-    ``ClientSession.capabilities`` arg.
-    """
+    """Build a McpToolset from a persisted server config dict."""
     url = config.get("url")
     if not url:
         log.warning("mcp_registry: server %r has no url field; skipping", server_id)
@@ -334,8 +278,6 @@ def _build_toolset(server_id: str, config: dict) -> McpToolset | None:
     try:
         server_headers = _resolve_header_secrets(server_id, server_headers)
     except UnresolvedHeaderSecret as exc:
-        # Same contract as a missing `url`: return None so the caller records
-        # the server as missing and the strict resolver raises with a clear diff.
         log.error("mcp_registry: %s", exc)
         return None
     headers = _merge_ui_capability_header(server_headers)
