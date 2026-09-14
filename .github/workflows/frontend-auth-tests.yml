@@ -1,0 +1,45 @@
+name: Frontend auth tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - frontend/src/lib/localJwtAuth.ts
+      - frontend/src/lib/firebase.ts
+      - frontend/src/contexts/AuthContext.tsx
+      - frontend/src/components/SignInButton.tsx
+      - frontend/src/__tests__/local-jwt-auth.test.ts
+      - .github/workflows/frontend-auth-tests.yml
+  pull_request:
+    paths:
+      - frontend/src/lib/localJwtAuth.ts
+      - frontend/src/lib/firebase.ts
+      - frontend/src/contexts/AuthContext.tsx
+      - frontend/src/components/SignInButton.tsx
+      - frontend/src/__tests__/local-jwt-auth.test.ts
+      - .github/workflows/frontend-auth-tests.yml
+
+jobs:
+  local-jwt-session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run local JWT browser session tests
+        run: npm run test:run -- src/__tests__/local-jwt-auth.test.ts
