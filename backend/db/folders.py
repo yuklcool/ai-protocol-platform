@@ -1,10 +1,14 @@
-"""User-facing document folder CRUD (Firestore).
+"""User-facing document folder CRUD on the backend-neutral repository.
 
-These folders organise user document uploads within a client GCS bucket.
-Distinct from the storage-ACL BucketFolderConfig in backend/buckets/.
+New records live in the flat ``document_folders`` collection so Memory,
+Firestore and PostgreSQL share one model. Folder contents are derived from the
+canonical ``parsed_documents`` collection instead of maintaining a second
+nested document index.
 
-Firestore path: `users/{uid}/folders/{folderId}`
-Documents subcollection: `users/{uid}/folders/{folderId}/documents/{docId}`
+Cloud deployments may still have historical Firestore data under
+``users/{uid}/folders/{folderId}``; read/count helpers retain a narrow legacy
+fallback when DATA_BACKEND=firestore so the self-host migration does not make
+existing cloud folders disappear.
 """
 
 from __future__ import annotations
@@ -15,7 +19,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from db.firestore import get_client
+from db.persistence import data_backend, get_document, increment_field, query_documents, set_document
+
+_FOLDER_COLLECTION = "document_folders"
+_PARSED_DOCS_COLLECTION = "parsed_documents"
 
 
 class Folder(BaseModel):
@@ -29,77 +36,110 @@ class Folder(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-def _folders_ref(user_id: str):
+def _legacy_folders_ref(user_id: str):
+    from db.firestore import get_client
+
     return get_client().collection("users").document(user_id).collection("folders")
 
 
-def _docs_ref(user_id: str, folder_id: str):
-    return _folders_ref(user_id).document(folder_id).collection("documents")
+def _legacy_get_folder(user_id: str, folder_id: str) -> dict[str, Any] | None:
+    if data_backend() != "firestore":
+        return None
+    doc = _legacy_folders_ref(user_id).document(folder_id).get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict() or {}
+    data.setdefault("id", folder_id)
+    return data
 
 
 def create_folder(user_id: str, name: str) -> dict[str, Any]:
     folder_id = str(uuid.uuid4())
-    now = datetime.now(UTC)
     data: dict[str, Any] = {
         "id": folder_id,
         "name": name,
         "userId": user_id,
-        "createdAt": now,
+        "createdAt": datetime.now(UTC).isoformat(),
         "docCount": 0,
         "parsedCount": 0,
     }
-    _folders_ref(user_id).document(folder_id).set(data)
-    return {
-        "id": folder_id,
-        "name": name,
-        "userId": user_id,
-        "docCount": 0,
-        "parsedCount": 0,
-    }
+    set_document(_FOLDER_COLLECTION, folder_id, data)
+    return {k: data[k] for k in ("id", "name", "userId", "docCount", "parsedCount")}
 
 
 def get_folder(user_id: str, folder_id: str) -> dict[str, Any] | None:
-    doc = _folders_ref(user_id).document(folder_id).get()
-    return doc.to_dict() if doc.exists else None
+    data = get_document(_FOLDER_COLLECTION, folder_id)
+    if data is not None:
+        if data.get("userId") != user_id:
+            return None
+        data.setdefault("id", folder_id)
+        return data
+    return _legacy_get_folder(user_id, folder_id)
 
 
 def list_folders(user_id: str) -> list[dict[str, Any]]:
-    results = []
-    for doc in _folders_ref(user_id).stream():
-        data = doc.to_dict()
-        if data is not None:
+    current = query_documents(
+        _FOLDER_COLLECTION,
+        filters=[("userId", "==", user_id)],
+        order_by="createdAt",
+        order_direction="ASCENDING",
+    )
+    by_id: dict[str, dict[str, Any]] = {}
+    for item in current:
+        folder_id = str(item.get("id") or item.get("__id") or "")
+        if not folder_id:
+            continue
+        item["id"] = folder_id
+        by_id[folder_id] = item
+
+    if data_backend() == "firestore":
+        for doc in _legacy_folders_ref(user_id).stream():
+            if doc.id in by_id:
+                continue
+            data = doc.to_dict() or {}
             data.setdefault("id", doc.id)
-            results.append(data)
-    return results
+            by_id[doc.id] = data
+
+    return list(by_id.values())
 
 
 def list_folder_documents(user_id: str, folder_id: str) -> list[dict[str, Any]]:
-    results = []
-    for doc in _docs_ref(user_id, folder_id).stream():
-        data = doc.to_dict()
-        if data is not None:
-            data.setdefault("id", doc.id)
-            results.append(data)
-    return results
+    """Return the canonical parsed-document records assigned to this folder."""
+    return query_documents(
+        _PARSED_DOCS_COLLECTION,
+        filters=[("userId", "==", user_id), ("folderId", "==", folder_id)],
+        order_by="createdAt",
+        order_direction="DESCENDING",
+    )
 
 
 def update_folder_counts(user_id: str, folder_id: str, doc_delta: int = 0, parsed_delta: int = 0) -> None:
-    from google.cloud.firestore import Increment
+    current = get_document(_FOLDER_COLLECTION, folder_id)
+    if current is not None and current.get("userId") == user_id:
+        if doc_delta:
+            increment_field(_FOLDER_COLLECTION, folder_id, "docCount", doc_delta)
+        if parsed_delta:
+            increment_field(_FOLDER_COLLECTION, folder_id, "parsedCount", parsed_delta)
+        return
 
-    updates: dict[str, Any] = {}
-    if doc_delta:
-        updates["docCount"] = Increment(doc_delta)
-    if parsed_delta:
-        updates["parsedCount"] = Increment(parsed_delta)
-    if updates:
-        _folders_ref(user_id).document(folder_id).update(updates)
+    if data_backend() == "firestore":
+        # Historical cloud folders were nested and cannot be represented by the
+        # generic Repository contract. Keep count updates working until those
+        # records are lazily/explicitly migrated to document_folders.
+        from google.cloud.firestore import Increment
+
+        updates: dict[str, Any] = {}
+        if doc_delta:
+            updates["docCount"] = Increment(doc_delta)
+        if parsed_delta:
+            updates["parsedCount"] = Increment(parsed_delta)
+        if updates:
+            _legacy_folders_ref(user_id).document(folder_id).update(updates)
 
 
 def ensure_default_folder(user_id: str) -> str:
-    """Return the first folder id for the user, creating a default one if needed."""
     folders = list_folders(user_id)
     if folders:
-        return folders[0]["id"]
+        return str(folders[0]["id"])
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    result = create_folder(user_id, f"Uploads {today}")
-    return result["id"]
+    return str(create_folder(user_id, f"Uploads {today}")["id"])
