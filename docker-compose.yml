@@ -27,6 +27,7 @@ services:
       - -c
       - >-
         uv run python scripts/seed_selfhost_persistence.py &&
+        uv run python scripts/seed_selfhost_admin.py &&
         uv run uvicorn fast_api_app:app --host 0.0.0.0 --port 1956 --workers 1
     environment:
       PORT: "1956"
@@ -44,6 +45,14 @@ services:
       OBJECT_STORAGE_LOCAL_ROOT: "${OBJECT_STORAGE_LOCAL_ROOT:-/data/objects}"
       ADK_ARTIFACT_ROOT: "${ADK_ARTIFACT_ROOT:-/data/artifacts}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
+      AUTH_BACKEND: "${AUTH_BACKEND:-stub}"
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-}"
+      JWT_PREVIOUS_SIGNING_KEYS: "${JWT_PREVIOUS_SIGNING_KEYS:-}"
+      JWT_ISSUER: "${JWT_ISSUER:-ai-protocol-platform}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:-ai-protocol-platform}"
+      JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
+      SELFHOST_ADMIN_EMAIL: "${SELFHOST_ADMIN_EMAIL:-}"
+      SELFHOST_ADMIN_PASSWORD: "${SELFHOST_ADMIN_PASSWORD:-}"
       GOOGLE_GENAI_USE_VERTEXAI: "false"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
