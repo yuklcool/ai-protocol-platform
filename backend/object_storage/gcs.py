@@ -1,4 +1,4 @@
-"""Google Cloud Storage adapter for the provider-neutral ObjectStorage API."""
+"""Google Cloud Storage adapters for the provider-neutral ObjectStorage API."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ class GcsObjectStorage:
     """Store tenant objects beneath ``tenants/<tenant_id>/`` in one GCS bucket.
 
     The client is lazy so importing the platform or selecting another backend
-    never attempts ADC discovery.  Authorization metadata remains in PostgreSQL;
+    never attempts ADC discovery. Authorization metadata remains in PostgreSQL;
     this adapter is responsible only for namespaced bytes.
     """
 
@@ -65,8 +65,6 @@ class GcsObjectStorage:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
         blob, _ = self._blob(tenant_id, key)
-        # Blob.open performs range/chunked reads rather than materialising the
-        # whole object, keeping the same bounded-memory contract as local files.
         with blob.open("rb") as handle:
             while True:
                 chunk = handle.read(chunk_size)
@@ -83,9 +81,6 @@ class GcsObjectStorage:
         try:
             blob.delete()
         except Exception as exc:
-            # google-cloud-storage raises NotFound for an absent object. Avoid a
-            # hard dependency on the exception type here so fake clients remain
-            # lightweight; only swallow explicit 404-ish provider errors.
             if getattr(exc, "code", None) == 404 or getattr(exc, "status_code", None) == 404:
                 return
             raise
@@ -115,3 +110,22 @@ class GcsObjectStorage:
             )
         result.sort(key=lambda item: item.key)
         return result
+
+
+class LegacyGcsObjectStorage(GcsObjectStorage):
+    """Compatibility adapter for pre-ObjectStorage GCS objects.
+
+    Historical uploads lived directly at ``users/<uid>/docs/...`` inside the
+    per-client bucket. New uploads always use ``tenants/<tenant_id>/...``.
+    Keeping the old layout in this adapter lets business routes stay provider-
+    neutral without breaking existing documents. It must only be selected after
+    metadata ownership checks; new writes must never use this adapter.
+    """
+
+    def _object_name(self, tenant_id: str, key: str) -> tuple[str, str]:
+        _validate_tenant_id(tenant_id)
+        normalized = _validate_key(key).as_posix()
+        return normalized, normalized
+
+    def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:  # pragma: no cover
+        raise RuntimeError("LegacyGcsObjectStorage is read/delete compatibility only")
