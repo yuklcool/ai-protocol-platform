@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from db.firestore import get_document, set_document
+from db.persistence import get_document, set_document
 
 logger = logging.getLogger(__name__)
 
