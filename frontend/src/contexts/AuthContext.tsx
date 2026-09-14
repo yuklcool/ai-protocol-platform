@@ -21,6 +21,15 @@ import {
   type User,
 } from "@/lib/firebase";
 import {
+  clearLocalJwtSession,
+  isLocalJwtAuthMode,
+  LOCAL_JWT_AUTH_CHANGED_EVENT,
+  loginWithLocalJwt,
+  readLocalJwtSession,
+  validateLocalJwtSession,
+  type LocalJwtUser,
+} from "@/lib/localJwtAuth";
+import {
   isLocalMode,
   LOCAL_MODE_STUB_TOKEN,
   LOCAL_MODE_WORKSHOP_USER,
@@ -32,6 +41,8 @@ interface AuthContextValue {
   getIdToken: () => Promise<string | null>;
   signIn: () => Promise<void>;
   signInWithRedirect: () => Promise<void>;
+  /** Present only for the built-in self-host local-jwt provider. */
+  signInWithPassword?: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -49,11 +60,17 @@ function buildLocalModeStubUser(): User {
   } as unknown as User;
 }
 
+function buildLocalJwtUser(user: LocalJwtUser): User {
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.email,
+    photoURL: null,
+  } as unknown as User;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Anonymous group-ID mode (sprint 2.11) — checked FIRST so forks
-  // can opt into it without also unsetting NEXT_PUBLIC_LOCAL_MODE in
-  // their deployment. Wraps in AnonymousGroupAuthProvider, then
-  // adapts the group-auth state to the platform's AuthContext shape.
+  // Anonymous group-ID mode is an explicit deployment mode and keeps priority.
   if (isAnonymousGroupAuthMode()) {
     return (
       <AnonymousGroupAuthProvider>
@@ -62,8 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  // LOCAL_MODE: mount immediately with a deterministic stub identity.
-  // No Firebase listeners, no loading flicker, no sign-in screen.
+  // Built-in self-host identity must be checked BEFORE LOCAL_MODE. The current
+  // self-host Compose still uses LOCAL_MODE=1 to disable GCP assumptions while
+  // AUTH_BACKEND=local-jwt provides the real identity boundary.
+  if (isLocalJwtAuthMode()) {
+    return <LocalJwtAuthProvider>{children}</LocalJwtAuthProvider>;
+  }
+
+  // LOCAL_MODE development stub: no Firebase listeners or sign-in screen.
   if (isLocalMode()) {
     return (
       <AuthContext.Provider
@@ -84,10 +107,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <FirebaseAuthProvider>{children}</FirebaseAuthProvider>;
 }
 
+function LocalJwtAuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrate = async () => {
+      const stored = readLocalJwtSession();
+      if (!stored) {
+        if (!cancelled) {
+          setUser(null);
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const validated = await validateLocalJwtSession(stored);
+        if (!cancelled) setUser(validated ? buildLocalJwtUser(validated.user) : null);
+      } catch {
+        clearLocalJwtSession();
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void hydrate();
+
+    const onAuthChanged = () => {
+      const next = readLocalJwtSession();
+      setUser(next ? buildLocalJwtUser(next.user) : null);
+    };
+    window.addEventListener(LOCAL_JWT_AUTH_CHANGED_EVENT, onAuthChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(LOCAL_JWT_AUTH_CHANGED_EVENT, onAuthChanged);
+    };
+  }, []);
+
+  const signInWithPassword = async (email: string, password: string) => {
+    const session = await loginWithLocalJwt(email, password);
+    setUser(buildLocalJwtUser(session.user));
+  };
+
+  const localSignOut = async () => {
+    clearLocalJwtSession();
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        getIdToken: async () => readLocalJwtSession()?.token ?? null,
+        signIn: async () => {
+          throw new Error("Email/password sign-in is required for this deployment");
+        },
+        signInWithRedirect: async () => {
+          throw new Error("Redirect sign-in is unavailable for this deployment");
+        },
+        signInWithPassword,
+        signOut: localSignOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
 /** Bridge AnonymousGroupAuth state to the main AuthContext shape so
  * the rest of the app (e.g. `useAuth().user`) doesn't need to branch
- * on auth mode. signIn/signOut are no-ops here — students reach the
- * sign-in state via the `/group` page, not via a button. */
+ * on auth mode. */
 function AnonymousGroupAuthAdapter({ children }: { children: ReactNode }) {
   const group = useAnonymousGroupAuth();
   const user: User | null = group.user
@@ -104,10 +197,8 @@ function AnonymousGroupAuthAdapter({ children }: { children: ReactNode }) {
         user,
         loading: false,
         getIdToken: async () => group.token,
-        // No interactive sign-in — the /group page handles join.
         signIn: async () => {},
         signInWithRedirect: async () => {},
-        // Sign-out drops the sessionStorage token and returns to /group.
         signOut: async () => {
           group.clearStoredToken();
         },
