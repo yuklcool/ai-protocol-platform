@@ -24,6 +24,7 @@ on:
       - backend/config/models.yaml
       - backend/db/chat_sessions.py
       - backend/db/clients.py
+      - backend/db/folders.py
       - backend/db/persistence.py
       - backend/db/repository.py
       - backend/db/repositories/**
@@ -35,6 +36,8 @@ on:
       - backend/tools/documents/upload.py
       - backend/tools/documents/parse_input.py
       - backend/tools/documents/routes.py
+      - backend/tools/documents/context.py
+      - backend/tools/documents/import_by_reference.py
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
@@ -49,6 +52,7 @@ on:
       - backend/tests/api_tests/test_document_thumbnail.py
       - backend/tests/api_tests/test_document_storage_delete.py
       - backend/tests/api_tests/test_document_storage_binding.py
+      - backend/tests/api_tests/test_import_by_reference.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
@@ -56,6 +60,8 @@ on:
       - backend/tests/storage_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
+      - backend/tests/unit/test_document_context_persistence.py
+      - backend/tests/unit/test_document_folders_persistence.py
       - backend/tests/unit/test_permissions.py
       - backend/tests/unit/test_postgres_memory.py
       - backend/tests/unit/test_postgres_session_memory_factories.py
@@ -86,6 +92,7 @@ on:
       - backend/config/models.yaml
       - backend/db/chat_sessions.py
       - backend/db/clients.py
+      - backend/db/folders.py
       - backend/db/persistence.py
       - backend/db/repository.py
       - backend/db/repositories/**
@@ -97,6 +104,8 @@ on:
       - backend/tools/documents/upload.py
       - backend/tools/documents/parse_input.py
       - backend/tools/documents/routes.py
+      - backend/tools/documents/context.py
+      - backend/tools/documents/import_by_reference.py
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
@@ -111,6 +120,7 @@ on:
       - backend/tests/api_tests/test_document_thumbnail.py
       - backend/tests/api_tests/test_document_storage_delete.py
       - backend/tests/api_tests/test_document_storage_binding.py
+      - backend/tests/api_tests/test_import_by_reference.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
@@ -118,6 +128,8 @@ on:
       - backend/tests/storage_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
+      - backend/tests/unit/test_document_context_persistence.py
+      - backend/tests/unit/test_document_folders_persistence.py
       - backend/tests/unit/test_permissions.py
       - backend/tests/unit/test_postgres_memory.py
       - backend/tests/unit/test_postgres_session_memory_factories.py
@@ -193,7 +205,10 @@ jobs:
               tests/api_tests/test_doc_folders.py \
               tests/api_tests/test_document_thumbnail.py \
               tests/api_tests/test_document_storage_delete.py \
-              tests/api_tests/test_document_storage_binding.py
+              tests/api_tests/test_document_storage_binding.py \
+              tests/api_tests/test_import_by_reference.py \
+              tests/unit/test_document_folders_persistence.py \
+              tests/unit/test_document_context_persistence.py
 
       - name: Test PostgreSQL Session and Memory factories
         run: |
@@ -226,7 +241,7 @@ jobs:
             -e DATA_BACKEND=memory \
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import chat_sessions, clients; from db.persistence import build_repository; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
