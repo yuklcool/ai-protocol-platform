@@ -1,0 +1,89 @@
+name: One-shot runtime persistence migration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/one-shot-runtime-persistence-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace remaining business-runtime Firestore imports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              "backend/adk/a2ui_ppa_render.py": [
+                  ("from db.firestore import get_document", "from db.persistence import get_document"),
+              ],
+              "backend/adk/callbacks.py": [
+                  ("from db.firestore import get_document as _get_fs_doc", "from db.persistence import get_document as _get_fs_doc"),
+              ],
+              "backend/admin/analytics_routes.py": [
+                  ("from db.firestore import get_document, query_documents", "from db.persistence import get_document, query_documents"),
+              ],
+              "backend/channels/attachments.py": [
+                  ("from db.firestore import set_document", "from db.persistence import set_document"),
+              ],
+              "backend/channels/discord.py": [
+                  ("from db.firestore import get_document, set_document", "from db.persistence import get_document, set_document"),
+              ],
+              "backend/protocols/mcp_proxy.py": [
+                  ("from db.firestore import get_document", "from db.persistence import get_document"),
+              ],
+              "backend/skills/skill_processor.py": [
+                  ("from db.firestore import get_document", "from db.persistence import get_document"),
+              ],
+          }
+
+          for file_name, pairs in replacements.items():
+              path = Path(file_name)
+              text = path.read_text(encoding="utf-8")
+              original = text
+              for old, new in pairs:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f"{file_name}: expected exactly one {old!r}, found {count}")
+                  text = text.replace(old, new)
+              path.write_text(text, encoding="utf-8")
+              print(f"migrated {file_name}")
+
+          roots = [
+              Path("backend/admin"), Path("backend/adk"), Path("backend/channels"),
+              Path("backend/buckets"), Path("backend/rag"), Path("backend/skills"),
+              Path("backend/protocols"), Path("backend/tools/documents"),
+          ]
+          needles = (
+              "from db.firestore import",
+              "import db.firestore",
+              "google.cloud.firestore",
+          )
+          offenders = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("*.py"):
+                  text = path.read_text(encoding="utf-8")
+                  if any(needle in text for needle in needles):
+                      offenders.append(str(path))
+          if offenders:
+              raise SystemExit("Remaining direct Firestore coupling: " + ", ".join(sorted(offenders)))
+          print("Runtime Firestore dependency audit passed")
+          PY
+
+      - name: Commit migration and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-shot-runtime-persistence-migration.yml
+          git add backend/adk/a2ui_ppa_render.py backend/adk/callbacks.py backend/admin/analytics_routes.py backend/channels/attachments.py backend/channels/discord.py backend/protocols/mcp_proxy.py backend/skills/skill_processor.py
+          git commit -m "refactor(persistence): remove remaining runtime Firestore coupling"
+          git push origin HEAD:main
