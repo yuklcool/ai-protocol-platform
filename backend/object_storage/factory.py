@@ -1,6 +1,6 @@
 """Object storage backend selection.
 
-The selector is intentionally independent from GCP/ADK configuration.  New
+The selector is intentionally independent from GCP/ADK configuration. New
 business code should depend on ``get_object_storage()`` and the ObjectStorage
 contract rather than importing a provider SDK directly.
 """
@@ -29,22 +29,32 @@ def object_storage_backend_name() -> str:
 def get_object_storage() -> ObjectStorage:
     """Return the configured storage adapter.
 
-    Phase 2 starts with the zero-component local backend. GCS/S3 are named now so
-    deployment configuration is stable, but are activated only after their
-    adapters are wired; failing loudly is safer than silently writing local data
-    when an operator explicitly requested remote storage.
+    ``local`` is the zero-component self-host default. ``gcs`` keeps the cloud
+    deployment path available behind the same contract. ``s3`` is intentionally
+    fail-loud until its adapter is implemented; silently falling back to local
+    when an operator requested remote storage would create split-brain data.
     """
     global _storage_singleton, _storage_signature
     backend = object_storage_backend_name()
-    root = os.environ.get("OBJECT_STORAGE_LOCAL_ROOT", "/data/objects").strip() or "/data/objects"
-    signature = (backend, root)
+    if backend == "local":
+        config = os.environ.get("OBJECT_STORAGE_LOCAL_ROOT", "/data/objects").strip() or "/data/objects"
+    elif backend == "gcs":
+        config = os.environ.get("OBJECT_STORAGE_GCS_BUCKET", "").strip()
+        if not config:
+            raise RuntimeError("OBJECT_STORAGE_GCS_BUCKET is required when OBJECT_STORAGE_BACKEND=gcs")
+    else:
+        config = os.environ.get("OBJECT_STORAGE_S3_BUCKET", "").strip()
+
+    signature = (backend, config)
     if _storage_singleton is not None and _storage_signature == signature:
         return _storage_singleton
 
     if backend == "local":
-        _storage_singleton = LocalObjectStorage(root)
+        _storage_singleton = LocalObjectStorage(config)
     elif backend == "gcs":
-        raise RuntimeError("OBJECT_STORAGE_BACKEND=gcs adapter is not wired yet")
+        from object_storage.gcs import GcsObjectStorage
+
+        _storage_singleton = GcsObjectStorage(config)
     else:
         raise RuntimeError("OBJECT_STORAGE_BACKEND=s3 adapter is not wired yet")
     _storage_signature = signature
