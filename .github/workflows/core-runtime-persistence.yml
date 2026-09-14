@@ -1,0 +1,168 @@
+name: Core runtime persistence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/admin/tenants.py
+      - backend/admin/prewarm_routes.py
+      - backend/adk/tools.py
+      - backend/channels/_default_skill.py
+      - backend/channels/identity.py
+      - backend/buckets/bucket_config.py
+      - backend/buckets/folder_config.py
+      - backend/db/persistence.py
+      - backend/db/repository.py
+      - backend/db/repositories/**
+      - backend/tests/unit/test_tools_registry.py
+      - backend/tests/api_tests/test_tools_route.py
+      - backend/tests/api_tests/test_admin_tenants.py
+      - backend/tests/api_tests/test_admin_prewarm.py
+      - backend/tests/api_tests/test_buckets.py
+      - backend/tests/api_tests/test_folders.py
+      - .github/workflows/core-runtime-persistence.yml
+  pull_request:
+    paths:
+      - backend/admin/tenants.py
+      - backend/admin/prewarm_routes.py
+      - backend/adk/tools.py
+      - backend/channels/_default_skill.py
+      - backend/channels/identity.py
+      - backend/buckets/bucket_config.py
+      - backend/buckets/folder_config.py
+      - backend/db/persistence.py
+      - backend/db/repository.py
+      - backend/db/repositories/**
+      - backend/tests/unit/test_tools_registry.py
+      - backend/tests/api_tests/test_tools_route.py
+      - backend/tests/api_tests/test_admin_tenants.py
+      - backend/tests/api_tests/test_admin_prewarm.py
+      - backend/tests/api_tests/test_buckets.py
+      - backend/tests/api_tests/test_folders.py
+      - .github/workflows/core-runtime-persistence.yml
+
+jobs:
+  core-runtime-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      PLATFORM_OWNER_EMAIL: platform@ci.local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Run runtime regression tests with memory repository
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+              tests/unit/test_tools_registry.py \
+              tests/api_tests/test_tools_route.py \
+              tests/api_tests/test_admin_tenants.py \
+              tests/api_tests/test_admin_prewarm.py \
+              tests/api_tests/test_buckets.py \
+              tests/api_tests/test_folders.py
+
+      - name: Verify migrated runtime domains against PostgreSQL
+        run: |
+          docker compose up -d postgres
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            backend uv run python - <<'PY'
+          import asyncio
+
+          from buckets.bucket_config import (
+              create_bucket,
+              delete_bucket,
+              find_by_gcs_name,
+              get_bucket,
+              update_bucket,
+          )
+          from buckets.folder_config import (
+              create_folder,
+              delete_folder,
+              get_folder,
+              list_folders,
+              update_folder,
+          )
+          from channels._default_skill import get_user_default_skill, set_user_default_skill
+          from channels.identity import IdentityResolver
+          from db.persistence import get_repository
+
+          repo = get_repository()
+          assert repo.healthcheck()
+
+          # Bucket metadata CRUD uses PostgreSQL through db.persistence.
+          bucket = create_bucket(
+              "CI Bucket",
+              "ci-runtime-bucket",
+              "ci-owner",
+              "owner@example.com",
+              allowedDomains=["example.com"],
+          )
+          assert get_bucket(bucket.bucket_id).display_name == "CI Bucket"
+          assert find_by_gcs_name("ci-runtime-bucket").bucket_id == bucket.bucket_id
+          updated_bucket = update_bucket(bucket.bucket_id, {"displayName": "CI Bucket Updated"})
+          assert updated_bucket is not None
+          assert updated_bucket.display_name == "CI Bucket Updated"
+
+          # Preserve the original nested Firestore collection identity while
+          # PostgreSQL treats it as a logical collection key.
+          folder = create_folder(
+              updated_bucket,
+              path="contracts/",
+              display_name="Contracts",
+              owner_id="ci-owner",
+          )
+          assert get_folder(updated_bucket.bucket_id, folder.folder_id).path == "contracts/"
+          assert [f.folder_id for f in list_folders(updated_bucket.bucket_id)] == [folder.folder_id]
+          updated_folder = update_folder(
+              updated_bucket,
+              folder.folder_id,
+              {"displayName": "Contracts Updated"},
+          )
+          assert updated_folder is not None
+          assert updated_folder.display_name == "Contracts Updated"
+
+          # User channel settings are no longer tied to Firestore.
+          asyncio.run(set_user_default_skill("ci-user", "general-assistant"))
+          assert asyncio.run(get_user_default_skill("ci-user")) == "general-assistant"
+
+          # Channel identity mapping and last-seen touch are PostgreSQL-safe.
+          uid = asyncio.run(
+              IdentityResolver.auto_create(
+                  "discord",
+                  "4242",
+                  email="channel-user@example.com",
+              )
+          )
+          assert uid == "channel-discord_4242"
+          assert asyncio.run(IdentityResolver.resolve("discord", "4242")) == uid
+          identity = repo.get_document("channel_identities", "discord_4242")
+          assert identity is not None
+          assert identity["domain"] == "example.com"
+          assert isinstance(identity["created_at"], str)
+          assert isinstance(identity["last_seen_at"], str)
+
+          assert delete_folder(updated_bucket.bucket_id, folder.folder_id) is True
+          assert delete_bucket(updated_bucket.bucket_id) is True
+          repo.delete_document("user_settings", "ci-user")
+          repo.delete_document("channel_identities", "discord_4242")
+          print("Core runtime PostgreSQL persistence checks passed")
+          PY
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
