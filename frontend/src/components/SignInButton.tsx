@@ -1,34 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { isLocalJwtAuthMode } from "@/lib/localJwtAuth";
 import { cn } from "@/lib/utils";
 
-/**
- * Google Sign-In button. When signed out, clicking opens a Google popup;
- * if the popup flow fails (Safari blocks third-party storage that the popup
- * relies on in some configurations), we fall back to a full-page redirect.
- * When signed in, it becomes a Sign-Out button with the user's email next to
- * it.
- */
+/** Authentication control for Firebase and built-in self-host JWT modes. */
 export function SignInButton() {
-  const { user, loading, signIn, signInWithRedirect, signOut } = useAuth();
+  const { user, loading, signIn, signInWithRedirect, signInWithPassword, signOut } = useAuth();
+  const localJwt = isLocalJwtAuthMode();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLocalLogin, setShowLocalLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleSignIn = async () => {
+  const handleFirebaseSignIn = async () => {
     setBusy(true);
     setError(null);
     try {
       await signIn();
     } catch (popupErr) {
-      // Safari popup-blocked or third-party-storage fail — fall back to redirect.
       console.warn("popup sign-in failed, falling back to redirect", popupErr);
       try {
         await signInWithRedirect();
       } catch (redirectErr) {
         setError(String(redirectErr));
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLocalSignIn = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!signInWithPassword) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithPassword(email, password);
+      setPassword("");
+      setShowLocalLogin(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sign-in failed";
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -48,10 +63,7 @@ export function SignInButton() {
 
   if (loading) {
     return (
-      <span
-        className="text-xs text-muted-foreground"
-        data-testid="sign-in-loading"
-      >
+      <span className="text-xs text-muted-foreground" data-testid="sign-in-loading">
         checking auth…
       </span>
     );
@@ -60,7 +72,7 @@ export function SignInButton() {
   if (user) {
     return (
       <div className="flex items-center gap-3" data-testid="signed-in">
-        <span className="text-sm text-muted-foreground">{user.email}</span>
+        <span className="max-w-48 truncate text-sm text-muted-foreground">{user.email}</span>
         <button
           type="button"
           onClick={handleSignOut}
@@ -76,11 +88,115 @@ export function SignInButton() {
     );
   }
 
+  if (localJwt) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setShowLocalLogin(true);
+          }}
+          data-testid="sign-in-button"
+          className={cn(
+            "rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground",
+            "hover:opacity-90",
+          )}
+        >
+          Sign in
+        </button>
+
+        {showLocalLogin && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="local-login-title"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !busy) setShowLocalLogin(false);
+            }}
+          >
+            <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-2xl">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="local-login-title" className="text-lg font-semibold text-foreground">
+                    Sign in
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Use your self-hosted platform account.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close sign-in"
+                  disabled={busy}
+                  onClick={() => setShowLocalLogin(false)}
+                  className="rounded-md px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form className="space-y-4" onSubmit={handleLocalSignIn}>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium text-foreground">Email</span>
+                  <input
+                    type="email"
+                    autoComplete="username"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-ring"
+                    placeholder="admin@example.com"
+                  />
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium text-foreground">Password</span>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    minLength={12}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+
+                {error && (
+                  <div
+                    className="rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-600"
+                    data-testid="sign-in-error"
+                    role="alert"
+                  >
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={busy || !email || password.length < 12}
+                  className={cn(
+                    "w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground",
+                    "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
+                  )}
+                >
+                  {busy ? "Signing in…" : "Sign in"}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-2">
       <button
         type="button"
-        onClick={handleSignIn}
+        onClick={handleFirebaseSignIn}
         disabled={busy}
         data-testid="sign-in-button"
         className={cn(
@@ -91,11 +207,7 @@ export function SignInButton() {
         {busy ? "Signing in…" : "Sign in with Google"}
       </button>
       {error && (
-        <span
-          className="text-xs text-red-600"
-          data-testid="sign-in-error"
-          role="alert"
-        >
+        <span className="text-xs text-red-600" data-testid="sign-in-error" role="alert">
           {error}
         </span>
       )}
