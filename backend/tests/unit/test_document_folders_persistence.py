@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import pytest
 
+from db.firestore_inmemory import InMemoryFirestoreClient
 from db.persistence import reset_repository_for_testing
 from db.repositories.memory import MemoryRepository
 
 
 @pytest.fixture(autouse=True)
 def repository():
-    repo = MemoryRepository()
+    # The backend-wide conftest intentionally replaces db.firestore._client with
+    # a non-persistent MagicMock to catch accidental Firestore network access.
+    # MemoryRepository normally reuses that client in LOCAL_MODE, so construct a
+    # dedicated real in-memory client explicitly for repository contract tests.
+    repo = MemoryRepository(client=InMemoryFirestoreClient())
     reset_repository_for_testing(repo)
     yield repo
     reset_repository_for_testing(None)
