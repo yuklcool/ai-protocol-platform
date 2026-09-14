@@ -1,14 +1,8 @@
 """Tenant-isolated local filesystem object storage.
 
 Self-hosted deployments mount a persistent Docker volume at ``/data`` and use
-this adapter by default.  Files live under::
-
-    <root>/tenants/<tenant_id>/<key>
-
-The adapter never exposes the root directory directly to callers and rejects
-absolute paths, traversal, backslash path tricks, NUL bytes, and symlink escapes.
-Writes are atomic (temporary file + ``os.replace``), and reads can be streamed in
-bounded chunks so large downloads do not need to be buffered in memory.
+this adapter by default. Files live under ``<root>/tenants/<tenant_id>/<key>``.
+Writes are atomic and both upload/download paths support bounded-memory chunks.
 """
 
 from __future__ import annotations
@@ -17,6 +11,7 @@ import os
 import uuid
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
+from typing import BinaryIO
 
 from object_storage.base import ObjectInfo
 
@@ -42,14 +37,9 @@ def _validate_key(key: str, *, allow_empty: bool = False) -> PurePosixPath:
         raise StoragePathError("object key must not be empty")
     if "\x00" in value or "\\" in value:
         raise StoragePathError("object key contains an unsafe path sequence")
-
-    # Validate the raw text BEFORE PurePosixPath gets a chance to normalize
-    # segments such as ``docs/./file``.  Security checks must never depend on a
-    # library-normalized representation that silently discards suspicious input.
     raw_parts = value.split("/")
     if any(part in {"", ".", ".."} for part in raw_parts):
         raise StoragePathError("object key must be a normalized relative POSIX path")
-
     path = PurePosixPath(value)
     if path.is_absolute():
         raise StoragePathError("object key must be a normalized relative POSIX path")
@@ -80,23 +70,33 @@ class LocalObjectStorage:
         return candidate, normalized
 
     def _info(self, tenant_id: str, key: str, path: Path) -> ObjectInfo:
-        return ObjectInfo(
-            tenant_id=tenant_id,
-            key=key,
-            size=path.stat().st_size,
-            uri=path.resolve().as_uri(),
-        )
+        return ObjectInfo(tenant_id=tenant_id, key=key, size=path.stat().st_size, uri=path.resolve().as_uri())
 
     def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:
+        from io import BytesIO
+
+        return self.put_fileobj(tenant_id, key, BytesIO(data))
+
+    def put_fileobj(
+        self,
+        tenant_id: str,
+        key: str,
+        fileobj: BinaryIO,
+        *,
+        chunk_size: int = 1024 * 1024,
+    ) -> ObjectInfo:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
         path, normalized = self._resolve(tenant_id, key)
         path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Keep the temporary file in the destination directory so os.replace is
-        # atomic even when /data is a separately-mounted filesystem.
         temp = path.parent / f".{path.name}.tmp-{uuid.uuid4().hex}"
         try:
             with temp.open("wb") as handle:
-                handle.write(data)
+                while True:
+                    chunk = fileobj.read(chunk_size)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp, path)
@@ -109,13 +109,7 @@ class LocalObjectStorage:
         path, _ = self._resolve(tenant_id, key)
         return path.read_bytes()
 
-    def iter_bytes(
-        self,
-        tenant_id: str,
-        key: str,
-        *,
-        chunk_size: int = 1024 * 1024,
-    ) -> Iterator[bytes]:
+    def iter_bytes(self, tenant_id: str, key: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
         path, _ = self._resolve(tenant_id, key)
@@ -137,9 +131,6 @@ class LocalObjectStorage:
         if not path.is_file():
             raise StoragePathError("object key does not resolve to a regular file")
         path.unlink()
-
-        # Best-effort pruning, stopping at the tenant root. This keeps repeated
-        # upload/delete cycles from leaving a deep tree of empty directories.
         tenant_root = self._tenant_root(tenant_id).resolve()
         parent = path.parent
         while parent != tenant_root:
@@ -160,13 +151,11 @@ class LocalObjectStorage:
                 raise StoragePathError("prefix escapes tenant storage namespace") from exc
         else:
             scan_root = tenant_root
-
         if not scan_root.exists():
             return []
         if scan_root.is_file():
             rel = scan_root.relative_to(tenant_root).as_posix()
             return [self._info(tenant_id, rel, scan_root)]
-
         result: list[ObjectInfo] = []
         for path in sorted(scan_root.rglob("*")):
             if not path.is_file() or (path.name.startswith(".") and ".tmp-" in path.name):
@@ -175,8 +164,6 @@ class LocalObjectStorage:
             try:
                 rel = resolved.relative_to(tenant_root.resolve()).as_posix()
             except ValueError as exc:
-                # A symlink placed into the volume by an operator must not turn
-                # listing into a cross-namespace read primitive.
                 raise StoragePathError("storage tree contains a path outside the tenant namespace") from exc
             result.append(self._info(tenant_id, rel, resolved))
         return result
