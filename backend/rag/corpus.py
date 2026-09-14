@@ -1,7 +1,8 @@
 """Per-user Vertex AI RAG Engine corpus management.
 
 Each user gets one persistent RAG corpus. The corpus resource name is stored
-in Firestore at ``user_profiles/{user_id}`` under ``ragCorpusName``.
+in the configured persistence backend at ``user_profiles/{user_id}`` under
+``ragCorpusName``.
 
 All public functions are async. Synchronous vertexai.rag SDK calls are
 dispatched via ``asyncio.to_thread`` so the FastAPI event loop is not blocked.
@@ -49,10 +50,11 @@ def _ensure_vertexai() -> None:
 async def get_or_create_user_corpus(user_id: str) -> str:
     """Return the user's RAG corpus resource name, creating it if absent.
 
-    Reads ``ragCorpusName`` from ``user_profiles/{user_id}`` in Firestore.
-    On a miss, creates a new corpus and writes the name back before returning.
+    Reads ``ragCorpusName`` from ``user_profiles/{user_id}`` through the
+    configured repository. On a miss, creates the Vertex RAG corpus and writes
+    only its resource-name metadata back before returning.
     """
-    from db.firestore import get_document, set_document
+    from db.persistence import get_document, set_document
 
     profile = get_document(_USER_PROFILES_COLLECTION, user_id) or {}
     corpus_name: str | None = profile.get(_CORPUS_NAME_FIELD)
@@ -61,7 +63,12 @@ async def get_or_create_user_corpus(user_id: str) -> str:
 
     corpus_name = await asyncio.to_thread(_create_corpus_sync, user_id)
     # merge=True: safe whether or not the profile doc already exists
-    set_document(_USER_PROFILES_COLLECTION, user_id, {_CORPUS_NAME_FIELD: corpus_name}, merge=True)
+    set_document(
+        _USER_PROFILES_COLLECTION,
+        user_id,
+        {_CORPUS_NAME_FIELD: corpus_name},
+        merge=True,
+    )
     logger.info("rag: created corpus for user %s → %s", user_id, corpus_name)
     return corpus_name
 
