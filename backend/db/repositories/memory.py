@@ -1,16 +1,16 @@
 """In-memory repository used by LOCAL_MODE and persistence contract tests.
 
-In LOCAL_MODE this adapter deliberately wraps the existing
-``InMemoryFirestoreClient`` singleton used by the fixture seeder. That keeps
-seeded data visible while business modules migrate from ``db.firestore`` to
-``db.persistence``.
+``MemoryRepository()`` is intentionally an isolated repository instance.  The
+LOCAL_MODE fixture store is shared only when the persistence factory explicitly
+injects ``db.firestore.get_client()``.  Keeping that choice out of this adapter
+prevents environment variables from silently changing repository semantics in
+unit tests, migration tools, tenant wrappers, or other direct callers.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from config.local_mode import is_local_mode
 from db.repositories._document_ops import apply_query
 from db.repository import Filter
 
@@ -19,10 +19,6 @@ class MemoryRepository:
     def __init__(self, client: Any | None = None) -> None:
         if client is not None:
             self._client = client
-        elif is_local_mode():
-            from db.firestore import get_client
-
-            self._client = get_client()
         else:
             from db.firestore_inmemory import InMemoryFirestoreClient
 
