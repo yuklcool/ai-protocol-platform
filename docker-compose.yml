@@ -31,9 +31,10 @@ services:
         uv run uvicorn fast_api_app:app --host 0.0.0.0 --port 1956 --workers 1
     environment:
       PORT: "1956"
-      LOCAL_MODE: "1"
-      LOCAL_MODE_PERSIST: "${LOCAL_MODE_PERSIST:-1}"
-      OTEL_SDK_DISABLED: "true"
+      # Production-style Self-host is deliberately distinct from LOCAL_MODE.
+      # LOCAL_MODE keeps the developer auth stub/in-memory fixture semantics.
+      SELF_HOSTED_MODE: "1"
+      LOCAL_MODE: "0"
       DATA_BACKEND: "${DATA_BACKEND:-postgres}"
       SESSION_BACKEND: "${SESSION_BACKEND:-postgres}"
       MEMORY_BACKEND: "${MEMORY_BACKEND:-postgres}"
@@ -43,9 +44,10 @@ services:
       MEMORY_SEARCH_SCAN_LIMIT: "${MEMORY_SEARCH_SCAN_LIMIT:-2000}"
       OBJECT_STORAGE_BACKEND: "${OBJECT_STORAGE_BACKEND:-local}"
       OBJECT_STORAGE_LOCAL_ROOT: "${OBJECT_STORAGE_LOCAL_ROOT:-/data/objects}"
+      ARTIFACT_BACKEND: "${ARTIFACT_BACKEND:-local}"
       ADK_ARTIFACT_ROOT: "${ADK_ARTIFACT_ROOT:-/data/artifacts}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
-      AUTH_BACKEND: "${AUTH_BACKEND:-stub}"
+      AUTH_BACKEND: "${AUTH_BACKEND:-local-jwt}"
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-}"
       JWT_PREVIOUS_SIGNING_KEYS: "${JWT_PREVIOUS_SIGNING_KEYS:-}"
       JWT_ISSUER: "${JWT_ISSUER:-ai-protocol-platform}"
@@ -53,17 +55,21 @@ services:
       JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
       SELFHOST_ADMIN_EMAIL: "${SELFHOST_ADMIN_EMAIL:-}"
       SELFHOST_ADMIN_PASSWORD: "${SELFHOST_ADMIN_PASSWORD:-}"
-      GOOGLE_GENAI_USE_VERTEXAI: "false"
+      # No implicit GCP/ADC path in the default self-host profile.
+      GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-false}"
+      TRACE_EXPORT_ENABLED: "${TRACE_EXPORT_ENABLED:-0}"
+      CLOUD_LOGGING_ENABLED: "${CLOUD_LOGGING_ENABLED:-0}"
+      VERTEX_SEARCH_ENABLED: "${VERTEX_SEARCH_ENABLED:-0}"
+      OTEL_SDK_DISABLED: "${OTEL_SDK_DISABLED:-true}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_API_BASE: "${OPENAI_API_BASE:-}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      GROUP_AUTH_SIGNING_SECRET: "${GROUP_AUTH_SIGNING_SECRET:-local-mode-anon-group-dev-secret-DO-NOT-USE-IN-PROD}"
-      ALLOW_ORIGINS: "http://localhost:3456"
+      GROUP_AUTH_SIGNING_SECRET: "${GROUP_AUTH_SIGNING_SECRET:-}"
+      ALLOW_ORIGINS: "${ALLOW_ORIGINS:-http://localhost:3456}"
     ports:
       - "1956:1956"
     volumes:
-      - local-state:/root/.aitana-local
       - object-data:/data
     depends_on:
       postgres:
@@ -104,8 +110,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_LOCAL_MODE: "1"
-        NEXT_PUBLIC_AUTH_MODE: "${AUTH_BACKEND:-stub}"
+        NEXT_PUBLIC_LOCAL_MODE: "0"
+        NEXT_PUBLIC_AUTH_MODE: "${AUTH_BACKEND:-local-jwt}"
         NEXT_PUBLIC_BACKEND_URL: "http://localhost:1956"
         NEXT_PUBLIC_MCP_SANDBOX_URL: "http://localhost:3457"
         NEXT_PUBLIC_FRONTEND_URL: "http://localhost:3456"
@@ -136,8 +142,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  local-state:
-    name: ai-protocol-platform-local-state
   postgres-data:
     name: ai-protocol-platform-postgres-data
   object-data:
