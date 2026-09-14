@@ -1,8 +1,9 @@
-"""GET /api/models — unauthenticated model list for the skill-settings UI.
+"""Public platform metadata endpoints.
 
-Returns the structured model registry from backend/config/models.yaml.
-No auth required: the model list is not sensitive.
-Compaction config is internal and not included in the response.
+``GET /api/models`` serves the model registry used by the skill-settings UI.
+``GET /api/capabilities`` exposes which provider backends are enabled so a
+self-host can distinguish an intentionally-disabled optional cloud feature from
+a broken service. Neither endpoint contains credentials or sensitive values.
 """
 
 from __future__ import annotations
@@ -10,9 +11,10 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from config.capabilities import capabilities_payload
 from config.models import ModelEntry, load_models_config
 
-router = APIRouter(prefix="/api", tags=["models"])
+router = APIRouter(prefix="/api", tags=["platform"])
 
 
 class ModelsResponse(BaseModel):
@@ -33,3 +35,9 @@ async def list_models() -> ModelsResponse:
         platform_default=cfg.platform_default,
         tier_defaults=cfg.tier_defaults,
     )
+
+
+@router.get("/capabilities")
+async def platform_capabilities() -> dict[str, object]:
+    """Return provider/backend status without probing optional cloud services."""
+    return capabilities_payload()
