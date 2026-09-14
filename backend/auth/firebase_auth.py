@@ -1,8 +1,10 @@
 """Firebase/Identity Platform identity provider adapter.
 
 This module is intentionally provider-specific. Core Self-host auth code should
-import ``User`` from ``auth.models`` and only import this module when
-``AUTH_BACKEND=firebase`` is selected.
+import ``User`` from ``auth.models``. The Firebase Admin SDK itself is imported
+only when a Firebase verifier/lookup is actually executed, so legacy modules
+that still import ``User`` from this compatibility adapter do not pull Firebase
+into a local-JWT startup.
 """
 
 from __future__ import annotations
@@ -12,12 +14,18 @@ import time
 from typing import Any
 
 from fastapi import HTTPException, Request
-from firebase_admin import auth as fb_auth
 
 from auth.access_context import build_access_context
 from auth.models import User
 
 logger = logging.getLogger(__name__)
+
+
+def _firebase_auth_api():
+    """Load Firebase Admin only for the Firebase provider execution path."""
+    from firebase_admin import auth as fb_auth
+
+    return fb_auth
 
 
 def _extract_domain(email: str) -> str:
@@ -52,6 +60,7 @@ async def get_current_user(request: Request) -> User:
     if not token:
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
+    fb_auth = _firebase_auth_api()
     try:
         decoded = fb_auth.verify_id_token(token)
     except fb_auth.ExpiredIdTokenError as exc:
@@ -104,6 +113,7 @@ def resolve_user_by_uid(uid: str) -> User | None:
     if cached is not None and now - cached[0] < _USER_CACHE_TTL_SEC:
         return cached[1]
 
+    fb_auth = _firebase_auth_api()
     user: User | None
     try:
         record = fb_auth.get_user(uid)
