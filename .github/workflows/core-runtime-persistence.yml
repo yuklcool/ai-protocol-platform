@@ -4,17 +4,16 @@ on:
   push:
     branches: [main]
     paths:
-      - backend/admin/tenants.py
-      - backend/admin/prewarm_routes.py
-      - backend/adk/tools.py
-      - backend/channels/_default_skill.py
-      - backend/channels/identity.py
-      - backend/buckets/bucket_config.py
-      - backend/buckets/folder_config.py
-      - backend/rag/corpus.py
-      - backend/db/persistence.py
-      - backend/db/repository.py
-      - backend/db/repositories/**
+      - backend/admin/**
+      - backend/adk/**
+      - backend/channels/**
+      - backend/buckets/**
+      - backend/rag/**
+      - backend/skills/**
+      - backend/protocols/**
+      - backend/tools/documents/**
+      - backend/db/**
+      - backend/tests/persistence_tests/**
       - backend/tests/unit/test_tools_registry.py
       - backend/tests/unit/test_rag_corpus.py
       - backend/tests/api_tests/test_tools_route.py
@@ -25,17 +24,16 @@ on:
       - .github/workflows/core-runtime-persistence.yml
   pull_request:
     paths:
-      - backend/admin/tenants.py
-      - backend/admin/prewarm_routes.py
-      - backend/adk/tools.py
-      - backend/channels/_default_skill.py
-      - backend/channels/identity.py
-      - backend/buckets/bucket_config.py
-      - backend/buckets/folder_config.py
-      - backend/rag/corpus.py
-      - backend/db/persistence.py
-      - backend/db/repository.py
-      - backend/db/repositories/**
+      - backend/admin/**
+      - backend/adk/**
+      - backend/channels/**
+      - backend/buckets/**
+      - backend/rag/**
+      - backend/skills/**
+      - backend/protocols/**
+      - backend/tools/documents/**
+      - backend/db/**
+      - backend/tests/persistence_tests/**
       - backend/tests/unit/test_tools_registry.py
       - backend/tests/unit/test_rag_corpus.py
       - backend/tests/api_tests/test_tools_route.py
@@ -58,6 +56,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Audit business runtime for direct Firestore coupling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          roots = [
+              Path("backend/admin"),
+              Path("backend/adk"),
+              Path("backend/channels"),
+              Path("backend/buckets"),
+              Path("backend/rag"),
+              Path("backend/skills"),
+              Path("backend/protocols"),
+              Path("backend/tools/documents"),
+          ]
+          needles = (
+              "from db.firestore import",
+              "import db.firestore",
+              "google.cloud.firestore",
+          )
+          offenders: list[str] = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("*.py"):
+                  text = path.read_text(encoding="utf-8")
+                  if any(needle in text for needle in needles):
+                      offenders.append(str(path))
+
+          if offenders:
+              raise SystemExit(
+                  "Business runtime still depends directly on Firestore: "
+                  + ", ".join(sorted(offenders))
+              )
+          print("No direct Firestore coupling found in audited business runtime")
+          PY
+
       - name: Build backend
         run: docker compose build backend
 
@@ -70,6 +105,7 @@ jobs:
             -e PLATFORM_OWNER_EMAIL=platform@ci.local \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
+              tests/persistence_tests \
               tests/unit/test_tools_registry.py \
               tests/unit/test_rag_corpus.py \
               tests/api_tests/test_tools_route.py \
@@ -104,11 +140,32 @@ jobs:
           )
           from channels._default_skill import get_user_default_skill, set_user_default_skill
           from channels.identity import IdentityResolver
-          from db.persistence import get_repository
+          from db.persistence import get_repository, get_tenant_repository
+          from db.tenant_repository import TenantIsolationError
           import rag.corpus as corpus_mod
 
           repo = get_repository()
           assert repo.healthcheck()
+
+          # Generic PostgreSQL repository CRUD.
+          repo.set_document("ci_acceptance", "root", {"kind": "root"}, merge=False)
+          assert repo.get_document("ci_acceptance", "root")["kind"] == "root"
+
+          # TenantRepository must fail closed on real PostgreSQL, not only Memory.
+          tenant_a = get_tenant_repository("tenant-a")
+          tenant_b = get_tenant_repository("tenant-b")
+          tenant_a.set_document("ci_tenant_docs", "a-1", {"value": 1}, merge=False)
+          tenant_b.set_document("ci_tenant_docs", "b-1", {"value": 2}, merge=False)
+          assert tenant_a.get_document("ci_tenant_docs", "a-1")["value"] == 1
+          assert tenant_b.get_document("ci_tenant_docs", "b-1")["value"] == 2
+          assert [row["__id"] for row in tenant_a.query_documents("ci_tenant_docs")] == ["a-1"]
+          assert [row["__id"] for row in tenant_b.query_documents("ci_tenant_docs")] == ["b-1"]
+          try:
+              tenant_a.get_document("ci_tenant_docs", "b-1")
+          except TenantIsolationError:
+              pass
+          else:
+              raise AssertionError("cross-tenant read must fail closed")
 
           # Bucket metadata CRUD uses PostgreSQL through db.persistence.
           bucket = create_bucket(
@@ -180,6 +237,9 @@ jobs:
           repo.delete_document("user_settings", "ci-user")
           repo.delete_document("channel_identities", "discord_4242")
           repo.delete_document("user_profiles", "ci-rag-user")
+          repo.delete_document("ci_acceptance", "root")
+          tenant_a.delete_document("ci_tenant_docs", "a-1")
+          tenant_b.delete_document("ci_tenant_docs", "b-1")
           print("Core runtime PostgreSQL persistence checks passed")
           PY
 
