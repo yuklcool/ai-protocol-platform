@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -17,11 +18,20 @@ def test_round_trip_survives_adapter_reconstruction(tmp_path: Path):
     assert info.size == len(b"persistent-data")
     assert info.uri.startswith("file://")
 
-    # Reconstruct the adapter to model a backend process restart. No in-process
-    # cache is allowed to be necessary for recovery.
     second = LocalObjectStorage(root)
     assert second.get_bytes("tenant-a", "docs/folder/report.txt") == b"persistent-data"
     assert second.exists("tenant-a", "docs/folder/report.txt")
+
+
+def test_file_object_upload_is_chunked_and_atomic(tmp_path: Path):
+    storage = LocalObjectStorage(tmp_path / "objects")
+    payload = b"0123456789" * 1000
+    info = storage.put_fileobj("tenant-a", "streamed.bin", BytesIO(payload), chunk_size=97)
+
+    assert info.size == len(payload)
+    assert storage.get_bytes("tenant-a", "streamed.bin") == payload
+    tenant_dir = storage.root_dir / "tenants" / "tenant-a"
+    assert not list(tenant_dir.glob(".*.tmp-*"))
 
 
 def test_tenants_are_hard_namespaces(tmp_path: Path):
