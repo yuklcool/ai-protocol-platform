@@ -186,9 +186,22 @@ def _verification_keys() -> list[str]:
     keys = [_signing_key()]
     for key in os.environ.get("JWT_PREVIOUS_SIGNING_KEYS", "").split(","):
         key = key.strip()
-        if key and key not in keys:
+        if not key:
+            continue
+        if len(key.encode("utf-8")) < 32:
+            raise RuntimeError("every JWT_PREVIOUS_SIGNING_KEYS entry must be at least 32 bytes")
+        if key not in keys:
             keys.append(key)
     return keys
+
+
+def validate_local_jwt_config() -> None:
+    """Fail loudly during startup instead of on the first login request."""
+    _signing_key()
+    _verification_keys()
+    _expiry_seconds()
+    if not _issuer() or not _audience():
+        raise RuntimeError("JWT_ISSUER and JWT_AUDIENCE must be non-empty")
 
 
 def issue_access_token(user: User) -> tuple[str, int]:
@@ -276,5 +289,6 @@ __all__ = [
     "hash_password",
     "issue_access_token",
     "user_from_token",
+    "validate_local_jwt_config",
     "verify_password",
 ]
