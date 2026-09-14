@@ -14,7 +14,6 @@ import logging
 import os
 
 from google.adk.apps.app import EventsCompactionConfig
-from google.adk.artifacts import GcsArtifactService, InMemoryArtifactService
 from google.adk.memory import BaseMemoryService, InMemoryMemoryService, VertexAiMemoryBankService
 from google.adk.sessions import BaseSessionService, InMemorySessionService, VertexAiSessionService
 
@@ -461,30 +460,18 @@ def get_memory_service() -> BaseMemoryService:
     return _memory_service_singleton
 
 
-_artifact_service_singleton: InMemoryArtifactService | GcsArtifactService | None = None
-
-
 def _reset_artifact_service_for_tests() -> None:
-    """Reset the singleton so tests can exercise different env-var combinations."""
-    global _artifact_service_singleton
-    _artifact_service_singleton = None
+    """Reset the delegated artifact backend so tests can switch providers."""
+    from adk.artifact_backend import _reset_artifact_service_for_tests as reset_artifact_backend
+
+    reset_artifact_backend()
 
 
-def get_artifact_service() -> InMemoryArtifactService | GcsArtifactService:
-    """Get artifact service — GCS or in-memory, process-level singleton.
+def get_artifact_service():
+    """Get the configured ADK ArtifactService from the unified backend factory."""
+    from adk.artifact_backend import get_artifact_service as get_configured_artifact_service
 
-    Singleton ensures the upload endpoint and ADK runner share the same
-    InMemoryArtifactService in local dev. In prod GCS is shared by bucket name
-    and a singleton is still cheaper to construct.
-    """
-    global _artifact_service_singleton
-    if _artifact_service_singleton is None:
-        bucket = os.environ.get("ADK_ARTIFACT_BUCKET")
-        if bucket:
-            _artifact_service_singleton = GcsArtifactService(bucket_name=bucket)
-        else:
-            _artifact_service_singleton = InMemoryArtifactService()
-    return _artifact_service_singleton
+    return get_configured_artifact_service()
 
 
 # --- URI helpers for get_fast_api_app() ---
@@ -504,11 +491,10 @@ def get_session_service_uri() -> str | None:
 
 
 def get_artifact_service_uri() -> str | None:
-    """Get artifact service URI for get_fast_api_app(). None = in-memory."""
-    bucket = os.environ.get("ADK_ARTIFACT_BUCKET")
-    if bucket:
-        return f"gs://{bucket}"
-    return None
+    """Return the ADK FastAPI ArtifactService URI for the selected backend."""
+    from adk.artifact_backend import get_artifact_service_uri as get_configured_artifact_service_uri
+
+    return get_configured_artifact_service_uri()
 
 
 def get_memory_service_uri() -> str | None:
