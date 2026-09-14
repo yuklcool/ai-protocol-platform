@@ -42,8 +42,16 @@ def _validate_key(key: str, *, allow_empty: bool = False) -> PurePosixPath:
         raise StoragePathError("object key must not be empty")
     if "\x00" in value or "\\" in value:
         raise StoragePathError("object key contains an unsafe path sequence")
+
+    # Validate the raw text BEFORE PurePosixPath gets a chance to normalize
+    # segments such as ``docs/./file``.  Security checks must never depend on a
+    # library-normalized representation that silently discards suspicious input.
+    raw_parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in raw_parts):
+        raise StoragePathError("object key must be a normalized relative POSIX path")
+
     path = PurePosixPath(value)
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+    if path.is_absolute():
         raise StoragePathError("object key must be a normalized relative POSIX path")
     return path
 
@@ -130,7 +138,7 @@ class LocalObjectStorage:
             raise StoragePathError("object key does not resolve to a regular file")
         path.unlink()
 
-        # Best-effort pruning, stopping at the tenant root.  This keeps repeated
+        # Best-effort pruning, stopping at the tenant root. This keeps repeated
         # upload/delete cycles from leaving a deep tree of empty directories.
         tenant_root = self._tenant_root(tenant_id).resolve()
         parent = path.parent
@@ -161,7 +169,7 @@ class LocalObjectStorage:
 
         result: list[ObjectInfo] = []
         for path in sorted(scan_root.rglob("*")):
-            if not path.is_file() or path.name.startswith(".") and ".tmp-" in path.name:
+            if not path.is_file() or (path.name.startswith(".") and ".tmp-" in path.name):
                 continue
             resolved = path.resolve()
             try:
