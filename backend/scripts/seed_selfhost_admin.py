@@ -1,9 +1,9 @@
 """Bootstrap the first built-in self-host administrator.
 
 The script is intentionally idempotent and never rewrites an existing
-credential on container restart. Set SELFHOST_ADMIN_EMAIL/PASSWORD only for the
-initial account creation; later user-management work should mutate accounts
-through authenticated admin APIs rather than environment variables.
+credential on container restart. A first local-jwt deployment must provide
+SELFHOST_ADMIN_EMAIL/PASSWORD; after an account exists those bootstrap secrets
+may be removed from the environment.
 """
 
 from __future__ import annotations
@@ -12,7 +12,17 @@ import os
 
 from auth.admin_roles import PLATFORM_ADMIN_TAG
 from auth.identity import auth_backend
-from auth.local_jwt import create_local_user, get_local_user_by_email
+from auth.local_jwt import (
+    USER_COLLECTION,
+    create_local_user,
+    get_local_user_by_email,
+    validate_local_jwt_config,
+)
+from db import persistence
+
+
+def _has_any_local_user() -> bool:
+    return bool(persistence.query_documents(USER_COLLECTION, limit=1))
 
 
 def main() -> int:
@@ -20,11 +30,20 @@ def main() -> int:
         print("self-host admin bootstrap: skipped (AUTH_BACKEND is not local-jwt)")
         return 0
 
+    # Validate signing/expiry settings before uvicorn starts. A deployment that
+    # cannot mint or verify tokens must fail at boot, not on the first login.
+    validate_local_jwt_config()
+
     email = os.environ.get("SELFHOST_ADMIN_EMAIL", "").strip()
     password = os.environ.get("SELFHOST_ADMIN_PASSWORD", "")
     if not email and not password:
-        print("self-host admin bootstrap: no credentials configured; no account created")
-        return 0
+        if _has_any_local_user():
+            print("self-host admin bootstrap: existing local account found; bootstrap credentials not required")
+            return 0
+        raise SystemExit(
+            "AUTH_BACKEND=local-jwt requires SELFHOST_ADMIN_EMAIL and "
+            "SELFHOST_ADMIN_PASSWORD on first startup"
+        )
     if not email or not password:
         raise SystemExit(
             "SELFHOST_ADMIN_EMAIL and SELFHOST_ADMIN_PASSWORD must be configured together"
