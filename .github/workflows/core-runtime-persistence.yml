@@ -11,10 +11,12 @@ on:
       - backend/channels/identity.py
       - backend/buckets/bucket_config.py
       - backend/buckets/folder_config.py
+      - backend/rag/corpus.py
       - backend/db/persistence.py
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/tests/unit/test_tools_registry.py
+      - backend/tests/unit/test_rag_corpus.py
       - backend/tests/api_tests/test_tools_route.py
       - backend/tests/api_tests/test_admin_tenants.py
       - backend/tests/api_tests/test_admin_prewarm.py
@@ -30,10 +32,12 @@ on:
       - backend/channels/identity.py
       - backend/buckets/bucket_config.py
       - backend/buckets/folder_config.py
+      - backend/rag/corpus.py
       - backend/db/persistence.py
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/tests/unit/test_tools_registry.py
+      - backend/tests/unit/test_rag_corpus.py
       - backend/tests/api_tests/test_tools_route.py
       - backend/tests/api_tests/test_admin_tenants.py
       - backend/tests/api_tests/test_admin_prewarm.py
@@ -67,6 +71,7 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/unit/test_tools_registry.py \
+              tests/unit/test_rag_corpus.py \
               tests/api_tests/test_tools_route.py \
               tests/api_tests/test_admin_tenants.py \
               tests/api_tests/test_admin_prewarm.py \
@@ -100,6 +105,7 @@ jobs:
           from channels._default_skill import get_user_default_skill, set_user_default_skill
           from channels.identity import IdentityResolver
           from db.persistence import get_repository
+          import rag.corpus as corpus_mod
 
           repo = get_repository()
           assert repo.healthcheck()
@@ -156,10 +162,24 @@ jobs:
           assert isinstance(identity["created_at"], str)
           assert isinstance(identity["last_seen_at"], str)
 
+          # Vertex remains the RAG provider, but its resource-name metadata is
+          # persisted through PostgreSQL rather than direct Firestore access.
+          corpus_mod._create_corpus_sync = lambda user_id: f"projects/ci/ragCorpora/{user_id}"
+          corpus_name = asyncio.run(corpus_mod.get_or_create_user_corpus("ci-rag-user"))
+          assert corpus_name == "projects/ci/ragCorpora/ci-rag-user"
+          profile = repo.get_document("user_profiles", "ci-rag-user")
+          assert profile is not None
+          assert profile["ragCorpusName"] == corpus_name
+          corpus_mod._create_corpus_sync = lambda _user_id: (_ for _ in ()).throw(
+              AssertionError("existing corpus metadata should prevent a second Vertex create")
+          )
+          assert asyncio.run(corpus_mod.get_or_create_user_corpus("ci-rag-user")) == corpus_name
+
           assert delete_folder(updated_bucket.bucket_id, folder.folder_id) is True
           assert delete_bucket(updated_bucket.bucket_id) is True
           repo.delete_document("user_settings", "ci-user")
           repo.delete_document("channel_identities", "discord_4242")
+          repo.delete_document("user_profiles", "ci-rag-user")
           print("Core runtime PostgreSQL persistence checks passed")
           PY
 
