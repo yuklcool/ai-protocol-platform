@@ -1,12 +1,8 @@
-"""GCP project resolution.
+"""GCP project and credential resolution.
 
-Centralises the env-var + ADC fallback chain that was duplicated across
-``app.py``, ``fast_api_app.py``, ``db/firestore.py``, and ``adk/session.py``.
-
-Lookup order:
-    1. ``GOOGLE_CLOUD_PROJECT`` env var
-    2. ``GCP_PROJECT`` env var (legacy v5 name)
-    3. ``google.auth.default()`` (Application Default Credentials)
+GCP is a provider, not a process-wide prerequisite. Managed deployments keep
+the historical env/ADC fallback. ``SELF_HOSTED_MODE=1`` does not probe ADC or
+require a project unless an operator explicitly selects a GCP-backed capability.
 """
 
 from __future__ import annotations
@@ -18,10 +14,41 @@ import google.auth
 import google.auth.credentials
 import google.auth.exceptions
 
+from config.deployment import is_self_hosted_mode
+
 _log = logging.getLogger(__name__)
 
 # API-key env vars that, in Vertex mode, poison the genai client.
 _API_KEY_VARS = ("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GENAI_API_KEY")
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUTHY
+
+
+def selfhost_gcp_capability_requested() -> bool:
+    """Return True only when a self-host explicitly opted into a GCP provider.
+
+    Merely having ``google-auth`` installed, or stale ADC on the machine, must
+    never turn a PostgreSQL/local/JWT deployment into a GCP deployment.
+    """
+    if not is_self_hosted_mode():
+        return True
+    return any(
+        (
+            os.environ.get("AUTH_BACKEND", "").strip().lower() == "firebase",
+            os.environ.get("SESSION_BACKEND", "").strip().lower() == "vertex",
+            os.environ.get("MEMORY_BACKEND", "").strip().lower() == "vertex",
+            os.environ.get("ARTIFACT_BACKEND", "").strip().lower() == "gcs",
+            os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").strip().lower() == "true",
+            _truthy("VERTEX_SEARCH_ENABLED"),
+            _truthy("TRACE_EXPORT_ENABLED"),
+            _truthy("CLOUD_LOGGING_ENABLED"),
+            bool(os.environ.get("AGENT_ENGINE_ID")),
+            bool(os.environ.get("ADK_ARTIFACT_BUCKET")),
+        )
+    )
 
 
 def neutralize_api_key_in_vertex_mode() -> list[str]:
@@ -60,9 +87,13 @@ def neutralize_api_key_in_vertex_mode() -> list[str]:
 def resolve_gcp_credentials() -> tuple[google.auth.credentials.Credentials, str | None] | None:
     """Return ``(credentials, adc_project)`` or ``None`` when ADC is unavailable.
 
-    Used by callers that need to inspect the credentials object itself
-    (e.g. the startup probe that checks ``credentials.quota_project_id``).
+    In the default self-host profile this returns ``None`` *without calling*
+    ``google.auth.default()``. That matters because ADC discovery may consult
+    local gcloud files or metadata endpoints even when the operator never
+    enabled a GCP capability.
     """
+    if is_self_hosted_mode() and not selfhost_gcp_capability_requested():
+        return None
     try:
         creds, adc_project = google.auth.default()
         return creds, adc_project
@@ -84,14 +115,15 @@ def require_gcp_project() -> str:
     project = resolve_gcp_project()
     if not project:
         raise RuntimeError(
-            "No GCP project available: set GOOGLE_CLOUD_PROJECT, GCP_PROJECT, "
-            "or run with ADC (`gcloud auth application-default login`)."
+            "No GCP project available for the selected GCP capability: set "
+            "GOOGLE_CLOUD_PROJECT/GCP_PROJECT and credentials, or switch that "
+            "capability to a self-host backend."
         )
     return project
 
 
-#: Sentinel used by ``app.py`` when no project resolves (CI import path). Kept
-#: here so the guard and the fallback cannot drift apart.
+#: Sentinel used by legacy managed-GCP imports when no project resolves. Kept
+#: for backwards compatibility; SELF_HOSTED_MODE never installs it.
 PLACEHOLDER_PROJECT = "unset-project"
 
 
@@ -100,51 +132,33 @@ class ProjectGuardError(RuntimeError):
 
 
 def check_startup_project(*, local_mode: bool) -> str:
-    """Validate the resolved GCP project at boot. Returns it, or raises.
+    """Validate the managed-GCP project at boot. Returns a descriptive value.
 
-    Replaces a guard that was both **brand-anchored and fail-open** (v6.19.0,
-    AIPLA #42): it compared the resolved project against a hardcoded
-    ``your-project-id`` prefix and only logged a ``STARTUP WARNING``. That is
-    backwards on both counts — it fired on every correctly-configured fork, and
-    stayed quiet when the project was genuinely wrong, which is the case it
-    existed to catch. A guard that warns when correct and is silent when wrong
-    is worse than no guard.
-
-    The replacement derives its expectation instead of baking one in:
-
-    * ``PLATFORM_EXPECTED_PROJECT`` set  -> must match exactly, else refuse to boot.
-      This is the real protection for the documented shell-shadow gotcha, where
-      a developer's ``GCP_PROJECT`` points at some other project entirely and
-      the app cheerfully reads and writes there.
-    * ``PLATFORM_EXPECTED_PROJECT`` unset -> nothing to compare against, so make
-      no claim. We only require that *some* project resolved.
-    * No project at all, outside LOCAL_MODE -> refuse to boot. Firestore, GCS and
-      ADK would all silently target the wrong place.
-
-    LOCAL_MODE is exempt throughout: it has no GCP backing by design.
+    LOCAL_MODE and SELF_HOSTED_MODE are process-wide exemptions because neither
+    mode requires GCP. Individual optional GCP backends call
+    :func:`require_gcp_project` when they are constructed, so selecting Vertex
+    or GCS in a self-host still fails loudly at the provider boundary rather
+    than weakening validation.
     """
     resolved = resolve_gcp_project()
 
     if local_mode:
         return resolved or "(local-mode)"
+    if is_self_hosted_mode():
+        return resolved or "(self-hosted)"
 
     if not resolved:
         raise ProjectGuardError(
-            "No GCP project resolved at startup. Firestore, GCS and ADK would all "
-            "target the wrong place. Set GOOGLE_CLOUD_PROJECT (or GCP_PROJECT), or "
-            "run with ADC (`gcloud auth application-default login`). "
-            "Set LOCAL_MODE=1 to run without GCP."
+            "No GCP project resolved at startup. Set GOOGLE_CLOUD_PROJECT "
+            "(or GCP_PROJECT), configure ADC, or use SELF_HOSTED_MODE=1 for a "
+            "PostgreSQL/local-storage deployment that does not require GCP."
         )
 
-    # ``app.py`` sets this literal placeholder when nothing resolves, so CI can
-    # import the module tree without GCP. Reaching a real boot with it still set
-    # means the deployment never configured a project — treat it as unset rather
-    # than letting "unset-project" look like a legitimate project name.
     if resolved == PLACEHOLDER_PROJECT:
         raise ProjectGuardError(
             f"GCP project is the placeholder {PLACEHOLDER_PROJECT!r}, which means none was "
             "configured. Set GOOGLE_CLOUD_PROJECT (or PLATFORM_DEFAULT_PROJECT) to the real "
-            "project, or set LOCAL_MODE=1 to run without GCP."
+            "project, or use SELF_HOSTED_MODE=1 to run without GCP."
         )
 
     expected = os.getenv("PLATFORM_EXPECTED_PROJECT", "").strip()
@@ -157,3 +171,15 @@ def check_startup_project(*, local_mode: bool) -> str:
         )
 
     return resolved
+
+
+__all__ = [
+    "PLACEHOLDER_PROJECT",
+    "ProjectGuardError",
+    "check_startup_project",
+    "neutralize_api_key_in_vertex_mode",
+    "require_gcp_project",
+    "resolve_gcp_credentials",
+    "resolve_gcp_project",
+    "selfhost_gcp_capability_requested",
+]
