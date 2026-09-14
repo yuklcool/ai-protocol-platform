@@ -80,22 +80,22 @@ def _storage_binding(doc: dict, user: User):
         bucket = parsed.netloc if parsed and parsed.netloc else resolve_documents_bucket(user)
         return GcsObjectStorage(bucket), tenant_id, key, backend
 
+    if backend == "gcs-legacy":
+        parsed = urlparse(source_url) if source_url.startswith("gs://") else None
+        bucket = parsed.netloc if parsed and parsed.netloc else resolve_documents_bucket(user)
+        return LegacyGcsObjectStorage(bucket), tenant_id, key, backend
+
     if backend == "s3":
         if object_storage_backend_name() != "s3":
             raise HTTPException(status_code=503, detail="Document storage backend s3 is not configured")
         return get_object_storage(), tenant_id, key, backend
 
-    # Legacy records pre-date storageBackend/tenantId and stored GCS objects at
-    # users/<uid>/docs/... without the tenant prefix. Keep this compatibility in
-    # the adapter layer rather than leaking provider calls into business routes.
     if source_url.startswith("gs://"):
         parsed = urlparse(source_url)
         if not parsed.netloc:
             raise HTTPException(status_code=500, detail="Malformed sourceUrl on document")
         return LegacyGcsObjectStorage(parsed.netloc), tenant_id, key, "gcs-legacy"
 
-    # New local records always carry storageBackend, but this fallback keeps
-    # partially-migrated self-host metadata readable when storagePath exists.
     if object_storage_backend_name() == "local":
         return get_object_storage(), tenant_id, key, "local"
 
@@ -194,13 +194,11 @@ def get_document(doc_id: str, user: _CurrentUser) -> dict:
 
 @router.get("/api/documents/{doc_id}/preview")
 def preview_document(doc_id: str, user: _CurrentUser):
-    """Authenticated streaming preview for local, GCS and future adapters."""
     return _stream_document(_owned_document(doc_id, user), user, disposition="inline")
 
 
 @router.get("/api/documents/{doc_id}/download")
 def download_document(doc_id: str, user: _CurrentUser):
-    """Authenticated attachment download; local storage never exposes a file URL."""
     return _stream_document(_owned_document(doc_id, user), user, disposition="attachment")
 
 
@@ -240,7 +238,6 @@ def thumbnail_document(doc_id: str, user: _CurrentUser, width: int = 600):
 
 @router.post("/api/documents/{doc_id}/reparse")
 async def reparse_document(doc_id: str, user: _CurrentUser) -> dict:
-    """Re-run parsing from ObjectStorage bytes, independent of provider URI."""
     from tools.documents.upload import _run_parse
 
     doc = _owned_document(doc_id, user)
@@ -256,7 +253,6 @@ async def reparse_document(doc_id: str, user: _CurrentUser) -> dict:
     filename = doc.get("originalFilename") or key.rsplit("/", 1)[-1]
     source_ref = doc.get("sourceUrl") or f"{backend}:{tenant_id}/{key}"
     status, blocks, elapsed_ms, error = await _run_parse(data, filename, source_ref=source_ref)
-
     now = datetime.now(UTC)
     update = {
         "parseStatus": status,
@@ -277,13 +273,9 @@ async def reparse_document(doc_id: str, user: _CurrentUser) -> dict:
 
 @router.delete("/api/documents/{doc_id}", status_code=204)
 async def delete_document(doc_id: str, user: _CurrentUser) -> None:
-    """Delete bytes and metadata with a recoverable deletion state."""
     doc = _owned_document(doc_id, user)
     storage, tenant_id, key, backend = _storage_binding(doc, user)
     now = datetime.now(UTC).isoformat()
-
-    # Mark first so a storage failure leaves a durable retry signal instead of
-    # silently deleting metadata while bytes remain orphaned.
     _set_document_record(
         _PARSED_DOCS_COLLECTION,
         doc_id,
