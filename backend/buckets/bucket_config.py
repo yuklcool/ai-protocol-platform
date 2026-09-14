@@ -1,4 +1,4 @@
-"""Bucket configuration — Firestore CRUD for the /buckets collection.
+"""Bucket configuration — backend-neutral CRUD for the /buckets collection.
 
 Mirrors skills/skill_config.py but without the in-memory cache (buckets
 are low-traffic config docs, not hot request-path reads — revisit if the
@@ -11,7 +11,7 @@ import time
 import uuid
 from typing import Any
 
-from db import firestore as fs
+from db import persistence as fs
 from db.models import BucketConfig
 
 COLLECTION = "buckets"
@@ -33,7 +33,7 @@ def create_bucket(
     owner_email: str,
     **kwargs: Any,
 ) -> BucketConfig:
-    """Create a new bucket and persist to Firestore.
+    """Create a new bucket and persist through the configured repository.
 
     Caller must supply `owner_id` from the verified JWT — route handler
     MUST NOT accept it from the request body.
@@ -62,16 +62,7 @@ def get_bucket(bucket_id: str) -> BucketConfig | None:
 
 
 def find_by_gcs_name(gcs_bucket: str) -> BucketConfig | None:
-    """Return the registered bucket-config whose ``gcsBucket`` matches, or None.
-
-    The file-serving endpoints (`/{name}/list|preview|thumbnail`) address by GCS
-    bucket **name**, not by config-id, so per-tenant authorization needs a
-    name→config lookup. Raw buckets that were never registered as a config (e.g. a
-    per-env llmops bucket) return None; the caller then falls back to the
-    tenant-bucket check in `_authorize_bucket_read`. First match wins — `gcsBucket`
-    is expected unique per config; a duplicate would be a config error, and both
-    copies still carry `accessControl`, so it is not a security hole.
-    """
+    """Return the registered bucket-config whose ``gcsBucket`` matches, or None."""
     if not gcs_bucket:
         return None
     docs = fs.query_documents(
