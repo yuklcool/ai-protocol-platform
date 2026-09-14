@@ -1,12 +1,9 @@
-"""Folder configuration — Firestore CRUD for /buckets/{bucketId}/folders.
+"""Folder configuration — backend-neutral CRUD for bucket folder records.
 
-The folder's `effective_access` is computed on every write (create and
-update) so Firestore rules can read it directly without recursing to the
-parent bucket — keeps access checks O(1).
-
-Parent-access-change fan-out (re-computing effective_access for all
-descendant folders when a bucket's accessControl changes) is deferred to
-v6.1 — see resource-access-control.md §Open questions.
+For Firestore compatibility the collection key remains the existing nested path
+``buckets/{bucketId}/folders``. PostgreSQL stores that same path as the logical
+collection key, so no business-model or Firestore data-layout migration is
+required.
 """
 
 from __future__ import annotations
@@ -15,15 +12,14 @@ import time
 import uuid
 from typing import Any
 
-from db import firestore as fs
+from db import persistence as fs
 from db.models import AccessControl, BucketConfig, BucketFolderConfig
 
 _FOLDERS_SUBCOLLECTION = "folders"
 
 
-def _folder_path(bucket_id: str, folder_id: str | None = None) -> str:
-    base = f"buckets/{bucket_id}/{_FOLDERS_SUBCOLLECTION}"
-    return f"{base}/{folder_id}" if folder_id else base
+def _folder_collection(bucket_id: str) -> str:
+    return f"buckets/{bucket_id}/{_FOLDERS_SUBCOLLECTION}"
 
 
 def _to_firestore(config: BucketFolderConfig) -> dict[str, Any]:
@@ -39,12 +35,7 @@ def compute_effective_access(
     folder_access: AccessControl | dict[str, Any] | None,
     parent: BucketConfig,
 ) -> AccessControl:
-    """Resolve effective access at write time.
-
-    Rule: folder.accessControl wins if set (override); otherwise inherit
-    from parent bucket. Rules then read effectiveAccess directly — no
-    recursion to the parent at read time.
-    """
+    """Resolve effective access at write time."""
     if folder_access is None:
         return parent.access_control
     if isinstance(folder_access, AccessControl):
@@ -60,11 +51,7 @@ def create_folder(
     access_control: AccessControl | dict[str, Any] | None = None,
     tags: list[str] | None = None,
 ) -> BucketFolderConfig:
-    """Create a new folder under `bucket`.
-
-    `bucket` is required (not just bucket_id) so we can compute
-    effective_access without a second Firestore read.
-    """
+    """Create a new folder under `bucket`."""
     folder_id = str(uuid.uuid4())
     now = time.time()
     effective = compute_effective_access(access_control, bucket)
@@ -82,15 +69,19 @@ def create_folder(
         createdAt=now,
         updatedAt=now,
     )
-    fs.get_client().document(_folder_path(bucket.bucket_id, folder_id)).set(_to_firestore(config))
+    fs.set_document(
+        _folder_collection(bucket.bucket_id),
+        folder_id,
+        _to_firestore(config),
+    )
     return config
 
 
 def get_folder(bucket_id: str, folder_id: str) -> BucketFolderConfig | None:
-    doc = fs.get_client().document(_folder_path(bucket_id, folder_id)).get()
-    if not doc.exists:
+    data = fs.get_document(_folder_collection(bucket_id), folder_id)
+    if data is None:
         return None
-    return _from_firestore(doc.to_dict() or {})
+    return _from_firestore(data)
 
 
 def update_folder(
@@ -107,24 +98,23 @@ def update_folder(
         effective = compute_effective_access(updates["accessControl"], bucket)
         updates["effectiveAccess"] = effective.model_dump()
     updates["updatedAt"] = time.time()
-    fs.get_client().document(_folder_path(bucket.bucket_id, folder_id)).update(updates)
+    fs.update_document(_folder_collection(bucket.bucket_id), folder_id, updates)
     return get_folder(bucket.bucket_id, folder_id)
 
 
 def delete_folder(bucket_id: str, folder_id: str) -> bool:
     if get_folder(bucket_id, folder_id) is None:
         return False
-    fs.get_client().document(_folder_path(bucket_id, folder_id)).delete()
+    fs.delete_document(_folder_collection(bucket_id), folder_id)
     return True
 
 
 def list_folders(bucket_id: str, limit: int = 50) -> list[BucketFolderConfig]:
-    """List folders under a bucket."""
-    coll = fs.get_client().collection(_folder_path(bucket_id))
-    query = coll.order_by("updatedAt", direction="DESCENDING").limit(limit)
-    results: list[BucketFolderConfig] = []
-    for doc in query.stream():
-        data = doc.to_dict()
-        if data:
-            results.append(_from_firestore(data))
-    return results
+    """List folders under a bucket ordered by most recently updated."""
+    docs = fs.query_documents(
+        _folder_collection(bucket_id),
+        order_by="updatedAt",
+        order_direction="DESCENDING",
+        limit=limit,
+    )
+    return [_from_firestore(doc) for doc in docs]
