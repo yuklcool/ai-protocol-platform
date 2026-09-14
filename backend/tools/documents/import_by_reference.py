@@ -16,7 +16,9 @@ Cache cascade (see docs/design/v6.4.0/document-import-by-reference.md):
       editedBlocks isolation.
 - L3  fresh AILANG Parse → _store_document.
 
-Returns 422 with parseError detail when AILANG Parse fails.
+The referenced binary is still intentionally a GCS feature, but metadata reads
+use the backend-neutral persistence facade so PostgreSQL deployments do not
+need Firestore merely to perform deduplication.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth import User, get_current_user
-from db.firestore import query_documents
+from db.persistence import query_documents
 from skills.platform import PLATFORM_OWNER_UID
 
 from .upload import (
@@ -44,9 +46,7 @@ from .upload import (
 )
 
 _CurrentUser = Annotated[User, Depends(get_current_user)]
-
 log = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
@@ -59,23 +59,10 @@ class ImportByReferenceRequest(BaseModel):
 
 
 @router.post("/import-by-reference")
-async def import_by_reference(
-    req: ImportByReferenceRequest,
-    user: _CurrentUser,
-) -> ParsedDocumentResponse:
-    """Parse a GCS-resident document by reference. Same pipeline as /upload,
-    minus the file→GCS step since the file already lives at
-    ``gs://{bucket}/{object}``.
-    """
+async def import_by_reference(req: ImportByReferenceRequest, user: _CurrentUser) -> ParsedDocumentResponse:
+    """Parse a GCS-resident document by reference."""
     gs_url = f"gs://{req.bucket}/{req.object}"
 
-    # L2 — self-dedup. Same user has already imported this gs://, AND the
-    # cached record is healthy ("parsed" status)? Stale records left from
-    # prior broken AILANG runs ("pending_ai_extraction" with empty blocks,
-    # "failed", etc.) MUST fall through to L4/L3 so the user can recover.
-    # Without this guard a stale L2 record keeps serving the same broken
-    # spinner forever — bug surfaced 2026-06-11 with 3 sentinel PPAs stuck
-    # in pending_ai_extraction from 10:01 UTC (pre-PDF-fix records).
     self_hits = query_documents(
         _COLLECTION,
         filters=[("userId", "==", user.uid), ("sourceUrl", "==", gs_url)],
@@ -92,9 +79,6 @@ async def import_by_reference(
             self_hits[0].get("parseStatus"),
         )
 
-    # L4 — sentinel-dedup. Platform-pre-parsed this gs://? Clone into the
-    # existing per-user record if one exists (overwriting any stale state),
-    # else create a fresh one. editedBlocks / folder semantics stay isolated.
     existing_user_doc_id = self_hits[0]["__id"] if self_hits else None
     sentinel_hit = query_documents(
         _COLLECTION,
@@ -104,17 +88,9 @@ async def import_by_reference(
     if sentinel_hit:
         log.info("import_by_reference: l4_hit user=%s gs=%s", user.uid, gs_url)
         return _clone_sentinel_to_user(
-            sentinel_hit[0],
-            user,
-            req.skill_id,
-            req.object,
-            gs_url,
-            doc_id_override=existing_user_doc_id,
+            sentinel_hit[0], user, req.skill_id, req.object, gs_url, doc_id_override=existing_user_doc_id
         )
 
-    # L3 — fresh AILANG Parse + persist. If there's a stale per-user record
-    # already, reuse its docId so we overwrite the stale state instead of
-    # creating a second record for the same gs_url.
     log.info("import_by_reference: l3_fresh user=%s gs=%s", user.uid, gs_url)
     parse_status, blocks, parsed_ms, parse_error = await _run_parse(gs_url)
     if parse_status == "failed":
@@ -131,7 +107,7 @@ async def import_by_reference(
         storage_path=req.object,
         original_filename=filename,
         source_format=source_format,
-        folder_id=None,  # imported-by-reference docs don't belong to a user folder
+        folder_id=None,
         parse_result=_ParseResult(parse_status, blocks, parse_error, parsed_ms),
         now=datetime.now(UTC),
     )
@@ -155,15 +131,6 @@ def _clone_sentinel_to_user(
     gs_url: str,
     doc_id_override: str | None = None,
 ) -> ParsedDocumentResponse:
-    """Materialise a per-user parsed_documents record from a sentinel record.
-
-    Copies the parsed blocks verbatim — they're already valid AILANG Parse
-    output. Per-user record gets a fresh doc_id (or ``doc_id_override`` if
-    one is supplied — used to OVERWRITE a stale prior record for the same
-    gs_url so users don't accumulate duplicates), the caller's uid, and an
-    empty ``editedBlocks`` map so user edits don't bleed across the
-    PLATFORM_OWNER_UID-owned source.
-    """
     doc_id = doc_id_override or str(uuid.uuid4())
     filename = sentinel.get("originalFilename") or PurePosixPath(object_path).name
     source_format = sentinel.get("sourceFormat") or PurePosixPath(object_path).suffix.lstrip(".")
