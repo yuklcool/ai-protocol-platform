@@ -1,12 +1,15 @@
 """Document upload handler — POST /api/documents/upload.
 
-Flow:
-  1. Resolve per-client GCS bucket from user's email domain
-  2. Write Firestore record with parseStatus: pending
-  3. Upload file to GCS: users/{uid}/docs/{folderId}/{filename}
-  4. AILANG Parse: blocks + a2ui formats
-  5. Update Firestore with parseStatus: parsed|failed + stats
+Provider-neutral flow:
+  1. Resolve tenant namespace and configured ObjectStorage adapter
+  2. Write repository metadata with parseStatus: pending
+  3. Store bytes under users/{uid}/docs/{folderId}/{filename}
+  4. Parse the uploaded bytes independently of the storage provider
+  5. Update repository metadata with parseStatus: parsed|failed + stats
   6. Return ParsedDocumentResponse
+
+Self-hosted deployments therefore need neither GCS nor a signed URL. Cloud GCS
+keeps the historical per-client bucket mapping behind ``GcsObjectStorage``.
 """
 
 from __future__ import annotations
@@ -23,7 +26,9 @@ from pydantic import BaseModel, Field
 import db.folders as folders_db
 from auth import User, get_current_user
 from db.clients import UnmappedTenantError, resolve_documents_bucket
-from db.firestore import query_documents, set_document
+from db.persistence import query_documents, set_document
+from object_storage import get_object_storage, object_storage_backend_name
+from object_storage.gcs import GcsObjectStorage
 
 _CurrentUser = Annotated[User, Depends(get_current_user)]
 
@@ -51,10 +56,8 @@ _ALLOWED_EXTENSIONS = {
     ".txt",
 }
 
-# Canonical Content-Type by extension. Browsers usually set these correctly,
-# but programmatic clients often send application/octet-stream — which makes
-# downstream parsers (e.g. AILANG Parse) fall back to content sniffing and
-# misroute Office files (docx → generic zip-office). Override at upload time.
+# Canonical Content-Type by extension. This is stored with document metadata so
+# download/preview routes do not need to trust a browser supplied value.
 _EXTENSION_CONTENT_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -82,6 +85,37 @@ def _resolve_content_type(filename: str, client_content_type: str | None) -> str
     return client_content_type or "application/octet-stream"
 
 
+def _tenant_namespace(user: User) -> str:
+    """Use the existing domain tenancy model, with a safe per-user fallback.
+
+    A user without an email/domain must never fall into one global namespace;
+    the uid fallback preserves isolation until a real tenant mapping exists.
+    """
+    domain = (getattr(user, "domain", None) or "").strip().lower()
+    if not domain:
+        email = (getattr(user, "email", None) or "").strip().lower()
+        if "@" in email:
+            domain = email.rsplit("@", 1)[1]
+    if domain:
+        return domain
+    return f"user-{user.uid}"
+
+
+def _storage_for_user(user: User):
+    """Return (storage, tenant_namespace, backend_name).
+
+    GCS preserves the pre-existing per-domain bucket resolver. Local storage has
+    no provisioning dependency: tenant isolation is the on-disk namespace, so a
+    self-host works without any GCS bucket configuration.
+    """
+    backend = object_storage_backend_name()
+    tenant_id = _tenant_namespace(user)
+    if backend == "gcs":
+        bucket_name = resolve_documents_bucket(user)
+        return GcsObjectStorage(bucket_name), tenant_id, backend
+    return get_object_storage(), tenant_id, backend
+
+
 class ParsedDocumentResponse(BaseModel):
     doc_id: str = Field(alias="docId")
     status: str
@@ -94,87 +128,53 @@ class ParsedDocumentResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _upload_to_gcs(bucket_name: str, path: str, data: bytes, content_type: str, uid: str, filename: str) -> None:
-    from google.cloud import storage as gcs
-
-    client = gcs.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(path)
-    blob.metadata = {"originalName": filename, "uploadedBy": uid}
-    blob.upload_from_string(data, content_type=content_type)
-
-
-# Plain-text formats ailang-parse does NOT handle (it has no `.txt` path, so a
-# .txt upload used to strand forever in `pending_ai_extraction` — nothing ever
-# resolves that status, so the viewer span "Parsing document…" indefinitely).
-# These need no parsing: read the bytes and emit paragraph blocks directly.
+# Plain-text formats ailang-parse does NOT handle. These need no external
+# parser: decode the upload bytes and emit paragraph blocks directly.
 _PLAIN_TEXT_EXTENSIONS = {".txt", ".log", ".text"}
 
 
-def _is_plain_text(gs_url: str) -> bool:
-    return PurePosixPath(gs_url).suffix.lower() in _PLAIN_TEXT_EXTENSIONS
+def _is_plain_text(filename: str) -> bool:
+    return PurePosixPath(filename).suffix.lower() in _PLAIN_TEXT_EXTENSIONS
 
 
-async def _parse_plain_text(gs_url: str) -> list | None:
-    """Read a plain-text file from GCS and emit paragraph blocks (split on blank
-    lines). Returns None on a read/decode failure. Block shape matches the
-    permissive db.models.Block (type + text + a block_id for citations)."""
-    import asyncio
-    from urllib.parse import urlparse
-
-    from google.cloud import storage as gcs
-
-    def _read() -> bytes:
-        parts = urlparse(gs_url)  # gs://bucket/path
-        return gcs.Client().bucket(parts.netloc).blob(parts.path.lstrip("/")).download_as_bytes()
-
-    try:
-        data = await asyncio.to_thread(_read)
-    except Exception as exc:
-        log.error("plain-text read failed for %s: %s", gs_url, exc)
-        return None
-
+def _parse_plain_text(data: bytes) -> list[dict]:
     text = data.decode("utf-8", errors="replace")
     blocks: list[dict] = [
         {"type": "paragraph", "text": para, "block_id": f"p{i}"}
         for i, para in enumerate(chunk.strip() for chunk in text.split("\n\n"))
         if para
     ]
-    # A file with no blank-line breaks (or a single line) still gets one block.
     if not blocks and text.strip():
         blocks = [{"type": "paragraph", "text": text.strip(), "block_id": "p0"}]
     return blocks
 
 
-async def _run_parse(gs_url: str) -> tuple[str, list, int, str | None]:
-    """Run AILANG Parse. Returns (status, blocks, parsed_ms, error).
-
-    We render documents from the BlockADT directly — see
-    docs/design/v6.1.0/document-rendering-decision.md.
-    """
+async def _run_parse(
+    file_bytes: bytes,
+    filename: str,
+    *,
+    source_ref: str,
+) -> tuple[str, list, int, str | None]:
+    """Run parsing without depending on the object-storage URI scheme."""
     import time
 
     t0 = time.monotonic()
 
-    # Plain text needs no parser — read it and emit blocks so it reaches
-    # `parsed` instead of the never-resolving `pending_ai_extraction`.
-    if _is_plain_text(gs_url):
-        blocks = await _parse_plain_text(gs_url)
+    if _is_plain_text(filename):
+        blocks = _parse_plain_text(file_bytes)
         elapsed_ms = int((time.monotonic() - t0) * 1000)
-        if blocks is None:
-            return "failed", [], elapsed_ms, "Could not read text file"
         return "parsed", blocks, elapsed_ms, None
 
-    from tools.documents.ailang_parse import parse_gcs_file
+    from tools.documents.parse_input import parse_uploaded_bytes
 
-    outcome = await parse_gcs_file(gs_url, output_format="blocks")
+    outcome = await parse_uploaded_bytes(file_bytes, filename, output_format="blocks")
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
     if outcome is None:
-        log.info("AILANG Parse: extension not supported for %s, using AI extraction", gs_url)
+        log.info("AILANG Parse: extension/client unavailable for %s, using AI extraction", source_ref)
         return "pending_ai_extraction", [], elapsed_ms, None
     if not outcome.ok:
-        log.error("AILANG Parse failed for %s: [%s] %s", gs_url, outcome.error_code, outcome.error)
+        log.error("AILANG Parse failed for %s: [%s] %s", source_ref, outcome.error_code, outcome.error)
         return "failed", [], elapsed_ms, outcome.error
 
     return "parsed", outcome.blocks or [], elapsed_ms, None
@@ -191,16 +191,7 @@ class _ParseResult:
 
 
 def _to_response(doc: dict) -> ParsedDocumentResponse:
-    """Build a ParsedDocumentResponse from a parsed_documents-shaped dict.
-
-    Accepts both shapes that flow through the document pipeline:
-    - query_documents() results, which carry the Firestore doc id at "__id"
-    - inline dicts assembled by routes that already know the doc_id locally
-      and put it at "doc_id" / "docId"
-
-    Lets /upload and /import-by-reference build identical responses without
-    duplicating the field mapping.
-    """
+    """Build a ParsedDocumentResponse from a parsed_documents-shaped dict."""
     return ParsedDocumentResponse(
         docId=doc.get("__id") or doc.get("doc_id") or doc.get("docId") or "",
         status=doc.get("parseStatus") or doc.get("status") or "parsed",
@@ -216,9 +207,12 @@ def _store_document(
     doc_id: str,
     *,
     user_id: str,
+    tenant_id: str,
     skill_id: str,
-    gs_url: str,
+    source_url: str,
+    storage_backend: str,
     storage_path: str,
+    content_type: str,
     original_filename: str,
     source_format: str,
     folder_id: str | None,
@@ -230,14 +224,15 @@ def _store_document(
     doc: dict = {
         "skillId": skill_id,
         "userId": user_id,
-        "sourceUrl": gs_url,
+        "tenantId": tenant_id,
+        "sourceUrl": source_url,
         "sourceFormat": source_format,
+        "contentType": content_type,
         "originalFilename": original_filename,
+        "storageBackend": storage_backend,
         "storagePath": storage_path,
         "folderId": folder_id,
         "parseStatus": pr.status,
-        # Store parsed blocks so build_document_context / the AI pipeline can read them.
-        # Firestore limit is 1 MiB per doc; typical documents are well under that.
         "blocks": blocks if pr.status == "parsed" else [],
         "blockCount": len(blocks) if pr.status == "parsed" else None,
         "tableCount": sum(1 for b in blocks if isinstance(b, dict) and b.get("type") == "table") if blocks else None,
@@ -269,12 +264,7 @@ async def upload_document(
     skill_id: str = "",
     folder_id: str = "",
 ) -> ParsedDocumentResponse:
-    """Upload a document, parse it with AILANG Parse, store in Firestore.
-
-    Uses the per-client GCS bucket resolved from the user's email domain.
-    Documents are stored at users/{uid}/docs/{folderId}/{filename} within
-    the client bucket — cross-user and cross-domain isolation at the path level.
-    """
+    """Store a document through ObjectStorage, then parse the uploaded bytes."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="File must have a name.")
 
@@ -285,18 +275,11 @@ async def upload_document(
             detail=f"File type {ext!r} is not supported. Allowed: {sorted(_ALLOWED_EXTENSIONS)}",
         )
 
-    # Resolve destination folder (auto-create if not provided)
     effective_folder_id = folder_id.strip() or folders_db.ensure_default_folder(user.uid)
 
-    # Resolve per-client GCS bucket. When the deployment fails closed and the
-    # user's domain has no mapped bucket, refuse rather than write into the
-    # shared deployment-wide bucket — surfaced as a visible 403 (NEVER-SILENT).
     try:
-        bucket_name = resolve_documents_bucket(user)
+        storage, tenant_id, storage_backend = _storage_for_user(user)
     except UnmappedTenantError as exc:
-        # Structured detail so the frontend can render a clear, specific "why"
-        # (NEVER-SILENT #8) instead of a generic "Upload failed (403)". `code`
-        # lets the UI branch; `message` is user-facing copy.
         raise HTTPException(
             status_code=403,
             detail={
@@ -310,12 +293,12 @@ async def upload_document(
                 ),
             },
         ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=f"Object storage is not configured: {exc}") from exc
 
     safe_filename = file.filename.replace("/", "_").replace("\\", "_")
+    content_type = _resolve_content_type(safe_filename, file.content_type)
 
-    # Deduplication: reuse existing doc_id if same filename already exists in
-    # this folder. GCS overwrites the file at the same path; we update the
-    # existing Firestore record in-place instead of creating a second entry.
     existing = query_documents(
         _COLLECTION,
         filters=[
@@ -329,17 +312,19 @@ async def upload_document(
     doc_id = existing[0]["__id"] if is_overwrite else str(uuid.uuid4())
     if is_overwrite:
         log.info("Re-upload detected for %s — reusing doc_id %s", safe_filename, doc_id)
+
     storage_path = f"users/{user.uid}/docs/{effective_folder_id}/{safe_filename}"
-    gs_url = f"gs://{bucket_name}/{storage_path}"
     now = datetime.now(UTC)
 
-    # Write pending record immediately so the frontend can show the file
     _store_document(
         doc_id,
         user_id=user.uid,
+        tenant_id=tenant_id,
         skill_id=skill_id,
-        gs_url=gs_url,
+        source_url="",
+        storage_backend=storage_backend,
         storage_path=storage_path,
+        content_type=content_type,
         original_filename=safe_filename,
         source_format=ext.lstrip("."),
         folder_id=effective_folder_id,
@@ -347,26 +332,28 @@ async def upload_document(
         now=now,
     )
 
-    # Upload to GCS
     file_bytes = await file.read()
     try:
-        _upload_to_gcs(
-            bucket_name,
-            storage_path,
-            file_bytes,
-            _resolve_content_type(safe_filename, file.content_type),
-            user.uid,
+        object_info = storage.put_bytes(tenant_id, storage_path, file_bytes)
+        source_url = object_info.uri
+        log.info(
+            "Uploaded %s via %s tenant=%s key=%s",
             safe_filename,
+            storage_backend,
+            tenant_id,
+            storage_path,
         )
-        log.info("Uploaded %s to gs://%s/%s", safe_filename, bucket_name, storage_path)
     except Exception as exc:
-        log.error("GCS upload failed for %s: %s", safe_filename, exc)
+        log.error("Object storage upload failed for %s: %s", safe_filename, exc)
         _store_document(
             doc_id,
             user_id=user.uid,
+            tenant_id=tenant_id,
             skill_id=skill_id,
-            gs_url=gs_url,
+            source_url="",
+            storage_backend=storage_backend,
             storage_path=storage_path,
+            content_type=content_type,
             original_filename=safe_filename,
             source_format=ext.lstrip("."),
             folder_id=effective_folder_id,
@@ -375,15 +362,21 @@ async def upload_document(
         )
         raise HTTPException(status_code=500, detail=f"Storage upload failed: {exc}") from exc
 
-    # Parse
-    parse_status, blocks, parsed_ms, parse_error = await _run_parse(gs_url)
+    parse_status, blocks, parsed_ms, parse_error = await _run_parse(
+        file_bytes,
+        safe_filename,
+        source_ref=source_url,
+    )
 
     _store_document(
         doc_id,
         user_id=user.uid,
+        tenant_id=tenant_id,
         skill_id=skill_id,
-        gs_url=gs_url,
+        source_url=source_url,
+        storage_backend=storage_backend,
         storage_path=storage_path,
+        content_type=content_type,
         original_filename=safe_filename,
         source_format=ext.lstrip("."),
         folder_id=effective_folder_id,
@@ -391,7 +384,6 @@ async def upload_document(
         now=now,
     )
 
-    # Update folder counts — skip delta for overwrites (doc already counted)
     if not is_overwrite:
         if parse_status == "parsed":
             try:
