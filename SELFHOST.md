@@ -2,7 +2,7 @@
 
 This document describes the current self-hosted baseline for `ai-protocol-platform`.
 
-The design principle is simple: **use as few infrastructure components as possible**. PostgreSQL is reused for platform data, ADK Session, and durable Memory. Redis, MinIO, Keycloak, a separate Session database, and a separate Memory database are not part of the default stack.
+The design principle is simple: **use as few infrastructure components as possible**. PostgreSQL is reused for platform data, ADK Session, and durable Memory. A backend-mounted Docker Volume is used for user files and ADK Artifacts. Redis, MinIO, Keycloak, a separate Session database, and a separate Memory database are not part of the default stack.
 
 ## What runs
 
@@ -21,9 +21,11 @@ backend :1956
   ├── MCP
   ├── MCP Apps integration
   ├── ADK Session ─────┐
-  └── durable Memory ──┼──> PostgreSQL :5432
-                       │
-platform persistence ──┘
+  ├── durable Memory ──┼──> PostgreSQL :5432
+  ├── platform data ───┘
+  │
+  ├── user files ─────────> /data/objects
+  └── ADK Artifacts ──────> /data/artifacts
 
 mcp-sandbox :3457
   └── separate-origin iframe host
@@ -47,7 +49,7 @@ A Linux server needs:
 - outbound HTTPS access to the configured model provider
 - ports 3456, 1956 and 3457 available, or equivalent reverse-proxy mappings
 
-No GCP project, Firebase project, Vertex Agent Engine, Redis, MinIO, or Keycloak is required for the current baseline.
+No GCP project, Firebase project, Vertex Agent Engine, Redis, MinIO, or Keycloak is required for the current self-host baseline.
 
 ## Quick start
 
@@ -165,9 +167,81 @@ The Docker self-host baseline is different: it defaults to PostgreSQL so a backe
 
 ## File / Artifact storage
 
-The minimal-component roadmap uses a backend-mounted persistent local volume as the default file store, with S3-compatible storage optional later. That work is tracked separately in Issue #6.
+The default self-host file backend is the backend-mounted `object-data` Docker Volume. No MinIO or S3 service is required.
 
-At the current implementation stage, GCS compatibility and the existing in-memory artifact fallback remain present. Do not yet treat Artifact/file persistence as completed merely because Session/Memory are durable.
+```env
+OBJECT_STORAGE_BACKEND=local
+OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+ADK_ARTIFACT_ROOT=/data/artifacts
+```
+
+The on-volume layout is intentionally separated:
+
+```text
+/data
+├── objects/
+│   └── tenants/<tenant-domain>/users/<uid>/docs/<folder>/<file>
+└── artifacts/
+    └── ... ADK FileArtifactService managed layout ...
+```
+
+User document metadata remains in the configured Repository/PostgreSQL backend. Binary content lives in ObjectStorage. The existing domain/client tenant model is reused as the object namespace; self-hosting does not introduce a second independent tenant identity.
+
+### Uploads and large files
+
+HTTP uploads use Starlette's spooled `UploadFile`. The backend streams the file-like object into ObjectStorage instead of calling `await file.read()` for the complete PDF/Office file. Local storage writes in bounded chunks to a temporary file and atomically replaces the destination after `fsync`. The parser rewinds the upload and copies it to its short-lived parse file in bounded chunks as well.
+
+Downloads/previews are also streamed in chunks.
+
+### Controlled download / preview
+
+Local filesystem URLs are never returned to the browser as a public file URL. File access stays behind authenticated FastAPI routes:
+
+```text
+GET /api/documents/{doc_id}/preview
+GET /api/documents/{doc_id}/download
+```
+
+The route verifies document ownership and tenant metadata before resolving the ObjectStorage object. `preview` uses inline disposition; `download` uses attachment disposition.
+
+### Delete consistency
+
+A delete is deliberately staged because PostgreSQL and filesystem/object storage cannot participate in one ACID transaction:
+
+```text
+metadata -> deletionStatus=deleting
+binary   -> delete
+metadata -> delete
+```
+
+If binary deletion fails, the metadata is retained with `deletionStatus=failed` so an operator/retry job still has a durable recovery record. If the binary is gone but final metadata cleanup fails, the route attempts to persist `binary_deleted_metadata_pending`.
+
+### ADK Artifacts
+
+Self-host Artifact persistence reuses ADK's official `FileArtifactService`; the platform does not maintain a second artifact/version implementation. The service root defaults to `/data/artifacts`, so Artifact versions survive backend container reconstruction on the same Docker Volume.
+
+Cloud GCS Artifact behavior remains available through the existing ADK/GCS configuration.
+
+### GCS compatibility
+
+`OBJECT_STORAGE_BACKEND=gcs` uses the same `ObjectStorage` business contract. New objects use a tenant-prefixed layout. Historical GCS documents that predate the abstraction are handled through a read/delete compatibility adapter so existing `gs://bucket/users/...` records remain usable without putting GCS SDK calls back into document routes.
+
+### S3-compatible storage
+
+`OBJECT_STORAGE_BACKEND=s3` is reserved as an optional adapter. It is **not** part of the default Compose stack and MinIO is not deployed automatically. The current locked backend dependency set does not yet include an S3 SDK, so the factory intentionally fails loudly instead of pretending S3 support is complete.
+
+When S3-compatible support is added, it should implement the same `ObjectStorage` contract and remain an optional deployment choice; business document code should not change.
+
+### Backup
+
+A complete self-host backup currently needs both:
+
+```text
+1. PostgreSQL data
+2. object-data Docker Volume (/data/objects + /data/artifacts)
+```
+
+Backing up only PostgreSQL preserves metadata/sessions/memory but not uploaded binaries or ADK Artifacts. Backing up only the Volume preserves bytes but not ownership and conversation metadata.
 
 ## OpenAI-compatible model registry
 
@@ -209,14 +283,16 @@ SANDBOX_URL=http://127.0.0.1:3457 \
 bash scripts/smoke-selfhost.sh
 ```
 
-The self-host GitHub Actions workflow additionally starts a real PostgreSQL container and verifies that:
+The self-host GitHub Actions workflow additionally verifies:
 
 1. the platform Repository can read/write PostgreSQL;
 2. self-host fixture data is seeded;
-3. an ADK Session is created and receives an event;
-4. the SessionService is reconstructed and the same session/event is restored;
-5. Memory is persisted;
-6. the MemoryService is reconstructed and still recalls the stored content.
+3. ADK Session survives SessionService reconstruction;
+4. durable Memory survives MemoryService reconstruction;
+5. A2UI visual replay, client data model, and model-facing action state survive PostgreSQL reconstruction;
+6. local ObjectStorage and ADK FileArtifactService survive backend container reconstruction;
+7. document upload, preview/download, thumbnail, tenant access checks, and recoverable delete behavior use provider-neutral storage;
+8. document folders and Agent document context use the Repository facade rather than requiring Firestore.
 
 Before treating a release as fully accepted, manually verify the real protocol path as well:
 
@@ -242,7 +318,7 @@ When changing origins, update the frontend build arguments and sandbox `ALLOWED_
 
 ## Security boundary
 
-`LOCAL_MODE` still uses a stub identity. PostgreSQL persistence does **not** turn the current baseline into a production authentication system.
+`LOCAL_MODE` still uses a stub identity. PostgreSQL persistence and durable local files do **not** turn the current baseline into a production authentication system.
 
 The intended minimal production path is:
 
@@ -257,15 +333,15 @@ with standard OIDC/Firebase kept as optional adapters. Keycloak is not a default
 ## Minimal-component roadmap
 
 ```text
-Current
+Completed baseline
   frontend
   backend
   postgres
+  local object/artifact volume
   mcp-sandbox (isolated origin)
 
 Next
-  #5 finish Session/Memory recovery semantics
-  #6 LocalStorage + persistent file volume
+  #6 finish optional/provider edges and final acceptance
   #7 built-in JWT + PostgreSQL identity
   #8 remove remaining mandatory GCP assumptions
 
