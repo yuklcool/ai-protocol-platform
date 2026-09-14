@@ -40,6 +40,8 @@ services:
       POSTGRES_POOL_MIN_SIZE: "${POSTGRES_POOL_MIN_SIZE:-1}"
       POSTGRES_POOL_MAX_SIZE: "${POSTGRES_POOL_MAX_SIZE:-10}"
       MEMORY_SEARCH_SCAN_LIMIT: "${MEMORY_SEARCH_SCAN_LIMIT:-2000}"
+      OBJECT_STORAGE_BACKEND: "${OBJECT_STORAGE_BACKEND:-local}"
+      OBJECT_STORAGE_LOCAL_ROOT: "${OBJECT_STORAGE_LOCAL_ROOT:-/data/objects}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
       GOOGLE_GENAI_USE_VERTEXAI: "false"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
@@ -52,6 +54,7 @@ services:
       - "1956:1956"
     volumes:
       - local-state:/root/.aitana-local
+      - object-data:/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,6 +129,8 @@ volumes:
     name: ai-protocol-platform-local-state
   postgres-data:
     name: ai-protocol-platform-postgres-data
+  object-data:
+    name: ai-protocol-platform-object-data
 
 networks:
   default:
