@@ -124,7 +124,17 @@ async def get_document_content(
     mode: str = "markdown",
     tool_context: ToolContext = None,
 ) -> str:
-    """Get content of a parsed document."""
+    """Get content of a parsed document.
+
+    Args:
+        doc_id: The document ID from list_documents.
+        section: Optional section heading to extract (case-insensitive substring). Omit for full document.
+        mode: Output format — "markdown" for reading/chat (default), "blocks" for extraction tasks
+              where table structure and tracked changes must be preserved exactly.
+
+    Returns:
+        Document content as markdown, or JSON blocks string when mode="blocks".
+    """
     try:
         content, blocks = await asyncio.to_thread(build_document_context, doc_id, mode, section)
     except KeyError:
@@ -141,20 +151,47 @@ async def get_document_content(
 
 
 def _extract_ppa_clauses_factory(_config: dict) -> FunctionTool:
+    """Lazy import — extract_ppa_clauses pulls in google-genai which is slow."""
     from tools.extract_ppa_clauses import extract_ppa_clauses
 
     return FunctionTool(extract_ppa_clauses)
 
 
 def _compare_ppa_contracts_factory(_config: dict) -> FunctionTool:
+    """Lazy import — compare_ppa_contracts pulls in extract_ppa_clauses transitively."""
     from tools.compare_ppa_contracts import compare_ppa_contracts
 
     return FunctionTool(compare_ppa_contracts)
 
 
-# tool name → factory function(config dict) → FunctionTool
-# Model-aware tools are resolved directly in agent.py. MCP tools are loaded by
-# tools/mcp/registry.py and returned as McpToolset.
+def _map_ppa_obligations_factory(_config: dict) -> FunctionTool:
+    """Lazy import — map_ppa_obligations pulls in google-genai transitively."""
+    from tools.map_ppa_obligations import map_ppa_obligations
+
+    return FunctionTool(map_ppa_obligations)
+
+
+def _entsoe_day_ahead_prices_factory(_config: dict) -> FunctionTool:
+    """Lazy import — entsoe_query pulls in google-cloud-bigquery which is slow."""
+    from tools.entsoe_query import entsoe_day_ahead_prices
+
+    return FunctionTool(entsoe_day_ahead_prices)
+
+
+async def list_bucket_documents(bucket_uri: str, prefix: str = "") -> list[dict]:
+    """List PPA contracts (or any documents) in a GCS bucket the agent can read.
+
+    Use this BEFORE extract_ppa_clauses or compare_ppa_contracts when the
+    user names a bucket / folder rather than a specific document. Returns
+    the list of objects so you can pick the right one(s) by filename, then
+    pass their gs:// URLs to the downstream tools without needing to
+    upload anything first.
+    """
+    from tools.org_documents import list_documents_in_bucket
+
+    return await list_documents_in_bucket(bucket_uri, prefix=prefix)
+
+
 TOOL_REGISTRY: dict[str, Callable[[dict], FunctionTool]] = {
     "list_documents": lambda _config: FunctionTool(list_documents),
     "get_document_content": lambda _config: FunctionTool(get_document_content),
@@ -162,16 +199,143 @@ TOOL_REGISTRY: dict[str, Callable[[dict], FunctionTool]] = {
     "search_workshop_docs": lambda _config: FunctionTool(search_workshop_docs),
     "extract_ppa_clauses": _extract_ppa_clauses_factory,
     "compare_ppa_contracts": _compare_ppa_contracts_factory,
+    "map_ppa_obligations": _map_ppa_obligations_factory,
+    "entsoe_day_ahead_prices": _entsoe_day_ahead_prices_factory,
+    "list_bucket_documents": lambda _config: FunctionTool(list_bucket_documents),
 }
 
-
-def get_tool(name: str, config: dict | None = None) -> FunctionTool | None:
-    factory = TOOL_REGISTRY.get(name)
-    if factory is None:
-        logger.warning("Unknown tool requested: %s", name)
-        return None
-    return factory(config or {})
+_MODEL_AWARE = {"ai_search", "google_search", "code_execution"}
+_SKIP = {"structured_extraction"}
+_MCP_TOOL = "mcp"
 
 
-def list_registered_tools() -> list[str]:
-    return sorted(TOOL_REGISTRY)
+TOOL_CATALOG: list[dict[str, str]] = [
+    {
+        "name": "ai_search",
+        "label": "Knowledge search",
+        "description": "Search the skill's indexed knowledge base for relevant passages.",
+        "category": "Search",
+    },
+    {
+        "name": "google_search",
+        "label": "Web search",
+        "description": "Look up current information on the public web via Google.",
+        "category": "Search",
+    },
+    {
+        "name": "url_processing",
+        "label": "Read a web page",
+        "description": "Fetch and read the content of a URL the user provides.",
+        "category": "Search",
+    },
+    {
+        "name": "list_documents",
+        "label": "List documents",
+        "description": "See the documents the user has uploaded to this workspace.",
+        "category": "Documents",
+    },
+    {
+        "name": "get_document_content",
+        "label": "Read a document",
+        "description": "Open and read the full text of an uploaded document.",
+        "category": "Documents",
+    },
+    {
+        "name": "list_bucket_documents",
+        "label": "Browse a storage bucket",
+        "description": "List files in a connected cloud storage bucket before reading them.",
+        "category": "Documents",
+    },
+    {
+        "name": "code_execution",
+        "label": "Run code",
+        "description": "Execute code to do calculations, data crunching, or charts.",
+        "category": "Analysis",
+    },
+    {
+        "name": "search_workshop_docs",
+        "label": "Workshop docs",
+        "description": "Search the built-in workshop / product documentation.",
+        "category": "Analysis",
+    },
+    {
+        "name": "extract_ppa_clauses",
+        "label": "Extract PPA clauses",
+        "description": "Pull structured clauses (with citations) from a power-purchase agreement.",
+        "category": "Energy (PPA)",
+    },
+    {
+        "name": "compare_ppa_contracts",
+        "label": "Compare PPA contracts",
+        "description": "Compare two power-purchase agreements side by side.",
+        "category": "Energy (PPA)",
+    },
+    {
+        "name": "map_ppa_obligations",
+        "label": "Analyze PPA obligations",
+        "description": "Map a power-purchase agreement into a verified obligation timeline and settlement model.",
+        "category": "Energy (PPA)",
+    },
+    {
+        "name": "entsoe_day_ahead_prices",
+        "label": "Energy market prices",
+        "description": "Look up ENTSO-E day-ahead electricity prices.",
+        "category": "Energy (PPA)",
+    },
+]
+
+
+def catalog_tool_names() -> set[str]:
+    """Names in TOOL_CATALOG — the set of user-selectable tools."""
+    return {entry["name"] for entry in TOOL_CATALOG}
+
+
+def known_tool_names() -> set[str]:
+    """Every tool name the resolver accepts (registry + model-aware + mcp)."""
+    return set(TOOL_REGISTRY) | _MODEL_AWARE | {_MCP_TOOL}
+
+
+def resolve_tools(tool_names: list[str], tool_configs: dict[str, dict]) -> list[FunctionTool]:
+    """Resolve a list of tool names to FunctionTool instances.
+
+    Model-aware tools (ai_search, google_search, code_execution) are wired
+    separately in agent.py after model detection. MCP tools are loaded via
+    tools/mcp/registry.get_mcp_tools() and appended separately.
+    """
+    resolved: list[FunctionTool] = []
+    for name in tool_names:
+        if name in _MODEL_AWARE or name in _SKIP or name == _MCP_TOOL:
+            continue
+        factory = TOOL_REGISTRY.get(name)
+        if factory is None:
+            raise ValueError(
+                f"Unknown tool {name!r} — not in TOOL_REGISTRY and not model-aware. "
+                "Check the skill config or add the tool to TOOL_REGISTRY."
+            )
+        config = tool_configs.get(name, {})
+        resolved.append(factory(config))
+    return resolved
+
+
+class McpServerResolutionError(RuntimeError):
+    """Raised when declared MCP servers cannot all resolve at agent-build time."""
+
+
+def resolve_mcp_tools(tool_configs: dict[str, dict]) -> list:
+    """Return McpToolset instances for MCP servers listed in tool_configs."""
+    server_ids: list[str] = (tool_configs.get("mcp") or {}).get("servers", [])
+    if not server_ids:
+        return []
+    from tools.mcp.registry import get_mcp_tools_with_status
+
+    resolved, missing = get_mcp_tools_with_status(server_ids)
+    if missing:
+        raise McpServerResolutionError(
+            f"SKILL.md declares {len(server_ids)} MCP server(s) "
+            f"({sorted(server_ids)!r}) but only {len(resolved)} resolved. "
+            f"Missing: {sorted(missing)!r}. "
+            "Common causes: (1) the server doc doesn't exist in the configured "
+            "mcp_servers persistence registry; (2) the server doc is missing the "
+            "'url' field; (3) the SKILL.md typoed the server name."
+        )
+    return resolved
