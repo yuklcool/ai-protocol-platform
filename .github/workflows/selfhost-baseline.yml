@@ -33,6 +33,7 @@ on:
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
+      - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
@@ -76,6 +77,7 @@ on:
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
+      - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_admin_audit.py
@@ -181,7 +183,7 @@ jobs:
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.query_documents('skills', limit=1), 'self-host seed did not create skills'; p=r.get_document('tool_permissions','*'); assert p and '*' in p.get('tools', []), 'self-host seed did not create wildcard permission'; print('postgres self-host seed OK')"
 
-      - name: Verify ADK Session and Memory survive PostgreSQL reconstruction
+      - name: Verify ADK Session, Memory and A2UI resume survive PostgreSQL reconstruction
         run: |
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
@@ -189,7 +191,9 @@ jobs:
             -e MEMORY_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             -v "$PWD/backend/tests:/app/tests:ro" \
-            backend uv run pytest -q tests/integration/test_postgres_adk_session_memory.py
+            backend uv run pytest -q \
+              tests/integration/test_postgres_adk_session_memory.py \
+              tests/integration/test_postgres_a2ui_resume.py
 
       - name: Build self-host images
         run: docker compose build --pull
