@@ -26,6 +26,7 @@ jobs:
               ],
               "backend/adk/callbacks.py": [
                   ("from db.firestore import get_document as _get_fs_doc", "from db.persistence import get_document as _get_fs_doc"),
+                  ("from db.firestore import get_document", "from db.persistence import get_document"),
               ],
               "backend/admin/analytics_routes.py": [
                   ("from db.firestore import get_document, query_documents", "from db.persistence import get_document, query_documents"),
@@ -47,7 +48,6 @@ jobs:
           for file_name, pairs in replacements.items():
               path = Path(file_name)
               text = path.read_text(encoding="utf-8")
-              original = text
               for old, new in pairs:
                   count = text.count(old)
                   if count != 1:
