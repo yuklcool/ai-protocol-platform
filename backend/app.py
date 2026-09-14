@@ -21,20 +21,23 @@ from google.adk.apps import App
 from adk.agent import resolve_model_chain
 from adk.artifact_tools import retrieve_artifact
 from adk.session import get_compaction_config
+from config.deployment import configure_google_genai_environment, is_managed_gcp_mode
 from config.gcp import PLACEHOLDER_PROJECT, resolve_gcp_project
 from config.models import default_model
 
-# Fallback project keeps module import working on CI runners (no env vars, no
-# ADC) — the resolver returns None there. v6.19.0 (AIPLA #42): the default used
-# to be Aitana's own dev project, which pointed every fork at OUR project unless
-# they knew to override it. There is no brand default now; a placeholder that is
-# obviously not a real project is safer than a real one that belongs to someone
-# else, and the startup guard (config.gcp.check_startup_project) refuses to boot
-# on it outside LOCAL_MODE anyway.
-_FALLBACK_PROJECT = os.environ.get("PLATFORM_DEFAULT_PROJECT", PLACEHOLDER_PROJECT)
-os.environ.setdefault("GOOGLE_CLOUD_PROJECT", resolve_gcp_project() or _FALLBACK_PROJECT)
-os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
-os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
+# Google GenAI transport is deployment-aware. Managed GCP keeps the historical
+# Vertex default; SELF_HOSTED_MODE defaults to the Gemini Developer API and does
+# not trigger ADC/project discovery simply by importing this module. An explicit
+# GOOGLE_GENAI_USE_VERTEXAI value always wins.
+configure_google_genai_environment()
+
+# Only managed-GCP deployments receive the historical project/location defaults.
+# A self-host must never be pointed at a fake/placeholder GCP project: optional
+# Vertex/GCS providers validate their own project configuration when selected.
+if is_managed_gcp_mode():
+    _FALLBACK_PROJECT = os.environ.get("PLATFORM_DEFAULT_PROJECT", PLACEHOLDER_PROJECT)
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", resolve_gcp_project() or _FALLBACK_PROJECT)
+    os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 
 
 # --- Root agent ---
