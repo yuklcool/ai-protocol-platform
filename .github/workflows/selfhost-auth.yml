@@ -1,0 +1,98 @@
+name: Self-host auth baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/auth/**
+      - backend/scripts/seed_selfhost_admin.py
+      - backend/tests/unit/test_local_jwt_auth.py
+      - frontend/Dockerfile
+      - frontend/src/components/SignInButton.tsx
+      - frontend/src/contexts/AuthContext.tsx
+      - frontend/src/lib/firebase.ts
+      - frontend/src/lib/localJwtAuth.ts
+      - .github/workflows/selfhost-auth.yml
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/auth/**
+      - backend/scripts/seed_selfhost_admin.py
+      - backend/tests/unit/test_local_jwt_auth.py
+      - frontend/Dockerfile
+      - frontend/src/components/SignInButton.tsx
+      - frontend/src/contexts/AuthContext.tsx
+      - frontend/src/lib/firebase.ts
+      - frontend/src/lib/localJwtAuth.ts
+      - .github/workflows/selfhost-auth.yml
+
+jobs:
+  auth-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: ci-local-jwt-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-ci
+      JWT_AUDIENCE: ai-protocol-platform-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-admin-password-strong
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      SKIP_QUALITY_CHECKS: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Test local JWT unit contract
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/unit/test_local_jwt_auth.py
+
+      - name: Verify PostgreSQL admin bootstrap and JWT round trip
+        run: |
+          docker compose up -d postgres
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python scripts/seed_selfhost_admin.py
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python -c "from auth.local_jwt import authenticate_credentials, issue_access_token, user_from_token; u=authenticate_credentials('admin@example.com','ci-admin-password-strong'); assert u is not None; assert 'aitana-admin' in u.group_tags; t,_=issue_access_token(u); r=user_from_token(t); assert r.uid==u.uid and 'aitana-admin' in r.group_tags; print('local JWT PostgreSQL round trip OK')"
+
+      - name: Verify server-authoritative role changes
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python -c "from auth.local_jwt import authenticate_credentials, issue_access_token, create_local_user, user_from_token; u=authenticate_credentials('admin@example.com','ci-admin-password-strong'); assert u is not None; t,_=issue_access_token(u); create_local_user(email='admin@example.com',password='ci-admin-password-new',group_tags={'tenant-admin:example.com'},overwrite=True); r=user_from_token(t); assert r.uid==u.uid; assert r.group_tags==frozenset({'tenant-admin:example.com'}); print('server-authoritative role reload OK')"
+
+      - name: Verify bootstrap is idempotent
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python scripts/seed_selfhost_admin.py
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            backend uv run python -c "from auth.local_jwt import authenticate_credentials; assert authenticate_credentials('admin@example.com','ci-admin-password-new') is not None; assert authenticate_credentials('admin@example.com','ci-admin-password-strong') is None; print('bootstrap did not overwrite existing credential')"
+
+      - name: Build frontend with local JWT mode
+        run: docker compose build frontend
