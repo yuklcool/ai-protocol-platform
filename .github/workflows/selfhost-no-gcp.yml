@@ -17,8 +17,14 @@ on:
       - backend/adk/artifact_backend.py
       - backend/auth/**
       - backend/protocols/models_route.py
+      - backend/protocols/agui.py
+      - backend/protocols/mcp_proxy.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/storage_tests/**
+      - backend/tests/unit/test_agui.py
+      - backend/tests/api_tests/test_mcp_proxy.py
+      - backend/tests/api_tests/test_stream_skill.py
+      - backend/tests/api_tests/test_upload.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - .github/workflows/selfhost-no-gcp.yml
@@ -37,8 +43,14 @@ on:
       - backend/adk/artifact_backend.py
       - backend/auth/**
       - backend/protocols/models_route.py
+      - backend/protocols/agui.py
+      - backend/protocols/mcp_proxy.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/storage_tests/**
+      - backend/tests/unit/test_agui.py
+      - backend/tests/api_tests/test_mcp_proxy.py
+      - backend/tests/api_tests/test_stream_skill.py
+      - backend/tests/api_tests/test_upload.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - .github/workflows/selfhost-no-gcp.yml
@@ -85,15 +97,17 @@ jobs:
         run: |
           docker compose run --rm --no-deps backend uv run python -c "import os; os.environ.pop('GOOGLE_CLOUD_PROJECT',None); os.environ.pop('GCP_PROJECT',None); import google.auth; google.auth.default=lambda *a,**k: (_ for _ in ()).throw(AssertionError('ADC must not be probed')); from config.deployment import configure_google_genai_environment,is_self_hosted_mode,is_managed_gcp_mode; configure_google_genai_environment(); assert is_self_hosted_mode() and not is_managed_gcp_mode(); assert os.environ['GOOGLE_GENAI_USE_VERTEXAI'].lower()=='false'; from config.gcp import resolve_gcp_credentials,resolve_gcp_project; assert resolve_gcp_credentials() is None; assert resolve_gcp_project() is None; print('no implicit ADC/project discovery')"
 
-      - name: Verify no-GCP provider routing and local storage regressions
+      - name: Verify OpenAI-compatible local storage AG-UI and MCP regressions
         run: |
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
             tests/model_tests/test_openai_compatible_routing.py \
-            tests/storage_tests/test_object_storage.py \
-            tests/storage_tests/test_tenant_object_storage.py \
-            tests/api_tests/test_file_upload_api.py
+            tests/storage_tests/test_local_object_storage.py \
+            tests/storage_tests/test_artifact_backend.py \
+            tests/api_tests/test_upload.py \
+            tests/unit/test_agui.py \
+            tests/api_tests/test_mcp_proxy.py
 
       - name: Verify capability matrix without cloud SDK calls
         run: |
@@ -112,11 +126,12 @@ jobs:
           docker compose logs backend
           exit 1
 
-      - name: Verify PostgreSQL Session Memory and A2UI resume in formal Self-host mode
+      - name: Verify Chat Skill AG-UI PostgreSQL Session Memory and A2UI resume
         run: |
           docker compose run --rm \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
+            tests/api_tests/test_stream_skill.py \
             tests/integration/test_postgres_adk_session_memory.py \
             tests/integration/test_postgres_a2ui_resume.py
 
