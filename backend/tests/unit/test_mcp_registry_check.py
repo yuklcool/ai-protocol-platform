@@ -1,18 +1,10 @@
-"""Tests for the MCP-registry consistency check (issue #14 safeguard).
-
-Two layers:
-* Template-vs-catalog (PR time): every MCP server id declared in any real
-  skill template must be one the seed tooling can actually seed — catches
-  typos and seed-support-less declarations before merge.
-* Verifier logic: missing / url-less registry docs report as ``mcp_missing``
-  (deploy-gate fatal); loopback drift on deployed envs reports as a warning;
-  a registry read failure degrades to a warning, never a false "missing".
-"""
+"""Tests for the MCP-registry consistency check (issue #14 safeguard)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import admin.mcp_registry_check as registry_check
 from admin.mcp_registry_check import (
     KNOWN_SEEDABLE_SERVER_IDS,
     LOOPBACK_BY_DESIGN,
@@ -45,9 +37,6 @@ Instructions body.
 
 class TestTemplatesMatchSeedCatalog:
     def test_every_declared_server_is_seedable(self):
-        """A template declaring a server the seed tooling can't provide would
-        pass locally and hard-500 on the first env whose registry lacks it
-        (exactly issue #14). Pin declarations to the known-seedable set."""
         declared = declared_servers_by_skill(TEMPLATES_ROOT)
         unknown = {
             f"{skill} -> {sid}"
@@ -55,11 +44,7 @@ class TestTemplatesMatchSeedCatalog:
             for sid in ids
             if sid not in KNOWN_SEEDABLE_SERVER_IDS
         }
-        assert not unknown, (
-            f"Templates declare MCP servers the seed tooling doesn't know: {sorted(unknown)}. "
-            "Either add seeding support (scripts/seed_mcp_servers.py + "
-            "admin.mcp_registry_check.KNOWN_SEEDABLE_SERVER_IDS) or drop the declaration."
-        )
+        assert not unknown, f"Templates declare unknown MCP servers: {sorted(unknown)}"
 
     def test_loopback_by_design_is_subset_of_catalog(self):
         assert LOOPBACK_BY_DESIGN <= KNOWN_SEEDABLE_SERVER_IDS
@@ -69,8 +54,7 @@ class TestDeclaredServersBySkill:
     def test_reads_declarations(self, tmp_path):
         _write_template(tmp_path, "skill-a", ["ext-apps-map"])
         _write_template(tmp_path, "skill-b", ["toolbox", "ext-apps-map"])
-        declared = declared_servers_by_skill(tmp_path)
-        assert declared == {
+        assert declared_servers_by_skill(tmp_path) == {
             "skill-a": ["ext-apps-map"],
             "skill-b": ["toolbox", "ext-apps-map"],
         }
@@ -98,27 +82,21 @@ class TestVerifyMcpRegistry:
 
     def test_missing_doc_reports_missing(self, tmp_path, monkeypatch):
         _write_template(tmp_path, "skill-a", ["ext-apps-map"])
-        import db.firestore as fs
-
-        monkeypatch.setattr(fs, "get_document", self._registry({}))
+        monkeypatch.setattr(registry_check, "get_document", self._registry({}))
         result = verify_mcp_registry(tmp_path, deployed=False)
         assert result["ok"] is False
         assert result["mcp_missing"] == ["skill-a -> ext-apps-map"]
 
     def test_urlless_doc_reports_missing(self, tmp_path, monkeypatch):
         _write_template(tmp_path, "skill-a", ["ext-apps-map"])
-        import db.firestore as fs
-
-        monkeypatch.setattr(fs, "get_document", self._registry({"ext-apps-map": {"name": "x"}}))
+        monkeypatch.setattr(registry_check, "get_document", self._registry({"ext-apps-map": {"name": "x"}}))
         result = verify_mcp_registry(tmp_path, deployed=False)
         assert result["mcp_missing"] == ["skill-a -> ext-apps-map"]
 
     def test_resolvable_registry_is_ok(self, tmp_path, monkeypatch):
         _write_template(tmp_path, "skill-a", ["ext-apps-map", "toolbox"])
-        import db.firestore as fs
-
         monkeypatch.setattr(
-            fs,
+            registry_check,
             "get_document",
             self._registry(
                 {
@@ -130,15 +108,12 @@ class TestVerifyMcpRegistry:
         result = verify_mcp_registry(tmp_path, deployed=True)
         assert result["ok"] is True
         assert result["mcp_missing"] == []
-        # toolbox loopback is by-design — no warning even on a deployed env.
         assert result["mcp_warnings"] == []
 
     def test_loopback_on_deployed_env_warns_but_passes(self, tmp_path, monkeypatch):
         _write_template(tmp_path, "skill-a", ["ext-apps-map"])
-        import db.firestore as fs
-
         monkeypatch.setattr(
-            fs,
+            registry_check,
             "get_document",
             self._registry({"ext-apps-map": {"url": "http://127.0.0.1:3001/mcp"}}),
         )
@@ -146,20 +121,15 @@ class TestVerifyMcpRegistry:
         assert deployed["ok"] is True
         assert len(deployed["mcp_warnings"]) == 1
         assert "loopback" in deployed["mcp_warnings"][0]
-        # Same registry on a local run is legitimate — no warning.
-        local = verify_mcp_registry(tmp_path, deployed=False)
-        assert local["mcp_warnings"] == []
+        assert verify_mcp_registry(tmp_path, deployed=False)["mcp_warnings"] == []
 
     def test_read_failure_degrades_to_warning_not_missing(self, tmp_path, monkeypatch):
-        """An unreadable registry must not fail the deploy gate as 'missing' —
-        that would block good deploys on a transient Firestore error."""
         _write_template(tmp_path, "skill-a", ["ext-apps-map"])
-        import db.firestore as fs
 
         def boom(collection, doc_id):
-            raise RuntimeError("firestore unavailable")
+            raise RuntimeError("persistence unavailable")
 
-        monkeypatch.setattr(fs, "get_document", boom)
+        monkeypatch.setattr(registry_check, "get_document", boom)
         result = verify_mcp_registry(tmp_path, deployed=True)
         assert result["ok"] is True
         assert result["mcp_missing"] == []
