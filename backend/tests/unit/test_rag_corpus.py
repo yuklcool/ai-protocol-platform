@@ -1,6 +1,6 @@
 """Unit tests for backend/rag/corpus.py.
 
-All Vertex AI SDK calls and Firestore I/O are mocked — no GCP credentials needed.
+All Vertex AI SDK calls and persistence I/O are mocked — no GCP credentials needed.
 """
 
 from __future__ import annotations
@@ -51,8 +51,8 @@ def _make_retrieval_response(contexts: list) -> MagicMock:
 async def test_get_or_create_returns_existing_corpus():
     """When profile has ragCorpusName, return it without calling Vertex."""
     with (
-        patch("db.firestore.get_document", return_value={"ragCorpusName": "projects/p/corpora/42"}),
-        patch("db.firestore.set_document") as mock_update,
+        patch("db.persistence.get_document", return_value={"ragCorpusName": "projects/p/corpora/42"}),
+        patch("db.persistence.set_document") as mock_update,
         patch("rag.corpus._create_corpus_sync") as mock_create,
     ):
         from rag.corpus import get_or_create_user_corpus
@@ -66,11 +66,11 @@ async def test_get_or_create_returns_existing_corpus():
 
 @pytest.mark.asyncio
 async def test_get_or_create_creates_corpus_when_missing():
-    """When profile has no corpus, create one and write the name to Firestore."""
+    """When profile has no corpus, create one and persist the resource name."""
     corpus_name = "projects/p/locations/l/ragCorpora/99"
     with (
-        patch("db.firestore.get_document", return_value={}),
-        patch("db.firestore.set_document") as mock_update,
+        patch("db.persistence.get_document", return_value={}),
+        patch("db.persistence.set_document") as mock_update,
         patch("rag.corpus._create_corpus_sync", return_value=corpus_name) as mock_create,
     ):
         from rag.corpus import get_or_create_user_corpus
@@ -79,7 +79,12 @@ async def test_get_or_create_creates_corpus_when_missing():
 
     assert result == corpus_name
     mock_create.assert_called_once_with("user-2")
-    mock_update.assert_called_once_with("user_profiles", "user-2", {"ragCorpusName": corpus_name}, merge=True)
+    mock_update.assert_called_once_with(
+        "user_profiles",
+        "user-2",
+        {"ragCorpusName": corpus_name},
+        merge=True,
+    )
 
 
 @pytest.mark.asyncio
@@ -87,8 +92,8 @@ async def test_get_or_create_handles_missing_profile():
     """None profile (first-time user) is treated the same as missing corpus."""
     corpus_name = "projects/p/locations/l/ragCorpora/7"
     with (
-        patch("db.firestore.get_document", return_value=None),
-        patch("db.firestore.update_document"),
+        patch("db.persistence.get_document", return_value=None),
+        patch("db.persistence.set_document") as mock_update,
         patch("rag.corpus._create_corpus_sync", return_value=corpus_name),
     ):
         from rag.corpus import get_or_create_user_corpus
@@ -96,6 +101,12 @@ async def test_get_or_create_handles_missing_profile():
         result = await get_or_create_user_corpus("user-new")
 
     assert result == corpus_name
+    mock_update.assert_called_once_with(
+        "user_profiles",
+        "user-new",
+        {"ragCorpusName": corpus_name},
+        merge=True,
+    )
 
 
 # ---------------------------------------------------------------------------
