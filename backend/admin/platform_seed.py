@@ -1,16 +1,8 @@
-"""Seed the five default platform-owned skills into configured persistence.
+"""Seed the default platform-owned skills into configured persistence.
 
-Called by POST /api/admin/seed-platform-skills, which is hit once per
-deploy by the Cloud Build seed step. Idempotent: any template whose
-`name` already exists as a platform-owned skill is skipped, so repeat
-runs are safe (and the expected steady state).
-
-Template layout (one directory per skill):
-    backend/skills/templates/<name>/SKILL.md    # YAML frontmatter + markdown body
-
-The frontmatter supplies name/description/metadata; the body is the
-agent instruction. Platform-owned skills are always created with
-owner_id=PLATFORM_OWNER_UID and accessControl={type: public}.
+The seeder is intentionally backend-neutral. Skill documents and the wildcard
+Tool permission are persisted through the repository facade selected by
+``DATA_BACKEND`` while preserving the existing seed/refresh/purge behaviour.
 """
 
 from __future__ import annotations
@@ -24,19 +16,19 @@ from typing import Any
 import yaml
 
 from config.local_mode import is_local_mode
-from db.persistence import get_document, set_document
+from db import persistence as fs
 from skills import skill_config
 from skills.platform import PLATFORM_OWNER_UID
 from skills.slugify import slugify, unique_slug
 
 logger = logging.getLogger(__name__)
 
-# Email recorded as the owner of platform-seeded skills.
-# Resolved lazily by _resolve_owner_email() so module import never raises —
-# the validation fires at seed() call time where the error message is actionable.
 PLATFORM_OWNER_EMAIL = os.environ.get("PLATFORM_OWNER_EMAIL", "platform@yourcompany.com")
 DEFAULT_TEMPLATES_ROOT = Path(__file__).resolve().parent.parent / "skills" / "templates"
 
+# Demo skills shipped with the template. Public-template forks can opt out by
+# setting _INCLUDE_DEMO_SKILLS=false while platform deployments keep the
+# backwards-compatible default of including them.
 DEMO_SKILL_NAMES: frozenset[str] = frozenset(
     {
         "code-assistant",
@@ -84,18 +76,23 @@ class SeedSummary:
 
 
 def _parse_template(skill_md: Path) -> dict[str, Any]:
+    """Parse YAML frontmatter + markdown body from a SKILL.md template."""
     text = skill_md.read_text()
     if not text.startswith("---"):
         raise ValueError(f"missing frontmatter in {skill_md}")
+
     parts = text.split("---", 2)
     if len(parts) < 3:
         raise ValueError(f"missing frontmatter close fence in {skill_md}")
+
     try:
         front = yaml.safe_load(parts[1]) or {}
-    except yaml.YAMLError as e:
-        raise ValueError(f"invalid YAML frontmatter in {skill_md}: {e}") from e
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid YAML frontmatter in {skill_md}: {exc}") from exc
+
     if "name" not in front:
         raise ValueError(f"frontmatter missing 'name' in {skill_md}")
+
     return {
         "name": front["name"],
         "description": (front.get("description") or "").strip(),
@@ -131,29 +128,39 @@ def _previous_owner_uids() -> list[str]:
 def _purge_stale_owner_skills(previous_uids: list[str], dry_run: bool = False) -> int:
     if not previous_uids:
         return 0
+
     purged = 0
     for uid in previous_uids:
         configs = skill_config.list_skills(owner_id=uid, limit=200)
         for cfg in configs:
             if dry_run:
-                logger.info("platform_seed: [dry-run] would purge stale skill %r (previous_owner=%s)", cfg.name, uid)
+                logger.info(
+                    "platform_seed: [dry-run] would purge stale skill %r (previous_owner=%s)",
+                    cfg.name,
+                    uid,
+                )
                 purged += 1
                 continue
             if skill_config.delete_skill(cfg.skill_id):
-                logger.info("platform_seed: purged stale skill %r (previous_owner=%s)", cfg.name, uid)
+                logger.info(
+                    "platform_seed: purged stale skill %r (previous_owner=%s)",
+                    cfg.name,
+                    uid,
+                )
                 purged += 1
     return purged
 
 
 def _ensure_tool_permissions_wildcard(dry_run: bool = False) -> bool:
-    """Idempotent: write a wildcard allow-all rule if none exists."""
-    existing = get_document("tool_permissions", "*")
+    """Create the default wildcard Tool permission through the repository facade."""
+    existing = fs.get_document("tool_permissions", "*")
     if existing is not None:
         return False
     if dry_run:
         logger.info("platform_seed: [dry-run] would seed tool_permissions wildcard allow-all rule")
         return True
-    set_document(
+
+    fs.set_document(
         "tool_permissions",
         "*",
         {
@@ -168,14 +175,158 @@ def _ensure_tool_permissions_wildcard(dry_run: bool = False) -> bool:
 
 
 def _resolve_owner_email() -> str:
+    """Resolve the platform owner and fail loudly outside LOCAL_MODE."""
     email = os.environ.get("PLATFORM_OWNER_EMAIL", "")
     if email:
         return email
     if is_local_mode():
-        return PLATFORM_OWNER_EMAIL
+        return "platform@localhost"
     raise RuntimeError(
-        "PLATFORM_OWNER_EMAIL must be set before seeding platform skills outside LOCAL_MODE"
+        "PLATFORM_OWNER_EMAIL env var is required in non-LOCAL_MODE. "
+        "Set it to the platform admin email for this deployment "
+        "(e.g. platform@yourdomain.com). "
+        "Forks: add it to your Cloud Build substitutions as _PLATFORM_OWNER_EMAIL."
     )
+
+
+def seed(templates_root: Path | None = None, dry_run: bool = False) -> SeedSummary:
+    """Seed platform skills from disk templates while preserving legacy semantics.
+
+    Existing template-managed skills are refreshed, durable
+    ``managed_by='firestore'`` skills are preserved, previous-owner skills can
+    be purged, and dry-run performs no writes.
+    """
+    owner_email = _resolve_owner_email()
+    root = templates_root or DEFAULT_TEMPLATES_ROOT
+    summary = SeedSummary()
+    summary.tool_permissions_wildcard_seeded = _ensure_tool_permissions_wildcard(
+        dry_run=dry_run
+    )
+
+    summary.purged = _purge_stale_owner_skills(
+        _previous_owner_uids(), dry_run=dry_run
+    )
+    existing_by_name = _existing_platform_skill_by_name()
+    include_demos = _include_demo_skills()
+
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        skill_md = child / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        if not include_demos and child.name in DEMO_SKILL_NAMES:
+            logger.info(
+                "platform_seed: skipping demo skill %r (_INCLUDE_DEMO_SKILLS != 'true')",
+                child.name,
+            )
+            summary.skipped += 1
+            continue
+
+        try:
+            parsed = _parse_template(skill_md)
+        except Exception as exc:
+            logger.warning("platform_seed: failed to parse %s: %s", skill_md, exc)
+            summary.failed.append(child.name)
+            continue
+
+        if parsed["name"] in existing_by_name:
+            existing_cfg = existing_by_name[parsed["name"]]
+            if getattr(existing_cfg, "managed_by", None) == "firestore":
+                summary.preserved += 1
+                continue
+
+            refresh_payload: dict[str, Any] = {
+                "description": parsed["description"],
+                "instructions": parsed["instructions"],
+                "skillMetadata": parsed["metadata"],
+                "managedBy": "template",
+            }
+            if parsed.get("welcome") is not None:
+                refresh_payload["welcome"] = parsed["welcome"]
+            if parsed.get("shell") is not None:
+                refresh_payload["shell"] = parsed["shell"]
+            if parsed.get("access_control") is not None:
+                refresh_payload["accessControl"] = parsed["access_control"]
+            if parsed.get("initial_message"):
+                refresh_payload["initialMessage"] = parsed["initial_message"]
+            if parsed.get("display_name"):
+                refresh_payload["displayName"] = parsed["display_name"]
+            if parsed.get("tags"):
+                refresh_payload["tags"] = parsed["tags"]
+            if parsed.get("avatar"):
+                refresh_payload["avatar"] = parsed["avatar"]
+            if not getattr(existing_cfg, "slug", None):
+                refresh_payload["slug"] = unique_slug(
+                    PLATFORM_OWNER_UID, slugify(parsed["name"])
+                )
+
+            try:
+                if not dry_run:
+                    skill_config.update_skill(existing_cfg.skill_id, refresh_payload)
+                summary.refreshed += 1
+            except Exception as exc:
+                logger.warning(
+                    "platform_seed: failed to refresh %s: %s",
+                    parsed["name"],
+                    exc,
+                )
+                summary.failed.append(parsed["name"])
+            continue
+
+        try:
+            slug = unique_slug(PLATFORM_OWNER_UID, slugify(parsed["name"]))
+            create_kwargs: dict[str, Any] = {
+                "name": parsed["name"],
+                "description": parsed["description"],
+                "instructions": parsed["instructions"],
+                "owner_id": PLATFORM_OWNER_UID,
+                "owner_email": owner_email,
+                "accessControl": parsed.get("access_control") or {"type": "public"},
+                "skillMetadata": parsed["metadata"],
+                "slug": slug,
+                "managedBy": "template",
+            }
+            if parsed.get("welcome") is not None:
+                create_kwargs["welcome"] = parsed["welcome"]
+            if parsed.get("shell") is not None:
+                create_kwargs["shell"] = parsed["shell"]
+            if parsed.get("initial_message"):
+                create_kwargs["initialMessage"] = parsed["initial_message"]
+            if parsed.get("display_name"):
+                create_kwargs["displayName"] = parsed["display_name"]
+            if parsed.get("tags"):
+                create_kwargs["tags"] = parsed["tags"]
+            if parsed.get("avatar"):
+                create_kwargs["avatar"] = parsed["avatar"]
+            if not dry_run:
+                skill_config.create_skill(**create_kwargs)
+            summary.created += 1
+        except Exception as exc:
+            logger.warning("platform_seed: failed to create %s: %s", parsed["name"], exc)
+            summary.failed.append(parsed["name"])
+
+    try:
+        from admin.mcp_registry_check import verify_mcp_registry
+
+        check = verify_mcp_registry(root)
+        summary.mcp_missing = check["mcp_missing"]
+        summary.mcp_warnings = check["mcp_warnings"]
+        if summary.mcp_missing:
+            logger.error(
+                "platform_seed: mcp_servers registry cannot satisfy declared servers "
+                "(these skills would hard-500 at agent build): %s",
+                summary.mcp_missing,
+            )
+        for warning in summary.mcp_warnings:
+            logger.warning("platform_seed: mcp registry: %s", warning)
+    except Exception as exc:
+        logger.warning("platform_seed: mcp registry check crashed: %s", exc)
+        summary.mcp_warnings = [
+            f"mcp-registry check crashed (verification skipped): {exc}"
+        ]
+
+    return summary
 
 
 def seed_platform_skills(
@@ -183,103 +334,8 @@ def seed_platform_skills(
     *,
     dry_run: bool = False,
 ) -> SeedSummary:
-    """Seed/update platform-owned skill templates and required defaults."""
-    summary = SeedSummary()
-    owner_email = _resolve_owner_email()
-
-    summary.tool_permissions_wildcard_seeded = _ensure_tool_permissions_wildcard(dry_run=dry_run)
-
-    previous_uids = _previous_owner_uids()
-    summary.purged = _purge_stale_owner_skills(previous_uids, dry_run=dry_run)
-
-    existing = _existing_platform_skill_by_name()
-    if not templates_root.is_dir():
-        logger.warning("platform_seed: templates root %s does not exist", templates_root)
-        return summary
-
-    include_demos = _include_demo_skills()
-    for skill_dir in sorted(templates_root.iterdir()):
-        skill_md = skill_dir / "SKILL.md"
-        if not (skill_dir.is_dir() and skill_md.exists()):
-            continue
-        try:
-            template = _parse_template(skill_md)
-        except Exception as exc:
-            summary.failed.append(f"{skill_dir.name}: {exc}")
-            continue
-
-        name = template["name"]
-        if not include_demos and name in DEMO_SKILL_NAMES:
-            summary.skipped += 1
-            continue
-
-        current = existing.get(name)
-        if current is not None:
-            if getattr(current, "managed_by", None) == "firestore":
-                summary.preserved += 1
-                continue
-            if dry_run:
-                summary.refreshed += 1
-                continue
-            try:
-                skill_config.update_skill(
-                    current.skill_id,
-                    name=name,
-                    description=template["description"],
-                    instructions=template["instructions"],
-                    metadata=template["metadata"],
-                    welcome=template["welcome"],
-                    shell=template["shell"],
-                    access_control=template["access_control"] or {"type": "public"},
-                    initial_message=template["initial_message"],
-                    display_name=template["display_name"],
-                    tags=template["tags"],
-                    avatar=template["avatar"],
-                )
-                summary.refreshed += 1
-            except Exception as exc:
-                summary.failed.append(f"{name}: {exc}")
-            continue
-
-        if dry_run:
-            summary.created += 1
-            continue
-
-        try:
-            existing_slugs = {c.slug for c in skill_config.list_skills(limit=500) if c.slug}
-            slug = unique_slug(slugify(name), existing_slugs)
-            skill_config.create_skill(
-                owner_id=PLATFORM_OWNER_UID,
-                owner_email=owner_email,
-                name=name,
-                description=template["description"],
-                instructions=template["instructions"],
-                metadata=template["metadata"],
-                welcome=template["welcome"],
-                shell=template["shell"],
-                access_control=template["access_control"] or {"type": "public"},
-                initial_message=template["initial_message"],
-                display_name=template["display_name"],
-                tags=template["tags"],
-                avatar=template["avatar"],
-                slug=slug,
-                managed_by="template",
-            )
-            summary.created += 1
-        except Exception as exc:
-            summary.failed.append(f"{name}: {exc}")
-
-    try:
-        from admin.mcp_registry_check import verify_mcp_registry
-
-        mcp_check = verify_mcp_registry(templates_root)
-        summary.mcp_missing = mcp_check["mcp_missing"]
-        summary.mcp_warnings = mcp_check["mcp_warnings"]
-    except Exception as exc:
-        logger.warning("platform_seed: MCP registry verification failed: %s", exc)
-        summary.mcp_warnings.append(f"registry verification failed: {exc}")
-
-    return summary
+    """Compatibility entry point for callers introduced during persistence work."""
+    return seed(templates_root=templates_root, dry_run=dry_run)
 
 
 __all__ = [
@@ -288,5 +344,6 @@ __all__ = [
     "PLATFORM_OWNER_EMAIL",
     "SeedSummary",
     "_parse_template",
+    "seed",
     "seed_platform_skills",
 ]
