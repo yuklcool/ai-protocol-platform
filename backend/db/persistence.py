@@ -40,6 +40,14 @@ def build_repository(backend: DataBackend | None = None) -> Repository:
     if selected == "memory":
         from db.repositories.memory import MemoryRepository
 
+        # LOCAL_MODE historically seeds data through db.firestore's in-memory
+        # singleton. Inject that client explicitly so the provider-neutral
+        # facade sees the same fixtures. Direct MemoryRepository() callers stay
+        # isolated and are unaffected by environment variables.
+        if is_local_mode():
+            from db.firestore import get_client
+
+            return MemoryRepository(client=get_client())
         return MemoryRepository()
     if selected == "firestore":
         from db.repositories.firestore import FirestoreRepository
