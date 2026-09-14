@@ -55,6 +55,7 @@ on:
       - backend/tests/api_tests/test_import_by_reference.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
+      - backend/tests/integration/test_postgres_document_metadata.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/storage_tests/**
@@ -123,6 +124,7 @@ on:
       - backend/tests/api_tests/test_import_by_reference.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
+      - backend/tests/integration/test_postgres_document_metadata.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/storage_tests/**
@@ -258,6 +260,11 @@ jobs:
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.query_documents('skills', limit=1), 'self-host seed did not create skills'; p=r.get_document('tool_permissions','*'); assert p and '*' in p.get('tools', []), 'self-host seed did not create wildcard permission'; print('postgres self-host seed OK')"
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/integration/test_postgres_document_metadata.py
 
       - name: Verify local object and artifact volume survives container reconstruction
         run: |
