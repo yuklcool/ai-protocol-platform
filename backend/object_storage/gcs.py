@@ -3,19 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, BinaryIO
 
 from object_storage.base import ObjectInfo
 from object_storage.local import _validate_key, _validate_tenant_id
 
 
 class GcsObjectStorage:
-    """Store tenant objects beneath ``tenants/<tenant_id>/`` in one GCS bucket.
-
-    The client is lazy so importing the platform or selecting another backend
-    never attempts ADC discovery. Authorization metadata remains in PostgreSQL;
-    this adapter is responsible only for namespaced bytes.
-    """
+    """Store tenant objects beneath ``tenants/<tenant_id>/`` in one GCS bucket."""
 
     def __init__(self, bucket_name: str, *, client: Any | None = None) -> None:
         bucket = bucket_name.strip()
@@ -38,16 +33,34 @@ class GcsObjectStorage:
 
     def _blob(self, tenant_id: str, key: str):
         object_name, normalized = self._object_name(tenant_id, key)
-        blob = self._get_client().bucket(self.bucket_name).blob(object_name)
-        return blob, normalized
+        return self._get_client().bucket(self.bucket_name).blob(object_name), normalized
 
     def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:
+        from io import BytesIO
+
+        return self.put_fileobj(tenant_id, key, BytesIO(data))
+
+    def put_fileobj(
+        self,
+        tenant_id: str,
+        key: str,
+        fileobj: BinaryIO,
+        *,
+        chunk_size: int = 1024 * 1024,
+    ) -> ObjectInfo:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
         blob, normalized = self._blob(tenant_id, key)
-        blob.upload_from_string(data)
+        blob.chunk_size = chunk_size
+        blob.upload_from_file(fileobj, rewind=False)
+        try:
+            blob.reload()
+        except Exception:
+            pass
         return ObjectInfo(
             tenant_id=tenant_id,
             key=normalized,
-            size=len(data),
+            size=int(getattr(blob, "size", 0) or 0),
             uri=f"gs://{self.bucket_name}/{blob.name}",
         )
 
@@ -55,13 +68,7 @@ class GcsObjectStorage:
         blob, _ = self._blob(tenant_id, key)
         return blob.download_as_bytes()
 
-    def iter_bytes(
-        self,
-        tenant_id: str,
-        key: str,
-        *,
-        chunk_size: int = 1024 * 1024,
-    ) -> Iterator[bytes]:
+    def iter_bytes(self, tenant_id: str, key: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
         blob, _ = self._blob(tenant_id, key)
@@ -89,38 +96,21 @@ class GcsObjectStorage:
         tenant = _validate_tenant_id(tenant_id)
         normalized_prefix = _validate_key(prefix).as_posix() if prefix else ""
         namespace = f"tenants/{tenant}/"
-        provider_prefix = namespace + normalized_prefix
-        blobs = self._get_client().list_blobs(self.bucket_name, prefix=provider_prefix)
-
+        blobs = self._get_client().list_blobs(self.bucket_name, prefix=namespace + normalized_prefix)
         result: list[ObjectInfo] = []
         for blob in blobs:
             name = str(blob.name)
             if not name.startswith(namespace):
                 continue
             key = name[len(namespace) :]
-            if not key:
-                continue
-            result.append(
-                ObjectInfo(
-                    tenant_id=tenant_id,
-                    key=key,
-                    size=int(blob.size or 0),
-                    uri=f"gs://{self.bucket_name}/{name}",
-                )
-            )
+            if key:
+                result.append(ObjectInfo(tenant_id=tenant_id, key=key, size=int(blob.size or 0), uri=f"gs://{self.bucket_name}/{name}"))
         result.sort(key=lambda item: item.key)
         return result
 
 
 class LegacyGcsObjectStorage(GcsObjectStorage):
-    """Compatibility adapter for pre-ObjectStorage GCS objects.
-
-    Historical uploads lived directly at ``users/<uid>/docs/...`` inside the
-    per-client bucket. New uploads always use ``tenants/<tenant_id>/...``.
-    Keeping the old layout in this adapter lets business routes stay provider-
-    neutral without breaking existing documents. It must only be selected after
-    metadata ownership checks; new writes must never use this adapter.
-    """
+    """Read/delete compatibility for pre-ObjectStorage GCS objects."""
 
     def _object_name(self, tenant_id: str, key: str) -> tuple[str, str]:
         _validate_tenant_id(tenant_id)
@@ -129,3 +119,9 @@ class LegacyGcsObjectStorage(GcsObjectStorage):
 
     def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:  # pragma: no cover
         raise RuntimeError("LegacyGcsObjectStorage is read/delete compatibility only")
+
+    def put_fileobj(self, tenant_id: str, key: str, fileobj: BinaryIO, *, chunk_size: int = 1024 * 1024) -> ObjectInfo:  # pragma: no cover
+        raise RuntimeError("LegacyGcsObjectStorage is read/delete compatibility only")
+
+    def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]:  # pragma: no cover
+        raise RuntimeError("LegacyGcsObjectStorage does not expose namespace listing")
