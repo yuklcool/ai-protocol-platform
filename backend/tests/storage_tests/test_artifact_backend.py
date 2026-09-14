@@ -6,12 +6,15 @@ import pytest
 from google.genai import types
 
 from adk import artifact_backend
+from adk import session as session_mod
 
 
 @pytest.fixture(autouse=True)
 def _reset():
     artifact_backend._reset_artifact_service_for_tests()
+    session_mod._reset_artifact_service_for_tests()
     yield
+    session_mod._reset_artifact_service_for_tests()
     artifact_backend._reset_artifact_service_for_tests()
 
 
@@ -60,6 +63,19 @@ def test_selfhost_object_backend_selects_file_artifacts(tmp_path: Path, monkeypa
     service = artifact_backend.get_artifact_service()
     assert type(service).__name__ == "FileArtifactService"
     assert artifact_backend.get_artifact_service_uri().startswith("file://")
+
+
+def test_session_facade_uses_same_local_artifact_backend(tmp_path: Path, monkeypatch):
+    """Production AG-UI/FastAPI callers import artifacts through adk.session."""
+    monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
+    monkeypatch.setenv("ADK_ARTIFACT_ROOT", str(tmp_path / "runtime-artifacts"))
+    monkeypatch.delenv("ARTIFACT_BACKEND", raising=False)
+    monkeypatch.delenv("ADK_ARTIFACT_BUCKET", raising=False)
+
+    service = session_mod.get_artifact_service()
+    assert type(service).__name__ == "FileArtifactService"
+    assert session_mod.get_artifact_service_uri().startswith("file://")
+    assert service is artifact_backend.get_artifact_service()
 
 
 def test_existing_gcs_bucket_keeps_cloud_default(monkeypatch):
