@@ -1,24 +1,18 @@
 """Document upload handler — POST /api/documents/upload.
 
-Provider-neutral flow:
-  1. Resolve tenant namespace and configured ObjectStorage adapter
-  2. Write repository metadata with parseStatus: pending
-  3. Store bytes under users/{uid}/docs/{folderId}/{filename}
-  4. Parse the uploaded bytes independently of the storage provider
-  5. Update repository metadata with parseStatus: parsed|failed + stats
-  6. Return ParsedDocumentResponse
-
-Self-hosted deployments therefore need neither GCS nor a signed URL. Cloud GCS
-keeps the historical per-client bucket mapping behind ``GcsObjectStorage``.
+The HTTP upload path is bounded-memory: Starlette's spooled UploadFile is streamed
+directly into ObjectStorage and then rewound for parsing. New self-host uploads
+therefore do not materialise a whole PDF/Office file as Python bytes.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, BinaryIO
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -98,15 +92,60 @@ def _is_plain_text(filename: str) -> bool:
 
 
 def _parse_plain_text(data: bytes) -> list[dict]:
-    text = data.decode("utf-8", errors="replace")
-    blocks = [
-        {"type": "paragraph", "text": para, "block_id": f"p{i}"}
-        for i, para in enumerate(chunk.strip() for chunk in text.split("\n\n"))
-        if para
-    ]
-    if not blocks and text.strip():
-        blocks = [{"type": "paragraph", "text": text.strip(), "block_id": "p0"}]
+    from io import BytesIO
+
+    return _parse_plain_text_fileobj(BytesIO(data))
+
+
+def _parse_plain_text_fileobj(fileobj: BinaryIO) -> list[dict]:
+    """Build paragraph blocks line-by-line instead of reading the whole text file."""
+    fileobj.seek(0)
+    blocks: list[dict] = []
+    paragraph_lines: list[str] = []
+
+    def flush() -> None:
+        if not paragraph_lines:
+            return
+        text = "".join(paragraph_lines).strip()
+        paragraph_lines.clear()
+        if text:
+            blocks.append({"type": "paragraph", "text": text, "block_id": f"p{len(blocks)}"})
+
+    for raw_line in fileobj:
+        line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else str(raw_line)
+        if line.strip():
+            paragraph_lines.append(line)
+        else:
+            flush()
+    flush()
     return blocks
+
+
+async def _run_parse_fileobj(
+    fileobj: BinaryIO,
+    filename: str,
+    *,
+    source_ref: str,
+) -> tuple[str, list, int, str | None]:
+    """Parse a seekable upload stream with bounded-memory input handling."""
+    import time
+
+    t0 = time.monotonic()
+    if _is_plain_text(filename):
+        blocks = await asyncio.to_thread(_parse_plain_text_fileobj, fileobj)
+        return "parsed", blocks, int((time.monotonic() - t0) * 1000), None
+
+    from tools.documents.parse_input import parse_uploaded_fileobj
+
+    outcome = await parse_uploaded_fileobj(fileobj, filename, output_format="blocks")
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    if outcome is None:
+        log.info("AILANG Parse: extension/client unavailable for %s, using AI extraction", source_ref)
+        return "pending_ai_extraction", [], elapsed_ms, None
+    if not outcome.ok:
+        log.error("AILANG Parse failed for %s: [%s] %s", source_ref, outcome.error_code, outcome.error)
+        return "failed", [], elapsed_ms, outcome.error
+    return "parsed", outcome.blocks or [], elapsed_ms, None
 
 
 async def _run_parse(
@@ -115,12 +154,8 @@ async def _run_parse(
     *,
     source_ref: str | None = None,
 ) -> tuple[str, list, int, str | None]:
-    """Parse provider-neutral bytes while retaining the legacy gs:// call form.
-
-    New code passes ``(bytes, filename, source_ref=...)``. Older cloud-only
-    callers may still pass a single ``gs://`` URI; that compatibility path is
-    intentionally isolated here so business routes do not need provider SDKs.
-    """
+    """Compatibility parser for reparse bytes and historical ``gs://`` callers."""
+    from io import BytesIO
     import time
 
     t0 = time.monotonic()
@@ -134,8 +169,7 @@ async def _run_parse(
         try:
             file_bytes = legacy.get_bytes("legacy", key)
         except Exception as exc:
-            elapsed_ms = int((time.monotonic() - t0) * 1000)
-            return "failed", [], elapsed_ms, f"Could not read referenced document: {exc}"
+            return "failed", [], int((time.monotonic() - t0) * 1000), f"Could not read referenced document: {exc}"
         filename = filename or PurePosixPath(key).name
         source_ref = source_ref or gs_url
     else:
@@ -144,20 +178,7 @@ async def _run_parse(
             raise ValueError("filename is required when parsing uploaded bytes")
         source_ref = source_ref or filename
 
-    if _is_plain_text(filename):
-        return "parsed", _parse_plain_text(file_bytes), int((time.monotonic() - t0) * 1000), None
-
-    from tools.documents.parse_input import parse_uploaded_bytes
-
-    outcome = await parse_uploaded_bytes(file_bytes, filename, output_format="blocks")
-    elapsed_ms = int((time.monotonic() - t0) * 1000)
-    if outcome is None:
-        log.info("AILANG Parse: extension/client unavailable for %s, using AI extraction", source_ref)
-        return "pending_ai_extraction", [], elapsed_ms, None
-    if not outcome.ok:
-        log.error("AILANG Parse failed for %s: [%s] %s", source_ref, outcome.error_code, outcome.error)
-        return "failed", [], elapsed_ms, outcome.error
-    return "parsed", outcome.blocks or [], elapsed_ms, None
+    return await _run_parse_fileobj(BytesIO(file_bytes), filename, source_ref=source_ref)
 
 
 class _ParseResult:
@@ -199,14 +220,12 @@ def _store_document(
     content_type: str = "",
     gs_url: str | None = None,
 ) -> None:
-    """Persist parsed-document metadata with compatibility for old gs_url callers."""
     if gs_url and not source_url:
         source_url = gs_url
     if not storage_backend and source_url.startswith("gs://"):
         storage_backend = "gcs-legacy"
     if not content_type:
         content_type = _resolve_content_type(original_filename, None)
-
     pr = parse_result
     blocks = pr.blocks
     doc = {
@@ -242,7 +261,6 @@ def _store_document(
         "updatedAt": now.isoformat(),
     }
     set_document(_COLLECTION, doc_id, doc)
-    log.info("Stored ParsedDocument %s (parseStatus=%s, blocks=%d)", doc_id, pr.status, len(blocks))
 
 
 @router.post("/upload")
@@ -277,7 +295,6 @@ async def upload_document(
     doc_id = existing[0]["__id"] if is_overwrite else str(uuid.uuid4())
     storage_path = f"users/{user.uid}/docs/{effective_folder_id}/{safe_filename}"
     now = datetime.now(UTC)
-
     base = dict(
         user_id=user.uid,
         tenant_id=tenant_id,
@@ -292,21 +309,17 @@ async def upload_document(
     )
     _store_document(doc_id, source_url="", parse_result=_ParseResult("pending", [], None, None), **base)
 
-    file_bytes = await file.read()
     try:
-        object_info = storage.put_bytes(tenant_id, storage_path, file_bytes)
+        await file.seek(0)
+        object_info = await asyncio.to_thread(storage.put_fileobj, tenant_id, storage_path, file.file)
         source_url = object_info.uri
     except Exception as exc:
         _store_document(doc_id, source_url="", parse_result=_ParseResult("failed", [], str(exc), None), **base)
         raise HTTPException(status_code=500, detail=f"Storage upload failed: {exc}") from exc
 
-    parse_status, blocks, parsed_ms, parse_error = await _run_parse(file_bytes, safe_filename, source_ref=source_url)
-    _store_document(
-        doc_id,
-        source_url=source_url,
-        parse_result=_ParseResult(parse_status, blocks, parse_error, parsed_ms),
-        **base,
-    )
+    await file.seek(0)
+    parse_status, blocks, parsed_ms, parse_error = await _run_parse_fileobj(file.file, safe_filename, source_ref=source_url)
+    _store_document(doc_id, source_url=source_url, parse_result=_ParseResult(parse_status, blocks, parse_error, parsed_ms), **base)
 
     if not is_overwrite:
         try:
