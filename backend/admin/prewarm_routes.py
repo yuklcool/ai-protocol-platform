@@ -100,7 +100,7 @@ def prewarm_precheck(req: PrewarmRequest, request: Request) -> dict[str, Any]:
         raise HTTPException(
             status_code=413,
             detail=(
-                f"Block payload is {payload_bytes} bytes; persistence document limit is ~1 MB. "
+                f"Block payload is {payload_bytes} bytes; Firestore limit is ~1 MB. "
                 "Truncate blocks or split into multiple records before writing."
             ),
         )
