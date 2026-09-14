@@ -1,10 +1,10 @@
 """API tests for POST /api/admin/access/check — effective-access dry-run.
 
-Firebase + Firestore mocked. Exercises:
-  - admin guard (aitana-admin)
-  - tag union with provenance (direct / domain-derived / both)
-  - tool-permission decision mirrors permissions.can_use_tool lookup order
-  - graceful degrade when the email isn't a Firebase user (user_found=False)
+Identity lookup is mocked separately from persistence. Exercises:
+  - admin guard
+  - tag provenance union
+  - tool-permission lookup order through the persistence facade
+  - graceful degrade when the email is not an identity-provider user
 """
 
 from __future__ import annotations
@@ -85,7 +85,6 @@ def test_access_check_tool_permission_user_level(admin_client: TestClient) -> No
     fb = _fake_fb(tags=[])
 
     def _get_doc(collection, doc_id):
-        # user-level allow doc wins (mirrors can_use_tool order).
         if doc_id == "alice@one.com":
             return {"type": "user", "tools": ["search"]}
         return None
@@ -93,7 +92,7 @@ def test_access_check_tool_permission_user_level(admin_client: TestClient) -> No
     with (
         patch("admin.access_routes._fb_auth", return_value=fb),
         patch("admin.access_routes.resolve_derived_group_tags", return_value=frozenset()),
-        patch("admin.access_routes.fs.get_document", side_effect=_get_doc),
+        patch("admin.access_routes.get_document", side_effect=_get_doc),
     ):
         resp = admin_client.post("/api/admin/access/check", json={"email": "alice@one.com", "toolName": "search"})
     assert resp.status_code == 200
@@ -104,12 +103,35 @@ def test_access_check_tool_permission_user_level(admin_client: TestClient) -> No
     assert "user-level" in tp["reason"]
 
 
+def test_access_check_tool_permission_domain_then_wildcard_order(admin_client: TestClient) -> None:
+    fb = _fake_fb(tags=[])
+    seen: list[str] = []
+
+    def _get_doc(collection, doc_id):
+        seen.append(doc_id)
+        if doc_id == "one.com":
+            return {"type": "domain", "tools": ["search"]}
+        if doc_id == "*":
+            return {"type": "wildcard", "tools": []}
+        return None
+
+    with (
+        patch("admin.access_routes._fb_auth", return_value=fb),
+        patch("admin.access_routes.resolve_derived_group_tags", return_value=frozenset()),
+        patch("admin.access_routes.get_document", side_effect=_get_doc),
+    ):
+        resp = admin_client.post("/api/admin/access/check", json={"email": "alice@one.com", "toolName": "search"})
+    assert resp.status_code == 200
+    assert resp.json()["tool_permission"]["allowed"] is True
+    assert seen == ["alice@one.com", "one.com"]
+
+
 def test_access_check_tool_permission_default_deny(admin_client: TestClient) -> None:
     fb = _fake_fb(tags=[])
     with (
         patch("admin.access_routes._fb_auth", return_value=fb),
         patch("admin.access_routes.resolve_derived_group_tags", return_value=frozenset()),
-        patch("admin.access_routes.fs.get_document", return_value=None),
+        patch("admin.access_routes.get_document", return_value=None),
     ):
         resp = admin_client.post("/api/admin/access/check", json={"email": "alice@one.com", "toolName": "search"})
     assert resp.status_code == 200
@@ -130,6 +152,5 @@ def test_access_check_unknown_user_degrades(admin_client: TestClient) -> None:
     body = resp.json()
     assert body["user_found"] is False
     assert body["uid"] == ""
-    # domain-derived still resolves for an address that hasn't signed in.
     by_tag = {t["tag"]: t["provenances"] for t in body["tags"]}
     assert by_tag["DERIVED"] == ["domain-derived"]
