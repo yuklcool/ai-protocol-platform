@@ -9,11 +9,15 @@ on:
       - SELFHOST.md
       - frontend/Dockerfile
       - frontend/src/__tests__/next-public-env-declared.test.ts
+      - frontend/src/components/chat/ChatShell.tsx
+      - frontend/src/hooks/useSessionMessages.ts
       - backend/Dockerfile
       - backend/services.py
       - backend/adk/agent.py
       - backend/adk/session.py
       - backend/adk/postgres_memory.py
+      - backend/adk/callbacks.py
+      - backend/adk/a2ui_surface_context.py
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
@@ -23,6 +27,9 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/protocols/sessions_route.py
+      - backend/protocols/a2ui_surface_data_routes.py
+      - backend/protocols/a2ui_surface_action_routes.py
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
@@ -53,11 +60,15 @@ on:
       - SELFHOST.md
       - frontend/Dockerfile
       - frontend/src/__tests__/next-public-env-declared.test.ts
+      - frontend/src/components/chat/ChatShell.tsx
+      - frontend/src/hooks/useSessionMessages.ts
       - backend/Dockerfile
       - backend/services.py
       - backend/adk/agent.py
       - backend/adk/session.py
       - backend/adk/postgres_memory.py
+      - backend/adk/callbacks.py
+      - backend/adk/a2ui_surface_context.py
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
@@ -67,6 +78,9 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/protocols/sessions_route.py
+      - backend/protocols/a2ui_surface_data_routes.py
+      - backend/protocols/a2ui_surface_action_routes.py
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
