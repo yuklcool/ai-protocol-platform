@@ -44,7 +44,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from auth import User, get_current_user
-from db.firestore import get_document
+from db.persistence import get_document
 from protocols.artefact_review import (
     ArtefactReview,
     BlockedArtefactError,

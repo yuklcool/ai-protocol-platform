@@ -465,7 +465,7 @@ def _derive_initial_access_control(document_id: str | None):
     if not document_id:
         return AccessControl(type="private")
     try:
-        from db.firestore import get_document
+        from db.persistence import get_document
 
         doc = get_document("parsed_documents", document_id)
         if doc and "accessControl" in doc:

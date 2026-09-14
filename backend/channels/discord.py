@@ -57,7 +57,7 @@ from channels._agui_render import AGUIChannelRenderer, ChannelSink
 from channels._chunk import chunk_message
 from channels.base import BaseChannel, InboundMessage, OutboundMessage
 from channels.identity import IdentityResolver
-from db.firestore import get_document, set_document
+from db.persistence import get_document, set_document
 
 if TYPE_CHECKING:
     import discord

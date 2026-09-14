@@ -227,7 +227,7 @@ class AttachmentPipeline:
         extension: str,
     ) -> None:
         """Write a parse-pending Firestore record so the file shows up in the user's library."""
-        from db.firestore import set_document
+        from db.persistence import set_document
 
         now = datetime.now(UTC)
         record = {

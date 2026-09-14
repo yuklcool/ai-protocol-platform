@@ -331,7 +331,7 @@ def _resolve_doc_name(doc_id: str) -> str:
     if "/" in doc_id:  # gs:// URL or path — the tail is the filename already
         return doc_id.rsplit("/", 1)[-1] or doc_id
     try:
-        from db.firestore import get_document
+        from db.persistence import get_document
 
         doc = get_document("parsed_documents", doc_id) or {}
         name = doc.get("originalFilename") or (doc.get("sourceUrl") or "").rsplit("/", 1)[-1]

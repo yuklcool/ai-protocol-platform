@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from adk.agui import APP_NAME
 from admin.scope import AdminScope, Scope
 from db.chat_sessions import get_session_index, update_session_fields
-from db.firestore import get_document, query_documents
+from db.persistence import get_document, query_documents
 from protocols.sessions_route import (
     _author_agent_map,
     _earliest_event_ts,

@@ -441,7 +441,7 @@ async def _rag_loader(callback_context: Any, state: Any, document_ids: list[str]
         logger.info("doc loader (RAG): nothing to import — corpus=%s", corpus_name)
         return
 
-    from db.firestore import get_document as _get_fs_doc
+    from db.persistence import get_document as _get_fs_doc
 
     for doc_id in to_import:
         try:
@@ -922,7 +922,7 @@ def _derive_access_control(document_id: str | None) -> AccessControl:
     if not document_id:
         return AccessControl(type="private")
     try:
-        from db.firestore import get_document
+        from db.persistence import get_document
 
         doc = get_document("parsed_documents", document_id)
         if doc and "accessControl" in doc:
