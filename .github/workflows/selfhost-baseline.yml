@@ -19,6 +19,7 @@ on:
       - backend/adk/artifact_backend.py
       - backend/adk/callbacks.py
       - backend/adk/a2ui_surface_context.py
+      - backend/auth/group_id_auth.py
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
@@ -33,6 +34,7 @@ on:
       - backend/protocols/sessions_route.py
       - backend/protocols/a2ui_surface_data_routes.py
       - backend/protocols/a2ui_surface_action_routes.py
+      - backend/tools/mcp/registry.py
       - backend/tools/documents/upload.py
       - backend/tools/documents/parse_input.py
       - backend/tools/documents/routes.py
@@ -88,6 +90,7 @@ on:
       - backend/adk/artifact_backend.py
       - backend/adk/callbacks.py
       - backend/adk/a2ui_surface_context.py
+      - backend/auth/group_id_auth.py
       - backend/auth/permissions.py
       - backend/config/models.py
       - backend/config/models.yaml
@@ -102,6 +105,7 @@ on:
       - backend/protocols/sessions_route.py
       - backend/protocols/a2ui_surface_data_routes.py
       - backend/protocols/a2ui_surface_action_routes.py
+      - backend/tools/mcp/registry.py
       - backend/tools/documents/upload.py
       - backend/tools/documents/parse_input.py
       - backend/tools/documents/routes.py
@@ -229,8 +233,11 @@ jobs:
             -e DATA_BACKEND=memory \
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
+            -e GROUP_AUTH_SIGNING_SECRET=ci-group-auth-repository-secret \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
+              tests/persistence_tests/test_group_auth_repository.py \
+              tests/persistence_tests/test_mcp_registry_repository.py \
               tests/unit/test_admin_audit.py \
               tests/unit/test_clients.py \
               tests/unit/test_permissions.py \
@@ -243,7 +250,8 @@ jobs:
             -e DATA_BACKEND=memory \
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import permissions; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; assert build_repository('memory').healthcheck(); print('migrated persistence domains import OK')"
+            -e GROUP_AUTH_SIGNING_SECRET=ci-group-auth-repository-secret \
+            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes; from auth import group_id_auth, permissions; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
