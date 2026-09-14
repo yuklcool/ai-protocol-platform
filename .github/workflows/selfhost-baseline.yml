@@ -32,6 +32,8 @@ on:
       - backend/protocols/sessions_route.py
       - backend/protocols/a2ui_surface_data_routes.py
       - backend/protocols/a2ui_surface_action_routes.py
+      - backend/tools/documents/upload.py
+      - backend/tools/documents/parse_input.py
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
@@ -41,6 +43,7 @@ on:
       - backend/tests/api_tests/test_admin_tool_permissions.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
+      - backend/tests/api_tests/test_upload.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
@@ -86,6 +89,8 @@ on:
       - backend/protocols/sessions_route.py
       - backend/protocols/a2ui_surface_data_routes.py
       - backend/protocols/a2ui_surface_action_routes.py
+      - backend/tools/documents/upload.py
+      - backend/tools/documents/parse_input.py
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
@@ -95,6 +100,7 @@ on:
       - backend/tests/api_tests/test_admin_tool_permissions.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
+      - backend/tests/api_tests/test_upload.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
@@ -163,6 +169,16 @@ jobs:
             -e OBJECT_STORAGE_BACKEND=local \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/storage_tests/
+
+      - name: Test provider-neutral document upload
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e OBJECT_STORAGE_BACKEND=local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/api_tests/test_upload.py
 
       - name: Test PostgreSQL Session and Memory factories
         run: |
