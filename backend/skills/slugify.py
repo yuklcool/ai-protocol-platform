@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from db import firestore as fs
+from db import persistence as fs
 from db.models import _SLUG_PATTERN, RESERVED_SLUGS
 
 _COLLECTION = "skills"
@@ -44,10 +44,12 @@ def slugify(name: str) -> str:
 
 
 def unique_slug(owner_id: str, base: str, exclude_skill_id: str | None = None) -> str:
-    """Return ``base`` if free in ``owner_id``'s namespace, else append ``-2``, ``-3``, ...
+    """Return ``base`` if free in ``owner_id``'s namespace, else add a suffix.
 
-    ``exclude_skill_id`` lets the owner re-save their own slug on PUT without
-    colliding with themselves.
+    The uniqueness lookup is routed through the configured persistence backend,
+    so the same behavior works with memory, Firestore, and PostgreSQL.
+    ``exclude_skill_id`` lets an owner re-save their current slug without
+    colliding with the same skill.
     """
     if not _slug_taken(owner_id, base, exclude_skill_id):
         return base
