@@ -4,11 +4,13 @@ import json
 import os
 import time
 import uuid
+from typing import Any
 
 import pytest
 from google.adk.events import Event, EventActions
 
 from adk import session as session_mod
+from adk.a2ui_surface_context import render_instruction_with_a2ui_surface_context
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from protocols.sessions_route import _state_to_a2ui_surfaces
 
@@ -23,7 +25,7 @@ def _database_url() -> str:
     return value
 
 
-async def _append_state_delta(service, session, *, invocation_id: str, delta: dict[str, str]) -> None:
+async def _append_state_delta(service, session, *, invocation_id: str, delta: dict[str, Any]) -> None:
     await service.append_event(
         session,
         Event(
@@ -36,15 +38,18 @@ async def _append_state_delta(service, session, *, invocation_id: str, delta: di
 
 
 async def test_a2ui_surface_and_client_edits_survive_postgres_reconstruction(monkeypatch):
-    """The workbench must rehydrate from durable ADK session state.
+    """The workbench and model-facing A2UI context must survive a restart.
 
     This exercises the exact persistence contract used in production:
 
     * the result->A2UI emitter stores ``a2ui_surface:{surfaceId}`` in session
       state;
-    * ``DatabaseSessionService`` persists that state in PostgreSQL;
-    * the history endpoint converts it back to the live ``A2UI_SURFACE`` replay
-      payload through ``_state_to_a2ui_surfaces``;
+    * surface actions store ``a2ui_surface_context.{surfaceId}.lastAction``;
+    * ``DatabaseSessionService`` persists both in PostgreSQL;
+    * the history endpoint converts the surface stash back to the live
+      ``A2UI_SURFACE`` replay payload through ``_state_to_a2ui_surfaces``;
+    * the instruction provider can still see the persisted last action after
+      reconstruction;
     * client-side data-model edits are stored in the same stash and materialise
       as a final ``updateDataModel`` message on resume.
 
@@ -58,6 +63,7 @@ async def test_a2ui_surface_and_client_edits_survive_postgres_reconstruction(mon
     session_id = f"session-{suffix}"
     surface_id = f"obligation-analysis:{suffix}"
     state_key = f"{A2UI_SURFACE_STATE_PREFIX}{surface_id}"
+    action_key = f"a2ui_surface_context.{surface_id}.lastAction"
 
     monkeypatch.setenv("SESSION_BACKEND", "postgres")
     monkeypatch.setenv("DATABASE_URL", database_url)
@@ -101,14 +107,21 @@ async def test_a2ui_surface_and_client_edits_survive_postgres_reconstruction(mon
         "toolName": "map_obligations",
         "createdAt": time.time() * 1000,
     }
+    last_action = {
+        "surfaceId": surface_id,
+        "componentId": "approve-button",
+        "name": "approve",
+        "context": {"selected": True},
+    }
     await _append_state_delta(
         first,
         session,
         invocation_id=f"surface-{suffix}",
-        delta={state_key: json.dumps(stash)},
+        delta={state_key: json.dumps(stash), action_key: last_action},
     )
 
-    # Backend restart boundary #1: the replay must come from PostgreSQL.
+    # Backend restart boundary #1: both visual replay and model-facing action
+    # context must come back from PostgreSQL.
     session_mod._reset_session_service_for_tests()
     second = session_mod.get_session_service()
     restored = await second.get_session(
@@ -124,6 +137,12 @@ async def test_a2ui_surface_and_client_edits_survive_postgres_reconstruction(mon
     assert replay[0]["sourceId"] == stash["sourceId"]
     assert replay[0]["artifact"] == stash["artifact"]
     assert replay[0]["messages"] == canonical_messages
+
+    instruction = render_instruction_with_a2ui_surface_context("Base instruction", dict(restored.state or {}))
+    assert "A2UI surface state" in instruction
+    assert surface_id in instruction
+    assert "lastAction" in instruction
+    assert "approve" in instruction
 
     # Mirror POST /surface-data: preserve canonical messages and layer the
     # client's latest root data model on top of the replay.
