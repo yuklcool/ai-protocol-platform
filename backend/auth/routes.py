@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from auth import User, auth_backend, get_current_user
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class LocalLoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -30,7 +30,7 @@ def local_login(payload: LocalLoginRequest) -> LocalTokenResponse:
 
     from auth.local_jwt import authenticate_credentials, issue_access_token
 
-    user = authenticate_credentials(str(payload.email), payload.password)
+    user = authenticate_credentials(payload.email, payload.password)
     if user is None:
         # Deliberately generic: do not reveal whether the email exists.
         raise HTTPException(status_code=401, detail="Invalid email or password")
