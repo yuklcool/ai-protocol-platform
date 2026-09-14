@@ -25,7 +25,7 @@ import jwt
 from fastapi import HTTPException, Request
 
 from auth.access_context import build_access_context
-from auth.firebase_auth import User
+from auth.models import User
 from db import persistence
 
 logger = logging.getLogger(__name__)
@@ -281,6 +281,7 @@ class LocalJwtIdentityProvider:
 
 __all__ = [
     "AUTH_MODE",
+    "USER_COLLECTION",
     "LocalJwtIdentityProvider",
     "authenticate_credentials",
     "create_local_user",
