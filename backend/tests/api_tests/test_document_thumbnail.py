@@ -1,15 +1,10 @@
-"""Tests for GET /api/documents/{doc_id}/thumbnail (v6.6.0).
-
-Standardised page-1 / image thumbnail for imported docs — same renderer + cache
-as the bucket thumbnail route, gated by document ownership.
-"""
+"""Tests for provider-neutral document thumbnail rendering."""
 
 from __future__ import annotations
 
 import io
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,9 +16,11 @@ _USER_B = User(uid="user_b", email="bob@example.com", domain="example.com")
 _DOC = {
     "id": "doc_1",
     "userId": "user_a",
+    "tenantId": "example.com",
     "originalFilename": "sample.pdf",
     "sourceFormat": "pdf",
-    "sourceUrl": "gs://my-bucket/uploads/sample.pdf",
+    "storageBackend": "local",
+    "storagePath": "users/user_a/docs/f/sample.pdf",
     "parseStatus": "parsed",
 }
 
@@ -49,16 +46,14 @@ def _png_image() -> bytes:
     from PIL import Image
 
     buf = io.BytesIO()
-    Image.new("RGB", (640, 480), "steelblue").save(buf, "PNG")
+    Image.new("RGB", (640, 480), "white").save(buf, "PNG")
     return buf.getvalue()
 
 
-def _mock_storage(data: bytes) -> MagicMock:
-    blob = MagicMock()
-    blob.download_as_bytes.return_value = data
-    client = MagicMock()
-    client.bucket.return_value.blob.return_value = blob
-    return MagicMock(return_value=client)
+def _storage(data: bytes) -> MagicMock:
+    storage = MagicMock()
+    storage.get_bytes.return_value = data
+    return storage
 
 
 def test_thumbnail_anon_401() -> None:
@@ -71,9 +66,10 @@ def test_thumbnail_anon_401() -> None:
 
 def test_thumbnail_owner_renders_png() -> None:
     client = _app_for(_USER_A)
+    storage = _storage(_one_page_pdf())
     with (
-        patch("tools.documents.routes._get_firestore_doc", return_value=dict(_DOC)),
-        patch("google.cloud.storage.Client", _mock_storage(_one_page_pdf())),
+        patch("tools.documents.routes._get_document_record", return_value=dict(_DOC)),
+        patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", _DOC["storagePath"], "local")),
     ):
         resp = client.get("/api/documents/doc_1/thumbnail?width=300")
     assert resp.status_code == 200
@@ -83,10 +79,11 @@ def test_thumbnail_owner_renders_png() -> None:
 
 def test_thumbnail_image_doc_renders_png() -> None:
     client = _app_for(_USER_A)
-    doc = {**_DOC, "sourceFormat": "png", "sourceUrl": "gs://my-bucket/logo.png"}
+    doc = {**_DOC, "sourceFormat": "png", "originalFilename": "logo.png", "storagePath": "users/user_a/docs/f/logo.png"}
+    storage = _storage(_png_image())
     with (
-        patch("tools.documents.routes._get_firestore_doc", return_value=doc),
-        patch("google.cloud.storage.Client", _mock_storage(_png_image())),
+        patch("tools.documents.routes._get_document_record", return_value=doc),
+        patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", doc["storagePath"], "local")),
     ):
         resp = client.get("/api/documents/doc_1/thumbnail?width=200")
     assert resp.status_code == 200
@@ -95,30 +92,18 @@ def test_thumbnail_image_doc_renders_png() -> None:
 
 def test_thumbnail_non_owner_403() -> None:
     client = _app_for(_USER_B)
-    with patch("tools.documents.routes._get_firestore_doc", return_value=dict(_DOC)):
-        resp = client.get("/api/documents/doc_1/thumbnail")
-    assert resp.status_code == 403
+    with patch("tools.documents.routes._get_document_record", return_value=dict(_DOC)):
+        assert client.get("/api/documents/doc_1/thumbnail").status_code == 403
 
 
 def test_thumbnail_missing_doc_404() -> None:
     client = _app_for(_USER_A)
-    with patch("tools.documents.routes._get_firestore_doc", return_value=None):
-        resp = client.get("/api/documents/missing/thumbnail")
-    assert resp.status_code == 404
+    with patch("tools.documents.routes._get_document_record", return_value=None):
+        assert client.get("/api/documents/missing/thumbnail").status_code == 404
 
 
 def test_thumbnail_unsupported_format_415() -> None:
     client = _app_for(_USER_A)
-    doc = {**_DOC, "sourceFormat": "txt", "sourceUrl": "gs://my-bucket/notes.txt"}
-    with patch("tools.documents.routes._get_firestore_doc", return_value=doc):
-        resp = client.get("/api/documents/doc_1/thumbnail")
-    assert resp.status_code == 415
-
-
-@pytest.mark.parametrize("bad_url", [None, "", "https://not-gcs/x.pdf"])
-def test_thumbnail_requires_gcs_source(bad_url) -> None:
-    client = _app_for(_USER_A)
-    doc = {**_DOC, "sourceUrl": bad_url}
-    with patch("tools.documents.routes._get_firestore_doc", return_value=doc):
-        resp = client.get("/api/documents/doc_1/thumbnail")
-    assert resp.status_code == 404
+    doc = {**_DOC, "sourceFormat": "txt", "originalFilename": "notes.txt"}
+    with patch("tools.documents.routes._get_document_record", return_value=doc):
+        assert client.get("/api/documents/doc_1/thumbnail").status_code == 415
