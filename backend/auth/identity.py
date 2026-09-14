@@ -12,7 +12,7 @@ from typing import Literal, Protocol, runtime_checkable
 
 from fastapi import Request
 
-from auth.firebase_auth import User
+from auth.models import User
 from config.local_mode import is_local_mode
 
 AuthBackend = Literal["stub", "firebase", "local-jwt", "oidc"]
