@@ -47,6 +47,10 @@ services:
       ARTIFACT_BACKEND: "${ARTIFACT_BACKEND:-local}"
       ADK_ARTIFACT_ROOT: "${ADK_ARTIFACT_ROOT:-/data/artifacts}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
+      # Root orchestration model is provider-neutral. `lite` preserves the
+      # historical Gemini default; self-host .env may point this at any
+      # registered OpenAI-compatible/Anthropic/Google model or tier.
+      PLATFORM_DEFAULT_MODEL: "${PLATFORM_DEFAULT_MODEL:-lite}"
       AUTH_BACKEND: "${AUTH_BACKEND:-local-jwt}"
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-}"
       JWT_PREVIOUS_SIGNING_KEYS: "${JWT_PREVIOUS_SIGNING_KEYS:-}"
