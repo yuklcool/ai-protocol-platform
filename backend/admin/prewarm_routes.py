@@ -2,22 +2,10 @@
 
 POST /api/admin/documents/prewarm-from-blocks
 
-Accepts pre-parsed AILANG Block ADT blocks (produced locally by
-``docparse`` CLI), writes a parsed_documents record owned by
-``PLATFORM_OWNER_UID``, keyed by ``sourceUrl``. The
-``import-by-reference`` route's L4 cascade then clones from this
-record on first user click, so every viewer pays ~500ms (Firestore
-clone) instead of ~5s+ (AILANG API round-trip) or hits the AILANG
-"no pages" bug on multi-page PDFs.
-
-This endpoint deliberately accepts pre-parsed blocks instead of
-triggering its own parse — it's the demo-readiness escape hatch when
-AILANG can't handle a specific document. Once AILANG ships a fix, the
-runtime path (``import-by-reference``'s L3 fresh parse) becomes the
-default again; the L4 cache just makes things faster.
-
-Auth: ``_assert_caller_is_service_account`` (same Google ID token +
-SA-email allowlist pattern as seed-platform-skills).
+Accepts pre-parsed AILANG Block ADT blocks, writes a parsed_documents record
+owned by ``PLATFORM_OWNER_UID`` and keyed by ``sourceUrl``. Persistence lookup
+uses the backend-neutral repository; the write path is shared with normal
+document upload via ``_store_document``.
 """
 
 from __future__ import annotations
@@ -31,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from admin.auth import _assert_caller_is_service_account
-from db.firestore import query_documents
+from db.persistence import query_documents
 from skills.platform import PLATFORM_OWNER_UID
 from tools.documents.upload import _COLLECTION, _ParseResult, _store_document
 
@@ -62,16 +50,10 @@ class PrewarmResponse(BaseModel):
 
 @router.post("/prewarm-from-blocks", response_model=PrewarmResponse)
 def prewarm_from_blocks(req: PrewarmRequest, request: Request) -> PrewarmResponse:
-    """Write a sentinel-owned parsed_documents record from pre-parsed blocks.
-
-    Idempotent: if a PLATFORM_OWNER_UID record already exists for this
-    sourceUrl we OVERWRITE it (so re-running the pre-warm picks up
-    block-extraction fixes), but the docId is reused.
-    """
+    """Write or refresh a sentinel-owned parsed document from pre-parsed blocks."""
     _assert_caller_is_service_account(request)
 
     gs_url = f"gs://{req.bucket}/{req.object}"
-
     existing = query_documents(
         _COLLECTION,
         filters=[("userId", "==", PLATFORM_OWNER_UID), ("sourceUrl", "==", gs_url)],
@@ -104,10 +86,6 @@ def prewarm_from_blocks(req: PrewarmRequest, request: Request) -> PrewarmRespons
     )
 
 
-# Wider safety net: reject pre-warm payloads above ~1 MB (Firestore doc
-# limit). Frontend / CLI should error visibly so the operator can
-# truncate / split rather than getting a Firestore write rejection at the
-# end of a long upload.
 _MAX_PAYLOAD_BYTES = 900_000
 
 
@@ -122,7 +100,7 @@ def prewarm_precheck(req: PrewarmRequest, request: Request) -> dict[str, Any]:
         raise HTTPException(
             status_code=413,
             detail=(
-                f"Block payload is {payload_bytes} bytes; Firestore limit is ~1 MB. "
+                f"Block payload is {payload_bytes} bytes; persistence document limit is ~1 MB. "
                 "Truncate blocks or split into multiple records before writing."
             ),
         )
