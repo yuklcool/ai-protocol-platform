@@ -11,10 +11,16 @@ on:
       - backend/config/deployment.py
       - backend/config/capabilities.py
       - backend/config/gcp.py
+      - backend/config/models.py
+      - backend/config/models.yaml
       - backend/adk/session.py
       - backend/adk/artifact_backend.py
       - backend/auth/**
       - backend/protocols/models_route.py
+      - backend/tests/model_tests/test_openai_compatible_routing.py
+      - backend/tests/storage_tests/**
+      - backend/tests/integration/test_postgres_adk_session_memory.py
+      - backend/tests/integration/test_postgres_a2ui_resume.py
       - .github/workflows/selfhost-no-gcp.yml
   pull_request:
     paths:
@@ -25,16 +31,22 @@ on:
       - backend/config/deployment.py
       - backend/config/capabilities.py
       - backend/config/gcp.py
+      - backend/config/models.py
+      - backend/config/models.yaml
       - backend/adk/session.py
       - backend/adk/artifact_backend.py
       - backend/auth/**
       - backend/protocols/models_route.py
+      - backend/tests/model_tests/test_openai_compatible_routing.py
+      - backend/tests/storage_tests/**
+      - backend/tests/integration/test_postgres_adk_session_memory.py
+      - backend/tests/integration/test_postgres_a2ui_resume.py
       - .github/workflows/selfhost-no-gcp.yml
 
 jobs:
   no-gcp-startup:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       AUTH_BACKEND: local-jwt
       JWT_SIGNING_KEY: ci-no-gcp-jwt-signing-key-at-least-32-bytes-long
@@ -42,9 +54,12 @@ jobs:
       JWT_AUDIENCE: ai-protocol-platform-no-gcp-ci
       SELFHOST_ADMIN_EMAIL: admin@example.com
       SELFHOST_ADMIN_PASSWORD: ci-no-gcp-admin-password
-      # Placeholder API key only constructs the Gemini Developer API model.
-      # This workflow never sends a model request and never configures Vertex.
-      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      # Exercise the provider-neutral root path. The endpoint is intentionally
+      # non-routable because this workflow verifies routing/configuration rather
+      # than spending tokens on an external model request.
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
 
     steps:
       - name: Checkout
@@ -60,6 +75,7 @@ jobs:
           echo "$rendered" | grep -q 'SESSION_BACKEND: postgres'
           echo "$rendered" | grep -q 'MEMORY_BACKEND: postgres'
           echo "$rendered" | grep -q 'ARTIFACT_BACKEND: local'
+          echo "$rendered" | grep -q 'PLATFORM_DEFAULT_MODEL: gpt-5-6-terra'
           ! echo "$rendered" | grep -Eiq 'image: (redis|minio|quay.io/keycloak)|keycloak:|redis:|minio:'
 
       - name: Build backend
@@ -69,13 +85,21 @@ jobs:
         run: |
           docker compose run --rm --no-deps backend uv run python -c "import os; os.environ.pop('GOOGLE_CLOUD_PROJECT',None); os.environ.pop('GCP_PROJECT',None); import google.auth; google.auth.default=lambda *a,**k: (_ for _ in ()).throw(AssertionError('ADC must not be probed')); from config.deployment import configure_google_genai_environment,is_self_hosted_mode,is_managed_gcp_mode; configure_google_genai_environment(); assert is_self_hosted_mode() and not is_managed_gcp_mode(); assert os.environ['GOOGLE_GENAI_USE_VERTEXAI'].lower()=='false'; from config.gcp import resolve_gcp_credentials,resolve_gcp_project; assert resolve_gcp_credentials() is None; assert resolve_gcp_project() is None; print('no implicit ADC/project discovery')"
 
+      - name: Verify no-GCP provider routing and local storage regressions
+        run: |
+          docker compose run --rm --no-deps backend uv run pytest -q \
+            tests/model_tests/test_openai_compatible_routing.py \
+            tests/storage_tests/test_object_storage.py \
+            tests/storage_tests/test_tenant_object_storage.py \
+            tests/api_tests/test_file_upload_api.py
+
       - name: Verify capability matrix without cloud SDK calls
         run: |
-          docker compose run --rm --no-deps backend uv run python -c "from config.capabilities import capabilities_payload; p=capabilities_payload(); assert p['self_hosted_mode'] is True and p['local_mode'] is False and p['managed_gcp_mode'] is False; c=p['capabilities']; assert c['auth']['backend']=='local-jwt'; assert c['persistence']['backend']=='postgres'; assert c['session']['backend']=='postgres'; assert c['memory']['backend']=='postgres'; assert c['artifacts']['backend']=='local'; assert not c['firebase']['enabled']; assert not c['gcs']['enabled']; assert not c['agent_engine']['enabled']; assert not c['vertex_ai_search']['enabled']; assert not c['cloud_trace']['enabled']; assert not c['cloud_logging']['enabled']; print('self-host capability matrix OK')"
+          docker compose run --rm --no-deps backend uv run python -c "from config.capabilities import capabilities_payload; p=capabilities_payload(); assert p['self_hosted_mode'] is True and p['local_mode'] is False and p['managed_gcp_mode'] is False; c=p['capabilities']; assert c['llm']['backend']=='openai-compatible'; assert c['auth']['backend']=='local-jwt'; assert c['persistence']['backend']=='postgres'; assert c['session']['backend']=='postgres'; assert c['memory']['backend']=='postgres'; assert c['artifacts']['backend']=='local'; assert not c['firebase']['enabled']; assert not c['gcs']['enabled']; assert not c['agent_engine']['enabled']; assert not c['vertex_ai_search']['enabled']; assert not c['cloud_trace']['enabled']; assert not c['cloud_logging']['enabled']; print('self-host capability matrix OK')"
 
       - name: Start PostgreSQL and backend without GCP credentials
         run: |
-          unset GOOGLE_APPLICATION_CREDENTIALS GOOGLE_CLOUD_PROJECT GCP_PROJECT CLOUDSDK_CORE_PROJECT FIREBASE_CONFIG AGENT_ENGINE_ID ADK_ARTIFACT_BUCKET
+          unset GOOGLE_APPLICATION_CREDENTIALS GOOGLE_CLOUD_PROJECT GCP_PROJECT CLOUDSDK_CORE_PROJECT FIREBASE_CONFIG AGENT_ENGINE_ID ADK_ARTIFACT_BUCKET GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_GENAI_API_KEY
           docker compose up -d postgres backend
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:1956/health >/dev/null; then
@@ -85,6 +109,12 @@ jobs:
           done
           docker compose logs backend
           exit 1
+
+      - name: Verify PostgreSQL Session Memory and A2UI resume in formal Self-host mode
+        run: |
+          docker compose run --rm backend uv run pytest -q \
+            tests/integration/test_postgres_adk_session_memory.py \
+            tests/integration/test_postgres_a2ui_resume.py
 
       - name: Verify runtime capabilities endpoint
         run: |
@@ -96,6 +126,7 @@ jobs:
           assert p['local_mode'] is False
           assert p['managed_gcp_mode'] is False
           c=p['capabilities']
+          assert c['llm']['backend']=='openai-compatible'
           assert c['auth']['backend']=='local-jwt'
           assert c['session']['backend']=='postgres'
           assert c['memory']['backend']=='postgres'
