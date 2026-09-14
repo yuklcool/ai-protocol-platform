@@ -27,6 +27,7 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/object_storage/**
       - backend/protocols/sessions_route.py
       - backend/protocols/a2ui_surface_data_routes.py
       - backend/protocols/a2ui_surface_action_routes.py
@@ -43,6 +44,7 @@ on:
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
+      - backend/tests/storage_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
       - backend/tests/unit/test_permissions.py
@@ -78,6 +80,7 @@ on:
       - backend/db/repository.py
       - backend/db/repositories/**
       - backend/db/migrations/**
+      - backend/object_storage/**
       - backend/protocols/sessions_route.py
       - backend/protocols/a2ui_surface_data_routes.py
       - backend/protocols/a2ui_surface_action_routes.py
@@ -94,6 +97,7 @@ on:
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
+      - backend/tests/storage_tests/**
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/unit/test_clients.py
       - backend/tests/unit/test_permissions.py
@@ -148,6 +152,16 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q tests/persistence_tests/test_repository_contract.py
 
+      - name: Test local object storage contract and isolation
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e OBJECT_STORAGE_BACKEND=local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/storage_tests/test_local_object_storage.py
+
       - name: Test PostgreSQL Session and Memory factories
         run: |
           docker compose run --rm --no-deps \
@@ -196,6 +210,17 @@ jobs:
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             backend uv run python -c "from db.persistence import get_repository; r=get_repository(); assert r.query_documents('skills', limit=1), 'self-host seed did not create skills'; p=r.get_document('tool_permissions','*'); assert p and '*' in p.get('tools', []), 'self-host seed did not create wildcard permission'; print('postgres self-host seed OK')"
+
+      - name: Verify local object volume survives backend container reconstruction
+        run: |
+          docker compose run --rm --no-deps \
+            -e OBJECT_STORAGE_BACKEND=local \
+            -e OBJECT_STORAGE_LOCAL_ROOT=/data/objects \
+            backend uv run python -c "from object_storage import get_object_storage; s=get_object_storage(); i=s.put_bytes('ci-tenant','restart/probe.bin',b'volume-survives'); assert i.size==15; print('local object write OK')"
+          docker compose run --rm --no-deps \
+            -e OBJECT_STORAGE_BACKEND=local \
+            -e OBJECT_STORAGE_LOCAL_ROOT=/data/objects \
+            backend uv run python -c "from object_storage import get_object_storage; s=get_object_storage(); assert s.get_bytes('ci-tenant','restart/probe.bin')==b'volume-survives'; s.delete('ci-tenant','restart/probe.bin'); print('local object restart read OK')"
 
       - name: Verify ADK Session, Memory and A2UI resume survive PostgreSQL reconstruction
         run: |
