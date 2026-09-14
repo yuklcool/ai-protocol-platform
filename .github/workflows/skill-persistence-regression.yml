@@ -1,0 +1,96 @@
+name: Skill persistence regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/admin/platform_seed.py
+      - backend/skills/slugify.py
+      - backend/skills/skill_config.py
+      - backend/db/persistence.py
+      - backend/db/repository.py
+      - backend/db/repositories/**
+      - backend/tests/unit/test_platform_seed.py
+      - backend/tests/unit/test_slugify.py
+      - .github/workflows/skill-persistence-regression.yml
+  pull_request:
+    paths:
+      - backend/admin/platform_seed.py
+      - backend/skills/slugify.py
+      - backend/skills/skill_config.py
+      - backend/db/persistence.py
+      - backend/db/repository.py
+      - backend/db/repositories/**
+      - backend/tests/unit/test_platform_seed.py
+      - backend/tests/unit/test_slugify.py
+      - .github/workflows/skill-persistence-regression.yml
+
+jobs:
+  skill-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      PLATFORM_OWNER_EMAIL: platform@ci.local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Run seed and slug regression tests with memory repository
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+              tests/unit/test_platform_seed.py \
+              tests/unit/test_slugify.py
+
+      - name: Verify skill persistence paths against PostgreSQL
+        run: |
+          docker compose up -d postgres
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            backend uv run python - <<'PY'
+          from admin.platform_seed import _ensure_tool_permissions_wildcard
+          from db.persistence import get_repository
+          from skills.slugify import unique_slug
+
+          repo = get_repository()
+          assert repo.healthcheck()
+
+          repo.set_document(
+              "skills",
+              "ci-existing-skill",
+              {
+                  "skillId": "ci-existing-skill",
+                  "ownerId": "ci-owner",
+                  "slug": "ci-skill",
+              },
+          )
+          assert unique_slug("ci-owner", "ci-skill") == "ci-skill-2"
+          assert unique_slug("other-owner", "ci-skill") == "ci-skill"
+
+          repo.delete_document("tool_permissions", "*")
+          assert _ensure_tool_permissions_wildcard() is True
+          wildcard = repo.get_document("tool_permissions", "*")
+          assert wildcard is not None and wildcard["tools"] == ["*"]
+          assert _ensure_tool_permissions_wildcard() is False
+
+          repo.delete_document("skills", "ci-existing-skill")
+          repo.delete_document("tool_permissions", "*")
+          print("PostgreSQL skill persistence regression checks passed")
+          PY
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
