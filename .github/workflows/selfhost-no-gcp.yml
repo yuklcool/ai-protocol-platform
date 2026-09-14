@@ -1,0 +1,118 @@
+name: Self-host no-GCP gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/app.py
+      - backend/fast_api_app.py
+      - backend/config/deployment.py
+      - backend/config/capabilities.py
+      - backend/config/gcp.py
+      - backend/adk/session.py
+      - backend/adk/artifact_backend.py
+      - backend/auth/**
+      - backend/protocols/models_route.py
+      - .github/workflows/selfhost-no-gcp.yml
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/app.py
+      - backend/fast_api_app.py
+      - backend/config/deployment.py
+      - backend/config/capabilities.py
+      - backend/config/gcp.py
+      - backend/adk/session.py
+      - backend/adk/artifact_backend.py
+      - backend/auth/**
+      - backend/protocols/models_route.py
+      - .github/workflows/selfhost-no-gcp.yml
+
+jobs:
+  no-gcp-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: ci-no-gcp-jwt-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-no-gcp-ci
+      JWT_AUDIENCE: ai-protocol-platform-no-gcp-ci
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-no-gcp-admin-password
+      # Placeholder API key only constructs the Gemini Developer API model.
+      # This workflow never sends a model request and never configures Vertex.
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate production Self-host Compose model
+        run: |
+          docker compose config --quiet
+          rendered="$(docker compose config)"
+          echo "$rendered" | grep -q 'SELF_HOSTED_MODE: "1"'
+          echo "$rendered" | grep -q 'LOCAL_MODE: "0"'
+          echo "$rendered" | grep -q 'AUTH_BACKEND: local-jwt'
+          echo "$rendered" | grep -q 'SESSION_BACKEND: postgres'
+          echo "$rendered" | grep -q 'MEMORY_BACKEND: postgres'
+          echo "$rendered" | grep -q 'ARTIFACT_BACKEND: local'
+          ! echo "$rendered" | grep -Eiq 'image: (redis|minio|quay.io/keycloak)|keycloak:|redis:|minio:'
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Prove baseline does not probe ADC
+        run: |
+          docker compose run --rm --no-deps backend uv run python -c "import os; os.environ.pop('GOOGLE_CLOUD_PROJECT',None); os.environ.pop('GCP_PROJECT',None); import google.auth; google.auth.default=lambda *a,**k: (_ for _ in ()).throw(AssertionError('ADC must not be probed')); from config.deployment import configure_google_genai_environment,is_self_hosted_mode,is_managed_gcp_mode; configure_google_genai_environment(); assert is_self_hosted_mode() and not is_managed_gcp_mode(); assert os.environ['GOOGLE_GENAI_USE_VERTEXAI'].lower()=='false'; from config.gcp import resolve_gcp_credentials,resolve_gcp_project; assert resolve_gcp_credentials() is None; assert resolve_gcp_project() is None; print('no implicit ADC/project discovery')"
+
+      - name: Verify capability matrix without cloud SDK calls
+        run: |
+          docker compose run --rm --no-deps backend uv run python -c "from config.capabilities import capabilities_payload; p=capabilities_payload(); assert p['self_hosted_mode'] is True and p['local_mode'] is False and p['managed_gcp_mode'] is False; c=p['capabilities']; assert c['auth']['backend']=='local-jwt'; assert c['persistence']['backend']=='postgres'; assert c['session']['backend']=='postgres'; assert c['memory']['backend']=='postgres'; assert c['artifacts']['backend']=='local'; assert not c['firebase']['enabled']; assert not c['gcs']['enabled']; assert not c['agent_engine']['enabled']; assert not c['vertex_ai_search']['enabled']; assert not c['cloud_trace']['enabled']; assert not c['cloud_logging']['enabled']; print('self-host capability matrix OK')"
+
+      - name: Start PostgreSQL and backend without GCP credentials
+        run: |
+          unset GOOGLE_APPLICATION_CREDENTIALS GOOGLE_CLOUD_PROJECT GCP_PROJECT CLOUDSDK_CORE_PROJECT FIREBASE_CONFIG AGENT_ENGINE_ID ADK_ARTIFACT_BUCKET
+          docker compose up -d postgres backend
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend
+          exit 1
+
+      - name: Verify runtime capabilities endpoint
+        run: |
+          curl -fsS http://127.0.0.1:1956/api/capabilities > /tmp/capabilities.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/capabilities.json'))
+          assert p['self_hosted_mode'] is True
+          assert p['local_mode'] is False
+          assert p['managed_gcp_mode'] is False
+          c=p['capabilities']
+          assert c['auth']['backend']=='local-jwt'
+          assert c['session']['backend']=='postgres'
+          assert c['memory']['backend']=='postgres'
+          assert c['artifacts']['backend']=='local'
+          for name in ('firebase','gcs','agent_engine','vertex_ai_search','cloud_trace','cloud_logging'):
+              assert c[name]['enabled'] is False, (name, c[name])
+          print('runtime no-GCP capabilities OK')
+          PY
+
+      - name: Verify built-in login still works in non-LOCAL self-host mode
+        run: |
+          curl -fsS \
+            -H 'content-type: application/json' \
+            -d '{"email":"admin@example.com","password":"ci-no-gcp-admin-password"}' \
+            http://127.0.0.1:1956/api/auth/login \
+            | python -c "import json,sys; d=json.load(sys.stdin); assert d['token_type']=='bearer' and d['access_token']; assert 'aitana-admin' in d['user']['groupTags']; print('local-jwt login OK')"
+
+      - name: Show backend logs on failure
+        if: failure()
+        run: docker compose logs backend postgres
