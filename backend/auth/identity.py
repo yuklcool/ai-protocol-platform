@@ -28,7 +28,8 @@ def auth_backend() -> AuthBackend:
 
     Explicit ``AUTH_BACKEND`` always wins. For backwards compatibility, an
     unset value keeps the historical behavior: LOCAL_MODE uses the stub and
-    cloud mode uses Firebase.
+    cloud mode uses Firebase. The insecure stub is never accepted outside
+    LOCAL_MODE.
     """
     raw = os.environ.get("AUTH_BACKEND", "").strip().lower()
     if not raw:
@@ -43,6 +44,8 @@ def auth_backend() -> AuthBackend:
         raise RuntimeError(
             f"Unsupported AUTH_BACKEND={raw!r}; expected stub, firebase, local-jwt, or oidc"
         )
+    if raw == "stub" and not is_local_mode():
+        raise RuntimeError("AUTH_BACKEND=stub is only allowed when LOCAL_MODE=1")
     return raw  # type: ignore[return-value]
 
 
