@@ -1,9 +1,9 @@
 """ADK ArtifactService backend selection for self-host and cloud deployments.
 
-This module keeps artifact policy separate from Session/Memory policy.  Local
+This module keeps artifact policy separate from Session/Memory policy. Local
 self-hosting reuses the persistent ``/data`` volume through ADK's own
-``FileArtifactService``; cloud deployments can continue using GCS; memory stays
-available for tests and source-only development.
+``FileArtifactService``; GCS is loaded only when explicitly selected; memory
+stays available for tests and source-only development.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from google.adk.artifacts import GcsArtifactService, InMemoryArtifactService
+from google.adk.artifacts import InMemoryArtifactService
 from google.adk.artifacts.base_artifact_service import BaseArtifactService
 from google.adk.artifacts.file_artifact_service import FileArtifactService
 
@@ -71,6 +71,16 @@ def get_artifact_service() -> ArtifactService:
     if backend == "local":
         _service_singleton = FileArtifactService(root_dir=config)
     elif backend == "gcs":
+        # Keep the GCP adapter out of the default Self-host import graph. This
+        # also makes a missing optional GCS dependency fail at the capability
+        # boundary rather than while importing the platform.
+        try:
+            from google.adk.artifacts import GcsArtifactService
+        except ImportError as exc:
+            raise RuntimeError(
+                "ARTIFACT_BACKEND=gcs requires the Google/GCS artifact adapter; "
+                "install the cloud extras or switch to ARTIFACT_BACKEND=local"
+            ) from exc
         _service_singleton = GcsArtifactService(bucket_name=config)
     else:
         _service_singleton = InMemoryArtifactService()
