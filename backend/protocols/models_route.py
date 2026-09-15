@@ -1,6 +1,8 @@
 """Public platform metadata endpoints.
 
-``GET /api/models`` serves the model registry used by the skill-settings UI.
+``GET /api/models`` serves the effective model registry used by the
+skill-settings UI. YAML remains the bootstrap/GitOps baseline; enabled dynamic
+models from the persisted provider registry are overlaid when configured.
 ``GET /api/capabilities`` exposes which provider backends are enabled so a
 self-host can distinguish an intentionally-disabled optional cloud feature from
 a broken service. Neither endpoint contains credentials or sensitive values.
@@ -12,23 +14,22 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from config.capabilities import capabilities_payload
-from config.models import ModelEntry, load_models_config
+from config.effective_models import EffectiveModelEntry, load_effective_models_config
 
 router = APIRouter(prefix="/api", tags=["platform"])
 
 
 class ModelsResponse(BaseModel):
-    models: list[ModelEntry]
+    models: list[EffectiveModelEntry]
     defaults: dict[str, str]
     platform_default: str
-    # v6.6.0: logical tier name -> registry id (e.g. {"lite": "gemini-flash-lite"}).
     tier_defaults: dict[str, str] = {}
 
 
 @router.get("/models", response_model=ModelsResponse)
 async def list_models() -> ModelsResponse:
-    """Return all supported models grouped by provider."""
-    cfg = load_models_config()
+    """Return the effective YAML + persisted dynamic model registry."""
+    cfg = load_effective_models_config()
     return ModelsResponse(
         models=cfg.models,
         defaults=cfg.defaults,

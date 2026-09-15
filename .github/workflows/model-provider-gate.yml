@@ -6,9 +6,12 @@ on:
       - backend/admin/model_providers_routes.py
       - backend/admin/routes.py
       - backend/config/model_provider_registry.py
+      - backend/config/effective_models.py
+      - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
+      - backend/tests/unit/test_effective_models.py
       - .github/workflows/model-provider-gate.yml
   push:
     branches: [main]
@@ -16,9 +19,12 @@ on:
       - backend/admin/model_providers_routes.py
       - backend/admin/routes.py
       - backend/config/model_provider_registry.py
+      - backend/config/effective_models.py
+      - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
+      - backend/tests/unit/test_effective_models.py
       - .github/workflows/model-provider-gate.yml
 
 jobs:
@@ -46,4 +52,5 @@ jobs:
             backend uv run pytest -q \
               tests/api_tests/test_admin_model_providers.py \
               tests/api_tests/test_admin_cross_tenant_matrix.py \
-              tests/unit/test_model_provider_registry.py
+              tests/unit/test_model_provider_registry.py \
+              tests/unit/test_effective_models.py
