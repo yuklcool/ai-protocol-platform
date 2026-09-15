@@ -1,7 +1,7 @@
 """Administrative control plane for persisted MCP server registry entries.
 
 This module deliberately manages the same ``mcp_servers`` collection consumed by
-``tools.mcp.registry`` and ``protocols.mcp_proxy``.  It never returns header
+``tools.mcp.registry`` and ``protocols.mcp_proxy``. It never returns header
 values: credentials are write-only at the API boundary and audit snapshots are
 redacted for the same reason.
 """
@@ -21,7 +21,8 @@ from db.persistence import delete_document, get_document, query_documents, set_d
 from tools.mcp.registry import clear_registry_cache
 from tools.mcp.tenant_scope import PLATFORM_SCOPE, TENANT_SCOPE, normalize_mcp_scope
 
-router = APIRouter(prefix="/api/admin/mcp-servers", tags=["admin-mcp-servers"])
+# Included under admin.routes' /api/admin prefix.
+router = APIRouter(prefix="/mcp-servers", tags=["admin-mcp-servers"])
 _COLLECTION = "mcp_servers"
 _SERVER_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _ALLOWED_TRANSPORTS = {"http", "streamable-http", "sse"}
