@@ -60,31 +60,30 @@ def session_in_tenant(idx: ChatSessionIndex, tenant_id: str) -> bool:
 
 
 def session_tenant_allowed(idx: ChatSessionIndex, viewer_ctx: AccessContext) -> bool:
-    """Hard tenant boundary used before any ordinary session ACL evaluation."""
     return session_in_tenant(idx, viewer_ctx.tenant_id)
 
 
 def _write_tenant_id(explicit: str | None = None) -> str:
-    """Resolve the trusted tenant for a session write.
-
-    Request paths normally omit ``explicit`` and inherit the tenant bound by
-    ``get_current_user``. Migration/background jobs have no request context and
-    must pass a tenant explicitly. No domain guessing happens here.
-    """
     tenant_id = normalize_tenant_id(explicit or get_current_tenant_id())
     if not tenant_id:
         raise ValueError("tenant_id is required for chat-session writes")
     return tenant_id
 
 
-def _assert_current_tenant(idx: ChatSessionIndex) -> None:
-    """Reject a request-scoped mutation when SESSION belongs to another tenant.
+def _read_tenant_id(explicit: str | None = None) -> str:
+    """Resolve tenant scope for request-facing list/recent helpers.
 
-    Background/migration jobs have no tenant context and are intentionally left
-    to their explicit administrative scope. Authenticated request tasks always
-    carry a context, so accidental reuse of a foreign thread id cannot mutate
-    the row even when the same uid exists in two tenants.
+    Existing call sites do not need to thread a second identity parameter:
+    authenticated requests inherit the context set by ``get_current_user``.
+    Tests/background callers may still pass an explicit tenant id.
     """
+    tenant_id = normalize_tenant_id(explicit or get_current_tenant_id())
+    if not tenant_id:
+        raise ValueError("tenant_id is required for tenant-aware session reads")
+    return tenant_id
+
+
+def _assert_current_tenant(idx: ChatSessionIndex) -> None:
     current = normalize_tenant_id(get_current_tenant_id())
     if current and not session_in_tenant(idx, current):
         raise PermissionError("chat session belongs to another tenant")
@@ -119,12 +118,7 @@ def create_session_index(
     owner_domain: str = "",
     provisional: bool = False,
 ) -> ChatSessionIndex:
-    """Persist a new tenant-scoped ChatSessionIndex row.
-
-    ``tenant_id`` defaults to the trusted authenticated request context. This
-    keeps deep call sites provider-neutral while still requiring background
-    writers to supply an explicit scope.
-    """
+    """Persist a new tenant-scoped ChatSessionIndex row."""
     stable_tenant_id = _write_tenant_id(tenant_id)
 
     existing = get_session_index(session_id)
@@ -153,11 +147,7 @@ def clear_provisional(session_id: str, not_after: datetime | None = None) -> Non
     stamp = _utcnow()
     if not_after is not None and not_after < stamp:
         stamp = not_after
-    update_document(
-        _COLLECTION,
-        session_id,
-        {"provisional": False, "firstMessageAt": stamp.isoformat()},
-    )
+    update_document(_COLLECTION, session_id, {"provisional": False, "firstMessageAt": stamp.isoformat()})
 
 
 def save_session_index(idx: ChatSessionIndex) -> None:
@@ -196,7 +186,7 @@ def soft_delete_session(session_id: str) -> None:
 
 
 def get_session_index(session_id: str) -> ChatSessionIndex | None:
-    """Raw internal read. Request handlers must enforce the tenant boundary."""
+    """Raw internal read. Request handlers must still apply AccessContext ACLs."""
     data = get_document(_COLLECTION, session_id)
     if data is None:
         return None
@@ -234,13 +224,9 @@ def list_sessions_for_document(
     page_size: int = 20,
     cursor: str | None = None,
 ) -> tuple[list[ChatSessionIndex], str | None]:
-    """List visible, same-tenant, non-archived sessions for one document."""
     rows = query_documents(
         _COLLECTION,
-        filters=[
-            ("documentIds", "array_contains", doc_id),
-            ("archivedAt", "==", None),
-        ],
+        filters=[("documentIds", "array_contains", doc_id), ("archivedAt", "==", None)],
         order_by="lastMessageAt",
         order_direction="DESCENDING",
         start_after_id=cursor,
@@ -266,23 +252,20 @@ def list_sessions_for_document(
         if len(results) >= page_size:
             break
 
-    next_cursor = last_id if len(results) == page_size else None
-    return results, next_cursor
+    return results, (last_id if len(results) == page_size else None)
 
 
 def list_sessions_for_skill(
     skill_id: str | None,
     owner_uid: str,
     *,
-    tenant_id: str,
+    tenant_id: str | None = None,
     page_size: int = 20,
     cursor: str | None = None,
 ) -> tuple[list[ChatSessionIndex], str | None]:
     """List one user's same-tenant, non-archived sessions, newest first."""
-    filters: list[tuple[str, str, object]] = [
-        ("ownerUid", "==", owner_uid),
-        ("archivedAt", "==", None),
-    ]
+    stable_tenant_id = _read_tenant_id(tenant_id)
+    filters: list[tuple[str, str, object]] = [("ownerUid", "==", owner_uid), ("archivedAt", "==", None)]
     if skill_id is not None:
         filters.insert(0, ("skillId", "==", skill_id))
 
@@ -298,7 +281,7 @@ def list_sessions_for_skill(
     results: list[ChatSessionIndex] = []
     last_id: str | None = None
     for row_id, idx in _hydrate_rows(rows):
-        if not session_in_tenant(idx, tenant_id):
+        if not session_in_tenant(idx, stable_tenant_id):
             continue
         if idx.provisional:
             last_id = row_id
@@ -308,17 +291,16 @@ def list_sessions_for_skill(
         if len(results) >= page_size:
             break
 
-    next_cursor = last_id if len(results) == page_size else None
-    return results, next_cursor
+    return results, (last_id if len(results) == page_size else None)
 
 
 def most_recent_session_for_user(
     owner_uid: str,
     *,
-    tenant_id: str,
+    tenant_id: str | None = None,
     limit: int = 10,
 ) -> list[ChatSessionIndex]:
-    """Return a user's most-recent same-tenant, non-archived sessions."""
+    stable_tenant_id = _read_tenant_id(tenant_id)
     rows = query_documents(
         _COLLECTION,
         filters=[("ownerUid", "==", owner_uid), ("archivedAt", "==", None)],
@@ -328,7 +310,7 @@ def most_recent_session_for_user(
     )
     out: list[ChatSessionIndex] = []
     for _, idx in _hydrate_rows(rows):
-        if not session_in_tenant(idx, tenant_id):
+        if not session_in_tenant(idx, stable_tenant_id):
             continue
         if idx.provisional:
             continue
@@ -358,6 +340,16 @@ def _from_document(data: dict, doc_id: str) -> ChatSessionIndex:
     clean = {key: value for key, value in data.items() if key != "__id"}
     if "sessionId" not in clean:
         clean = {**clean, "sessionId": doc_id}
+
+    # Migration bridge: hydrate a stable tenant id only from an explicit domain
+    # mapping/legacy client record. Unknown ownerDomain stays empty and the
+    # tenant-aware AccessContext denies the resource.
+    if not str(clean.get("tenantId") or "").strip():
+        legacy_domain = str(clean.get("ownerDomain") or "").strip()
+        mapped = tenant_id_for_domain(legacy_domain) if legacy_domain else None
+        if mapped:
+            clean = {**clean, "tenantId": mapped}
+
     return ChatSessionIndex.model_validate(clean)
 
 
