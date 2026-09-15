@@ -45,7 +45,13 @@ def test_delete_removes_binary_then_metadata() -> None:
     storage.delete.assert_called_once_with("example.com", DOC["storagePath"])
     delete_record.assert_called_once_with("parsed_documents", "doc1")
     assert mark.call_args_list[0].args[2]["deletionStatus"] == "deleting"
-    counts.assert_called_once_with("user_a", "f1", doc_delta=-1, parsed_delta=-1)
+    counts.assert_called_once_with(
+        "user_a",
+        "f1",
+        doc_delta=-1,
+        parsed_delta=-1,
+        tenant_id="example.com",
+    )
 
 
 def test_delete_storage_failure_preserves_metadata() -> None:
