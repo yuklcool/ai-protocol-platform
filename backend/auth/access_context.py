@@ -1,9 +1,12 @@
 """Request-scoped access context + pure-Python 5-type access evaluator.
 
-`AccessContext` is built **once per request** in `get_current_user` (see
-`auth/firebase_auth.py`) and stored on `request.state.access`. Route
-handlers — and later the agent's tool_context — then check access against
-in-memory state; no Firestore reads on the hot path.
+`AccessContext` is built **once per request** in `get_current_user` and stored
+on `request.state.access`. Route handlers — and later the agent's tool_context —
+then check access against in-memory state; no persistence reads on the hot path.
+
+Tenant identity is separate from email-domain identity. ``tenant_id`` is the
+stable scope key used by tenant-aware persistence. ``domain`` is retained for
+legacy domain access rules and email-domain mapping during migration.
 
 Evaluator rules (from resource-access-control.md:169):
 
@@ -30,7 +33,7 @@ from auth.admin_roles import is_skill_admin as _is_skill_admin_tags
 from auth.admin_roles import is_tenant_admin as _is_tenant_admin_tags
 
 if TYPE_CHECKING:
-    from auth.firebase_auth import User
+    from auth.models import User
     from db.models.access import AccessControl
 
 # Legacy skill-admin tag, retained for back-compat. The canonical set of tags
@@ -49,16 +52,18 @@ class _HasAccess(Protocol):
 
 @dataclass(frozen=True)
 class AccessContext:
-    """Immutable per-request access snapshot derived from a verified Firebase JWT.
+    """Immutable per-request access snapshot derived from a verified identity.
 
-    Held on `request.state.access` after `get_current_user` completes. All
-    downstream access checks read from this; none re-read the JWT or
-    Firestore.
+    ``tenant_id`` is the stable tenant scope. For legacy identities that do not
+    yet carry one, :func:`build_access_context` falls back to ``domain``. New
+    authorization and persistence code should use ``tenant_id``; ``domain``
+    remains available for legacy access-control rules.
     """
 
     uid: str
     email: str = ""
     domain: str = ""
+    tenant_id: str = ""
     group_tags: frozenset[str] = field(default_factory=frozenset)
 
     # --- Resource checks (generic) -----------------------------------------
@@ -86,9 +91,7 @@ class AccessContext:
 
         Owner OR a holder of a skill-admin tag (`one-admin` OR the platform
         `aitana-admin`). The tag lets ONE's admin team — and platform admins —
-        manage skills they don't personally own, without granting ownership
-        (is_skill_owner stays strict). Delegates to `auth.admin_roles`
-        (v6.9.0 unified role model; v6.6.0 ONE-FORK-CONVERGENCE).
+        manage skills they don't personally own, without granting ownership.
         """
         return self.is_skill_owner(skill) or _is_skill_admin_tags(self.group_tags)
 
@@ -97,14 +100,17 @@ class AccessContext:
         """True iff the user is a platform super-admin (`aitana-admin`)."""
         return _is_platform_admin_tags(self.group_tags)
 
-    def is_tenant_admin(self, domain: str) -> bool:
-        """True iff the user may administer `domain` (platform admin, or a
-        `tenant-admin:{domain}` holder for exactly this domain)."""
-        return _is_tenant_admin_tags(self.group_tags, domain)
+    def is_tenant_admin(self, tenant_id: str | None = None) -> bool:
+        """True iff the user may administer ``tenant_id``.
+
+        When omitted, the caller's own stable tenant scope is used. The legacy
+        domain-based tag shape remains compatible because migrated identities
+        default ``tenant_id`` to ``domain`` until an explicit tenant id exists.
+        """
+        scope = (tenant_id if tenant_id is not None else self.tenant_id).strip()
+        return _is_tenant_admin_tags(self.group_tags, scope)
 
     # --- Folder-specific shim ---------------------------------------------
-    # Folders carry `effective_access` (pre-computed at write time) rather
-    # than `access_control`, so the generic `_HasAccess` protocol doesn't fit.
 
     def can_access_folder(self, folder: object) -> bool:
         """Apply the 5-type evaluator to a folder's pre-computed effectiveAccess."""
@@ -116,20 +122,24 @@ class AccessContext:
 
 
 def build_access_context(user: User) -> AccessContext:
-    """Construct `AccessContext` from a verified `User`. Called once per request."""
+    """Construct `AccessContext` from a verified `User`. Called once per request.
+
+    Domain fallback is the compatibility bridge for existing installations.
+    Once an identity provider or migrated account supplies ``tenant_id``, that
+    stable id wins and domain is no longer the tenant primary key.
+    """
+    tenant_id = (user.tenant_id or user.domain).strip()
     return AccessContext(
         uid=user.uid,
         email=user.email,
         domain=user.domain,
+        tenant_id=tenant_id,
         group_tags=user.group_tags,
     )
 
 
 def can_access(ac: AccessControl, ctx: AccessContext, owner_id: str) -> bool:
-    """Pure 5-type evaluator — no I/O, no Firestore reads, no JWT lookups.
-
-    See resource-access-control.md for the canonical rule table.
-    """
+    """Pure 5-type evaluator — no I/O, no Firestore reads, no JWT lookups."""
     if ac.type == "public":
         return True
     if owner_id and owner_id == ctx.uid:  # owner always wins
