@@ -1,6 +1,6 @@
-"""Gate for tests/integration/: skip cleanly unless live GCP is armed.
+"""Gate cloud integrations separately from PostgreSQL self-host integrations.
 
-Integration tests here require real GCP credentials AND the root
+Cloud integration tests here require real GCP credentials AND the root
 conftest's session-wide ``google.auth.default()`` stub to be disarmed
 (both controlled by ``RUN_LIVE_GCP=1``). Without this gate, any pytest
 invocation whose marker filter included them (e.g. ``-m "not slow"``)

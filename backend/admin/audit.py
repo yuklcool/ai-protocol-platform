@@ -70,7 +70,9 @@ def list_admin_actions(
     filters = None if domains is None else [("tenantId", "in", sorted(domains))]
 
     try:
-        raw = query_documents(_COLLECTION, filters=filters, order_by="ts", order_direction="DESCENDING", limit=None)
+        raw = query_documents(
+            _COLLECTION, filters=filters, order_by="ts", order_direction="DESCENDING", limit=None
+        )
     except Exception as exc:
         logger.error("admin_audit read FAILED: %s", exc)
         return [], 0

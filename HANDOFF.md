@@ -341,7 +341,8 @@ PR #18 后续 CI 修复与审计（2026-09-15）：
 - 提交 9cd3102 的 no-GCP Run 34933795839 已通过，Chat/Skill/Session/Memory/A2UI
   阶段 **40 passed、无跳过**；Tenant gate 与 Core runtime persistence 也通过。
 - baseline 随后暴露 demo seed 仍假设 LOCAL_MODE 默认开启：仅 seed 命令显式开启
-  LOCAL_MODE，并为 PostgreSQL Folder integration 补充稳定 tenantId；等待远端重验。
+  LOCAL_MODE，并为 PostgreSQL Folder integration、Artifact 重建探针补充稳定 tenantId；
+  等待远端重验。
 - 审计及扩展 Tenant gate 本地 **378 passed, 2 skipped**，包含额外 admin user/config
   回归；这些结果使用 memory 后端。新增审计代码尚待远端 CI。
 
