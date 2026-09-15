@@ -130,13 +130,23 @@ def test_tenant_directory_supports_multiple_domains_for_one_stable_tenant() -> N
     assert directory.get_by_domain("acme.com").tenant_id == "tenant-acme"
 
 
-def test_tenant_directory_rejects_domain_collision_between_tenants() -> None:
+def test_tenant_directory_rejects_domain_collision_before_any_tenant_write() -> None:
     base = MemoryRepository()
     directory = TenantDirectory(base)
     directory.put(TenantConfig(tenantId="tenant-a", domains=["shared.example"]))
 
     with pytest.raises(ValueError, match="already mapped"):
-        directory.put(TenantConfig(tenantId="tenant-b", domains=["shared.example"]))
+        directory.put(
+            TenantConfig(
+                tenantId="tenant-b",
+                displayName="Must not be partially persisted",
+                domains=["free.example", "shared.example"],
+            )
+        )
+
+    assert base.get_document("tenants", "tenant-b") is None
+    assert base.get_document("tenant_domains", "free.example") is None
+    assert base.get_document("tenant_domains", "shared.example")["tenantId"] == "tenant-a"
 
 
 def test_tenant_directory_reads_legacy_clients_domain_without_migration() -> None:
