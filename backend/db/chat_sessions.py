@@ -26,6 +26,7 @@ from db.persistence import (
     update_document,
 )
 from db.tenants import normalize_tenant_id, tenant_id_for_domain
+from observability.tenant_context import get_current_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +43,7 @@ def _utcnow() -> datetime:
 
 
 def resolved_session_tenant_id(idx: ChatSessionIndex) -> str:
-    """Return a row's stable tenant id, resolving legacy domain rows safely.
-
-    New rows always carry ``tenantId``. Historical rows may only cross the
-    migration bridge when ``ownerDomain`` is registered in ``tenant_domains``
-    (or has a legacy clients record). Unknown domains resolve to an empty string
-    and are denied by every tenant-aware reader.
-    """
+    """Return a row's stable tenant id, resolving legacy domain rows safely."""
     explicit = normalize_tenant_id(idx.tenant_id)
     if explicit:
         return explicit
@@ -69,13 +64,45 @@ def session_tenant_allowed(idx: ChatSessionIndex, viewer_ctx: AccessContext) -> 
     return session_in_tenant(idx, viewer_ctx.tenant_id)
 
 
+def _write_tenant_id(explicit: str | None = None) -> str:
+    """Resolve the trusted tenant for a session write.
+
+    Request paths normally omit ``explicit`` and inherit the tenant bound by
+    ``get_current_user``. Migration/background jobs have no request context and
+    must pass a tenant explicitly. No domain guessing happens here.
+    """
+    tenant_id = normalize_tenant_id(explicit or get_current_tenant_id())
+    if not tenant_id:
+        raise ValueError("tenant_id is required for chat-session writes")
+    return tenant_id
+
+
+def _assert_current_tenant(idx: ChatSessionIndex) -> None:
+    """Reject a request-scoped mutation when SESSION belongs to another tenant.
+
+    Background/migration jobs have no tenant context and are intentionally left
+    to their explicit administrative scope. Authenticated request tasks always
+    carry a context, so accidental reuse of a foreign thread id cannot mutate
+    the row even when the same uid exists in two tenants.
+    """
+    current = normalize_tenant_id(get_current_tenant_id())
+    if current and not session_in_tenant(idx, current):
+        raise PermissionError("chat session belongs to another tenant")
+
+
+def _assert_mutation_scope(session_id: str) -> ChatSessionIndex | None:
+    idx = get_session_index(session_id)
+    if idx is not None:
+        _assert_current_tenant(idx)
+    return idx
+
+
 # ---------------------------------------------------------------------------
 # Write helpers
 # ---------------------------------------------------------------------------
 
 
 def owner_domain_of(email: str | None) -> str:
-    """Email -> lower-cased domain retained only as a migration/access hint."""
     email = (email or "").strip().lower()
     return email.rsplit("@", 1)[-1] if "@" in email else ""
 
@@ -85,8 +112,8 @@ def create_session_index(
     session_id: str,
     skill_id: str,
     owner_uid: str,
-    tenant_id: str,
     access_control: AccessControl,
+    tenant_id: str | None = None,
     document_ids: list[str] | None = None,
     first_message_at: datetime | None = None,
     owner_domain: str = "",
@@ -94,13 +121,15 @@ def create_session_index(
 ) -> ChatSessionIndex:
     """Persist a new tenant-scoped ChatSessionIndex row.
 
-    New writes fail closed when the authenticated identity has no stable tenant
-    scope. This prevents creating unattributable rows that later become visible
-    through owner/domain ACL shortcuts.
+    ``tenant_id`` defaults to the trusted authenticated request context. This
+    keeps deep call sites provider-neutral while still requiring background
+    writers to supply an explicit scope.
     """
-    stable_tenant_id = normalize_tenant_id(tenant_id)
-    if not stable_tenant_id:
-        raise ValueError("tenant_id is required for new chat sessions")
+    stable_tenant_id = _write_tenant_id(tenant_id)
+
+    existing = get_session_index(session_id)
+    if existing is not None and not session_in_tenant(existing, stable_tenant_id):
+        raise PermissionError("refusing to overwrite a chat session from another tenant")
 
     now = first_message_at or _utcnow()
     idx = ChatSessionIndex(
@@ -120,6 +149,7 @@ def create_session_index(
 
 
 def clear_provisional(session_id: str, not_after: datetime | None = None) -> None:
+    _assert_mutation_scope(session_id)
     stamp = _utcnow()
     if not_after is not None and not_after < stamp:
         stamp = not_after
@@ -131,14 +161,17 @@ def clear_provisional(session_id: str, not_after: datetime | None = None) -> Non
 
 
 def save_session_index(idx: ChatSessionIndex) -> None:
+    _assert_current_tenant(idx)
     set_document(_COLLECTION, idx.session_id, _to_document(idx))
 
 
 def update_session_fields(session_id: str, fields: dict) -> None:
+    _assert_mutation_scope(session_id)
     update_document(_COLLECTION, session_id, fields)
 
 
 def set_session_skill(session_id: str, new_skill_id: str, prev_skill_id: str | None = None) -> None:
+    _assert_mutation_scope(session_id)
     history = [skill for skill in (prev_skill_id, new_skill_id) if skill]
     if history:
         array_union_field(_COLLECTION, session_id, "skillHistory", history)
@@ -148,10 +181,12 @@ def set_session_skill(session_id: str, new_skill_id: str, prev_skill_id: str | N
 def add_session_documents(session_id: str, doc_ids: list[str]) -> None:
     if not doc_ids:
         return
+    _assert_mutation_scope(session_id)
     array_union_field(_COLLECTION, session_id, "documentIds", list(doc_ids))
 
 
 def soft_delete_session(session_id: str) -> None:
+    _assert_mutation_scope(session_id)
     update_document(_COLLECTION, session_id, {"archivedAt": _utcnow().isoformat()})
 
 
@@ -161,12 +196,7 @@ def soft_delete_session(session_id: str) -> None:
 
 
 def get_session_index(session_id: str) -> ChatSessionIndex | None:
-    """Raw internal read.
-
-    Request handlers MUST pair this with :func:`session_tenant_allowed` (or use
-    a tenant-aware wrapper) before applying sharing ACLs. Internal mutation
-    helpers keep this raw form for migration/reconciliation jobs.
-    """
+    """Raw internal read. Request handlers must enforce the tenant boundary."""
     data = get_document(_COLLECTION, session_id)
     if data is None:
         return None
@@ -214,8 +244,6 @@ def list_sessions_for_document(
         order_by="lastMessageAt",
         order_direction="DESCENDING",
         start_after_id=cursor,
-        # Tenant filtering may discard rows after the backend query, including
-        # legacy rows, so over-fetch just as ACL filtering already does.
         limit=page_size * 4,
     )
 
@@ -264,8 +292,6 @@ def list_sessions_for_skill(
         order_by="lastMessageAt",
         order_direction="DESCENDING",
         start_after_id=cursor,
-        # Same uid can legitimately exist in several tenants (OIDC federation,
-        # service identities), so filter after hydration for legacy support.
         limit=(page_size * 4) + 1,
     )
 
