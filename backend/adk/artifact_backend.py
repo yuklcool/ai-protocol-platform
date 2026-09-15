@@ -4,6 +4,10 @@ This module keeps artifact policy separate from Session/Memory policy. Local
 self-hosting reuses the persistent ``/data`` volume through ADK's own
 ``FileArtifactService``; GCS is loaded only when explicitly selected; memory
 stays available for tests and source-only development.
+
+Every concrete backend is wrapped by ``TenantScopedArtifactService`` so ADK's
+native ``app_name / user_id / session_id / filename`` keyspace gains a stable
+platform tenant boundary without changing Session/Memory user ids.
 """
 
 from __future__ import annotations
@@ -14,6 +18,8 @@ from pathlib import Path
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.artifacts.base_artifact_service import BaseArtifactService
 from google.adk.artifacts.file_artifact_service import FileArtifactService
+
+from adk.tenant_artifact_service import TenantScopedArtifactService
 
 ArtifactService = BaseArtifactService
 
@@ -59,18 +65,10 @@ def _gcs_bucket() -> str:
     return bucket
 
 
-def get_artifact_service() -> ArtifactService:
-    """Return a process singleton for the selected artifact backend."""
-    global _service_singleton, _service_signature
-    backend = artifact_backend_name()
-    config = _local_root() if backend == "local" else _gcs_bucket() if backend == "gcs" else "memory"
-    signature = (backend, config)
-    if _service_singleton is not None and _service_signature == signature:
-        return _service_singleton
-
+def _build_delegate(backend: str, config: str) -> BaseArtifactService:
     if backend == "local":
-        _service_singleton = FileArtifactService(root_dir=config)
-    elif backend == "gcs":
+        return FileArtifactService(root_dir=config)
+    if backend == "gcs":
         # Keep the GCP adapter out of the default Self-host import graph. This
         # also makes a missing optional GCS dependency fail at the capability
         # boundary rather than while importing the platform.
@@ -81,15 +79,37 @@ def get_artifact_service() -> ArtifactService:
                 "ARTIFACT_BACKEND=gcs requires the Google/GCS artifact adapter; "
                 "install the cloud extras or switch to ARTIFACT_BACKEND=local"
             ) from exc
-        _service_singleton = GcsArtifactService(bucket_name=config)
-    else:
-        _service_singleton = InMemoryArtifactService()
+        return GcsArtifactService(bucket_name=config)
+    return InMemoryArtifactService()
+
+
+def get_artifact_service() -> ArtifactService:
+    """Return the tenant-scoped process singleton for the selected backend.
+
+    The wrapper resolves tenant context per operation, so one process singleton
+    safely serves many tenants. A missing authenticated tenant fails closed at
+    the artifact boundary instead of silently falling into a shared namespace.
+    """
+    global _service_singleton, _service_signature
+    backend = artifact_backend_name()
+    config = _local_root() if backend == "local" else _gcs_bucket() if backend == "gcs" else "memory"
+    signature = (backend, config)
+    if _service_singleton is not None and _service_signature == signature:
+        return _service_singleton
+
+    delegate = _build_delegate(backend, config)
+    _service_singleton = TenantScopedArtifactService(delegate)
     _service_signature = signature
     return _service_singleton
 
 
 def get_artifact_service_uri() -> str | None:
-    """Return the URI understood by ADK's FastAPI service registry."""
+    """Return the URI understood by ADK's FastAPI service registry.
+
+    The URI describes the physical backend only. Runtime artifact access still
+    goes through ``get_artifact_service()`` so tenant namespacing cannot be
+    bypassed by callers using the platform's configured service instance.
+    """
     backend = artifact_backend_name()
     if backend == "local":
         return Path(_local_root()).expanduser().resolve().as_uri()
