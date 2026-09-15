@@ -22,6 +22,18 @@ class LocalTokenResponse(BaseModel):
     user: dict
 
 
+def _user_payload(user: User) -> dict:
+    """Provider-neutral identity payload returned to authenticated clients."""
+    return {
+        "uid": user.uid,
+        "email": user.email,
+        "domain": user.domain,
+        "tenantId": user.tenant_id or user.domain,
+        "groupTags": sorted(user.group_tags),
+        "authMode": user.auth_mode,
+    }
+
+
 @router.post("/login", response_model=LocalTokenResponse)
 def local_login(payload: LocalLoginRequest) -> LocalTokenResponse:
     """Authenticate an account from the built-in self-host identity store."""
@@ -38,22 +50,10 @@ def local_login(payload: LocalLoginRequest) -> LocalTokenResponse:
     return LocalTokenResponse(
         access_token=token,
         expires_in=expires_in,
-        user={
-            "uid": user.uid,
-            "email": user.email,
-            "domain": user.domain,
-            "groupTags": sorted(user.group_tags),
-            "authMode": user.auth_mode,
-        },
+        user=_user_payload(user),
     )
 
 
 @router.get("/whoami")
 def whoami(user: User = Depends(get_current_user)) -> dict:  # noqa: B008
-    return {
-        "uid": user.uid,
-        "email": user.email,
-        "domain": user.domain,
-        "groupTags": sorted(user.group_tags),
-        "authMode": user.auth_mode,
-    }
+    return _user_payload(user)
