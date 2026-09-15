@@ -98,13 +98,20 @@ ParseStatus = Literal["pending", "parsing", "parsed", "failed"]
 
 
 class ParsedDocument(BaseModel):
-    """Firestore document shape for `parsed_documents/{docId}`.
+    """Repository document shape for ``parsed_documents/{docId}``.
 
-    Mirrors the schema at docs/design/v6.0.0/document-ui.md:291-336
-    extended with file-browser fields (folderId, parseStatus, stats).
+    ``tenant_id`` is the stable Phase-3 authorization/storage boundary.  Legacy
+    rows created before first-class tenants keep the empty default and are
+    therefore unattributable until an explicit migration/hydration step assigns
+    them; request-time authorization must never infer a stable tenant merely
+    from an email domain.
+
+    Mirrors the schema at docs/design/v6.0.0/document-ui.md:291-336 extended
+    with file-browser fields (folderId, parseStatus, stats).
     """
 
-    # --- Ownership / source ---
+    # --- Stable tenant / ownership / source ---
+    tenant_id: str = Field(default="", alias="tenantId")
     skill_id: str = Field(alias="skillId")
     user_id: str = Field(alias="userId")
     source_url: str = Field(alias="sourceUrl")
