@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from admin.audit import record_admin_action
 from admin.scope import Scope
 from db.persistence import delete_document, get_document, query_documents, set_document
+from tools.mcp.diagnostics import McpDiagnosticError, check_mcp_server, discover_mcp_server
 from tools.mcp.registry import clear_registry_cache
 from tools.mcp.tenant_scope import PLATFORM_SCOPE, TENANT_SCOPE, normalize_mcp_scope
 
@@ -49,6 +50,21 @@ class McpServerView(BaseModel):
     description: str = ""
     header_names: list[str] = []
     has_credentials: bool = False
+
+
+class McpHealthView(BaseModel):
+    ok: bool
+    category: str | None = None
+    message: str | None = None
+    server: dict[str, Any] | None = None
+
+
+class McpDiscoveryView(McpHealthView):
+    tools: list[dict[str, Any]] = []
+    resources: list[dict[str, Any]] = []
+    prompts: list[dict[str, Any]] = []
+    warnings: list[dict[str, str]] = []
+    mcp_apps: dict[str, Any] = Field(default_factory=lambda: {"supported": False, "resourceUris": []})
 
 
 def _validate_server_id(server_id: str) -> str:
@@ -119,6 +135,15 @@ def _assert_may_mutate(scope: Scope, data: dict[str, Any]) -> None:
     scope.assert_platform()
 
 
+def _visible_config(server_id: str, scope: Scope) -> tuple[str, dict[str, Any]]:
+    server_id = _validate_server_id(server_id)
+    data = get_document(_COLLECTION, server_id)
+    if data is None or not _may_read(scope, data):
+        # Do not disclose existence of another tenant's private endpoint.
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    return server_id, data
+
+
 @router.get("", response_model=list[McpServerView])
 def list_mcp_servers(scope: Scope) -> list[McpServerView]:
     result: list[McpServerView] = []
@@ -134,14 +159,38 @@ def list_mcp_servers(scope: Scope) -> list[McpServerView]:
 
 @router.get("/{server_id}", response_model=McpServerView)
 def get_mcp_server(server_id: str, scope: Scope) -> McpServerView:
-    server_id = _validate_server_id(server_id)
-    data = get_document(_COLLECTION, server_id)
-    if data is None:
-        raise HTTPException(status_code=404, detail="MCP server not found")
-    if not _may_read(scope, data):
-        # Do not disclose existence of another tenant's private endpoint.
-        raise HTTPException(status_code=404, detail="MCP server not found")
+    server_id, data = _visible_config(server_id, scope)
     return _to_view(server_id, data)
+
+
+@router.post("/{server_id}/health", response_model=McpHealthView)
+async def health_mcp_server(server_id: str, scope: Scope) -> McpHealthView:
+    """Run a real MCP initialize handshake against one visible server."""
+    server_id, data = _visible_config(server_id, scope)
+    try:
+        result = await check_mcp_server(server_id, data)
+    except McpDiagnosticError as exc:
+        return McpHealthView(ok=False, category=exc.category, message=exc.message)
+    return McpHealthView(ok=True, server=result.get("server"))
+
+
+@router.post("/{server_id}/discover", response_model=McpDiscoveryView)
+async def discover_mcp_server_capabilities(server_id: str, scope: Scope) -> McpDiscoveryView:
+    """Discover tools/resources/prompts and summarize MCP Apps UI resources."""
+    server_id, data = _visible_config(server_id, scope)
+    try:
+        result = await discover_mcp_server(server_id, data)
+    except McpDiagnosticError as exc:
+        return McpDiscoveryView(ok=False, category=exc.category, message=exc.message)
+    return McpDiscoveryView(
+        ok=True,
+        server=result.get("server"),
+        tools=result.get("tools") or [],
+        resources=result.get("resources") or [],
+        prompts=result.get("prompts") or [],
+        warnings=result.get("warnings") or [],
+        mcp_apps=result.get("mcpApps") or {"supported": False, "resourceUris": []},
+    )
 
 
 @router.put("/{server_id}", response_model=McpServerView)
