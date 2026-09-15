@@ -11,6 +11,7 @@ on:
       - backend/auth/admin_roles.py
       - backend/auth/routes.py
       - backend/admin/scope.py
+      - backend/admin/tenants.py
       - backend/db/tenant_repository.py
       - backend/db/tenants.py
       - backend/db/clients.py
@@ -20,6 +21,8 @@ on:
       - backend/tests/unit/test_access_context.py
       - backend/tests/unit/test_admin_scope.py
       - backend/tests/persistence_tests/test_tenant_repository.py
+      - backend/tests/api_tests/test_admin_tenants.py
+      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - .github/workflows/tenant-isolation.yml
   pull_request:
     paths:
@@ -30,6 +33,7 @@ on:
       - backend/auth/admin_roles.py
       - backend/auth/routes.py
       - backend/admin/scope.py
+      - backend/admin/tenants.py
       - backend/db/tenant_repository.py
       - backend/db/tenants.py
       - backend/db/clients.py
@@ -39,6 +43,8 @@ on:
       - backend/tests/unit/test_access_context.py
       - backend/tests/unit/test_admin_scope.py
       - backend/tests/persistence_tests/test_tenant_repository.py
+      - backend/tests/api_tests/test_admin_tenants.py
+      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - .github/workflows/tenant-isolation.yml
 
 jobs:
@@ -57,16 +63,20 @@ jobs:
       - name: Build backend
         run: docker compose build backend
 
-      - name: Verify tenant identity directory migration admin scope and fail-closed repository
+      - name: Verify tenant identity lifecycle admin scope and fail-closed repository
         run: |
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=memory \
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
+            -e ARTIFACT_BACKEND=local \
+            -e OBJECT_STORAGE_BACKEND=local \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
             tests/unit/test_tenant_identity.py \
             tests/unit/test_tenant_migration.py \
             tests/unit/test_access_context.py \
             tests/unit/test_admin_scope.py \
-            tests/persistence_tests/test_tenant_repository.py
+            tests/persistence_tests/test_tenant_repository.py \
+            tests/api_tests/test_admin_tenants.py \
+            tests/api_tests/test_admin_cross_tenant_matrix.py
