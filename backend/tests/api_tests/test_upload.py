@@ -127,8 +127,8 @@ class TestUploadStorage:
         monkeypatch.setenv("OBJECT_STORAGE_LOCAL_ROOT", str(tmp_path / "objects"))
         calls = []
 
-        def capture_ensure(uid: str) -> str:
-            calls.append(uid)
+        def capture_ensure(uid: str, *, tenant_id: str | None = None) -> str:
+            calls.append((uid, tenant_id))
             return "auto-folder"
 
         with (
@@ -141,7 +141,7 @@ class TestUploadStorage:
             resp = client.post("/api/documents/upload", files=_file())
 
         assert resp.status_code == 200
-        assert calls == ["user1"]
+        assert calls == [("user1", "example.com")]
 
     def test_large_payload_reaches_storage_without_upload_route_reading_bytes(self, client: TestClient, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
