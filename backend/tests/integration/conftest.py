@@ -20,6 +20,10 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _require_live_gcp(request):
+    # PostgreSQL self-host tests need DATABASE_URL, not live cloud credentials.
+    # Each module checks its own database prerequisites.
+    if request.node.path.name.startswith("test_postgres_"):
+        return
     if os.environ.get("RUN_LIVE_GCP") == "1":
         return
     pytest.skip("live GCP disabled (set RUN_LIVE_GCP=1 to run integration tests)")

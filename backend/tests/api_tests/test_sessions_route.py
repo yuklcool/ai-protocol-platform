@@ -49,6 +49,7 @@ def _make_session(
 ) -> ChatSessionIndex:
     return ChatSessionIndex(
         sessionId=session_id,
+        tenantId="test-tenant",
         documentIds=[doc_id] if doc_id else [],
         skillId="skill-1",
         ownerUid=owner_uid,
@@ -61,8 +62,8 @@ def _make_session(
 
 def _inject_user(uid: str, tags: frozenset[str] = frozenset()) -> None:
     """Override get_current_user + request.state.access for a given uid."""
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
-    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
+    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com", tenant_id="test-tenant")
+    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags, tenant_id="test-tenant")
 
     from auth import firebase_auth
 
@@ -88,8 +89,8 @@ from auth import get_current_user  # noqa: E402
 
 
 def _make_client(uid: str, tags: frozenset[str] = frozenset()) -> TestClient:
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
-    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
+    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com", tenant_id="test-tenant")
+    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags, tenant_id="test-tenant")
 
     test_app = FastAPI()
     test_app.include_router(router)
@@ -331,8 +332,8 @@ class TestGetSessionMessages:
         # Build a TestClient that doesn't re-raise so we see the 500 the
         # real frontend sees in dev (which then triggers the
         # "Couldn't load previous messages" banner).
-        user = User(uid="firebase-uid-abc", email="x@example.com", domain="example.com")
-        ctx = AccessContext(uid="firebase-uid-abc", email=user.email, domain=user.domain, group_tags=frozenset())
+        user = User(uid="firebase-uid-abc", email="x@example.com", domain="example.com", tenant_id="test-tenant")
+        ctx = AccessContext(uid="firebase-uid-abc", email=user.email, domain=user.domain, group_tags=frozenset(), tenant_id="test-tenant")
         test_app = FastAPI()
         test_app.include_router(router)
 
@@ -693,3 +694,21 @@ class TestGetSessionActivityDelegations:
         assert len(body["delegations"]) == 1
         assert body["delegations"][0]["mode"] == "auto"
         assert body["session_start_ts"] == 1_700_000_000.0 * 1000
+
+
+class TestStableTenantBoundary:
+    @patch("protocols.sessions_route.get_session_index")
+    def test_same_owner_public_session_in_other_tenant_is_denied(self, mock_get):
+        session = _make_session(owner_uid="viewer", ac=AccessControl(type="public"))
+        session.tenant_id = "other-tenant"
+        mock_get.return_value = session
+        client = _make_client("viewer")
+        assert client.get("/api/sessions/sess-1").status_code == 403
+        assert client.get("/api/sessions/sess-1/messages").status_code == 403
+        assert client.get("/api/sessions/sess-1/activity").status_code == 403
+        with patch("protocols.sessions_route.update_session_fields") as update:
+            assert client.patch("/api/sessions/sess-1", json={"title": "Hijack"}).status_code == 403
+            update.assert_not_called()
+        with patch("protocols.sessions_route.soft_delete_session") as delete:
+            assert client.delete("/api/sessions/sess-1").status_code == 403
+            delete.assert_not_called()

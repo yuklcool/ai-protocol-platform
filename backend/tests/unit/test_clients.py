@@ -4,7 +4,21 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from auth.firebase_auth import User
+import pytest
+
+from auth import User
+
+
+@pytest.fixture(autouse=True)
+def isolated_client_store(monkeypatch):
+    """Keep both cache tiers isolated regardless of deployment backend."""
+    from db import clients
+    from db.repositories.memory import MemoryRepository
+
+    repository = MemoryRepository()
+    monkeypatch.setattr(clients, "get_document", repository.get_document)
+    monkeypatch.setattr(clients, "set_document", repository.set_document)
+    monkeypatch.setattr(clients, "delete_document", repository.delete_document)
 
 
 def _user(domain: str) -> User:
@@ -190,9 +204,8 @@ class TestGetClientSync:
 class TestClientConfigCache:
     """Durable two-tier cache in front of get_client_sync (v6.9.0 M4).
 
-    The autouse `_reset_client_config_cache` conftest fixture clears the module
-    tier between tests; the durable tier is stubbed empty per test by
-    `_stub_firestore_client`. So each test starts cold."""
+    The conftest fixture clears the module tier; isolated_client_store gives
+    each test a real, empty memory repository for the durable tier."""
 
     def test_cached_read_hits_source_once(self):
         from db import clients

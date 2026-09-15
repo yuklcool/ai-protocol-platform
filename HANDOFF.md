@@ -323,9 +323,21 @@ S3-compatible 已拆为 #16，可选，不阻塞默认架构，也不自动引�
 - MCP registry、Proxy 与 seed 回归加入 Tenant isolation gate；修正先前 registry
   回归对 ADK connection params 属性的错误断言。
 
-本轮本地验证：按更新后的 Tenant isolation gate 测试清单执行，**279 passed, 2 skipped**。
+MCP 改造本地验证：按更新后的 Tenant isolation gate 测试清单执行，**279 passed, 2 skipped**。
 使用 SELF_HOSTED_MODE=1 / LOCAL_MODE=0 / local-jwt，数据与 Session/Memory 为 memory
 测试后端；这不是本轮 Docker/PostgreSQL 或真实浏览器验收结果。
+
+PR #18 后续 CI 修复（2026-09-15，尚待新提交远端验收）：
+
+- 首轮远端 Tenant isolation / Core runtime persistence 已通过，但 Self-host baseline
+  与 no-GCP gate 失败；不能把本地 Tenant gate 通过等同于所有 CI 通过。
+- 修正 Session CRUD / Skill stream 的旧测试数据，显式提供稳定 tenantId；
+  增加相同 UID、public ACL 跨 tenant 仍拒绝的 API 回归。
+- Client cache 单测同时隔离模块缓存与持久化缓存，消除跨用例数据污染。
+- 上述针对性回归本地 **84 passed**（memory 后端）。
+- 发现 integration/conftest.py 误将 PostgreSQL 测试也按 GCP 门控跳过；
+  PostgreSQL 测试现仅依赖其 DATABASE_URL 前置条件，不需要 RUN_LIVE_GCP。
+  此前 no-GCP gate 中的 PostgreSQL/A2UI 测试不能仅据绿色状态认定实际执行。
 
 剩余工作（不得关闭 #9）：
 
