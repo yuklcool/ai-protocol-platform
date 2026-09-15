@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - backend/admin/model_providers_routes.py
+      - backend/admin/model_probe_routes.py
       - backend/admin/routes.py
       - backend/adk/agent.py
       - backend/config/model_provider_registry.py
@@ -11,6 +12,7 @@ on:
       - backend/config/runtime_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
+      - backend/tests/api_tests/test_admin_model_probe.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
@@ -21,6 +23,7 @@ on:
     branches: [main]
     paths:
       - backend/admin/model_providers_routes.py
+      - backend/admin/model_probe_routes.py
       - backend/admin/routes.py
       - backend/adk/agent.py
       - backend/config/model_provider_registry.py
@@ -28,6 +31,7 @@ on:
       - backend/config/runtime_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
+      - backend/tests/api_tests/test_admin_model_probe.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
@@ -59,6 +63,7 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/api_tests/test_admin_model_providers.py \
+              tests/api_tests/test_admin_model_probe.py \
               tests/api_tests/test_admin_cross_tenant_matrix.py \
               tests/unit/test_model_provider_registry.py \
               tests/unit/test_effective_models.py \
