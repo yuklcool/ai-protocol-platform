@@ -1,0 +1,58 @@
+name: Tenant isolation gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/auth/models.py
+      - backend/auth/access_context.py
+      - backend/auth/local_jwt.py
+      - backend/auth/firebase_auth.py
+      - backend/auth/admin_roles.py
+      - backend/db/tenant_repository.py
+      - backend/db/clients.py
+      - backend/tests/unit/test_tenant_identity.py
+      - backend/tests/unit/test_access_context.py
+      - backend/tests/persistence_tests/test_tenant_repository.py
+      - .github/workflows/tenant-isolation.yml
+  pull_request:
+    paths:
+      - backend/auth/models.py
+      - backend/auth/access_context.py
+      - backend/auth/local_jwt.py
+      - backend/auth/firebase_auth.py
+      - backend/auth/admin_roles.py
+      - backend/db/tenant_repository.py
+      - backend/db/clients.py
+      - backend/tests/unit/test_tenant_identity.py
+      - backend/tests/unit/test_access_context.py
+      - backend/tests/persistence_tests/test_tenant_repository.py
+      - .github/workflows/tenant-isolation.yml
+
+jobs:
+  tenant-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JWT_SIGNING_KEY: tenant-isolation-ci-signing-key-at-least-32-bytes
+      JWT_ISSUER: tenant-isolation-ci
+      JWT_AUDIENCE: tenant-isolation-ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Verify tenant identity and fail-closed repository
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+            tests/unit/test_tenant_identity.py \
+            tests/unit/test_access_context.py \
+            tests/persistence_tests/test_tenant_repository.py
