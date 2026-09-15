@@ -7,7 +7,9 @@ on:
       - backend/tools/mcp/**
       - backend/protocols/mcp_proxy.py
       - backend/tests/api_tests/test_admin_mcp_servers.py
+      - backend/tests/api_tests/test_admin_mcp_diagnostics.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
+      - backend/tests/unit/test_mcp_diagnostics.py
       - .github/workflows/mcp-admin-gate.yml
   push:
     branches: [main]
@@ -16,7 +18,9 @@ on:
       - backend/tools/mcp/**
       - backend/protocols/mcp_proxy.py
       - backend/tests/api_tests/test_admin_mcp_servers.py
+      - backend/tests/api_tests/test_admin_mcp_diagnostics.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
+      - backend/tests/unit/test_mcp_diagnostics.py
       - .github/workflows/mcp-admin-gate.yml
 
 jobs:
@@ -45,4 +49,6 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/api_tests/test_admin_mcp_servers.py \
-              tests/api_tests/test_admin_cross_tenant_matrix.py
+              tests/api_tests/test_admin_mcp_diagnostics.py \
+              tests/api_tests/test_admin_cross_tenant_matrix.py \
+              tests/unit/test_mcp_diagnostics.py
