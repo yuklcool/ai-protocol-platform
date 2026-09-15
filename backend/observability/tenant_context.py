@@ -24,6 +24,19 @@ _tenant_context: ContextVar[dict[str, str] | None] = ContextVar("tenant_context"
 TenantEnricher = Callable[[User], dict[str, str]]
 _registered_enrichers: list[TenantEnricher] = []
 
+# These fields are authorization/storage identity and must only come from the
+# already-verified User object. Observability enrichers and caller-supplied
+# ``extra`` metadata may add attributes, but may never rewrite this boundary.
+_RESERVED_IDENTITY_KEYS = frozenset(
+    {
+        "tenant.id",
+        "tenant.uid",
+        "tenant.auth_mode",
+        "tenant.group_id",
+        "tenant.uid_hash",
+    }
+)
+
 
 def register_tenant_enricher(fn: TenantEnricher) -> None:
     if not callable(fn):
@@ -35,28 +48,34 @@ def clear_tenant_enrichers() -> None:
     _registered_enrichers.clear()
 
 
+def _merge_untrusted_metadata(attrs: dict[str, str], values: dict[str, str] | None) -> None:
+    """Merge observability metadata without allowing identity-key override."""
+    if not values:
+        return
+    for key, value in values.items():
+        if key in _RESERVED_IDENTITY_KEYS:
+            logger.warning("tenant_context: ignored attempted override of reserved key %s", key)
+            continue
+        attrs[key] = value
+
+
 def set_tenant_context(user: User, extra: dict[str, str] | None = None) -> None:
     """Bind trusted tenant attributes to the current async task.
 
     ``tenant.id`` is the stable authorization/persistence scope. Domain is only
     a migration fallback for legacy identities that predate explicit tenant
     claims; new local-JWT/OIDC identities should populate ``User.tenant_id``.
+
+    Registered enrichers are observability-only. They are deliberately unable
+    to override stable identity fields; doing so could collapse two explicit
+    tenants that happen to share a legacy domain mapping.
     """
     stable_tenant_id = (getattr(user, "tenant_id", "") or user.domain or "").strip()
-    attrs: dict[str, str] = {
-        "tenant.uid": user.uid,
-        "tenant.auth_mode": user.auth_mode,
-    }
-    if stable_tenant_id:
-        attrs["tenant.id"] = stable_tenant_id
-    if user.group_id:
-        attrs["tenant.group_id"] = user.group_id
-    if user.email:
-        attrs["tenant.uid_hash"] = _hash_email(user.email)
+    attrs: dict[str, str] = {}
 
     for fn in _registered_enrichers:
         try:
-            attrs.update(fn(user))
+            _merge_untrusted_metadata(attrs, fn(user))
         except Exception as exc:
             logger.warning(
                 "tenant_context: enricher %s raised — skipping. Other enrichers continue. Error: %s",
@@ -64,8 +83,19 @@ def set_tenant_context(user: User, extra: dict[str, str] | None = None) -> None:
                 exc,
             )
 
-    if extra:
-        attrs.update(extra)
+    _merge_untrusted_metadata(attrs, extra)
+
+    # Trusted verified identity is written last. Even if a future refactor
+    # accidentally weakens the merge helper, these values still win.
+    attrs["tenant.uid"] = user.uid
+    attrs["tenant.auth_mode"] = user.auth_mode
+    if stable_tenant_id:
+        attrs["tenant.id"] = stable_tenant_id
+    if user.group_id:
+        attrs["tenant.group_id"] = user.group_id
+    if user.email:
+        attrs["tenant.uid_hash"] = _hash_email(user.email)
+
     _tenant_context.set(attrs)
 
 
