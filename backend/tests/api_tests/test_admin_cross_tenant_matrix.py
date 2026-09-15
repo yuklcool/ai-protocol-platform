@@ -81,13 +81,13 @@ _EXEMPT: dict[str, str] = {
     "POST /api/admin/documents/prewarm-from-blocks/precheck": (
         "Service-account auth, ops runbook path; no per-tenant data returned."
     ),
-    # These two read their domain from the request BODY, not the path, so a
-    # route-level dependency cannot know it in time. They call the same
-    # resolve_admin_scope via admin/tenants.py::_require_tenant_admin, and the
-    # behavioural probes below still exercise the boundary.
-    "POST /api/admin/tenants": "Domain comes from the body; enforced via _require_tenant_admin -> resolve_admin_scope.",
-    "GET /api/admin/tenants/{domain}/validate": (
-        "Enforced via _require_tenant_admin -> resolve_admin_scope; covered behaviourally below."
+    # Onboarding reads its tenant identity from the request body, so a
+    # path-derived scope cannot be resolved before body parsing. The handler
+    # still calls AdminScope.assert_may_tenant() and the behavioural matrix
+    # below exercises that boundary.
+    "POST /api/admin/tenants": "Tenant identity comes from the body; handler enforces AdminScope.assert_may_tenant().",
+    "GET /api/admin/tenants/{tenant_id}/validate": (
+        "Handler enforces AdminScope.assert_may_tenant(); covered behaviourally below."
     ),
 }
 
@@ -203,10 +203,9 @@ def _b_com_probes():
         ("toolperms.delete", tool_permissions, "DELETE", "/api/admin/tool-permissions/b.com", None),
         ("toolperms.wildcard", tool_permissions, "GET", "/api/admin/tool-permissions/*", None),
         ("access.check", access, "POST", "/api/admin/access/check", {"email": "someone@b.com"}),
-        # Body-domain routes: exempt from the STATIC sweep (the dependency can't
-        # see a body param), so they must be covered behaviourally or the
-        # exemption becomes a blind spot.
-        ("tenants.onboard", tenants, "POST", "/api/admin/tenants", {"domain": "b.com", "display_name": "B"}),
+        # Tenant-management routes are covered behaviourally so stable
+        # tenant-id migration cannot weaken cross-tenant denial.
+        ("tenants.onboard", tenants, "POST", "/api/admin/tenants", {"tenant_id": "b.com", "domains": ["b.com"]}),
         ("tenants.validate", tenants, "GET", "/api/admin/tenants/b.com/validate", None),
     ]
 
