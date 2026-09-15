@@ -10,6 +10,7 @@ from auth.local_jwt import _record_to_user, issue_access_token
 from auth.models import User
 from db.repositories.memory import MemoryRepository
 from db.tenant_repository import TenantIsolationError, TenantRepository
+from db.tenants import TenantConfig, TenantDirectory
 
 
 def test_access_context_prefers_explicit_tenant_id_over_email_domain() -> None:
@@ -104,3 +105,58 @@ def test_tenant_repository_is_fail_closed_and_rejects_cross_tenant_access() -> N
         tenant_a.get_document("sessions", "legacy")
     with pytest.raises(TenantIsolationError):
         tenant_a.set_document("sessions", "bad", {"tenantId": "tenant-b"})
+
+
+def test_tenant_directory_supports_multiple_domains_for_one_stable_tenant() -> None:
+    base = MemoryRepository()
+    directory = TenantDirectory(base)
+
+    config = directory.put(
+        TenantConfig(
+            tenantId="tenant-acme",
+            displayName="Acme",
+            domains=["ACME.COM", "acme-energy.example"],
+            enabledSkills=["ops"],
+            modelPolicy={"allowed": ["gpt-5-6-terra"]},
+            quota={"monthlyTokens": 1000000},
+        )
+    )
+
+    assert config.tenant_id == "tenant-acme"
+    assert config.domains == ["acme-energy.example", "acme.com"]
+    assert config.storage_namespace == "tenant-acme"
+    assert directory.tenant_id_for_domain("Acme.Com") == "tenant-acme"
+    assert directory.tenant_id_for_domain("acme-energy.example") == "tenant-acme"
+    assert directory.get_by_domain("acme.com").tenant_id == "tenant-acme"
+
+
+def test_tenant_directory_rejects_domain_collision_between_tenants() -> None:
+    base = MemoryRepository()
+    directory = TenantDirectory(base)
+    directory.put(TenantConfig(tenantId="tenant-a", domains=["shared.example"]))
+
+    with pytest.raises(ValueError, match="already mapped"):
+        directory.put(TenantConfig(tenantId="tenant-b", domains=["shared.example"]))
+
+
+def test_tenant_directory_reads_legacy_clients_domain_without_migration() -> None:
+    base = MemoryRepository()
+    base.set_document(
+        "clients",
+        "legacy.example",
+        {
+            "display_name": "Legacy tenant",
+            "enabled_skills": ["legacy-skill"],
+            "default_skill": "legacy-skill",
+            "documents_bucket": "legacy-docs",
+        },
+    )
+    directory = TenantDirectory(base)
+
+    assert directory.tenant_id_for_domain("legacy.example") == "legacy.example"
+    tenant = directory.get_by_domain("legacy.example")
+    assert tenant is not None
+    assert tenant.tenant_id == "legacy.example"
+    assert tenant.domains == ["legacy.example"]
+    assert tenant.enabled_skills == ["legacy-skill"]
+    assert tenant.documents_bucket == "legacy-docs"
