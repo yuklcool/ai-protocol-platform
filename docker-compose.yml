@@ -86,6 +86,24 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # Optional real upstream MCP Apps server for self-host acceptance/testing.
+  # Start it with: docker compose --profile mcp-example up -d --build
+  # Register in Admin -> MCP Servers as:
+  #   URL: http://mcp-example-map:8080/mcp
+  #   Transport: streamable-http
+  # It is intentionally NOT published to the host; backend/agent traffic uses
+  # the Compose network and the browser reaches it only through /mcp/{server_id}.
+  mcp-example-map:
+    profiles: ["mcp-example"]
+    build:
+      context: ./infrastructure/mcp-ext-apps-map
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+    expose:
+      - "8080"
+    restart: unless-stopped
+
   mcp-sandbox:
     build:
       context: ./infrastructure/mcp-sandbox

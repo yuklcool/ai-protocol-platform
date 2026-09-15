@@ -33,13 +33,14 @@ def _reset():
     clear_tenant_enrichers()
 
 
-def _config(*, scope: str, tenant_id: str = "", url: str = "https://mcp.example.com") -> dict:
+def _config(*, scope: str, tenant_id: str = "", url: str = "https://mcp.example.com", enabled: bool = True) -> dict:
     data = {
         "name": "test",
         "scope": scope,
         "transport": "http",
         "url": url,
         "headers": {},
+        "enabled": enabled,
     }
     if tenant_id:
         data["tenantId"] = tenant_id
@@ -59,6 +60,17 @@ def test_tenant_scope_requires_exact_stable_tenant() -> None:
     assert mcp_config_visible_to_tenant(config, "") is False
 
 
+def test_disabled_config_is_not_runtime_visible() -> None:
+    config = _config(scope="tenant", tenant_id="tenant-a", enabled=False)
+    assert mcp_config_visible_to_tenant(config, "tenant-a") is False
+
+
+def test_legacy_config_without_enabled_defaults_to_enabled() -> None:
+    config = _config(scope="tenant", tenant_id="tenant-a")
+    config.pop("enabled")
+    assert mcp_config_visible_to_tenant(config, "tenant-a") is True
+
+
 def test_historical_unscoped_config_fails_closed() -> None:
     assert mcp_config_visible_to_tenant({"url": "https://legacy.example.com"}, "tenant-a") is False
 
@@ -69,6 +81,14 @@ def test_registry_rejects_foreign_tenant_config() -> None:
         resolved, missing = registry.get_mcp_tools_with_status(["private-server"])
     assert resolved == []
     assert missing == ["private-server"]
+
+
+def test_registry_rejects_disabled_config() -> None:
+    disabled = _config(scope="tenant", tenant_id="tenant-a", enabled=False)
+    with patch("tools.mcp.registry.get_document", return_value=disabled):
+        resolved, missing = registry.get_mcp_tools_with_status(["disabled-server"])
+    assert resolved == []
+    assert missing == ["disabled-server"]
 
 
 def test_registry_cache_is_partitioned_by_tenant() -> None:

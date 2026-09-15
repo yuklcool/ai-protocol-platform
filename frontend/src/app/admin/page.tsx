@@ -60,9 +60,12 @@ const AREAS: Area[] = [
   },
   {
     href: "/skills/studio/new",
-    title: "Skills",
-    question: "What is published, and to whom?",
-    links: [{ href: "/skills/studio/new", label: "Skill Studio", note: "model, tools, instructions, access" }],
+    title: "Skills & MCP",
+    question: "What is published, what can it call, and to whom?",
+    links: [
+      { href: "/skills/studio/new", label: "Skill Studio", note: "model, tools, instructions, access" },
+      { href: "/admin/mcp-servers", label: "MCP Servers", note: "endpoints, health, capabilities, Skill bindings" },
+    ],
   },
   {
     href: "/admin/analytics",
@@ -142,7 +145,7 @@ export default function AdminHub() {
       <header className="mb-6">
         <h1 className="text-xl font-semibold">Administration</h1>
         <p className="text-sm text-muted-foreground">
-          Manage tenants, skills, access, and analytics.
+          Manage tenants, skills, access, MCP integrations, and analytics.
         </p>
         {!isPlatform && domains.length > 0 && (
           // Say plainly whose data this is. A tenant admin seeing a short list
