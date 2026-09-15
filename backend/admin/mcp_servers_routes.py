@@ -34,6 +34,7 @@ class McpServerWrite(BaseModel):
     transport: Literal["http", "streamable-http", "sse"] = "http"
     scope: Literal["platform", "tenant"] = "tenant"
     tenant_id: str | None = None
+    enabled: bool = True
     headers: dict[str, str] | None = Field(
         default=None,
         description="Write-only upstream headers. Values may use ${ENV_VAR} secret references.",
@@ -47,6 +48,7 @@ class McpServerView(BaseModel):
     transport: str
     scope: str
     tenant_id: str | None = None
+    enabled: bool = True
     description: str = ""
     header_names: list[str] = []
     has_credentials: bool = False
@@ -107,6 +109,7 @@ def _to_view(server_id: str, data: dict[str, Any]) -> McpServerView:
         transport=str(data.get("transport") or "http"),
         scope=normalize_mcp_scope(data),
         tenant_id=str(data.get("tenantId") or "") or None,
+        enabled=data.get("enabled", True) is not False,
         description=str(data.get("description") or ""),
         header_names=sorted(str(k) for k in headers),
         has_credentials=bool(headers),
@@ -114,6 +117,7 @@ def _to_view(server_id: str, data: dict[str, Any]) -> McpServerView:
 
 
 def _may_read(scope: Scope, data: dict[str, Any]) -> bool:
+    """Admin visibility ignores enabled state so disabled servers remain repairable."""
     resource_scope = normalize_mcp_scope(data)
     if scope.is_platform:
         return True
@@ -165,7 +169,11 @@ def get_mcp_server(server_id: str, scope: Scope) -> McpServerView:
 
 @router.post("/{server_id}/health", response_model=McpHealthView)
 async def health_mcp_server(server_id: str, scope: Scope) -> McpHealthView:
-    """Run a real MCP initialize handshake against one visible server."""
+    """Run a real MCP initialize handshake against one visible server.
+
+    Admin diagnostics intentionally work even when ``enabled=false`` so an
+    operator can repair/test a server before exposing it to runtime traffic.
+    """
     server_id, data = _visible_config(server_id, scope)
     try:
         result = await check_mcp_server(server_id, data)
@@ -225,6 +233,7 @@ def upsert_mcp_server(server_id: str, body: McpServerWrite, scope: Scope) -> Mcp
         # explicit value so the admin UI can accurately show operator intent.
         "transport": transport,
         "scope": body.scope,
+        "enabled": body.enabled,
         "description": body.description.strip(),
     }
     if tenant_id:
