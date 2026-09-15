@@ -129,6 +129,18 @@ class TenantDirectory:
         }
         current_domains = set(normalized.domains)
 
+        # Preflight every new mapping before writing the tenant document.  The
+        # Repository contract is intentionally backend-neutral and does not
+        # promise multi-document transactions.  Without this pass a collision
+        # on the second domain could leave a partially-updated tenant record.
+        for domain in current_domains:
+            existing = self._repository.get_document(DOMAIN_MAPPING_COLLECTION, domain)
+            if existing is None:
+                continue
+            owner = normalize_tenant_id(str(existing.get("tenantId") or ""))
+            if owner and owner != tenant_id:
+                raise ValueError(f"domain {domain!r} is already mapped to tenant {owner!r}")
+
         self._repository.set_document(
             TENANT_COLLECTION,
             tenant_id,
@@ -136,11 +148,6 @@ class TenantDirectory:
         )
 
         for domain in current_domains:
-            existing = self._repository.get_document(DOMAIN_MAPPING_COLLECTION, domain)
-            if existing is not None:
-                owner = normalize_tenant_id(str(existing.get("tenantId") or ""))
-                if owner and owner != tenant_id:
-                    raise ValueError(f"domain {domain!r} is already mapped to tenant {owner!r}")
             self._repository.set_document(
                 DOMAIN_MAPPING_COLLECTION,
                 domain,
