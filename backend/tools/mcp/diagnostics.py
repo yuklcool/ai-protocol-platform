@@ -22,20 +22,46 @@ class McpDiagnosticError(RuntimeError):
         self.message = message
 
 
+def _exception_tree(exc: BaseException) -> list[BaseException]:
+    """Flatten ExceptionGroup/cause/context wrappers without looping."""
+    result: list[BaseException] = []
+    stack = [exc]
+    seen: set[int] = set()
+    while stack:
+        current = stack.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        result.append(current)
+        nested = getattr(current, "exceptions", None)
+        if isinstance(nested, (list, tuple)):
+            stack.extend(item for item in nested if isinstance(item, BaseException))
+        if current.__cause__ is not None:
+            stack.append(current.__cause__)
+        elif current.__context__ is not None:
+            stack.append(current.__context__)
+    return result
+
+
 def _classify_exception(exc: BaseException) -> McpDiagnosticError:
-    text = str(exc)
+    tree = _exception_tree(exc)
+    text = " | ".join(str(item) for item in tree if str(item)) or exc.__class__.__name__
     lowered = text.lower()
-    if isinstance(exc, ValidationError):
+
+    if any(isinstance(item, ValidationError) for item in tree):
         return McpDiagnosticError("schema", text)
-    if "401" in lowered or "403" in lowered or "unauthorized" in lowered or "forbidden" in lowered:
+    if any(marker in lowered for marker in ("401", "403", "unauthorized", "forbidden")):
         return McpDiagnosticError("authentication", text)
-    if isinstance(exc, (httpx.TimeoutException, TimeoutError)) or "timed out" in lowered or "timeout" in lowered:
-        return McpDiagnosticError("network", text)
-    if isinstance(exc, (httpx.ConnectError, httpx.NetworkError, OSError)) or any(
-        marker in lowered for marker in ("connection refused", "name or service not known", "nodename nor servname", "dns")
+    if any(isinstance(item, (httpx.TimeoutException, TimeoutError)) for item in tree) or any(
+        marker in lowered for marker in ("timed out", "timeout")
     ):
         return McpDiagnosticError("network", text)
-    return McpDiagnosticError("protocol", text or exc.__class__.__name__)
+    if any(isinstance(item, (httpx.ConnectError, httpx.NetworkError, OSError)) for item in tree) or any(
+        marker in lowered
+        for marker in ("connection refused", "name or service not known", "nodename nor servname", "dns")
+    ):
+        return McpDiagnosticError("network", text)
+    return McpDiagnosticError("protocol", text)
 
 
 def _dump(value: Any) -> Any:
