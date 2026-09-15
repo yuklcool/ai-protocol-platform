@@ -59,12 +59,17 @@ def _resolve_content_type(filename: str, client_content_type: str | None) -> str
 
 
 def _tenant_namespace(user: User) -> str:
-    domain = (getattr(user, "domain", None) or "").strip().lower()
-    if not domain:
-        email = (getattr(user, "email", None) or "").strip().lower()
-        if "@" in email:
-            domain = email.rsplit("@", 1)[1]
-    return domain or f"user-{user.uid}"
+    """Return the trusted stable tenant scope for document persistence.
+
+    Explicit ``tenant_id`` wins. ``domain`` is retained only as the legacy
+    identity mapping used by pre-Phase-3 accounts; unlike the old implementation
+    we never parse an arbitrary email string or invent ``user-<uid>`` as a
+    pseudo-tenant. Missing scope fails closed.
+    """
+    tenant_id = (getattr(user, "tenant_id", None) or getattr(user, "domain", None) or "").strip()
+    if not tenant_id:
+        raise UnmappedTenantError("Authenticated identity has no stable tenant scope")
+    return tenant_id
 
 
 def _storage_for_user(user: User):
@@ -220,6 +225,8 @@ def _store_document(
     content_type: str = "",
     gs_url: str | None = None,
 ) -> None:
+    if not tenant_id.strip():
+        raise PermissionError("stable tenant id is required to store a document")
     if gs_url and not source_url:
         source_url = gs_url
     if not storage_backend and source_url.startswith("gs://"):
@@ -276,7 +283,6 @@ async def upload_document(
     if ext not in _ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"File type {ext!r} is not supported. Allowed: {sorted(_ALLOWED_EXTENSIONS)}")
 
-    effective_folder_id = folder_id.strip() or folders_db.ensure_default_folder(user.uid)
     try:
         storage, tenant_id, storage_backend = _storage_for_user(user)
     except UnmappedTenantError as exc:
@@ -284,11 +290,20 @@ async def upload_document(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=f"Object storage is not configured: {exc}") from exc
 
+    effective_folder_id = folder_id.strip() or folders_db.ensure_default_folder(user.uid, tenant_id=tenant_id)
+    if folder_id.strip() and folders_db.get_folder(user.uid, effective_folder_id, tenant_id=tenant_id) is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+
     safe_filename = file.filename.replace("/", "_").replace("\\", "_")
     content_type = _resolve_content_type(safe_filename, file.content_type)
     existing = query_documents(
         _COLLECTION,
-        filters=[("userId", "==", user.uid), ("folderId", "==", effective_folder_id), ("originalFilename", "==", safe_filename)],
+        filters=[
+            ("tenantId", "==", tenant_id),
+            ("userId", "==", user.uid),
+            ("folderId", "==", effective_folder_id),
+            ("originalFilename", "==", safe_filename),
+        ],
         limit=1,
     )
     is_overwrite = bool(existing)
@@ -324,9 +339,20 @@ async def upload_document(
     if not is_overwrite:
         try:
             if parse_status == "parsed":
-                folders_db.update_folder_counts(user.uid, effective_folder_id, doc_delta=1, parsed_delta=1)
+                folders_db.update_folder_counts(
+                    user.uid,
+                    effective_folder_id,
+                    doc_delta=1,
+                    parsed_delta=1,
+                    tenant_id=tenant_id,
+                )
             elif parse_status != "failed":
-                folders_db.update_folder_counts(user.uid, effective_folder_id, doc_delta=1)
+                folders_db.update_folder_counts(
+                    user.uid,
+                    effective_folder_id,
+                    doc_delta=1,
+                    tenant_id=tenant_id,
+                )
         except Exception as exc:
             log.warning("Failed to update folder counts for %s: %s", effective_folder_id, exc)
 
