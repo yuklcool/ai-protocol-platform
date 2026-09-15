@@ -63,6 +63,7 @@ class McpDiscoveryView(McpHealthView):
     tools: list[dict[str, Any]] = []
     resources: list[dict[str, Any]] = []
     prompts: list[dict[str, Any]] = []
+    warnings: list[dict[str, str]] = []
     mcp_apps: dict[str, Any] = Field(default_factory=lambda: {"supported": False, "resourceUris": []})
 
 
@@ -138,8 +139,7 @@ def _visible_config(server_id: str, scope: Scope) -> tuple[str, dict[str, Any]]:
     server_id = _validate_server_id(server_id)
     data = get_document(_COLLECTION, server_id)
     if data is None or not _may_read(scope, data):
-        # Hide foreign tenant endpoints and historical unscoped rows from tenant
-        # admins. Platform admins may still inspect legacy rows for migration.
+        # Do not disclose existence of another tenant's private endpoint.
         raise HTTPException(status_code=404, detail="MCP server not found")
     return server_id, data
 
@@ -188,6 +188,7 @@ async def discover_mcp_server_capabilities(server_id: str, scope: Scope) -> McpD
         tools=result.get("tools") or [],
         resources=result.get("resources") or [],
         prompts=result.get("prompts") or [],
+        warnings=result.get("warnings") or [],
         mcp_apps=result.get("mcpApps") or {"supported": False, "resourceUris": []},
     )
 
