@@ -1,45 +1,26 @@
-"""Resolved admin authority for one request (v6.16.0 / ADMIN-SCOPE M1).
+"""Resolved admin authority for one request.
 
-Every ``/api/admin/*`` route gates on **one** dependency that answers "which
-tenants may this caller touch?" — not on a per-route `is_platform_admin` check.
+Every ``/api/admin/*`` route gates on one shared dependency answering which
+stable tenant ids the caller may touch.  Tenant ids are first-class; email
+domains are only legacy identity mappings.
 
-The reason it is a shared dependency rather than a helper each route calls: the
-v6.9.0 admin API shipped with tenant scoping as *nobody's* parameter.
-``is_tenant_admin`` existed but had exactly one call site (``admin/tenants.py``)
-while every other route used the platform-only ``_Admin``. Fixing that route by
-route, as client admins hit 403s, is how you end up with twenty routes and
-nineteen slightly different scoping rules. So: one primitive, adopted
-everywhere, and a cross-tenant matrix test that goes red when a new admin route
-forgets it.
+Compatibility note
+------------------
+Historically this primitive exposed a field named ``domains`` and helpers such
+as ``filter_domains``. Existing admin routes still use those names, so the
+storage field is retained during the migration. Its values are now *tenant
+scope keys* (stable tenant ids; legacy installations use their old domain as the
+tenant id). New code should prefer ``tenant_ids``, ``may_tenant`` and
+``filter_tenant_ids``.
 
 Scope shapes
 ------------
-``domains is None``      → PLATFORM scope (``aitana-admin``): every tenant.
-``domains == {"a.com"}`` → TENANT scope: exactly those domains.
-(no admin authority)     → the dependency raises 403 before an AdminScope exists,
-                           so a constructed AdminScope always carries authority
-                           and an empty ``domains`` set is unrepresentable.
+``tenant_ids is None``             -> platform scope (``aitana-admin``)
+``tenant_ids == {"tenant-acme"}`` -> exactly that tenant
+no admin authority                 -> dependency returns 403 before a scope is built
 
-Deny-by-default is structural: :meth:`AdminScope.assert_may` denies unless the
-domain is explicitly in scope, and :meth:`AdminScope.filter_domains` returns
-only what is in scope. There is no "allow if unset" branch to get wrong.
-
-No feature flag
----------------
-Tenant scoping is **unconditional**. An earlier revision gated it behind
-``ADMIN_TENANT_SCOPE_ENABLED`` during the rollout; that flag is deliberately
-gone:
-
-  * A flag that is always on is dead weight, and worse, a trap — the next reader
-    concludes tenant scoping is optional and writes a route that assumes
-    platform-only callers.
-  * Runtime env vars do **not** promote with code (docs/ops/env-config-parity.md).
-    A flag on in dev and forgotten in prod is a recurring bug class here, and
-    the failure mode would have been "the console silently refuses every client
-    admin in prod only".
-  * Authority still comes from the ``tenant-admin:{domain}`` claim, which is
-    itself the real gate: nobody is a tenant admin until someone is granted the
-    tag, so "released" and "in use" stay separate decisions without a flag.
+Deny-by-default is structural: blank tenant ids never match and an unknown
+scope never means "unscoped allow".
 """
 
 from __future__ import annotations
@@ -50,41 +31,32 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 
 from auth import User, get_current_user
-from auth.admin_roles import is_platform_admin, tenant_admin_domains
+from auth.admin_roles import is_platform_admin, tenant_admin_tenant_ids
 
 
-def _normalise_domain(domain: str | None) -> str:
-    """Lower-case/strip a domain for comparison. Blank stays blank (never matches)."""
-    return (domain or "").strip().lower()
+def _normalise_scope_key(value: str | None) -> str:
+    """Canonicalize admin scope keys.
+
+    Tenant ids are issued by this platform and are treated case-insensitively
+    for admin claims to preserve the historical domain behavior. Operators
+    should use lowercase stable ids; legacy domain ids therefore remain fully
+    compatible.
+    """
+    return (value or "").strip().casefold()
 
 
 def domain_of_key(key: str | None) -> str:
-    """The tenant an admin identifier belongs to, or ``""`` for none.
+    """Legacy helper returning the email-domain ownership hint for an admin key.
 
-    Admin surfaces are keyed by several shapes and all of them need the same
-    question answered before scoping:
-
-        ``user@a.com``  → ``a.com``   (an email — a user of that tenant)
-        ``a.com``       → ``a.com``   (a domain — the tenant itself)
-        ``*``           → ``""``      (the wildcard tool-permission doc)
-        ``some-tag``    → ``""``      (a global registry id)
-        malformed/blank → ``""``
-
-    ``""`` means **belongs to no single tenant**, which callers must treat as
-    platform-only — never as "unscoped, allow". Because :meth:`AdminScope.may`
-    is False for a blank domain, passing this straight into ``assert_may``
-    already fails closed.
-
-    Centralised on the third occurrence: tool-permission doc ids, user emails,
-    and now audit targets all derived this independently, and three copies of a
-    security predicate is how they drift.
+    It remains for old user/tool/audit surfaces that have not yet gained an
+    explicit ``tenantId``. New tenant-aware resources must carry tenantId and
+    should not derive tenant ownership from arbitrary identifiers.
     """
-    k = (key or "").strip().lower()
+    k = (key or "").strip().casefold()
     if not k or k == "*":
         return ""
     if "@" in k:
         return k.rsplit("@", 1)[-1]
-    # A bare token with no dot is a registry id (a tag name), not a domain.
     return k if "." in k else ""
 
 
@@ -92,84 +64,88 @@ def domain_of_key(key: str | None) -> str:
 class AdminScope:
     """The tenants one admin caller may read or mutate.
 
-    Attributes:
-        user: The authenticated admin.
-        domains: ``None`` for platform-wide authority, else the exact set of
-            domains in scope. Never empty — a caller with no authority is
-            rejected by the dependency before an AdminScope is built.
+    ``domains`` is retained as the constructor/storage name for backward
+    compatibility. Its values are tenant ids. Use :attr:`tenant_ids` in new
+    code. ``None`` means platform-wide authority; an empty set should never be
+    constructed by :func:`resolve_admin_scope`.
     """
 
     user: User
     domains: frozenset[str] | None
 
     @property
+    def tenant_ids(self) -> frozenset[str] | None:
+        """Preferred first-class view of the scoped stable tenant ids."""
+        return self.domains
+
+    @property
     def is_platform(self) -> bool:
-        """True for ``aitana-admin`` — unrestricted across every tenant."""
         return self.domains is None
 
-    def may(self, domain: str) -> bool:
-        """True iff this scope covers ``domain``. Blank domain is always False."""
+    def may_tenant(self, tenant_id: str | None) -> bool:
+        """True iff this scope covers ``tenant_id``; blank always denies."""
+        target = _normalise_scope_key(tenant_id)
+        if not target:
+            return False
         if self.domains is None:
             return True
-        norm = _normalise_domain(domain)
-        return bool(norm) and norm in self.domains
+        return target in self.domains
 
-    def assert_may(self, domain: str) -> None:
-        """Raise 403 unless this scope covers ``domain``.
+    def may(self, tenant_id: str | None) -> bool:
+        """Backward-compatible alias of :meth:`may_tenant`."""
+        return self.may_tenant(tenant_id)
 
-        The message deliberately does not name the domains in scope — a tenant
-        admin probing for other tenants' names should learn nothing.
-        """
-        if not self.may(domain):
+    def assert_may_tenant(self, tenant_id: str | None) -> None:
+        """Raise 403 unless this scope covers ``tenant_id``."""
+        if not self.may_tenant(tenant_id):
+            # Deliberately do not expose the caller's scope contents.
             raise HTTPException(status_code=403, detail="Outside your tenant scope")
 
-    def assert_platform(self) -> None:
-        """Raise 403 unless this is platform scope.
+    def assert_may(self, tenant_id: str | None) -> None:
+        """Backward-compatible alias of :meth:`assert_may_tenant`."""
+        self.assert_may_tenant(tenant_id)
 
-        For genuinely global surfaces (the platform preamble, the wildcard
-        tool-permission doc) that no single tenant may own.
-        """
+    def assert_platform(self) -> None:
         if not self.is_platform:
             raise HTTPException(status_code=403, detail="Platform admin required")
 
-    def filter_domains(self, domains: object) -> list[str]:
-        """Return only the in-scope entries of ``domains`` (order preserved)."""
-        items = [str(d) for d in domains] if domains else []
+    def filter_tenant_ids(self, tenant_ids: object) -> list[str]:
+        """Return only in-scope tenant ids, preserving input order/casing."""
+        items = [str(value) for value in tenant_ids] if tenant_ids else []
         if self.domains is None:
             return items
-        return [d for d in items if _normalise_domain(d) in self.domains]
+        return [value for value in items if _normalise_scope_key(value) in self.domains]
+
+    def filter_domains(self, domains: object) -> list[str]:
+        """Legacy alias for domain-shaped tenant ids."""
+        return self.filter_tenant_ids(domains)
 
 
 def resolve_admin_scope(user: User) -> AdminScope | None:
-    """Resolve a user's admin authority, or ``None`` if they have none.
-
-    Pure (no HTTP) so the whoami endpoint can report "not an admin" as a 200
-    while the route dependency turns the same result into a 403.
-    """
+    """Resolve trusted admin tags into platform or stable-tenant authority."""
     tags = user.group_tags
     if is_platform_admin(tags):
         return AdminScope(user=user, domains=None)
-    domains = frozenset(_normalise_domain(d) for d in tenant_admin_domains(tags) if _normalise_domain(d))
-    if not domains:
+    tenant_ids = frozenset(
+        _normalise_scope_key(value)
+        for value in tenant_admin_tenant_ids(tags)
+        if _normalise_scope_key(value)
+    )
+    if not tenant_ids:
         return None
-    return AdminScope(user=user, domains=domains)
+    # ``domains`` is the compatibility storage field; semantically these are
+    # first-class tenant ids.
+    return AdminScope(user=user, domains=tenant_ids)
 
 
 def require_admin_scope(user: Annotated[User, Depends(get_current_user)]) -> AdminScope:
-    """FastAPI dependency: the caller's admin scope, or 403.
-
-    Replaces the platform-only ``_Admin`` dependency on every ``/api/admin/*``
-    route. A route that takes this and never consults it is a bug the
-    cross-tenant matrix test is designed to catch.
-    """
     scope = resolve_admin_scope(user)
     if scope is None:
-        raise HTTPException(status_code=403, detail="aitana-admin group required")
+        raise HTTPException(status_code=403, detail="Administrative tenant scope required")
     return scope
 
 
 def require_platform_scope(scope: Annotated[AdminScope, Depends(require_admin_scope)]) -> AdminScope:
-    """FastAPI dependency for platform-only routes (e.g. platform config)."""
     scope.assert_platform()
     return scope
 
@@ -182,6 +158,7 @@ __all__ = [
     "AdminScope",
     "PlatformScope",
     "Scope",
+    "domain_of_key",
     "require_admin_scope",
     "require_platform_scope",
     "resolve_admin_scope",
