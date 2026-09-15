@@ -13,6 +13,7 @@ on:
       - backend/config/gcp.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/adk/agui.py
       - backend/adk/session.py
       - backend/adk/artifact_backend.py
       - backend/auth/**
@@ -39,6 +40,7 @@ on:
       - backend/config/gcp.py
       - backend/config/models.py
       - backend/config/models.yaml
+      - backend/adk/agui.py
       - backend/adk/session.py
       - backend/adk/artifact_backend.py
       - backend/auth/**
@@ -97,7 +99,7 @@ jobs:
         run: |
           docker compose run --rm --no-deps backend uv run python -c "import os; os.environ.pop('GOOGLE_CLOUD_PROJECT',None); os.environ.pop('GCP_PROJECT',None); import google.auth; google.auth.default=lambda *a,**k: (_ for _ in ()).throw(AssertionError('ADC must not be probed')); from config.deployment import configure_google_genai_environment,is_self_hosted_mode,is_managed_gcp_mode; configure_google_genai_environment(); assert is_self_hosted_mode() and not is_managed_gcp_mode(); assert os.environ['GOOGLE_GENAI_USE_VERTEXAI'].lower()=='false'; from config.gcp import resolve_gcp_credentials,resolve_gcp_project; assert resolve_gcp_credentials() is None; assert resolve_gcp_project() is None; print('no implicit ADC/project discovery')"
 
-      - name: Verify OpenAI-compatible local storage AG-UI and MCP regressions
+      - name: Verify OpenAI-compatible local storage and MCP regressions
         run: |
           docker compose run --rm --no-deps \
             -v "$PWD/backend/tests:/app/tests:ro" \
@@ -106,7 +108,6 @@ jobs:
             tests/storage_tests/test_local_object_storage.py \
             tests/storage_tests/test_artifact_backend.py \
             tests/api_tests/test_upload.py \
-            tests/unit/test_agui.py \
             tests/api_tests/test_mcp_proxy.py
 
       - name: Verify capability matrix without cloud SDK calls
@@ -131,6 +132,7 @@ jobs:
           docker compose run --rm \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
+            tests/unit/test_agui.py \
             tests/api_tests/test_stream_skill.py \
             tests/integration/test_postgres_adk_session_memory.py \
             tests/integration/test_postgres_a2ui_resume.py
