@@ -25,11 +25,12 @@ Google ADK Agent Runtime
 
 ## Docker Compose quick start
 
-The current self-host baseline packages the three existing application services:
+The production-style self-host baseline runs four services:
 
 ```text
 frontend      :3456
 backend       :1956
+postgres      :5432 (internal by default)
 mcp-sandbox   :3457
 ```
 
@@ -37,8 +38,17 @@ Start from a clean host with Docker + Compose v2:
 
 ```bash
 cp .env.selfhost.example .env
-# edit .env and set GEMINI_API_KEY
+# edit .env:
+# - set JWT_SIGNING_KEY
+# - set SELFHOST_ADMIN_EMAIL / SELFHOST_ADMIN_PASSWORD for first startup
+# - configure at least one model provider
 
+make docker-up
+```
+
+The equivalent raw Compose command is:
+
+```bash
 docker compose up -d --build
 ```
 
@@ -48,46 +58,57 @@ Then open:
 http://localhost:3456
 ```
 
-Check status and logs:
+Useful self-host commands:
 
 ```bash
-docker compose ps
-docker compose logs -f
+make docker-ps
+make docker-logs
+make selfhost-smoke
+make docker-restart
+make docker-down
 ```
 
-Stop while retaining local state:
+`make docker-down` retains the PostgreSQL and object/artifact named volumes.
 
-```bash
-docker compose down
-```
-
-The Compose baseline runs `LOCAL_MODE=1`, persists supported local Firestore state in a named Docker volume, builds the frontend with LOCAL_MODE enabled, and keeps MCP Apps on its separate sandbox origin.
+The Docker self-host baseline deliberately runs `SELF_HOSTED_MODE=1` and `LOCAL_MODE=0`. PostgreSQL persists platform/domain data, built-in accounts, ADK Session and durable Memory; a backend-mounted Docker Volume persists user objects and ADK Artifacts. Built-in `local-jwt` authentication is the default self-host identity provider. No GCP project, Firebase project, Redis, MinIO or Keycloak is required for the baseline.
 
 See [SELFHOST.md](./SELFHOST.md) for Linux deployment, persistence, reverse-proxy and security notes.
 
+## Model providers
+
+The self-host path supports OpenAI official, Gemini Developer API, Anthropic and generic OpenAI-compatible gateways. Provider routing is registry-driven rather than based on a model-name prefix.
+
+For copyable DeepSeek, Qwen, vLLM and LiteLLM/OneAPI/NewAPI examples, see [docs/selfhost-openai-compatible.md](./docs/selfhost-openai-compatible.md).
+
 ## Source-development LOCAL_MODE baseline
 
-The same core platform can be run directly from source without Firestore, Firebase Auth, Vertex Session/Memory, GCS or Cloud Trace credentials.
+For the shortest source-development loop, the platform can still run directly from source in `LOCAL_MODE=1` without Firestore, Firebase Auth, Vertex Session/Memory, GCS or Cloud Trace credentials.
 
 ### 1. Install dependencies
 
 Install the repository prerequisites described in [WORKSHOP.md](./WORKSHOP.md), including Python/`uv`, Node.js/npm and the frontend/backend dependencies.
 
-### 2. Configure one model key
+### 2. Configure one model provider
 
-The current Phase-0 zero-GCP reference path uses Gemini Express Mode:
+Copy the example environment and configure a provider supported by the current registry:
 
 ```bash
 cp .env.selfhost.example backend/.env
 ```
 
-Then edit `backend/.env` and set:
+For example, Gemini Developer API:
 
-```bash
+```env
 GEMINI_API_KEY=your-key
 ```
 
-> Generic OpenAI-compatible endpoint support (custom Base URL + arbitrary model names such as `deepseek-chat`) is part of Roadmap Issue #2 and should not be confused with the Phase-0 baseline.
+Or an OpenAI-compatible endpoint:
+
+```env
+OPENAI_API_KEY=your-key-or-gateway-token
+OPENAI_API_BASE=https://your-endpoint.example/v1
+PLATFORM_DEFAULT_MODEL=<registered-model-id>
+```
 
 ### 3. Start LOCAL_MODE
 
@@ -103,7 +124,7 @@ Expected services:
 | Backend | http://localhost:1956 | FastAPI + Google ADK runtime |
 | MCP Apps sandbox | http://localhost:3457 | isolated MCP App rendering |
 
-LOCAL_MODE uses in-memory/local substitutes for cloud infrastructure but keeps the real protocol/runtime path:
+LOCAL_MODE uses development substitutes for cloud infrastructure but keeps the real protocol/runtime path:
 
 ```text
 Next.js -> FastAPI -> Google ADK -> Skill -> Tool/MCP -> AG-UI -> A2UI
@@ -111,23 +132,17 @@ Next.js -> FastAPI -> Google ADK -> Skill -> Tool/MCP -> AG-UI -> A2UI
 
 ### 4. Run the reusable smoke test
 
-With the stack running:
+With the self-host stack running:
 
 ```bash
-bash scripts/smoke-selfhost.sh
+make selfhost-smoke
 ```
 
-The automated smoke test verifies:
+The underlying script verifies the backend health/API surface, frontend reachability and MCP Apps sandbox reachability, and is also exercised by the self-host CI gates.
 
-- backend `/health`
-- `LOCAL_MODE=1` runtime status
-- FastAPI/OpenAPI route registration
-- Skill streaming API registration
-- MCP-related API surface
-- frontend reachability
-- MCP Apps sandbox reachability
+Automated persistence/auth tests additionally cover PostgreSQL repository state, Session/Memory reconstruction, A2UI replay/state, local ObjectStorage/Artifact persistence, local JWT authentication and complete image builds.
 
-It then prints the manual acceptance checklist for the real model-dependent flows:
+The final model-dependent/browser acceptance remains manual:
 
 - normal Chat
 - Runtime Skill
@@ -136,7 +151,7 @@ It then prints the manual acceptance checklist for the real model-dependent flow
 - MCP Tool call
 - MCP App iframe/sandbox rendering
 
-Issue #1 should only be closed after those model-dependent checks have also been completed successfully on a real development machine.
+Issue #1 remains the final real-protocol acceptance gate until those paths have been recorded on an actual deployment.
 
 ## Cloud/development mode
 
@@ -175,14 +190,14 @@ The canonical ADK app name is currently `aitana_platform` (`APP_NAME` in `backen
 
 The self-hosting roadmap is tracked in GitHub Issues and summarized in [HANDOFF.md](./HANDOFF.md):
 
-1. LOCAL_MODE reproducible baseline and smoke tests
-2. provider-driven OpenAI-compatible model routing
+1. real protocol/browser acceptance gate
+2. provider-driven OpenAI-compatible model routing and live Tool Calling acceptance
 3. Docker Compose one-command deployment
 4. PostgreSQL persistence abstraction
 5. persistent Session/Memory abstraction
-6. S3/MinIO object storage
-7. JWT/OIDC/Keycloak authentication
-8. optionalize remaining GCP-only capabilities
+6. local ObjectStorage / optional S3-compatible adapter
+7. built-in JWT / optional OIDC authentication
+8. optionalized GCP-only capabilities
 9. explicit tenant isolation and quotas
 10. model provider configuration center
 11. self-hosted MCP server management
