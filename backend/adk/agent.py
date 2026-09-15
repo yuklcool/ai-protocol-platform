@@ -99,13 +99,13 @@ from adk.today_context import wrap_with_today
 from adk.tools import resolve_mcp_tools, resolve_tools
 from auth.access_context import AccessContext
 from auth.firebase_auth import User
-from config.models import (
-    ChainLink,
-    active_residency_policy,
+from config.models import ChainLink, active_residency_policy, load_models_config
+from config.runtime_models import (
     api_name_for,
     entry_for,
-    load_models_config,
+    openai_runtime_kwargs,
     provider_for,
+    provider_key_missing,
 )
 from config.thinking import ThinkDepth, thinking_config_for
 from db.models import DelegateRule, FallbackConfig, SkillConfig
@@ -203,10 +203,7 @@ def resolve_model(model_id: str) -> Gemini | LiteLlm:
         # OPENAI_API_BASE lets the same code target OpenAI, DeepSeek/Qwen
         # gateways, vLLM, LiteLLM Proxy, OneAPI/NewAPI, or an internal
         # compatible endpoint without changing Python source.
-        kwargs: dict = {}
-        api_base = os.environ.get("OPENAI_API_BASE", "").strip()
-        if api_base:
-            kwargs["api_base"] = api_base
+        kwargs: dict = openai_runtime_kwargs(model_id)
 
         # Registry capabilities are authoritative. Legacy raw official
         # OpenAI names preserve the historical heuristic for compatibility.
@@ -273,16 +270,9 @@ def _residency_of(ref_or_api: str) -> str:
     return "eu" if api_name_for(ref_or_api).startswith("gemini-") else "us"
 
 
-_PROVIDER_KEY_ENVS = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
-
-
 def _provider_key_missing(model_ref: str) -> str | None:
-    """Env var name when a registered/raw provider requires an API key."""
-    provider = provider_for(model_ref)
-    needed = _PROVIDER_KEY_ENVS.get(provider or "")
-    if needed is None:
-        return None
-    return None if os.environ.get(needed) else needed
+    """Credential hint when a model cannot be used on this deployment."""
+    return provider_key_missing(model_ref)
 
 
 def _resolve_link(link: ChainLink) -> Gemini | LiteLlm:

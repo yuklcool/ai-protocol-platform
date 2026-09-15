@@ -5,26 +5,34 @@ on:
     paths:
       - backend/admin/model_providers_routes.py
       - backend/admin/routes.py
+      - backend/adk/agent.py
       - backend/config/model_provider_registry.py
       - backend/config/effective_models.py
+      - backend/config/runtime_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
+      - backend/tests/unit/test_runtime_models.py
+      - backend/tests/unit/test_model_runtime_routing.py
       - .github/workflows/model-provider-gate.yml
   push:
     branches: [main]
     paths:
       - backend/admin/model_providers_routes.py
       - backend/admin/routes.py
+      - backend/adk/agent.py
       - backend/config/model_provider_registry.py
       - backend/config/effective_models.py
+      - backend/config/runtime_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
+      - backend/tests/unit/test_runtime_models.py
+      - backend/tests/unit/test_model_runtime_routing.py
       - .github/workflows/model-provider-gate.yml
 
 jobs:
@@ -53,4 +61,6 @@ jobs:
               tests/api_tests/test_admin_model_providers.py \
               tests/api_tests/test_admin_cross_tenant_matrix.py \
               tests/unit/test_model_provider_registry.py \
-              tests/unit/test_effective_models.py
+              tests/unit/test_effective_models.py \
+              tests/unit/test_runtime_models.py \
+              tests/unit/test_model_runtime_routing.py
