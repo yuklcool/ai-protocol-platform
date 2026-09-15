@@ -1,46 +1,27 @@
 """Unified admin-role model (v6.9.0 / 9.1).
 
 Single source of truth for "who is an admin", replacing four divergent
-definitions that could silently diverge:
+definitions that could silently diverge.
 
-  1. ``admin/auth.py``          — ``aitana-admin`` tag (the /api/admin gate)
-  2. ``access_context.py``      — ``one-admin`` tag (skill-management)
-  3. ``skills/routes.py``       — ``_SKILL_ADMIN_TAGS`` / ``_PLATFORM_ADMIN_TAGS``
-  4. ``firestore.rules``        — a hardcoded ``owner@yourcompany.com`` email
+The model is driven entirely by **trusted group-tag claims**. Tenant authority
+is keyed by a stable tenant id, not by an email domain:
 
-The model is driven entirely by **group-tag claims** — the existing signed,
-forge-proof mechanism (JWT ``groupTags``), so the rules-admin and the
-backend-admin can no longer drift:
+  - ``aitana-admin``              — PLATFORM super-admin: every tenant.
+  - ``tenant-admin:{tenant_id}``  — TENANT admin: exactly that tenant.
+  - ``one-admin``                 — legacy cross-skill management capability,
+                                    not platform authority.
 
-  - ``aitana-admin``            — PLATFORM super-admin: all tenants, all skills,
-                                  all users, seeding.
-  - ``tenant-admin:{domain}``   — TENANT admin (v6.9.0 new shape): manages its
-                                  own tenant only. A platform admin is a tenant
-                                  admin of every domain; a tenant admin is NOT a
-                                  platform admin.
-  - ``one-admin``               — folded in as a scoped SKILL-admin capability
-                                  (edit/delete skills you don't own), NOT a
-                                  platform admin. Retained so ONE's admin team
-                                  keeps working; new grants should prefer
-                                  ``aitana-admin`` + ownership.
-
-Every predicate takes a plain ``group_tags`` iterable so it works uniformly
-against an ``AccessContext``, a ``User``, or a decoded JWT's ``groupTags`` claim
-— no coupling to any one representation.
+Historical deployments used a domain in the suffix
+(``tenant-admin:acme.example``). That remains valid because migrated tenants
+default their stable id to the old domain until operators explicitly remap it.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
-# Platform super-admin — unrestricted across every tenant.
 PLATFORM_ADMIN_TAG = "aitana-admin"
-
-# Prefix for the per-tenant admin claim shape, e.g. ``tenant-admin:acmeenergy.com``.
 TENANT_ADMIN_PREFIX = "tenant-admin:"
-
-# Tags that grant skill-management (edit/delete a skill you don't own). A
-# platform admin qualifies; ``one-admin`` is the folded legacy skill-admin tag.
 SKILL_ADMIN_TAGS = frozenset({PLATFORM_ADMIN_TAG, "one-admin"})
 
 
@@ -52,61 +33,62 @@ def _as_set(group_tags: Iterable[str] | None) -> frozenset[str]:
 
 
 def is_platform_admin(group_tags: Iterable[str] | None) -> bool:
-    """True iff the caller holds the platform super-admin tag (``aitana-admin``)."""
+    """True iff the caller holds the platform super-admin tag."""
     return PLATFORM_ADMIN_TAG in _as_set(group_tags)
 
 
-def tenant_admin_domains(group_tags: Iterable[str] | None) -> frozenset[str]:
-    """Domains the caller is a tenant-admin of, parsed from ``tenant-admin:{domain}``.
+def tenant_admin_tenant_ids(group_tags: Iterable[str] | None) -> frozenset[str]:
+    """Stable tenant ids granted by ``tenant-admin:{tenant_id}`` tags.
 
-    A platform admin is implicitly a tenant-admin of *every* domain, which this
-    set cannot enumerate — use :func:`is_tenant_admin` for the actual check.
+    A platform admin is implicitly an admin of every tenant, which cannot be
+    enumerated by this set; use :func:`is_tenant_admin` for an actual check.
+    Empty suffixes are ignored so ``tenant-admin:`` never grants authority.
     """
     tags = _as_set(group_tags)
     return frozenset(
-        t[len(TENANT_ADMIN_PREFIX) :]
-        for t in tags
-        if t.startswith(TENANT_ADMIN_PREFIX) and len(t) > len(TENANT_ADMIN_PREFIX)
+        suffix
+        for tag in tags
+        if tag.startswith(TENANT_ADMIN_PREFIX)
+        and (suffix := tag[len(TENANT_ADMIN_PREFIX) :].strip())
     )
 
 
-def is_tenant_admin(group_tags: Iterable[str] | None, domain: str) -> bool:
-    """True iff the caller may administer ``domain``.
+def tenant_admin_domains(group_tags: Iterable[str] | None) -> frozenset[str]:
+    """Backward-compatible alias for pre-tenant-id call sites.
 
-    Platform admins (``aitana-admin``) administer every domain; a
-    ``tenant-admin:{domain}`` holder administers only that one. Deny-by-default
-    on an empty/blank domain (never grant tenant-admin for "").
+    The returned suffixes are tenant ids. Legacy tenants whose ids are domains
+    therefore continue to behave exactly as before.
+    """
+    return tenant_admin_tenant_ids(group_tags)
+
+
+def is_tenant_admin(group_tags: Iterable[str] | None, tenant_id: str) -> bool:
+    """True iff the caller may administer ``tenant_id``.
+
+    Platform admins administer every non-empty tenant. Tenant admins match the
+    exact stable tenant-id suffix. The comparison is intentionally exact: a
+    tenant id is an opaque identifier, not a DNS suffix or substring.
     """
     tags = _as_set(group_tags)
     if is_platform_admin(tags):
-        return True
-    if not domain:
+        return bool((tenant_id or "").strip())
+    target = (tenant_id or "").strip()
+    if not target:
         return False
-    return f"{TENANT_ADMIN_PREFIX}{domain}" in tags
+    return f"{TENANT_ADMIN_PREFIX}{target}" in tags
 
 
 def is_skill_admin(group_tags: Iterable[str] | None) -> bool:
-    """True iff the caller may manage skills they do not own (platform or ``one-admin``)."""
+    """True iff the caller may manage skills they do not own."""
     return bool(_as_set(group_tags) & SKILL_ADMIN_TAGS)
 
 
 def is_admin_conferring_tag(tag: str) -> bool:
-    """True iff granting ``tag`` would hand someone administrative authority.
-
-    Used to stop **privilege escalation** through the group-tag grant endpoint
-    (v6.16.0 M3). Tag grants are the one admin operation that can change *who is
-    an admin*, so a tenant admin must never be able to mint one — otherwise
-    "manage my own tenant" silently becomes "grant myself aitana-admin", and the
-    tenant boundary is decorative.
-
-    Conferring tags: ``aitana-admin`` (platform), any ``tenant-admin:{domain}``
-    (tenant authority, including over *other* domains), and ``one-admin``
-    (cross-tenant skill management).
-    """
+    """True iff granting ``tag`` hands someone administrative authority."""
     t = (tag or "").strip()
     if not t:
         return False
-    if t in SKILL_ADMIN_TAGS:  # aitana-admin, one-admin
+    if t in SKILL_ADMIN_TAGS:
         return True
     return t.startswith(TENANT_ADMIN_PREFIX)
 
@@ -120,4 +102,5 @@ __all__ = [
     "is_skill_admin",
     "is_tenant_admin",
     "tenant_admin_domains",
+    "tenant_admin_tenant_ids",
 ]
