@@ -1,0 +1,49 @@
+name: Model provider gate
+
+on:
+  pull_request:
+    paths:
+      - backend/admin/model_providers_routes.py
+      - backend/admin/routes.py
+      - backend/config/model_provider_registry.py
+      - backend/tests/api_tests/test_admin_model_providers.py
+      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
+      - backend/tests/unit/test_model_provider_registry.py
+      - .github/workflows/model-provider-gate.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/admin/model_providers_routes.py
+      - backend/admin/routes.py
+      - backend/config/model_provider_registry.py
+      - backend/tests/api_tests/test_admin_model_providers.py
+      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
+      - backend/tests/unit/test_model_provider_registry.py
+      - .github/workflows/model-provider-gate.yml
+
+jobs:
+  model-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      PLATFORM_OWNER_EMAIL: platform@ci.local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build backend
+        run: docker compose build backend
+      - name: Run model-provider and admin-scope tests
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+              tests/api_tests/test_admin_model_providers.py \
+              tests/api_tests/test_admin_cross_tenant_matrix.py \
+              tests/unit/test_model_provider_registry.py
