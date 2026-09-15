@@ -18,10 +18,12 @@ from pydantic import BaseModel
 
 from admin import platform_seed
 from admin.auth import _assert_caller_is_service_account
+from admin.mcp_servers_routes import router as mcp_servers_router
 from admin.scope import resolve_admin_scope
 from auth import User, get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+router.include_router(mcp_servers_router)
 
 
 class AdminWhoAmI(BaseModel):

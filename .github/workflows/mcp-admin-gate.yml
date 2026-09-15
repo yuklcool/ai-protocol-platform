@@ -1,0 +1,48 @@
+name: MCP admin gate
+
+on:
+  pull_request:
+    paths:
+      - backend/admin/**
+      - backend/tools/mcp/**
+      - backend/protocols/mcp_proxy.py
+      - backend/tests/api_tests/test_admin_mcp_servers.py
+      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
+      - .github/workflows/mcp-admin-gate.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/admin/**
+      - backend/tools/mcp/**
+      - backend/protocols/mcp_proxy.py
+      - backend/tests/api_tests/test_admin_mcp_servers.py
+      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
+      - .github/workflows/mcp-admin-gate.yml
+
+jobs:
+  mcp-admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      PLATFORM_OWNER_EMAIL: platform@ci.local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Run MCP admin and scope regression tests
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+              tests/api_tests/test_admin_mcp_servers.py \
+              tests/api_tests/test_admin_cross_tenant_matrix.py
