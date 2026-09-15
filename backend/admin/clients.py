@@ -147,6 +147,7 @@ def upsert_client(
     merged.pop("domain", None)
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="upsert_client",
         target=domain,
@@ -178,6 +179,7 @@ def delete_client(domain: str, scope: Scope) -> ClientConfig:
     invalidate_client_cache(domain)
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="delete_client",
         target=domain,

@@ -304,3 +304,20 @@ def test_validate_reads_first_class_tenant() -> None:
     assert response.status_code == 200
     assert response.json()["tenant_id"] == "tenant-acme"
     assert response.json()["ok"] is True
+
+
+def test_lifecycle_audit_uses_target_tenant_and_authorized_counts(_repository):
+    from admin.audit_routes import router as audit_router
+
+    platform = _client(_PLATFORM_ADMIN)
+    with _allow_skill_validation():
+        for tenant in ("tenant-acme", "tenant-other"):
+            response = platform.post("/api/admin/tenants", json={"tenant_id": tenant})
+            assert response.status_code == 201, response.text
+    app = _app(_ACME_ADMIN)
+    app.include_router(audit_router)
+    body = TestClient(app).get("/api/admin/audit").json()
+    assert body["scanned"] == 1
+    assert len(body["entries"]) == 1
+    assert body["entries"][0]["tenantId"] == "tenant-acme"
+    assert body["entries"][0]["actorUid"] == "platform-admin"

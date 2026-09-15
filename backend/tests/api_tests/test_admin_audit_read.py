@@ -25,15 +25,15 @@ _TENANT_A = User(
     uid="ta-uid",
     email="ops@a.com",
     domain="a.com",
-    group_tags=frozenset({"tenant-admin:a.com"}),
+    group_tags=frozenset({"tenant-admin:tenant-a"}),
 )
 
 # One row per target SHAPE — audit rows are keyed by whatever was mutated.
 _ROWS = [
-    {"__id": "1", "ts": "2026-07-21T10:00:00Z", "action": "upsert_client", "target": "a.com"},
-    {"__id": "2", "ts": "2026-07-21T09:00:00Z", "action": "upsert_client", "target": "b.com"},
-    {"__id": "3", "ts": "2026-07-21T08:00:00Z", "action": "grant_group_tag", "target": "user@a.com"},
-    {"__id": "4", "ts": "2026-07-21T07:00:00Z", "action": "grant_group_tag", "target": "user@b.com"},
+    {"__id": "1", "ts": "2026-07-21T10:00:00Z", "action": "upsert_client", "target": "a.com", "tenantId": "tenant-a"},
+    {"__id": "2", "ts": "2026-07-21T09:00:00Z", "action": "upsert_client", "target": "b.com", "tenantId": "tenant-b"},
+    {"__id": "3", "ts": "2026-07-21T08:00:00Z", "action": "grant_group_tag", "target": "user@a.com", "tenantId": "tenant-a"},
+    {"__id": "4", "ts": "2026-07-21T07:00:00Z", "action": "grant_group_tag", "target": "user@b.com", "tenantId": "tenant-b"},
     # Platform-level: the wildcard tool-permission doc.
     {"__id": "5", "ts": "2026-07-21T06:00:00Z", "action": "upsert_tool_permission", "target": "*"},
     # Platform-level: a group-tag registry id (no domain).
@@ -76,12 +76,11 @@ class TestScoping:
         assert "5" not in ids  # wildcard tool-permission
         assert "6" not in ids  # group-tag registry
 
-    def test_scanned_reports_the_true_pre_filter_count(self):
-        """'Nothing happened' and 'nothing here concerns you' look identical
-        otherwise, and the second silently reads as the first."""
+    def test_scanned_reports_only_authorized_tenant_count(self):
+        """Another tenant's activity must not be observable through counts."""
         with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
             body = _app(_TENANT_A).get("/api/admin/audit").json()
-        assert body["scanned"] == 6
+        assert body["scanned"] == 2
         assert len(body["entries"]) == 2
         assert body["scope"] == "tenant"
 
@@ -132,7 +131,7 @@ class TestHelperDirectly:
 
     def test_multi_domain_tenant_admin(self):
         with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            rows, _ = list_admin_actions(domains=frozenset({"a.com", "b.com"}), limit=100)
+            rows, _ = list_admin_actions(domains=frozenset({"tenant-a", "tenant-b"}), limit=100)
         assert {r["__id"] for r in rows} == {"1", "2", "3", "4"}
 
     def test_empty_domain_set_yields_nothing(self):

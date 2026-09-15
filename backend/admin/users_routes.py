@@ -173,6 +173,7 @@ def grant_group(email: str, body: GrantRequest, scope: Scope) -> UserGroups:
     _write(fb, rec, new)
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="grant_group_tag",
         target=email,
@@ -194,6 +195,7 @@ def revoke_group(email: str, tag: str, scope: Scope) -> UserGroups:
     _write(fb, rec, new)
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="revoke_group_tag",
         target=email,
@@ -225,6 +227,7 @@ def refresh_claims(email: str, scope: Scope) -> RefreshResult:
         raise HTTPException(status_code=502, detail="Failed to revoke refresh tokens") from exc
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="refresh_claims",
         target=email,

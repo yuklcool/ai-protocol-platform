@@ -28,7 +28,7 @@ def test_folder_document_and_agent_context_share_postgres(monkeypatch) -> None:
     from db import folders
     from tools.documents.context import build_document_context
 
-    folder = folders.create_folder(user_id, "Integration")
+    folder = folders.create_folder(user_id, "Integration", tenant_id="example.com")
     folder_id = folder["id"]
     repo = get_repository()
     repo.set_document(
@@ -49,11 +49,11 @@ def test_folder_document_and_agent_context_share_postgres(monkeypatch) -> None:
         },
     )
 
-    folders.update_folder_counts(user_id, folder_id, doc_delta=1, parsed_delta=1)
-    listed = folders.list_folder_documents(user_id, folder_id)
+    folders.update_folder_counts(user_id, folder_id, doc_delta=1, parsed_delta=1, tenant_id="example.com")
+    listed = folders.list_folder_documents(user_id, folder_id, tenant_id="example.com")
     assert [item["__id"] for item in listed] == [doc_id]
 
-    stored_folder = folders.get_folder(user_id, folder_id)
+    stored_folder = folders.get_folder(user_id, folder_id, tenant_id="example.com")
     assert stored_folder is not None
     assert stored_folder["docCount"] == 1
     assert stored_folder["parsedCount"] == 1

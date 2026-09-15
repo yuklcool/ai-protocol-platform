@@ -61,6 +61,7 @@ on:
       - backend/tests/api_tests/test_document_storage_delete.py
       - backend/tests/api_tests/test_document_storage_binding.py
       - backend/tests/api_tests/test_import_by_reference.py
+      - backend/tests/integration/conftest.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/integration/test_postgres_document_metadata.py
@@ -141,6 +142,7 @@ on:
       - backend/tests/api_tests/test_document_storage_delete.py
       - backend/tests/api_tests/test_document_storage_binding.py
       - backend/tests/api_tests/test_import_by_reference.py
+      - backend/tests/integration/conftest.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/integration/test_postgres_document_metadata.py
@@ -285,6 +287,7 @@ jobs:
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -e LOCAL_MODE=1 \
             backend uv run python scripts/seed_selfhost_persistence.py
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \

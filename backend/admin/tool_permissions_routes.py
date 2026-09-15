@@ -93,6 +93,7 @@ def upsert_tool_permission(doc_id: str, body: ToolPermissionDoc, scope: Scope) -
     perms.clear_cache()
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="upsert_tool_permission",
         target=doc_id,
@@ -113,6 +114,7 @@ def delete_tool_permission(doc_id: str, scope: Scope) -> ToolPermissionEntry:
     perms.clear_cache()
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="delete_tool_permission",
         target=doc_id,

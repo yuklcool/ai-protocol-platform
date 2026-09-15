@@ -47,3 +47,36 @@ def test_record_never_raises_on_write_failure(caplog):
         # because the audit store blipped) — but the loss is logged at ERROR.
         audit.record_admin_action(actor_uid="a", action="x", target="t")
     assert any("admin_audit write FAILED" in r.message for r in caplog.records)
+
+
+def test_target_tenant_is_independent_of_actor_and_payload():
+    with patch("admin.audit.set_document") as write:
+        audit.record_admin_action(
+            actor_uid="platform-admin", actor_tenant_id="operator-tenant",
+            tenant_id="tenant-a", action="edit_tenant", target="shared@example.com",
+            after={"tenantId": "tenant-b"},
+        )
+    data = write.call_args.args[2]
+    assert data["tenantId"] == "tenant-a"
+    assert data["actorTenantId"] == "operator-tenant"
+
+
+def test_repository_filters_and_counts_exclude_unattributed_and_other_tenant():
+    from db.repositories.memory import MemoryRepository
+
+    repo = MemoryRepository()
+    rows = [
+        {"tenantId": "tenant-a", "target": "same@example.com"},
+        {"tenantId": "tenant-b", "target": "same@example.com"},
+        {"target": "tenant-a"},
+        {"tenantId": "", "actorTenantId": "tenant-a", "target": "same@example.com"},
+    ]
+    for i, row in enumerate(rows):
+        repo.set_document("admin_audit", str(i), dict(row, ts=str(i), action="edit"))
+    with patch("admin.audit.query_documents", wraps=repo.query_documents) as query:
+        own, count = audit.list_admin_actions(domains=frozenset({"tenant-a"}))
+        assert count == 1
+        assert [r["__id"] for r in own] == ["0"]
+        assert query.call_args.kwargs["filters"] == [("tenantId", "in", ["tenant-a"])]
+        platform, count = audit.list_admin_actions(domains=None)
+        assert len(platform) == count == 4

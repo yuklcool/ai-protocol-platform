@@ -327,7 +327,7 @@ MCP 改造本地验证：按更新后的 Tenant isolation gate 测试清单执�
 使用 SELF_HOSTED_MODE=1 / LOCAL_MODE=0 / local-jwt，数据与 Session/Memory 为 memory
 测试后端；这不是本轮 Docker/PostgreSQL 或真实浏览器验收结果。
 
-PR #18 后续 CI 修复（2026-09-15，尚待新提交远端验收）：
+PR #18 后续 CI 修复与审计（2026-09-15）：
 
 - 首轮远端 Tenant isolation / Core runtime persistence 已通过，但 Self-host baseline
   与 no-GCP gate 失败；不能把本地 Tenant gate 通过等同于所有 CI 通过。
@@ -338,11 +338,19 @@ PR #18 后续 CI 修复（2026-09-15，尚待新提交远端验收）：
 - 发现 integration/conftest.py 误将 PostgreSQL 测试也按 GCP 门控跳过；
   PostgreSQL 测试现仅依赖其 DATABASE_URL 前置条件，不需要 RUN_LIVE_GCP。
   此前 no-GCP gate 中的 PostgreSQL/A2UI 测试不能仅据绿色状态认定实际执行。
+- 提交 9cd3102 的 no-GCP Run 34933795839 已通过，Chat/Skill/Session/Memory/A2UI
+  阶段 **40 passed、无跳过**；Tenant gate 与 Core runtime persistence 也通过。
+- baseline 随后暴露 demo seed 仍假设 LOCAL_MODE 默认开启：仅 seed 命令显式开启
+  LOCAL_MODE，并为 PostgreSQL Folder integration 补充稳定 tenantId；等待远端重验。
+- 审计及扩展 Tenant gate 本地 **378 passed, 2 skipped**，包含额外 admin user/config
+  回归；这些结果使用 memory 后端。新增审计代码尚待远端 CI。
 
 剩余工作（不得关闭 #9）：
 
-1. Audit 增加显式 tenant attribution，并按稳定 tenant scope 读取；当前仍从 target
-   推断 domain，不能据此宣称审计隔离完成。
+1. Audit 已新增 target tenantId / actorTenantId，Tenant lifecycle 从已保存的配置记录
+   目标归属；读取在 Repository 查询与输出双重过滤，scanned 仅统计授权范围。
+   未归属的历史记录及旧 user/client/tool 管理事件仅平台管理员可见，不从邮箱猜归属。
+   仍需完成旧管理资源的可信 target attribution 和历史数据迁移，不应宣称全量完成。
 2. quota/budget 的运行时 enforcement；TenantConfig 的 quota 字段不等于配额已执行。
 3. 多租户端到端与旧数据迁移验收，再更新 #9 checklist 并决定是否关闭。
 
