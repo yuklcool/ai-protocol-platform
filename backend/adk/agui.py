@@ -34,6 +34,7 @@ this module integrates instead.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
 import os
 from collections.abc import AsyncGenerator
@@ -87,20 +88,36 @@ def _heartbeat_event(n: int) -> dict:
 
 
 def _deployment_app():
-    """The `App` declared in ``backend/app.py``.
+    """Load the ADK ``App`` declared in ``backend/app.py`` without import ambiguity.
 
-    Imported lazily and inside the function, not at module scope: ``app.py``
-    imports from ``adk.*`` (agent factory, artifact tools, session services), so
-    a top-level import here would close a cycle. It also builds the root agent
-    and its whole tool tree at import time, which module-level would put GCP SDK
-    construction on the critical path of anything that merely imports
-    ``adk.agui`` — including the CLI and most unit tests.
+    ``from app import app`` is not stable in a real Python environment because a
+    third-party package may also own the top-level ``app`` name.  The no-GCP
+    container exposed exactly that collision: it resolved to ``app.app`` (a
+    module) rather than this repository's Google ADK ``App`` instance, and the
+    AG-UI builder then crashed when it accessed ``events_compaction_config``.
 
-    Kept as a seam (rather than inlined) so a test or a fork can substitute an
-    App without monkeypatching a module attribute.
+    Keep the load lazy to avoid closing the ADK import cycle, but resolve the
+    repository entry point by absolute file path and cache the resulting App on
+    this function.  That makes behavior independent of ``sys.path`` ordering.
     """
-    from app import app as deployment_app
+    cached = getattr(_deployment_app, "_cached", None)
+    if cached is not None:
+        return cached
 
+    app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
+    spec = importlib.util.spec_from_file_location("_aitana_deployment_app", app_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load deployment App from {app_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    deployment_app = getattr(module, "app", None)
+    if deployment_app is None or not hasattr(deployment_app, "model_copy"):
+        raise RuntimeError(
+            f"Deployment module {app_path} did not expose a Google ADK App as `app`"
+        )
+
+    setattr(_deployment_app, "_cached", deployment_app)
     return deployment_app
 
 
