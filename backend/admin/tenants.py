@@ -1,34 +1,24 @@
-"""Tenant onboarding + validation API (v6.9.0 / 9.4).
+"""Tenant onboarding/edit/disable API backed by the first-class tenant directory.
 
-Adds an orchestration layer on top of the pass-through client CRUD in
-``admin/clients.py``:
-
-  * ``POST /api/admin/tenants`` — **atomic onboard**. Validates the proposed
-    tenant config, and only writes ``clients/{domain}`` if the hard checks pass
-    (unknown skill ref -> 422 BEFORE any write). Non-blocking checks (bucket
-    reachability, group tags) return WARNING verdicts alongside the created
-    config so the onboarding UI can surface them.
-  * ``GET  /api/admin/tenants/{domain}/validate`` — dry-run over the STORED
-    config for an existing tenant (the editor's "re-validate" button).
-
-Tenant records are persisted through ``db.persistence`` so the existing
-client/domain tenant model works unchanged on memory, Firestore, or PostgreSQL.
-Object-storage reachability remains a provider-specific validation concern.
+Phase 3 moves the admin plane away from ``clients/{domain}``.  The public API
+stays backward-compatible with the historical single-domain request while also
+supporting stable ``tenant_id`` values, multiple identity domains, domain-less
+OIDC/JWT tenants, storage namespaces and per-tenant policy/quota metadata.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from admin.audit import record_admin_action
-from admin.scope import resolve_admin_scope
-from auth import User, get_current_user
-from db.clients import ClientConfig, get_client_sync, invalidate_client_cache
-from db.persistence import get_document, set_document
+from admin.scope import AdminScope, require_admin_scope
+from db.persistence import get_repository
+from db.tenants import TenantConfig, TenantDirectory, normalize_domain, normalize_tenant_id
 from skills import skill_config
 from skills.platform import PLATFORM_OWNER_UID
 
@@ -36,7 +26,6 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/tenants", tags=["admin-tenants"])
 
-_COLLECTION = "clients"
 _LEVEL_OK = "ok"
 _LEVEL_WARNING = "warning"
 _LEVEL_ERROR = "error"
@@ -47,37 +36,91 @@ class ValidationCheck(BaseModel):
     field: str
     level: str
     message: str
-    details: dict[str, Any] = {}
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class TenantValidation(BaseModel):
-    domain: str
+    tenant_id: str
     ok: bool
     checks: list[ValidationCheck]
 
 
 class TenantOnboardRequest(BaseModel):
-    domain: str
+    # New first-class identity. Omitted for old callers: ``domain`` becomes
+    # the stable id until the tenant is explicitly migrated.
+    tenant_id: str = ""
+    domains: list[str] = Field(default_factory=list)
+
+    # Historical single-domain field retained for frontend/API compatibility.
+    domain: str = ""
+
     display_name: str = ""
-    documents_bucket: str | None = None
     enabled_skills: list[str] | None = None
     derived_group_tags: list[str] | None = None
     default_skill: str | None = None
 
+    model_policy: dict[str, Any] = Field(default_factory=dict)
+    storage_namespace: str = ""
+    quota: dict[str, Any] = Field(default_factory=dict)
+
+    # Legacy GCS-specific setting remains optional. Self-host local storage
+    # does not require it and never probes GCP merely because this route runs.
+    documents_bucket: str | None = None
+    disabled: bool = False
+
+
+class TenantPatchRequest(BaseModel):
+    domains: list[str] | None = None
+    display_name: str | None = None
+    enabled_skills: list[str] | None = None
+    derived_group_tags: list[str] | None = None
+    default_skill: str | None = None
+    model_policy: dict[str, Any] | None = None
+    storage_namespace: str | None = None
+    quota: dict[str, Any] | None = None
+    documents_bucket: str | None = None
+    disabled: bool | None = None
+
 
 class TenantOnboardResponse(BaseModel):
+    tenant_id: str
+    # Compatibility echo: first identity domain when present, else tenant_id.
     domain: str
-    config: ClientConfig
+    config: TenantConfig
     validation: TenantValidation
 
 
-def _require_tenant_admin(user: User, domain: str) -> None:
-    scope = resolve_admin_scope(user)
-    if scope is None or not scope.may(domain):
+def _directory() -> TenantDirectory:
+    return TenantDirectory(get_repository())
+
+
+def _normalize_identity(body: TenantOnboardRequest) -> tuple[str, list[str]]:
+    legacy_domain = normalize_domain(body.domain)
+    domains = [normalize_domain(value) for value in body.domains]
+    if legacy_domain:
+        domains.append(legacy_domain)
+    domains = sorted({value for value in domains if value})
+
+    tenant_id = normalize_tenant_id(body.tenant_id)
+    if not tenant_id:
+        if legacy_domain:
+            tenant_id = legacy_domain
+        elif len(domains) == 1:
+            tenant_id = domains[0]
+
+    if not tenant_id:
         raise HTTPException(
-            status_code=403,
-            detail=f"tenant-admin for {domain!r} (or aitana-admin) required",
+            status_code=422,
+            detail=(
+                "tenant_id is required when no legacy domain is supplied. "
+                "Domain-less OIDC/JWT tenants are supported; give them a stable tenant_id."
+            ),
         )
+    return tenant_id, domains
+
+
+def _assert_scope(scope: AdminScope, tenant_id: str) -> None:
+    scope.assert_may_tenant(tenant_id)
 
 
 def _known_slugs(actor_uid: str) -> set[str]:
@@ -99,59 +142,24 @@ def unknown_skill_refs(
     default_skill: str | None,
     actor_uid: str,
 ) -> list[str]:
-    refs = [r for r in list(enabled_skills or []) if r]
+    refs = [value for value in list(enabled_skills or []) if value]
     if default_skill:
         refs.append(default_skill)
-    refs = [r for r in refs if r]
     if not refs:
         return []
     known = _known_slugs(actor_uid)
+    # Preserve the historical fail-open behavior when a provider cannot list
+    # skills; onboarding must not become unavailable because validation storage
+    # is temporarily down.
     if not known:
         return []
     unknown: list[str] = []
     seen: set[str] = set()
-    for r in refs:
-        if r not in known and r not in seen:
-            unknown.append(r)
-            seen.add(r)
+    for value in refs:
+        if value not in known and value not in seen:
+            unknown.append(value)
+            seen.add(value)
     return unknown
-
-
-def _storage_client() -> Any:
-    from google.cloud import storage
-
-    return storage.Client()
-
-
-def probe_bucket(bucket_name: str) -> dict[str, Any]:
-    """Reachability probe using the runtime service account.
-
-    This remains GCS-specific for the legacy cloud deployment. Self-host object
-    storage abstraction is handled separately by the object-storage milestone;
-    tenant metadata persistence itself is already provider-neutral here.
-    """
-    from google.api_core.exceptions import Forbidden, NotFound
-
-    result: dict[str, Any] = {
-        "bucket": bucket_name,
-        "exists": False,
-        "readable": False,
-        "checked": False,
-    }
-    if not bucket_name:
-        return result
-    try:
-        client = _storage_client()
-        next(iter(client.list_blobs(bucket_name, max_results=1)), None)
-        result.update(exists=True, readable=True, checked=True)
-    except NotFound:
-        result["checked"] = True
-    except Forbidden as exc:
-        result.update(exists=True, checked=True)
-        log.info("probe_bucket: %s exists but is unreadable by the SA: %s", bucket_name, exc)
-    except Exception as exc:
-        log.info("probe_bucket: %s not reachable: %s", bucket_name, exc)
-    return result
 
 
 def _known_group_tags() -> set[str] | None:
@@ -169,21 +177,20 @@ def _known_group_tags() -> set[str] | None:
 
 
 def _validate_group_tags(tags: list[str] | None) -> ValidationCheck:
-    cleaned = [t for t in (tags or []) if t]
+    cleaned = [tag for tag in (tags or []) if tag]
     registry = _known_group_tags()
     if registry is None:
-        msg = (
-            "No group-tag registry in this build; accepting tags without validation."
-            if cleaned
-            else "No derived group tags."
-        )
         return ValidationCheck(
             field="derived_group_tags",
             level=_LEVEL_SKIPPED,
-            message=msg,
+            message=(
+                "No group-tag registry in this build; accepting tags without validation."
+                if cleaned
+                else "No derived group tags."
+            ),
             details={"tags": cleaned},
         )
-    unknown = [t for t in cleaned if t not in registry]
+    unknown = [tag for tag in cleaned if tag not in registry]
     if unknown:
         return ValidationCheck(
             field="derived_group_tags",
@@ -207,8 +214,8 @@ def _validate_skill_refs(
     unknown = set(unknown_skill_refs(enabled_skills, default_skill, actor_uid))
     checks: list[ValidationCheck] = []
 
-    enabled = [s for s in (enabled_skills or []) if s]
-    bad_enabled = [s for s in enabled if s in unknown]
+    enabled = [skill for skill in (enabled_skills or []) if skill]
+    bad_enabled = [skill for skill in enabled if skill in unknown]
     if not enabled:
         checks.append(
             ValidationCheck(
@@ -266,68 +273,90 @@ def _validate_skill_refs(
     return checks
 
 
-def _validate_bucket(documents_bucket: str | None) -> ValidationCheck | None:
-    if not documents_bucket:
-        return None
-    probe = probe_bucket(documents_bucket)
-    details = {
-        "bucket": documents_bucket,
-        "exists": bool(probe.get("exists")),
-        "readable": bool(probe.get("readable")),
-    }
-    if not probe.get("checked"):
-        msg = f"Could not verify bucket {documents_bucket!r} reachability (SA/creds unavailable)."
-    elif probe.get("exists") and probe.get("readable"):
-        msg = f"Bucket {documents_bucket!r} is reachable by the service account."
+def _gcs_selected() -> bool:
+    artifact = os.environ.get("ARTIFACT_BACKEND", "").strip().lower()
+    objects = os.environ.get("OBJECT_STORAGE_BACKEND", "").strip().lower()
+    return artifact == "gcs" or objects == "gcs"
+
+
+def _validate_storage(config: TenantConfig) -> ValidationCheck:
+    if not _gcs_selected():
         return ValidationCheck(
-            field="documents_bucket", level=_LEVEL_OK, message=msg, details=details
+            field="storage_namespace",
+            level=_LEVEL_OK,
+            message="Provider-neutral/local tenant storage namespace is configured.",
+            details={"storageNamespace": config.storage_namespace},
         )
-    elif probe.get("exists"):
-        msg = (
-            f"Bucket {documents_bucket!r} exists but the service account cannot read it "
-            "(grant roles/storage.objectViewer)."
+
+    bucket = (config.documents_bucket or "").strip()
+    if not bucket:
+        return ValidationCheck(
+            field="documents_bucket",
+            level=_LEVEL_WARNING,
+            message="GCS backend is selected but this tenant has no documents bucket.",
         )
-    else:
-        msg = f"Bucket {documents_bucket!r} does not exist or is not visible to the service account."
-    return ValidationCheck(
-        field="documents_bucket", level=_LEVEL_WARNING, message=msg, details=details
-    )
+
+    # GCP import is intentionally lazy and only happens when a GCS backend was
+    # explicitly selected. SELF_HOSTED_MODE with local storage never touches
+    # Google credentials here.
+    try:
+        from google.api_core.exceptions import Forbidden, NotFound
+        from google.cloud import storage
+
+        client = storage.Client()
+        next(iter(client.list_blobs(bucket, max_results=1)), None)
+        return ValidationCheck(
+            field="documents_bucket",
+            level=_LEVEL_OK,
+            message=f"Bucket {bucket!r} is reachable.",
+            details={"bucket": bucket, "exists": True, "readable": True},
+        )
+    except NotFound:
+        return ValidationCheck(
+            field="documents_bucket",
+            level=_LEVEL_WARNING,
+            message=f"Bucket {bucket!r} was not found.",
+            details={"bucket": bucket, "exists": False, "readable": False},
+        )
+    except Forbidden:
+        return ValidationCheck(
+            field="documents_bucket",
+            level=_LEVEL_WARNING,
+            message=f"Bucket {bucket!r} exists but is not readable by this runtime.",
+            details={"bucket": bucket, "exists": True, "readable": False},
+        )
+    except Exception as exc:
+        log.info("tenant storage validation skipped for %s: %s", bucket, exc)
+        return ValidationCheck(
+            field="documents_bucket",
+            level=_LEVEL_SKIPPED,
+            message=f"Could not verify GCS bucket {bucket!r}; runtime credentials are unavailable.",
+            details={"bucket": bucket},
+        )
 
 
-def build_validation(
-    *,
-    domain: str,
-    enabled_skills: list[str] | None,
-    default_skill: str | None,
-    documents_bucket: str | None,
-    derived_group_tags: list[str] | None,
-    actor_uid: str,
-) -> TenantValidation:
+def build_validation(config: TenantConfig, *, actor_uid: str) -> TenantValidation:
     checks: list[ValidationCheck] = []
-    checks.extend(_validate_skill_refs(enabled_skills, default_skill, actor_uid))
-    bucket_check = _validate_bucket(documents_bucket)
-    if bucket_check is not None:
-        checks.append(bucket_check)
-    checks.append(_validate_group_tags(derived_group_tags))
-    ok = not any(c.level == _LEVEL_ERROR for c in checks)
-    return TenantValidation(domain=domain, ok=ok, checks=checks)
+    checks.extend(_validate_skill_refs(config.enabled_skills, config.default_skill, actor_uid))
+    checks.append(_validate_storage(config))
+    checks.append(_validate_group_tags(config.derived_group_tags))
+    ok = not any(check.level == _LEVEL_ERROR for check in checks)
+    return TenantValidation(tenant_id=config.tenant_id, ok=ok, checks=checks)
+
+
+def _audit_config(config: TenantConfig | None) -> dict[str, Any] | None:
+    return config.model_dump(by_alias=True, exclude_none=True) if config else None
 
 
 @router.post("", response_model=TenantOnboardResponse, status_code=201)
 def onboard_tenant(
     body: TenantOnboardRequest,
-    user: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[AdminScope, Depends(require_admin_scope)],
 ) -> TenantOnboardResponse:
-    domain = (body.domain or "").strip().lower()
-    if not domain or "." not in domain:
-        raise HTTPException(
-            status_code=422,
-            detail="A valid email domain is required (e.g. acmeenergy.com).",
-        )
+    tenant_id, domains = _normalize_identity(body)
+    _assert_scope(scope, tenant_id)
 
-    _require_tenant_admin(user, domain)
-
-    unknown = unknown_skill_refs(body.enabled_skills, body.default_skill, user.uid)
+    unknown = unknown_skill_refs(body.enabled_skills, body.default_skill, scope.user.uid)
     if unknown:
         raise HTTPException(
             status_code=422,
@@ -338,63 +367,182 @@ def onboard_tenant(
             },
         )
 
-    existing = get_document(_COLLECTION, domain)
-    if existing is not None:
+    directory = _directory()
+    if directory.get(tenant_id) is not None:
+        raise HTTPException(status_code=409, detail=f"Tenant {tenant_id!r} already exists")
+
+    config = TenantConfig(
+        tenantId=tenant_id,
+        displayName=body.display_name.strip(),
+        domains=domains,
+        enabledSkills=body.enabled_skills or None,
+        defaultSkill=(body.default_skill or "").strip() or None,
+        derivedGroupTags=body.derived_group_tags or None,
+        modelPolicy=body.model_policy,
+        storageNamespace=body.storage_namespace.strip() or tenant_id,
+        documentsBucket=(body.documents_bucket or "").strip() or None,
+        quota=body.quota,
+        disabled=body.disabled,
+    ).normalized()
+
+    validation = build_validation(config, actor_uid=scope.user.uid)
+    if not validation.ok:
         raise HTTPException(
-            status_code=409,
-            detail=f"Tenant {domain!r} already exists; edit it via the tenant editor.",
+            status_code=422,
+            detail={
+                "error": "tenant_validation_failed",
+                "checks": [check.model_dump() for check in validation.checks],
+            },
         )
 
-    enabled = body.enabled_skills or None
-    derived = body.derived_group_tags or None
-    bucket = (body.documents_bucket or "").strip() or None
-    data: dict[str, Any] = {
-        "display_name": body.display_name.strip(),
-        "documents_bucket": bucket,
-        "enabled_skills": enabled,
-        "derived_group_tags": derived,
-        "default_skill": (body.default_skill or "").strip() or None,
-    }
+    try:
+        saved = directory.put(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    set_document(_COLLECTION, domain, data, merge=False)
-    invalidate_client_cache(domain)
     record_admin_action(
-        actor_uid=user.uid,
-        actor_email=getattr(user, "email", "") or "",
+        actor_uid=scope.user.uid,
+        actor_email=scope.user.email or "",
         action="onboard_tenant",
-        target=domain,
+        target=saved.tenant_id,
         before=None,
-        after=data,
+        after=_audit_config(saved),
     )
-    log.info("admin.tenants: onboard domain=%s by uid=%s", domain, user.uid)
+    log.info("admin.tenants: onboard tenant=%s by uid=%s", saved.tenant_id, scope.user.uid)
 
-    validation = build_validation(
-        domain=domain,
-        enabled_skills=enabled,
-        default_skill=data["default_skill"],
-        documents_bucket=bucket,
-        derived_group_tags=derived,
-        actor_uid=user.uid,
+    return TenantOnboardResponse(
+        tenant_id=saved.tenant_id,
+        domain=saved.domains[0] if saved.domains else saved.tenant_id,
+        config=saved,
+        validation=validation,
     )
-    config = ClientConfig(domain=domain, **data)
-    return TenantOnboardResponse(domain=domain, config=config, validation=validation)
 
 
-@router.get("/{domain}/validate", response_model=TenantValidation)
+@router.patch("/{tenant_id}", response_model=TenantConfig)
+def edit_tenant(
+    tenant_id: str,
+    body: TenantPatchRequest,
+    scope: Annotated[AdminScope, Depends(require_admin_scope)],
+) -> TenantConfig:
+    tenant_id = normalize_tenant_id(tenant_id)
+    _assert_scope(scope, tenant_id)
+    directory = _directory()
+    current = directory.get(tenant_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Tenant {tenant_id!r} not found")
+
+    updates: dict[str, Any] = {}
+    if body.domains is not None:
+        updates["domains"] = [normalize_domain(value) for value in body.domains if normalize_domain(value)]
+    if body.display_name is not None:
+        updates["display_name"] = body.display_name.strip()
+    if body.enabled_skills is not None:
+        updates["enabled_skills"] = body.enabled_skills or None
+    if body.derived_group_tags is not None:
+        updates["derived_group_tags"] = body.derived_group_tags or None
+    if body.default_skill is not None:
+        updates["default_skill"] = body.default_skill.strip() or None
+    if body.model_policy is not None:
+        updates["model_policy"] = body.model_policy
+    if body.storage_namespace is not None:
+        updates["storage_namespace"] = body.storage_namespace.strip() or tenant_id
+    if body.quota is not None:
+        updates["quota"] = body.quota
+    if body.documents_bucket is not None:
+        updates["documents_bucket"] = body.documents_bucket.strip() or None
+    if body.disabled is not None:
+        updates["disabled"] = body.disabled
+
+    candidate = current.model_copy(update=updates).normalized()
+    unknown = unknown_skill_refs(candidate.enabled_skills, candidate.default_skill, scope.user.uid)
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "unknown_skill_ref", "unknown": unknown},
+        )
+
+    validation = build_validation(candidate, actor_uid=scope.user.uid)
+    if not validation.ok:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "tenant_validation_failed",
+                "checks": [check.model_dump() for check in validation.checks],
+            },
+        )
+
+    try:
+        saved = directory.put(candidate)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    record_admin_action(
+        actor_uid=scope.user.uid,
+        actor_email=scope.user.email or "",
+        action="edit_tenant",
+        target=saved.tenant_id,
+        before=_audit_config(current),
+        after=_audit_config(saved),
+    )
+    return saved
+
+
+@router.post("/{tenant_id}/disable", response_model=TenantConfig)
+def disable_tenant(
+    tenant_id: str,
+    scope: Annotated[AdminScope, Depends(require_admin_scope)],
+) -> TenantConfig:
+    tenant_id = normalize_tenant_id(tenant_id)
+    _assert_scope(scope, tenant_id)
+    directory = _directory()
+    current = directory.get(tenant_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Tenant {tenant_id!r} not found")
+    saved = directory.set_disabled(tenant_id, True)
+    assert saved is not None
+    record_admin_action(
+        actor_uid=scope.user.uid,
+        actor_email=scope.user.email or "",
+        action="disable_tenant",
+        target=saved.tenant_id,
+        before=_audit_config(current),
+        after=_audit_config(saved),
+    )
+    return saved
+
+
+@router.post("/{tenant_id}/enable", response_model=TenantConfig)
+def enable_tenant(
+    tenant_id: str,
+    scope: Annotated[AdminScope, Depends(require_admin_scope)],
+) -> TenantConfig:
+    tenant_id = normalize_tenant_id(tenant_id)
+    _assert_scope(scope, tenant_id)
+    directory = _directory()
+    current = directory.get(tenant_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Tenant {tenant_id!r} not found")
+    saved = directory.set_disabled(tenant_id, False)
+    assert saved is not None
+    record_admin_action(
+        actor_uid=scope.user.uid,
+        actor_email=scope.user.email or "",
+        action="enable_tenant",
+        target=saved.tenant_id,
+        before=_audit_config(current),
+        after=_audit_config(saved),
+    )
+    return saved
+
+
+@router.get("/{tenant_id}/validate", response_model=TenantValidation)
 def validate_tenant(
-    domain: str,
-    user: Annotated[User, Depends(get_current_user)],
+    tenant_id: str,
+    scope: Annotated[AdminScope, Depends(require_admin_scope)],
 ) -> TenantValidation:
-    domain = domain.strip().lower()
-    _require_tenant_admin(user, domain)
-    stored = get_client_sync(domain)
+    tenant_id = normalize_tenant_id(tenant_id)
+    _assert_scope(scope, tenant_id)
+    stored = _directory().get(tenant_id)
     if stored is None:
-        raise HTTPException(status_code=404, detail=f"Tenant {domain!r} not found")
-    return build_validation(
-        domain=domain,
-        enabled_skills=stored.enabled_skills,
-        default_skill=stored.default_skill,
-        documents_bucket=stored.documents_bucket,
-        derived_group_tags=stored.derived_group_tags,
-        actor_uid=user.uid,
-    )
+        raise HTTPException(status_code=404, detail=f"Tenant {tenant_id!r} not found")
+    return build_validation(stored, actor_uid=scope.user.uid)
