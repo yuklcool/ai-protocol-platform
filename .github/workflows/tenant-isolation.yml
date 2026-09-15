@@ -13,7 +13,9 @@ on:
       - backend/db/tenant_repository.py
       - backend/db/tenants.py
       - backend/db/clients.py
+      - backend/scripts/migrate_tenants.py
       - backend/tests/unit/test_tenant_identity.py
+      - backend/tests/unit/test_tenant_migration.py
       - backend/tests/unit/test_access_context.py
       - backend/tests/persistence_tests/test_tenant_repository.py
       - .github/workflows/tenant-isolation.yml
@@ -28,7 +30,9 @@ on:
       - backend/db/tenant_repository.py
       - backend/db/tenants.py
       - backend/db/clients.py
+      - backend/scripts/migrate_tenants.py
       - backend/tests/unit/test_tenant_identity.py
+      - backend/tests/unit/test_tenant_migration.py
       - backend/tests/unit/test_access_context.py
       - backend/tests/persistence_tests/test_tenant_repository.py
       - .github/workflows/tenant-isolation.yml
@@ -49,7 +53,7 @@ jobs:
       - name: Build backend
         run: docker compose build backend
 
-      - name: Verify tenant identity directory and fail-closed repository
+      - name: Verify tenant identity directory migration and fail-closed repository
         run: |
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=memory \
@@ -58,5 +62,6 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
             tests/unit/test_tenant_identity.py \
+            tests/unit/test_tenant_migration.py \
             tests/unit/test_access_context.py \
             tests/persistence_tests/test_tenant_repository.py
