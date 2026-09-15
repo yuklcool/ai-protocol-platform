@@ -26,6 +26,7 @@ from adk.budget_config import BudgetConfig
 from auth.firebase_auth import User
 from budget.enforcer import (
     BudgetConsultation,
+    BudgetDecision,
     BudgetEnforcer,
     BudgetExceededError,
 )
@@ -58,8 +59,10 @@ def make_budget_callbacks(
       - the skill has no ``tool_configs.budget`` (``budget_config is None``)
       - the skill is marked exempt (``budget_config.exempt is True``)
 
-    Otherwise returns a pair that consults the enforcer pre-call and
-    records the realised cost post-call.
+    When the configured identity field is missing, historical configs keep the
+    ``skip`` (fail-open) behaviour. Multi-tenant quota configs can opt into
+    ``missing_identity_policy: block`` so an unresolved ``tenant_id`` fails
+    closed before any LLM spend occurs.
     """
     if enforcer is None or budget_config is None or budget_config.exempt:
         return _no_op_callbacks()
@@ -71,9 +74,15 @@ def make_budget_callbacks(
             extra={
                 "skill_id": skill_id,
                 "identity_key": budget_config.identity_key,
+                "missing_identity_policy": budget_config.missing_identity_policy,
                 "user_uid": user.uid,
             },
         )
+        if budget_config.missing_identity_policy == "block":
+            return _missing_identity_block_callbacks(
+                skill_id=skill_id,
+                identity_key=budget_config.identity_key,
+            )
         return _no_op_callbacks()
 
     # Closure-shared lookup so the after callback can find the
@@ -112,7 +121,7 @@ def make_budget_callbacks(
     return _before, _after
 
 
-# ─── No-op fallback ──────────────────────────────────────────────────────────
+# ─── No-op / fail-closed fallback ────────────────────────────────────────────
 
 
 def _no_op_callbacks() -> tuple[Any, Any]:
@@ -125,17 +134,43 @@ def _no_op_callbacks() -> tuple[Any, Any]:
     return _noop_before, _noop_after
 
 
+def _missing_identity_block_callbacks(*, skill_id: str, identity_key: str) -> tuple[Any, Any]:
+    """Return callbacks that fail closed before the model call.
+
+    Reuse ``BudgetExceededError`` so the existing AG-UI error translation path
+    renders a controlled budget/identity error rather than leaking a generic
+    callback exception. There is deliberately no enforcer consultation or
+    usage record because no stable quota bucket can be selected.
+    """
+
+    async def _block_before(callback_context: Any, llm_request: Any) -> None:
+        decision = BudgetDecision(
+            action="block",
+            remaining_usd=None,
+            period_end=None,
+            message=(
+                f"Budget identity '{identity_key}' is required for skill "
+                f"'{skill_id}' but is missing from the authenticated user."
+            ),
+            retry_after_seconds=None,
+        )
+        raise BudgetExceededError(decision)
+
+    async def _noop_after(callback_context: Any, llm_response: Any) -> None:
+        return None
+
+    return _block_before, _noop_after
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
 def _extract_identity(user: User, identity_key: str) -> str:
-    """Read ``user.<identity_key>`` and return it as a non-empty string,
-    or empty string if absent. Used to decide whether to skip the gate.
+    """Read ``user.<identity_key>`` and return it as a non-empty string.
 
-    Falls open: an unresolved identity short-circuits to no-op + WARN
-    log rather than block. The design's reasoning (see howto): forks
-    that misconfigure the identity_key shouldn't have the platform
-    silently deny everyone.
+    Missing values return ``""``. Whether that becomes a legacy-compatible
+    fail-open skip or a fail-closed block is controlled by
+    ``BudgetConfig.missing_identity_policy`` in ``make_budget_callbacks``.
     """
     value = getattr(user, identity_key, None)
     if value is None:
