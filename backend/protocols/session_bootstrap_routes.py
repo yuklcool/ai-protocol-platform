@@ -1,15 +1,9 @@
-"""Session bootstrap — pre-create ChatSessionIndex + ADK session.
+"""Session bootstrap — pre-create tenant-scoped ChatSessionIndex + ADK session.
 
-Called fire-and-forget by the frontend when the AG-UI HttpAgent first sees a
-session_id, before the first agent turn. Without this, iframe context pushes
-(ui/update-model-context) that arrive before the first turn 404 because the
-ChatSessionIndex row does not exist yet.
-
-Endpoint:
-    POST /api/sessions/{sessionId}/bootstrap
-
-Idempotent: if the Firestore index already exists, the call is a no-op (200).
-The ADK session_service.create_session() is also idempotent for the same id.
+Called before the first agent turn so iframe/A2UI context has a durable index
+row to bind to. Bootstrap is idempotent only inside the authenticated tenant;
+a reused session id from another tenant is rejected before any ADK session is
+touched.
 """
 
 from __future__ import annotations
@@ -17,12 +11,12 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from adk.agui import APP_NAME
 from adk.session import get_session_service
 from auth import User, get_current_user
-from db.chat_sessions import create_session_index, get_session_index, owner_domain_of
+from db.chat_sessions import create_session_index, get_session_index, owner_domain_of, session_in_tenant
 from db.models.access import AccessControl
 
 logger = logging.getLogger(__name__)
@@ -32,7 +26,7 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 
 class BootstrapRequest(BaseModel):
     skill_id: str
-    document_ids: list[str] = []
+    document_ids: list[str] = Field(default_factory=list)
 
 
 class BootstrapResponse(BaseModel):
@@ -47,36 +41,31 @@ async def bootstrap_session(
     request: Request,
     user: User = Depends(get_current_user),  # noqa: B008
 ) -> BootstrapResponse:
-    """Pre-create a ChatSessionIndex + ADK session before the first agent turn.
-
-    Idempotent: returns 200 whether or not the index already existed.
-    The ``created`` field in the response distinguishes new from existing.
-
-    Access: any authenticated user may bootstrap a session they own — the
-    caller's uid becomes owner_uid. If the session already exists and was
-    created by a different owner, returns 403.
-    """
+    """Pre-create a session inside the caller's stable tenant scope."""
+    ctx = request.state.access
     existing = get_session_index(session_id)
     if existing is not None:
+        if not session_in_tenant(existing, ctx.tenant_id):
+            # Do not disclose whether a foreign tenant owns this opaque id.
+            raise HTTPException(status_code=403, detail="Session unavailable in this tenant")
         if existing.owner_uid != user.uid:
             raise HTTPException(status_code=403, detail="Session owned by another user")
         return BootstrapResponse(session_id=session_id, created=False)
 
-    create_session_index(
-        session_id=session_id,
-        skill_id=body.skill_id,
-        owner_uid=user.uid,
-        owner_domain=owner_domain_of(user.email),
-        access_control=AccessControl(type="private"),
-        document_ids=body.document_ids,
-        # PROVISIONAL until the first real turn: this fires when the chat page
-        # MOUNTS, so without the flag every opened-and-abandoned chat became a
-        # history entry (22 of 40 rows on test were these). The row still has to
-        # exist now — iframe context pushes 404 without it — it just stays
-        # hidden from the session lists until `_ensure_session_index` promotes
-        # it on the first turn.
-        provisional=True,
-    )
+    try:
+        create_session_index(
+            session_id=session_id,
+            skill_id=body.skill_id,
+            owner_uid=user.uid,
+            tenant_id=ctx.tenant_id,
+            owner_domain=owner_domain_of(user.email),
+            access_control=AccessControl(type="private"),
+            document_ids=body.document_ids,
+            provisional=True,
+        )
+    except (ValueError, PermissionError) as exc:
+        logger.warning("session_bootstrap: tenant boundary rejected %s: %s", session_id, exc)
+        raise HTTPException(status_code=403, detail="Session unavailable in this tenant") from exc
 
     session_service = get_session_service()
     try:
@@ -91,5 +80,10 @@ async def bootstrap_session(
             session_id,
         )
 
-    logger.info("session_bootstrap: pre-created session %s for skill %s", session_id, body.skill_id)
+    logger.info(
+        "session_bootstrap: pre-created session %s for skill %s tenant=%s",
+        session_id,
+        body.skill_id,
+        ctx.tenant_id,
+    )
     return BootstrapResponse(session_id=session_id, created=True)
