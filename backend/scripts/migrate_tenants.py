@@ -7,8 +7,10 @@ The migration is intentionally conservative:
 * ``--map domain=tenant_id`` may merge multiple domains into one stable tenant;
 * conflicting legacy policy/config values fail fast instead of guessing;
 * dry-run is the default; writes require ``--apply``;
-* local-JWT ``auth_users`` rows are backfilled with the resolved ``tenantId``
-  when writes are enabled, so authentication immediately emits the stable id.
+* local-JWT ``auth_users`` rows are backfilled with the resolved ``tenantId``;
+* legacy ``tenant-admin:{domain}`` grants are rewritten to
+  ``tenant-admin:{tenant_id}`` when a domain is remapped, so administrators do
+  not lose authority during the migration.
 
 Examples:
 
@@ -28,6 +30,7 @@ import argparse
 from dataclasses import dataclass, field
 from typing import Any
 
+from auth.admin_roles import TENANT_ADMIN_PREFIX
 from db.persistence import get_repository
 from db.repository import Repository
 from db.tenants import TenantConfig, TenantDirectory, normalize_domain, normalize_tenant_id
@@ -156,6 +159,49 @@ def build_migration_plan(
     return plan
 
 
+def _domain_to_tenant(configs: list[TenantConfig]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for config in configs:
+        for domain in config.domains:
+            result[normalize_domain(domain)] = config.tenant_id
+    return result
+
+
+def _rewrite_tenant_admin_tags(
+    tags: object,
+    domain_mapping: dict[str, str],
+) -> tuple[list[str], bool]:
+    """Rewrite exact legacy tenant-admin domain grants to stable tenant ids.
+
+    Tags unrelated to tenant administration are preserved byte-for-byte. The
+    mapping is based on the migration plan rather than the user's own email
+    domain, so a platform operator holding scoped authority for several client
+    domains keeps all of those grants after a multi-domain tenant migration.
+    """
+    raw = [str(tag) for tag in (tags or [])]
+    rewritten: list[str] = []
+    changed = False
+    for tag in raw:
+        if not tag.startswith(TENANT_ADMIN_PREFIX):
+            rewritten.append(tag)
+            continue
+        suffix = tag[len(TENANT_ADMIN_PREFIX) :].strip()
+        legacy_domain = normalize_domain(suffix)
+        tenant_id = domain_mapping.get(legacy_domain)
+        if not tenant_id:
+            rewritten.append(tag)
+            continue
+        replacement = f"{TENANT_ADMIN_PREFIX}{tenant_id}"
+        rewritten.append(replacement)
+        changed = changed or replacement != tag
+
+    # A user may already hold the new stable-id tag alongside the legacy tag;
+    # normalize that to one grant while keeping deterministic persistence.
+    deduped = sorted(set(rewritten))
+    changed = changed or deduped != sorted(set(raw))
+    return deduped, changed
+
+
 def migrate(
     repository: Repository,
     mapping: dict[str, str],
@@ -166,6 +212,7 @@ def migrate(
     rows = repository.query_documents("clients", limit=None)
     plan = build_migration_plan(rows, mapping, require_explicit=require_explicit)
     configs = [plan[key].config() for key in sorted(plan)]
+    domain_mapping = _domain_to_tenant(configs)
 
     users_updated = 0
     if apply:
@@ -173,22 +220,31 @@ def migrate(
         for config in configs:
             directory.put(config)
 
-        # Backfill built-in self-host accounts from their authoritative domain.
-        # Firebase/OIDC identities should use trusted tenant claims instead.
+        # Backfill built-in self-host accounts from their authoritative domain
+        # and rewrite any legacy scoped-admin grants. Firebase/OIDC identities
+        # must migrate trusted external claims at their identity provider.
         for user_row in repository.query_documents("auth_users", limit=None):
             doc_id = str(user_row.get("__id") or "").strip()
             if not doc_id:
                 continue
+
+            updates: dict[str, Any] = {}
             domain = normalize_domain(str(user_row.get("domain") or ""))
-            if not domain:
-                continue
-            tenant_id = directory.tenant_id_for_domain(domain)
-            if not tenant_id:
-                continue
-            if str(user_row.get("tenantId") or "") == tenant_id:
-                continue
-            repository.update_document("auth_users", doc_id, {"tenantId": tenant_id})
-            users_updated += 1
+            if domain:
+                tenant_id = directory.tenant_id_for_domain(domain)
+                if tenant_id and str(user_row.get("tenantId") or "") != tenant_id:
+                    updates["tenantId"] = tenant_id
+
+            group_tags, tags_changed = _rewrite_tenant_admin_tags(
+                user_row.get("groupTags") or [],
+                domain_mapping,
+            )
+            if tags_changed:
+                updates["groupTags"] = group_tags
+
+            if updates:
+                repository.update_document("auth_users", doc_id, updates)
+                users_updated += 1
 
     return configs, users_updated
 
@@ -238,6 +294,7 @@ def main() -> int:
         )
     if args.apply:
         print(f"Updated local auth users: {users_updated}")
+        print("Firebase/OIDC tenant-admin claims must be migrated at the external identity provider.")
     else:
         print("No writes performed. Re-run with --apply after reviewing the plan.")
     return 0
