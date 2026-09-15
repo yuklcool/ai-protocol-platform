@@ -1,14 +1,16 @@
 """Stable tenant visibility policy for persisted MCP server configs.
 
-MCP server credentials/endpoints are security-sensitive resources.  A config is
-visible only when its scope is explicit:
+MCP server credentials/endpoints are security-sensitive resources. A config is
+runtime-visible only when it is enabled and its scope is explicit:
 
 * ``scope=platform`` — intentionally shared platform-operated server.
 * ``scope=tenant`` — private to the exact non-empty ``tenantId``.
+* ``enabled=false`` — administratively visible, but unavailable to runtime
+  agent/proxy resolution.
 
 Historical rows with no scope are intentionally *not* treated as platform-wide;
-they must be re-seeded or migrated.  This prevents a pre-multitenancy registry
-row from silently becoming accessible to every tenant.
+they must be re-seeded or migrated. Historical rows without ``enabled`` remain
+enabled for backward compatibility.
 """
 
 from __future__ import annotations
@@ -23,8 +25,13 @@ def normalize_mcp_scope(config: dict[str, Any]) -> str:
     return str(config.get("scope") or "").strip().lower()
 
 
+def mcp_config_enabled(config: dict[str, Any] | None) -> bool:
+    """Return runtime enabled state; legacy rows default to enabled."""
+    return bool(config) and config.get("enabled", True) is not False
+
+
 def mcp_config_visible_to_tenant(config: dict[str, Any] | None, tenant_id: str) -> bool:
-    if not config:
+    if not config or not mcp_config_enabled(config):
         return False
     scope = normalize_mcp_scope(config)
     if scope == PLATFORM_SCOPE:
@@ -46,6 +53,7 @@ def require_stable_tenant_id(tenant_id: str) -> str:
 __all__ = [
     "PLATFORM_SCOPE",
     "TENANT_SCOPE",
+    "mcp_config_enabled",
     "mcp_config_visible_to_tenant",
     "normalize_mcp_scope",
     "require_stable_tenant_id",
