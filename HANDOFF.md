@@ -2,8 +2,8 @@
 
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
-> 状态更新时间：2026-09-14  
-> 当前阶段：**Self-host 核心持久化能力已经实装，当前主线进入内置 JWT / 无 GCP 生产认证改造。**
+> 状态更新时间：2026-09-15
+> 当前阶段：**#4～#8 已完成；当前主线为 #9 多租户隔离，正在完成 MCP Proxy / seed / CI 收口。**
 
 ---
 
@@ -23,12 +23,12 @@
 - provider-driven OpenAI-compatible model routing
 - Self-host CI 与 persistence regression CI
 
-当前真正阻塞“生产级自托管”的首要问题已经从数据库/文件存储转为：
+当前 #7 内置 JWT 与 #8 无 GCP Self-host 已完成并关闭。接下来按顺序推进：
 
-1. #7 Built-in JWT + PostgreSQL identity
-2. #8 GCP 能力彻底 optional
-3. #1/#2/#3 最终真实协议验收与 Issue 收口
-4. #9～#11 多租户/模型/MCP 管理产品化
+1. #9 多租户：完成 MCP Proxy / seed / CI；继续 Audit tenant attribution 与 quota enforcement。
+2. #1/#2/#3 最终真实协议验收与 Issue 收口（不可把单测替代浏览器验收）。
+3. #10/#11 模型与 MCP 管理产品化。
+
 
 ---
 
@@ -277,112 +277,86 @@ S3-compatible 已拆为 #16，可选，不阻塞默认架构，也不自动引�
 
 ---
 
-## 8. 当前最重要任务：#7 Built-in JWT
+## 8. #7 Built-in JWT — 已完成并关闭
 
-这是现在 Self-host 走向“生产可用”的最大缺口。
+- PostgreSQL 本地账号、scrypt 密码哈希、JWT 签发/验证与 key rotation。
+- 首管理员 bootstrap；权限和租户来自服务端账号记录。
+- 统一 User / AccessContext，Firebase 作为可选 provider。
+- 前端邮箱密码登录、sessionStorage、whoami、过期/401 清理。
+- REST / AG-UI Bearer token 链路已接入。
+- OIDC / Keycloak 拆为可选 #17，不是默认部署依赖。
 
-当前 Self-host 虽然数据、Session、Memory、文件都已持久化，但 Compose 仍然依赖：
+## 9. #8 GCP optionalization — 已完成并关闭
 
-```env
-LOCAL_MODE=1
-```
+正式部署使用 `SELF_HOSTED_MODE=1`、`LOCAL_MODE=0`、`AUTH_BACKEND=local-jwt`。
+无需 ADC、GCP project、Firebase、Vertex、GCS 即可启动；GCP adapter 保留为可选能力。
 
-意味着身份仍是 dev stub，不应视为正式生产认证。
+- `config/capabilities.py` 与 `/api/capabilities` 统一能力状态。
+- `PLATFORM_DEFAULT_MODEL` 支持 OpenAI-compatible 根 Agent。
+- AG-UI deployment App 按绝对文件路径加载，避免 `app` 同名模块冲突。
+- Self-host no-GCP gate Run 34914798342 成功；该历史验收包含登录、启动、
+  OpenAI-compatible、MCP、Chat/Skill/AG-UI、PostgreSQL 与 A2UI resume。
+- ADK 传递依赖仍可能安装 GCP SDK；“无 GCP”指无配置、凭证、资源的运行依赖。
 
-#7 的目标是：
+## 10. 当前主线：#9 显式 Tenant / 隔离 — OPEN
 
-```text
-PostgreSQL
-├── auth users
-├── tenant identity
-├── roles / group tags
-└── credential metadata
+已在此前 main 落地：
 
-FastAPI
-├── login
-├── password verification
-├── JWT issue/verify
-├── expiry / issuer / audience
-└── request User / AccessContext
-```
+- 显式 Tenant directory、domain mapping、迁移工具及稳定 tenant identity。
+- Tenant-aware Repository、AccessContext 与管理员 scope。
+- Session / Skill、Document / Folder / ObjectStorage 的 tenant 边界。
+- Artifact 同时隔离 app_name 和 artifact-only user_id，弥补 ADK FileArtifactService
+  不按 app_name 隔离磁盘路径的行为；不改 Session/Memory 的用户身份。
+- observability enricher 不得覆盖认证后的 tenant.id。
+- MCP registry 使用 `(tenant_id, server_id)` 缓存，并应用显式 scope policy。
 
-推荐 backend selector：
+本轮改造：
 
-```env
-AUTH_BACKEND=local-jwt|firebase|stub|oidc
-```
+- HTTP MCP Proxy 在 POST / GET / DELETE 转发前，使用已认证 User 派生 tenant，
+  检查配置 scope；跨租户/无 scope/未知 scope 均 404，缺失 tenant context 为 403。
+- `scope=platform` 表示显式平台共享，仍须通过 Skill allowlist；
+  `scope=tenant + tenantId` 仅允许该稳定租户。
+- 内置 ext-apps / Toolbox / Maps Grounding seed 显式标记 `scope=platform`。
+  ext-apps 无 URL 参数重种时保留已部署 URL、headers 及已声明的私有 scope。
+- 历史无 scope 的自定义配置默认拒绝访问，需管理员明确迁移为平台共享或租户私有；
+  不可批量将未知配置升级为共享。
+- MCP registry、Proxy 与 seed 回归加入 Tenant isolation gate；修正先前 registry
+  回归对 ADK connection params 属性的错误断言。
 
-第一阶段最小闭环必须做到：
+MCP 改造本地验证：按更新后的 Tenant isolation gate 测试清单执行，**279 passed, 2 skipped**。
+使用 SELF_HOSTED_MODE=1 / LOCAL_MODE=0 / local-jwt，数据与 Session/Memory 为 memory
+测试后端；这不是本轮 Docker/PostgreSQL 或真实浏览器验收结果。
 
-- PostgreSQL 本地账号
-- 安全 password hash
-- JWT 登录
-- JWT 校验
-- server-authoritative tenant/domain/groupTags
-- platform admin / tenant admin 复用现有 `AccessContext`
-- 所有现有 `Depends(get_current_user)` 无需业务层大改
-- Firebase 保持兼容
+PR #18 后续 CI 修复与审计（2026-09-15）：
 
-OIDC 可以作为第二步，不阻塞最小 Self-host。
+- 首轮远端 Tenant isolation / Core runtime persistence 已通过，但 Self-host baseline
+  与 no-GCP gate 失败；不能把本地 Tenant gate 通过等同于所有 CI 通过。
+- 修正 Session CRUD / Skill stream 的旧测试数据，显式提供稳定 tenantId；
+  增加相同 UID、public ACL 跨 tenant 仍拒绝的 API 回归。
+- Client cache 单测同时隔离模块缓存与持久化缓存，消除跨用例数据污染。
+- 上述针对性回归本地 **84 passed**（memory 后端）。
+- 发现 integration/conftest.py 误将 PostgreSQL 测试也按 GCP 门控跳过；
+  PostgreSQL 测试现仅依赖其 DATABASE_URL 前置条件，不需要 RUN_LIVE_GCP。
+  此前 no-GCP gate 中的 PostgreSQL/A2UI 测试不能仅据绿色状态认定实际执行。
+- 提交 9cd3102 的 no-GCP Run 34933795839 已通过，Chat/Skill/Session/Memory/A2UI
+  阶段 **40 passed、无跳过**；Tenant gate 与 Core runtime persistence 也通过。
+- baseline 随后暴露 demo seed 仍假设 LOCAL_MODE 默认开启：仅 seed 命令显式开启
+  LOCAL_MODE，并为 PostgreSQL Folder integration、Artifact 重建探针补充稳定 tenantId；
+  等待远端重验。
+- 审计及扩展 Tenant gate 本地 **378 passed, 2 skipped**，包含额外 admin user/config
+  回归；这些结果使用 memory 后端。新增审计代码尚待远端 CI。
 
----
+剩余工作（不得关闭 #9）：
 
-## 9. #8 GCP optionalization
+1. Audit 已新增 target tenantId / actorTenantId，Tenant lifecycle 从已保存的配置记录
+   目标归属；读取在 Repository 查询与输出双重过滤，scanned 仅统计授权范围。
+   未归属的历史记录及旧 user/client/tool 管理事件仅平台管理员可见，不从邮箱猜归属。
+   仍需完成旧管理资源的可信 target attribution 和历史数据迁移，不应宣称全量完成。
+2. quota/budget 的运行时 enforcement；TenantConfig 的 quota 字段不等于配额已执行。
+3. 多租户端到端与旧数据迁移验收，再更新 #9 checklist 并决定是否关闭。
 
-#7 完成后立即推进。
-
-目标是在完全没有以下配置时：
-
-```text
-gcloud / ADC
-Firebase
-Vertex Agent Engine
-GCS
-Cloud Trace / Cloud Logging
-```
-
-仍然可以完整运行：
-
-```text
-Chat
-Skill
-MCP
-MCP Apps
-AG-UI
-A2UI
-Session
-Memory
-Files
-Auth
-```
-
-GCP 能力继续以可选 adapter/provider 形式存在。
-
----
-
-## 10. 后续产品化顺序
-
-建议严格按：
-
-```text
-#7 Built-in JWT
- ↓
-#8 GCP optionalization
- ↓
-收口 #1 / #2 / #3
- ↓
-#9 explicit Tenant model
- ↙                 ↘
-#10 Model Provider UI   #11 MCP Server UI
-           \            /
-            #12 i18n/branding
-                   ↓
-            #13 GHCR/release
-```
-
-#14 upstream sync 必须贯穿整个过程。
-
-#16 S3-compatible 只在有实际需求时推进。
+后续顺序：#9 → #1/#2/#3 验收收口 → #10/#11 → #12 中文化 → #13 Release。
+#14 upstream sync 贯穿全程；#16 S3 与 #17 OIDC 为可选扩展。
 
 ---
 
@@ -390,7 +364,7 @@ GCP 能力继续以可选 adapter/provider 形式存在。
 
 ```bash
 cp .env.selfhost.example .env
-# 配置至少一个 LLM provider
+# 配置 JWT_SIGNING_KEY、首次管理员账号密码，以及至少一个 LLM provider
 
 docker compose up -d --build
 ```
@@ -404,7 +378,7 @@ MEMORY_BACKEND=postgres
 OBJECT_STORAGE_BACKEND=local
 ```
 
-当前仍需注意：在 #7 完成之前，Compose 的身份边界仍属于 LOCAL_MODE/stub，不应直接当成公网生产认证。
+正式 Self-host 默认使用 local-jwt；LOCAL_MODE/stub 仅用于开发。具体管理员初始化及模型配置参见 SELFHOST.md。
 
 ---
 

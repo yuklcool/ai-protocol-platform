@@ -47,6 +47,7 @@ def _make_session_index(owner_uid: str = "caller-uid", access_type: str = "publi
     now = datetime.now(UTC)
     return ChatSessionIndex(
         session_id="test-session-id",
+        tenant_id="test-tenant",
         skill_id="test-skill-id",
         owner_uid=owner_uid,
         access_control={"type": access_type},
@@ -72,7 +73,7 @@ def _make_skill(
 
 
 def _make_user() -> User:
-    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com")
+    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com", tenant_id="test-tenant")
 
 
 async def _fake_event_stream(input_data) -> AsyncGenerator:
@@ -1029,3 +1030,20 @@ def test_stream_skill_unknown_exception_still_raises(client):
         _pytest.raises(RuntimeError, match="programming error"),
     ):
         client.post("/api/skill/test-skill-id/stream", json={"message": "hello"})
+
+
+def test_stream_rejects_same_owner_public_session_in_other_tenant(client):
+    skill = _make_skill(skill_id="test-skill-id", access_type="public")
+    session = _make_session_index(owner_uid="caller-uid", access_type="public")
+    session.tenant_id = "other-tenant"
+    with (
+        patch("skills.skill_processor.get_skill", return_value=skill),
+        patch("db.chat_sessions.get_session_index", return_value=session),
+        patch("ag_ui_adk.ADKAgent.run") as run,
+    ):
+        response = client.post(
+            "/api/skill/test-skill-id/stream",
+            json={"message": "hello", "sessionId": "test-session-id"},
+        )
+    assert response.status_code == 403
+    run.assert_not_called()

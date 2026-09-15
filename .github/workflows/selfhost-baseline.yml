@@ -61,6 +61,7 @@ on:
       - backend/tests/api_tests/test_document_storage_delete.py
       - backend/tests/api_tests/test_document_storage_binding.py
       - backend/tests/api_tests/test_import_by_reference.py
+      - backend/tests/integration/conftest.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/integration/test_postgres_document_metadata.py
@@ -141,6 +142,7 @@ on:
       - backend/tests/api_tests/test_document_storage_delete.py
       - backend/tests/api_tests/test_document_storage_binding.py
       - backend/tests/api_tests/test_import_by_reference.py
+      - backend/tests/integration/conftest.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/integration/test_postgres_document_metadata.py
@@ -285,6 +287,7 @@ jobs:
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -e LOCAL_MODE=1 \
             backend uv run python scripts/seed_selfhost_persistence.py
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
@@ -304,12 +307,12 @@ jobs:
             -e OBJECT_STORAGE_BACKEND=local \
             -e OBJECT_STORAGE_LOCAL_ROOT=/data/objects \
             -e ADK_ARTIFACT_ROOT=/data/artifacts \
-            backend uv run python -c "import asyncio; from google.genai import types; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; s=get_object_storage(); i=s.put_bytes('ci-tenant','restart/probe.bin',b'volume-survives'); assert i.size==15; a=get_artifact_service(); asyncio.run(a.save_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt',artifact=types.Part.from_text(text='artifact-survives'))); print('local object/artifact write OK')"
+            backend uv run python -c "import asyncio; from google.genai import types; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; from auth.models import User; from observability.tenant_context import set_tenant_context; set_tenant_context(User(uid='ci-user', tenant_id='ci-tenant')); s=get_object_storage(); i=s.put_bytes('ci-tenant','restart/probe.bin',b'volume-survives'); assert i.size==15; a=get_artifact_service(); asyncio.run(a.save_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt',artifact=types.Part.from_text(text='artifact-survives'))); print('local object/artifact write OK')"
           docker compose run --rm --no-deps \
             -e OBJECT_STORAGE_BACKEND=local \
             -e OBJECT_STORAGE_LOCAL_ROOT=/data/objects \
             -e ADK_ARTIFACT_ROOT=/data/artifacts \
-            backend uv run python -c "import asyncio; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; s=get_object_storage(); assert s.get_bytes('ci-tenant','restart/probe.bin')==b'volume-survives'; a=get_artifact_service(); p=asyncio.run(a.load_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); assert p is not None and p.text=='artifact-survives'; s.delete('ci-tenant','restart/probe.bin'); asyncio.run(a.delete_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); print('local object/artifact restart read OK')"
+            backend uv run python -c "import asyncio; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; from auth.models import User; from observability.tenant_context import set_tenant_context; set_tenant_context(User(uid='ci-user', tenant_id='ci-tenant')); s=get_object_storage(); assert s.get_bytes('ci-tenant','restart/probe.bin')==b'volume-survives'; a=get_artifact_service(); p=asyncio.run(a.load_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); assert p is not None and p.text=='artifact-survives'; s.delete('ci-tenant','restart/probe.bin'); asyncio.run(a.delete_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); print('local object/artifact restart read OK')"
 
       - name: Verify ADK Session, Memory and A2UI resume survive PostgreSQL reconstruction
         run: |

@@ -92,6 +92,7 @@ def upsert_group_tag(tag_id: str, body: GroupTagUpsert, scope: PlatformScope) ->
     set_document(COLLECTION, tag_id, data)
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="upsert_group_tag",
         target=tag_id,

@@ -5,7 +5,7 @@ Architecture (Path A, decided 2026-04-30 — see docs/design/v6.1.0/mcp-app-inte
 The frontend's `@mcp-ui/client` MCP `Client` connects to *this* endpoint
 instead of talking to MCP servers directly. Two reasons:
 
-  1. **Auth boundary** — the user's Firebase JWT validates HERE; the upstream
+  1. **Auth boundary** — the user's Bearer token validates HERE; the upstream
      MCP server never sees it. Servers carry their own auth via the
      `headers` config field on `mcp_servers/{server_id}` (e.g. an HMAC
      secret, OAuth bearer issued for the proxy).
@@ -26,9 +26,9 @@ Two MCP clients to keep straight:
     they flow through automatically.
 
 Errors:
-  * 401 — missing/invalid Firebase JWT (handled upstream by `get_current_user`)
+  * 401 — missing/invalid Bearer token (handled upstream by `get_current_user`)
   * 403 — caller has no allowlisted skill for `server_id`
-  * 404 — `server_id` not in Firestore
+  * 404 — `server_id` not registered or not visible to the caller's tenant
   * 502 — upstream returned 5xx
   * 504 — upstream timed out
   * 4xx — forwarded verbatim from upstream (the JSON-RPC error body explains)
@@ -44,6 +44,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from auth import User, get_current_user
+from auth.access_context import build_access_context
 from db.persistence import get_document
 from protocols.artefact_review import (
     ArtefactReview,
@@ -51,6 +52,7 @@ from protocols.artefact_review import (
     get_registered_artefact_reviewer,
 )
 from skills import skill_config
+from tools.mcp.tenant_scope import mcp_config_visible_to_tenant
 
 log = logging.getLogger(__name__)
 
@@ -138,8 +140,13 @@ async def _forward(*, server_id: str, request: Request, user: User, method: str)
     explicitly tear down a session. The proxy is a dumb forwarder for all
     three; auth + allowlist gates apply uniformly.
     """
+    # Derive identity from the verified user, never headers/body or ambient metadata.
+    tenant_id = build_access_context(user).tenant_id
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant context required for MCP server")
+
     server_config = get_document(_MCP_COLLECTION, server_id)
-    if server_config is None:
+    if not mcp_config_visible_to_tenant(server_config, tenant_id):
         log.info("mcp_proxy: unknown server_id=%s caller_uid=%s", server_id, user.uid)
         raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not registered")
 

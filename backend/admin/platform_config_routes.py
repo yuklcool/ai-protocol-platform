@@ -123,6 +123,7 @@ def write_platform_config(body: PlatformConfigUpdate, scope: PlatformScope) -> P
 
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="update_platform_config",
         target="singleton",

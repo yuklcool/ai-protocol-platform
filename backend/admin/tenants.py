@@ -402,9 +402,11 @@ def onboard_tenant(
 
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="onboard_tenant",
         target=saved.tenant_id,
+        tenant_id=saved.tenant_id,
         before=None,
         after=_audit_config(saved),
     )
@@ -478,9 +480,11 @@ def edit_tenant(
 
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="edit_tenant",
         target=saved.tenant_id,
+        tenant_id=saved.tenant_id,
         before=_audit_config(current),
         after=_audit_config(saved),
     )
@@ -502,9 +506,11 @@ def disable_tenant(
     assert saved is not None
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="disable_tenant",
         target=saved.tenant_id,
+        tenant_id=saved.tenant_id,
         before=_audit_config(current),
         after=_audit_config(saved),
     )
@@ -526,9 +532,11 @@ def enable_tenant(
     assert saved is not None
     record_admin_action(
         actor_uid=scope.user.uid,
+        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="enable_tenant",
         target=saved.tenant_id,
+        tenant_id=saved.tenant_id,
         before=_audit_config(current),
         after=_audit_config(saved),
     )

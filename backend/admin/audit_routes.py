@@ -6,7 +6,7 @@ audit trail the admin it concerns cannot read does not discharge the
 accountability promise that justified building it — especially once client-side
 tenant admins are operating their own tenant.
 
-Tenant-scoped: a tenant admin sees actions targeting their own domain; a
+Tenant-scoped: a tenant admin sees actions explicitly attributed to their stable tenant; a
 platform admin sees everything. Read-only, so no audit row is written for
 reading — consistent with ``access_routes`` (the trail is for changes; this is
 an inspection).
@@ -33,6 +33,8 @@ class AuditRow(BaseModel):
 
     id: str = ""
     ts: str = ""
+    tenant_id: str = Field(default="", alias="tenantId")
+    actor_tenant_id: str = Field(default="", alias="actorTenantId")
     actor_uid: str = Field(default="", alias="actorUid")
     actor_email: str = Field(default="", alias="actorEmail")
     action: str = ""
@@ -45,9 +47,7 @@ class AuditRow(BaseModel):
 
 class AuditResponse(BaseModel):
     entries: list[AuditRow] = Field(default_factory=list)
-    # True pre-filter count, so the UI can distinguish "nothing has happened"
-    # from "nothing here concerns your tenant" — those look identical otherwise
-    # and the second one silently reads as the first.
+    # Count within authorized tenant scope, before action filtering.
     scanned: int = 0
     scope: str = "platform"
 
@@ -57,15 +57,17 @@ class AuditResponse(BaseModel):
 @router.get("", response_model=AuditResponse)
 def read_audit(
     scope: Scope,
-    limit: int = Query(100, le=500, description="Max entries, newest first."),
+    limit: int = Query(100, ge=1, le=500, description="Max entries, newest first."),
     action: str | None = Query(None, description="Exact-match filter on the action verb."),
 ) -> AuditResponse:
     """Return the audit trail in scope, newest first."""
-    rows, scanned = list_admin_actions(domains=scope.domains, limit=limit, action=action)
+    rows, scanned = list_admin_actions(domains=scope.tenant_ids, limit=limit, action=action)
     entries = [
         AuditRow(
             id=str(r.get("__id", "") or ""),
             ts=str(r.get("ts", "") or ""),
+            tenantId=str(r.get("tenantId", "") or ""),
+            actorTenantId=str(r.get("actorTenantId", "") or ""),
             actorUid=str(r.get("actorUid", "") or ""),
             actorEmail=str(r.get("actorEmail", "") or ""),
             action=str(r.get("action", "") or ""),

@@ -20,7 +20,7 @@ def test_config_cache_avoids_repeated_firestore_reads():
 
     def fake_get(_coll, _sid):
         calls["n"] += 1
-        return {"url": "http://127.0.0.1:5000/mcp/x"}
+        return {"scope": "platform", "url": "http://127.0.0.1:5000/mcp/x"}
 
     with patch("tools.mcp.registry.get_document", side_effect=fake_get):
         registry.get_mcp_tools_with_status(["srv"])
@@ -47,7 +47,7 @@ def test_clear_registry_cache_forces_reread():
 
     def fake_get(_coll, _sid):
         calls["n"] += 1
-        return {"url": "http://x"}
+        return {"scope": "platform", "url": "http://x"}
 
     with patch("tools.mcp.registry.get_document", side_effect=fake_get):
         registry.get_mcp_tools_with_status(["srv"])
@@ -88,3 +88,16 @@ class TaggedMcpToolsetStub(registry.TaggedMcpToolset):
     def __init__(self):  # bypass McpToolset.__init__ (no live connection in tests)
         self._aitana_server_id = "srv"
         self._tools_cache = None
+
+
+@pytest.fixture(autouse=True)
+def _verified_mcp_tenant():
+    from auth import User
+    from observability.tenant_context import set_tenant_context
+    from tools.mcp.registry import clear_registry_cache
+
+    set_tenant_context(User(uid="viewer", tenant_id="tenant-a"))
+    clear_registry_cache()
+    yield
+    clear_registry_cache()
+    set_tenant_context(User(uid=""))

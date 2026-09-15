@@ -26,6 +26,7 @@ on:
       - backend/tests/api_tests/test_mcp_proxy.py
       - backend/tests/api_tests/test_stream_skill.py
       - backend/tests/api_tests/test_upload.py
+      - backend/tests/integration/conftest.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - .github/workflows/selfhost-no-gcp.yml
@@ -53,6 +54,7 @@ on:
       - backend/tests/api_tests/test_mcp_proxy.py
       - backend/tests/api_tests/test_stream_skill.py
       - backend/tests/api_tests/test_upload.py
+      - backend/tests/integration/conftest.py
       - backend/tests/integration/test_postgres_adk_session_memory.py
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - .github/workflows/selfhost-no-gcp.yml

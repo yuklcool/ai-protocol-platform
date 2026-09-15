@@ -72,6 +72,7 @@ def _make_skill(server_ids: list[str]) -> SkillConfig:
 
 
 _SERVER = {
+    "scope": "platform",
     "name": "test mcp",
     "transport": "http",
     "url": "https://upstream.example.com/mcp",
