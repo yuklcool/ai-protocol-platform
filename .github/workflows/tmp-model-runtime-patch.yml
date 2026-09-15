@@ -2,14 +2,16 @@ name: Temporary model runtime patch
 
 on:
   push:
-    branches: [feat/model-provider-runtime-routing]
+    branches:
+      - feat/model-provider-runtime-routing
+    paths:
+      - .github/workflows/tmp-model-runtime-patch.yml
 
 permissions:
   contents: write
 
 jobs:
   apply-patch:
-    if: ${{ github.event.head_commit.message == 'ci: bootstrap model runtime patch v2' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
