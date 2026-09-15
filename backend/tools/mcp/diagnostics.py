@@ -99,7 +99,7 @@ async def _session(server_id: str, config: dict[str, Any]) -> AsyncIterator[Clie
                     yield session
     except McpDiagnosticError:
         raise
-    except BaseException as exc:
+    except Exception as exc:
         raise _classify_exception(exc) from exc
 
 
@@ -109,37 +109,54 @@ async def discover_mcp_server(
     *,
     timeout_seconds: float = 15.0,
 ) -> dict[str, Any]:
-    """Initialize the server and discover tools/resources/prompts in one session."""
+    """Initialize the server and discover tools/resources/prompts in one session.
+
+    ``tools/list`` is the required discovery path for this platform and fails the
+    operation when malformed. Resources and prompts are optional MCP
+    capabilities: failures there are returned as structured warnings so the UI
+    can distinguish "unsupported/broken optional capability" from a dead server.
+    """
     try:
         async with asyncio.timeout(timeout_seconds):
             async with _session(server_id, config) as session:
                 initialize = await session.initialize()
                 tools_result = await session.list_tools()
                 tools = _items(tools_result, "tools")
+                warnings: list[dict[str, str]] = []
 
                 try:
                     resources = _items(await session.list_resources(), "resources")
-                except Exception:
+                except Exception as exc:
+                    error = _classify_exception(exc)
                     resources = []
+                    warnings.append(
+                        {"capability": "resources", "category": error.category, "message": error.message}
+                    )
                 try:
                     prompts = _items(await session.list_prompts(), "prompts")
-                except Exception:
+                except Exception as exc:
+                    error = _classify_exception(exc)
                     prompts = []
+                    warnings.append(
+                        {"capability": "prompts", "category": error.category, "message": error.message}
+                    )
 
+                resource_uris = _ui_resource_uris(tools, resources)
                 return {
                     "ok": True,
                     "server": _dump(initialize),
                     "tools": tools,
                     "resources": resources,
                     "prompts": prompts,
+                    "warnings": warnings,
                     "mcpApps": {
-                        "supported": bool(_ui_resource_uris(tools, resources)),
-                        "resourceUris": _ui_resource_uris(tools, resources),
+                        "supported": bool(resource_uris),
+                        "resourceUris": resource_uris,
                     },
                 }
     except McpDiagnosticError:
         raise
-    except BaseException as exc:
+    except Exception as exc:
         raise _classify_exception(exc) from exc
 
 
@@ -152,7 +169,7 @@ async def check_mcp_server(server_id: str, config: dict[str, Any], *, timeout_se
                 return {"ok": True, "server": _dump(initialize)}
     except McpDiagnosticError:
         raise
-    except BaseException as exc:
+    except Exception as exc:
         raise _classify_exception(exc) from exc
 
 
