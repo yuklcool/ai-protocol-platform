@@ -9,7 +9,12 @@ from adk import artifact_backend
 from adk import session as session_mod
 from adk.tenant_artifact_service import TenantScopedArtifactService
 from auth import User
-from observability.tenant_context import set_tenant_context
+from observability.tenant_context import (
+    clear_tenant_enrichers,
+    get_current_tenant_id,
+    register_tenant_enricher,
+    set_tenant_context,
+)
 
 
 def _bind(tenant_id: str) -> None:
@@ -27,10 +32,26 @@ def _bind(tenant_id: str) -> None:
 def _reset():
     artifact_backend._reset_artifact_service_for_tests()
     session_mod._reset_artifact_service_for_tests()
+    clear_tenant_enrichers()
     _bind("tenant-test")
     yield
+    clear_tenant_enrichers()
     session_mod._reset_artifact_service_for_tests()
     artifact_backend._reset_artifact_service_for_tests()
+
+
+def test_enricher_cannot_override_verified_tenant_identity() -> None:
+    register_tenant_enricher(lambda _user: {"tenant.id": "legacy-domain", "trace.cohort": "blue"})
+    set_tenant_context(
+        User(
+            uid="user-a",
+            email="user-a@example.com",
+            domain="legacy-domain",
+            tenant_id="tenant-explicit",
+        ),
+        extra={"tenant.id": "request-spoof", "trace.request": "yes"},
+    )
+    assert get_current_tenant_id() == "tenant-explicit"
 
 
 @pytest.mark.asyncio
