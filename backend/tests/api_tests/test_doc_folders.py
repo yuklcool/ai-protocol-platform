@@ -50,23 +50,32 @@ class TestPostFolders:
                 "id": "folder1",
                 "name": "Q1 Review",
                 "userId": "user_a",
+                "tenantId": "example.com",
                 "docCount": 0,
                 "parsedCount": 0,
             }
             resp = app_a.post("/api/folders", json={"name": "Q1 Review"})
         assert resp.status_code == 201
         assert resp.json()["id"] == "folder1"
+        mock_create.assert_called_once_with(user_id="user_a", name="Q1 Review", tenant_id="example.com")
 
-    def test_create_folder_passes_uid(self, app_a: TestClient):
+    def test_create_folder_passes_uid_and_tenant(self, app_a: TestClient):
         calls = []
 
-        def capturing_create(user_id: str, name: str) -> dict:
-            calls.append((user_id, name))
-            return {"id": "f1", "name": name, "userId": user_id, "docCount": 0, "parsedCount": 0}
+        def capturing_create(user_id: str, name: str, *, tenant_id: str | None = None) -> dict:
+            calls.append((user_id, name, tenant_id))
+            return {
+                "id": "f1",
+                "name": name,
+                "userId": user_id,
+                "tenantId": tenant_id or "",
+                "docCount": 0,
+                "parsedCount": 0,
+            }
 
         with patch("db.folders.create_folder", side_effect=capturing_create):
             app_a.post("/api/folders", json={"name": "My Folder"})
-        assert calls[0][0] == "user_a"
+        assert calls == [("user_a", "My Folder", "example.com")]
 
     def test_requires_auth(self, app_anon: TestClient):
         assert app_anon.post("/api/folders", json={"name": "test"}).status_code == 401
@@ -75,22 +84,25 @@ class TestPostFolders:
 class TestGetFolders:
     def test_returns_caller_folders_only(self, app_a: TestClient):
         folders = [{"id": "f1", "name": "My Docs", "userId": "user_a", "docCount": 3, "parsedCount": 3}]
-        with patch("db.folders.list_folders", return_value=folders):
+        with patch("db.folders.list_folders", return_value=folders) as mock_list:
             resp = app_a.get("/api/folders")
         assert resp.status_code == 200
         assert resp.json()["folders"][0]["id"] == "f1"
+        mock_list.assert_called_once_with(user_id="user_a", tenant_id="example.com")
 
 
 class TestGetFolderDocuments:
     def test_returns_documents_for_own_folder(self, app_a: TestClient):
         docs = [{"id": "doc1", "title": "Report.docx", "parseStatus": "parsed", "blockCount": 42}]
         with (
-            patch("db.folders.get_folder", return_value={"id": "f1", "userId": "user_a"}),
-            patch("db.folders.list_folder_documents", return_value=docs),
+            patch("db.folders.get_folder", return_value={"id": "f1", "userId": "user_a"}) as mock_get,
+            patch("db.folders.list_folder_documents", return_value=docs) as mock_docs,
         ):
             resp = app_a.get("/api/folders/f1/documents")
         assert resp.status_code == 200
         assert resp.json()["documents"][0]["parseStatus"] == "parsed"
+        mock_get.assert_called_once_with(user_id="user_a", folder_id="f1", tenant_id="example.com")
+        mock_docs.assert_called_once_with(user_id="user_a", folder_id="f1", tenant_id="example.com")
 
     def test_other_users_folder_is_403(self, app_a: TestClient):
         with patch("db.folders.get_folder", return_value={"id": "f1", "userId": "user_b"}):
@@ -131,7 +143,7 @@ class TestGetDocument:
 _UNICODE_DOC = {
     **_PARSED_DOC,
     "id": "docU",
-    "originalFilename": "Din SAS-booking bekr\u00e6ftet, 1 Jul \u2013 8 Jul.pdf",
+    "originalFilename": "Din SAS-booking bekræftet, 1 Jul – 8 Jul.pdf",
     "sourceFormat": "pdf",
     "contentType": "application/pdf",
     "storagePath": "users/user_a/docs/f/booking.pdf",
