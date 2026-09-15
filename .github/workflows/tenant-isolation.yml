@@ -9,6 +9,7 @@ on:
       - backend/auth/local_jwt.py
       - backend/auth/firebase_auth.py
       - backend/auth/admin_roles.py
+      - backend/auth/routes.py
       - backend/db/tenant_repository.py
       - backend/db/tenants.py
       - backend/db/clients.py
@@ -23,6 +24,7 @@ on:
       - backend/auth/local_jwt.py
       - backend/auth/firebase_auth.py
       - backend/auth/admin_roles.py
+      - backend/auth/routes.py
       - backend/db/tenant_repository.py
       - backend/db/tenants.py
       - backend/db/clients.py
