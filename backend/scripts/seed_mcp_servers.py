@@ -52,6 +52,7 @@ COLLECTION = "mcp_servers"
 DEFAULT_LOCAL_URL = "http://127.0.0.1:3001/mcp"
 
 EXT_APPS_MAP_CONFIG = {
+    "scope": "platform",
     "name": "Geo / 3D Globe (ext-apps map-server)",
     "transport": "http",
     "headers": {},
@@ -111,6 +112,7 @@ _BQ_TOOLSET = next((n for n in _TOOLSETS if "bigquery" in n or n.endswith("-bq")
 
 TOOLBOX_URL = f"http://127.0.0.1:5000/mcp/{_PRIMARY_TOOLSET}"
 TOOLBOX_CONFIG = {
+    "scope": "platform",
     "name": "Toolbox — ONE MarketData PPA prices",
     "transport": "http",
     "headers": {},
@@ -133,6 +135,7 @@ TOOLBOX_CONFIG = {
 # would hand every MarketData consumer arbitrary SQL by accident.
 TOOLBOX_BQ_URL = f"http://127.0.0.1:5000/mcp/{_BQ_TOOLSET}"
 TOOLBOX_ONE_BQ_CONFIG = {
+    "scope": "platform",
     "name": "Toolbox — ONE BigQuery (scoped ad-hoc query)",
     "transport": "http",
     "headers": {},
@@ -164,6 +167,7 @@ TOOLBOX_ONE_BQ_CONFIG = {
 # "Secret-bearing headers" in tools/mcp/registry.py.
 MAPS_GROUNDING_URL = "https://mapstools.googleapis.com/mcp"
 MAPS_GROUNDING_CONFIG = {
+    "scope": "platform",
     "name": "Google Maps Grounding Lite",
     "url": MAPS_GROUNDING_URL,
     "transport": "http",  # streamable HTTP
@@ -204,6 +208,13 @@ def seed_ext_apps_map(url: str | None, *, dry_run: bool = False) -> None:
         existing = fs.get_document(COLLECTION, "ext-apps-map")
         if existing and existing.get("url"):
             print(f"ext-apps-map: preserving existing url={existing['url']} (no --url/--public-url given)")
+            # Explicitly re-seeding this known built-in migrates its legacy scope,
+            # preserving deployed endpoints, headers and any explicit private scope.
+            if not existing.get("scope"):
+                if dry_run:
+                    print("[dry-run] would add scope=platform to ext-apps-map")
+                else:
+                    fs.set_document(COLLECTION, "ext-apps-map", {**existing, "scope": "platform"})
             return
         url = DEFAULT_LOCAL_URL  # first-time local seed, nothing to clobber
     config = {**EXT_APPS_MAP_CONFIG, "url": url}

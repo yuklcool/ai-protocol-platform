@@ -95,9 +95,9 @@ def test_registry_cache_is_partitioned_by_tenant() -> None:
         third, missing_a2 = registry.get_mcp_tools_with_status(["shared-id"])
 
     assert not missing_a and not missing_b and not missing_a2
-    assert first[0].connection_params.url == "https://tenant-a.example.com/mcp"
-    assert second[0].connection_params.url == "https://tenant-b.example.com/mcp"
-    assert third[0].connection_params.url == "https://tenant-a.example.com/mcp"
+    assert first[0]._connection_params.url == "https://tenant-a.example.com/mcp"
+    assert second[0]._connection_params.url == "https://tenant-b.example.com/mcp"
+    assert third[0]._connection_params.url == "https://tenant-a.example.com/mcp"
     assert calls == ["tenant-a", "tenant-b"]
 
 

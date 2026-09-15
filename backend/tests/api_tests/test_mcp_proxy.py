@@ -38,8 +38,11 @@ from protocols.mcp_proxy import router
 # ---------------------------------------------------------------------------
 
 
-def _make_client(uid: str = "viewer", tags: frozenset[str] = frozenset()) -> TestClient:
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
+def _make_client(
+    uid: str = "viewer", tags: frozenset[str] = frozenset(),
+    *, tenant_id: str = "tenant-a", domain: str = "example.com",
+) -> TestClient:
+    user = User(uid=uid, email=f"{uid}@example.com", domain=domain, tenant_id=tenant_id)
     ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
 
     test_app = FastAPI()
@@ -81,6 +84,7 @@ def _make_skill(
 
 
 _HAPPY_SERVER = {
+    "scope": "platform",
     "name": "Test Map Server",
     "transport": "http",
     "url": "https://upstream.example.com/mcp",
@@ -405,3 +409,44 @@ class TestPassthroughContentTypes:
 
 # Suppress noisy pytest warning about httpx mock handling
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+
+@pytest.mark.parametrize("method", ["POST", "GET", "DELETE"])
+@pytest.mark.parametrize("config,tenant_id,domain,expected", [
+    ({"scope": "tenant", "tenantId": "tenant-a"}, "tenant-a", "shared.example", 200),
+    ({"scope": "tenant", "tenantId": "tenant-a"}, "tenant-b", "shared.example", 404),
+    ({"scope": "tenant", "tenantId": "shared.example"}, "tenant-b", "shared.example", 404),
+    ({"scope": "tenant"}, "tenant-a", "shared.example", 404),
+    ({}, "tenant-a", "shared.example", 404),
+    ({"scope": "unknown"}, "tenant-a", "shared.example", 404),
+    ({"scope": "platform"}, "tenant-a", "shared.example", 200),
+    ({"scope": "platform"}, "tenant-b", "shared.example", 200),
+    ({"scope": "platform"}, "", "", 403),
+    ({"scope": "tenant", "tenantId": "legacy.example"}, "", "legacy.example", 200),
+])
+def test_proxy_tenant_boundary(method, config, tenant_id, domain, expected):
+    # Same UID/email/domain must not allow access across stable tenant IDs.
+    server = {**_HAPPY_SERVER, **config}
+    if "scope" not in config:
+        server.pop("scope")
+    upstream = httpx.Response(200, content=b"{}")
+    with (
+        patch("protocols.mcp_proxy.get_document", return_value=server) as read,
+        patch("protocols.mcp_proxy._user_can_use_server", return_value=True) as allowlist,
+        patch("protocols.mcp_proxy.httpx.AsyncClient") as client_cls,
+    ):
+        client = AsyncMock()
+        client.request.return_value = upstream
+        client_cls.return_value.__aenter__.return_value = client
+        response = _make_client(tenant_id=tenant_id, domain=domain).request(
+            method, "/mcp/private-server",
+            headers={"X-Tenant-ID": "tenant-a"},
+        )
+    assert response.status_code == expected
+    if expected == 200:
+        client.request.assert_awaited_once()
+    else:
+        client_cls.assert_not_called()
+        allowlist.assert_not_called()
+    if not tenant_id and not domain:
+        read.assert_not_called()

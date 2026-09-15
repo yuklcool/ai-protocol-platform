@@ -16,7 +16,7 @@ class TestGetMcpTools:
     def test_returns_toolset_for_http_server(self):
         from tools.mcp.registry import get_mcp_tools
 
-        config = {"url": "http://localhost:9000/mcp", "transport": "http"}
+        config = {"scope": "platform", "url": "http://localhost:9000/mcp", "transport": "http"}
         with patch("tools.mcp.registry.get_document", return_value=config):
             result = get_mcp_tools(["my-server"])
 
@@ -26,7 +26,7 @@ class TestGetMcpTools:
     def test_returns_sse_toolset_for_sse_transport(self):
         from tools.mcp.registry import _build_toolset
 
-        config = {"url": "http://localhost:9000/sse", "transport": "sse"}
+        config = {"scope": "platform", "url": "http://localhost:9000/sse", "transport": "sse"}
         toolset = _build_toolset("test-server", config)
         assert isinstance(toolset, McpToolset)
         assert isinstance(toolset._connection_params, SseConnectionParams)
@@ -34,7 +34,7 @@ class TestGetMcpTools:
     def test_returns_http_toolset_for_http_transport(self):
         from tools.mcp.registry import _build_toolset
 
-        config = {"url": "http://localhost:9000/mcp", "transport": "http"}
+        config = {"scope": "platform", "url": "http://localhost:9000/mcp", "transport": "http"}
         toolset = _build_toolset("test-server", config)
         assert isinstance(toolset, McpToolset)
         assert isinstance(toolset._connection_params, StreamableHTTPConnectionParams)
@@ -42,7 +42,7 @@ class TestGetMcpTools:
     def test_defaults_to_http_transport(self):
         from tools.mcp.registry import _build_toolset
 
-        config = {"url": "http://localhost:9000/mcp"}
+        config = {"scope": "platform", "url": "http://localhost:9000/mcp"}
         toolset = _build_toolset("test-server", config)
         assert isinstance(toolset._connection_params, StreamableHTTPConnectionParams)
 
@@ -72,8 +72,8 @@ class TestGetMcpTools:
         from tools.mcp.registry import get_mcp_tools
 
         configs = {
-            "server-a": {"url": "http://a.example.com/mcp"},
-            "server-b": {"url": "http://b.example.com/mcp"},
+            "server-a": {"scope": "platform", "url": "http://a.example.com/mcp"},
+            "server-b": {"scope": "platform", "url": "http://b.example.com/mcp"},
         }
         with patch("tools.mcp.registry.get_document", side_effect=lambda _, sid: configs[sid]):
             result = get_mcp_tools(["server-a", "server-b"])
@@ -134,7 +134,7 @@ class TestResolveMcpTools:
         assert "2" in msg  # declared count
         assert "1" in msg  # resolved count
         assert "missing-srv" in msg
-        assert "seed_mcp_servers" in msg  # pointer at the fix
+        assert "mcp_servers persistence registry" in msg  # provider-neutral diagnosis
 
     def test_g42_raises_when_all_declared_servers_fail_to_resolve(self):
         """All-miss path: zero resolved + N missing. The previous
@@ -189,8 +189,8 @@ class TestGetMcpToolsWithStatus:
         from tools.mcp.registry import get_mcp_tools_with_status
 
         configs = {
-            "server-a": {"url": "http://a.example.com/mcp"},
-            "server-b": {"url": "http://b.example.com/mcp"},
+            "server-a": {"scope": "platform", "url": "http://a.example.com/mcp"},
+            "server-b": {"scope": "platform", "url": "http://b.example.com/mcp"},
         }
         with patch(
             "tools.mcp.registry.get_document",
@@ -248,7 +248,7 @@ class TestGetMcpToolsWithStatus:
 
         def fake_get(_coll, sid):
             if sid == "ok":
-                return {"url": "http://ok.example.com/mcp"}
+                return {"scope": "platform", "url": "http://ok.example.com/mcp"}
             return None  # missing
 
         with patch("tools.mcp.registry.get_document", side_effect=fake_get):
@@ -393,7 +393,7 @@ class TestToolboxSidecarWiring:
 
         from adk.tools import resolve_mcp_tools
 
-        config = {"url": "http://127.0.0.1:5000/mcp/example", "transport": "http"}
+        config = {"scope": "platform", "url": "http://127.0.0.1:5000/mcp/example", "transport": "http"}
         with patch("tools.mcp.registry.get_document", return_value=config):
             result = resolve_mcp_tools({"mcp": {"servers": ["toolbox"]}})
         assert len(result) == 1
@@ -425,6 +425,7 @@ class TestHeaderSecretResolution:
 
         monkeypatch.setenv("TEST_MCP_KEY", "secret-value-123")
         config = {
+            "scope": "platform",
             "url": "https://example.test/mcp",
             "headers": {"X-Goog-Api-Key": "${TEST_MCP_KEY}"},
         }
@@ -439,6 +440,7 @@ class TestHeaderSecretResolution:
 
         monkeypatch.delenv("TEST_MCP_KEY", raising=False)
         config = {
+            "scope": "platform",
             "url": "https://example.test/mcp",
             "headers": {"X-Custom": "literal", "X-Dollar": "cost is $5"},
         }
@@ -453,6 +455,7 @@ class TestHeaderSecretResolution:
 
         monkeypatch.delenv("TEST_MCP_KEY", raising=False)
         config = {
+            "scope": "platform",
             "url": "https://example.test/mcp",
             "headers": {"X-Goog-Api-Key": "${TEST_MCP_KEY}"},
         }
@@ -465,6 +468,7 @@ class TestHeaderSecretResolution:
 
         monkeypatch.setenv("TEST_MCP_KEY", "   ")
         config = {
+            "scope": "platform",
             "url": "https://example.test/mcp",
             "headers": {"X-Goog-Api-Key": "${TEST_MCP_KEY}"},
         }
@@ -477,6 +481,7 @@ class TestHeaderSecretResolution:
 
         monkeypatch.delenv("MAPS_GROUNDING_API_KEY", raising=False)
         config = {
+            "scope": "platform",
             "url": "https://mapstools.googleapis.com/mcp",
             "headers": {"X-Goog-Api-Key": "${MAPS_GROUNDING_API_KEY}"},
         }
@@ -512,3 +517,16 @@ class TestHeaderSecretResolution:
         assert isinstance(toolset._connection_params, StreamableHTTPConnectionParams)
         assert toolset._connection_params.url == MAPS_GROUNDING_URL
         assert toolset._connection_params.headers["X-Goog-Api-Key"] == "test-key"
+
+
+@pytest.fixture(autouse=True)
+def _verified_mcp_tenant():
+    from auth import User
+    from observability.tenant_context import set_tenant_context
+    from tools.mcp.registry import clear_registry_cache
+
+    set_tenant_context(User(uid="viewer", tenant_id="tenant-a"))
+    clear_registry_cache()
+    yield
+    clear_registry_cache()
+    set_tenant_context(User(uid=""))

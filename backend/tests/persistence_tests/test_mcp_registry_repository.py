@@ -23,6 +23,7 @@ def test_mcp_registry_reads_server_config_from_repository(repository: MemoryRepo
         "mcp_servers",
         "internal-tools",
         {
+            "scope": "platform",
             "url": "http://127.0.0.1:9000/mcp",
             "transport": "http",
             "headers": {},
@@ -41,6 +42,7 @@ def test_mcp_registry_resolves_toolset_without_firestore(repository: MemoryRepos
         "mcp_servers",
         "internal-tools",
         {
+            "scope": "platform",
             "url": "http://127.0.0.1:9000/mcp",
             "transport": "http",
             "headers": {},
@@ -67,6 +69,7 @@ def test_mcp_registry_cache_avoids_repeated_repository_reads(repository: MemoryR
         "mcp_servers",
         "cached-tools",
         {
+            "scope": "platform",
             "url": "http://127.0.0.1:9001/mcp",
             "transport": "http",
             "headers": {},
@@ -88,3 +91,16 @@ def test_mcp_registry_cache_avoids_repeated_repository_reads(repository: MemoryR
 
     assert first == second
     assert calls == 1
+
+
+@pytest.fixture(autouse=True)
+def _verified_mcp_tenant():
+    from auth import User
+    from observability.tenant_context import set_tenant_context
+    from tools.mcp.registry import clear_registry_cache
+
+    set_tenant_context(User(uid="viewer", tenant_id="tenant-a"))
+    clear_registry_cache()
+    yield
+    clear_registry_cache()
+    set_tenant_context(User(uid=""))
