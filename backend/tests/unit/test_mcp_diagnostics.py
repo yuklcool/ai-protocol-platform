@@ -33,9 +33,26 @@ def test_authentication_error_is_classified() -> None:
     assert error.category == "authentication"
 
 
+def test_nested_authentication_error_is_classified() -> None:
+    error = diagnostics._classify_exception(
+        ExceptionGroup("transport failed", [RuntimeError("403 Forbidden")])
+    )
+    assert error.category == "authentication"
+
+
 def test_network_error_is_classified() -> None:
     request = httpx.Request("POST", "https://mcp.example.test")
     error = diagnostics._classify_exception(httpx.ConnectError("connection refused", request=request))
+    assert error.category == "network"
+
+
+def test_nested_network_error_is_classified() -> None:
+    request = httpx.Request("POST", "https://mcp.example.test")
+    wrapped = ExceptionGroup(
+        "task group failed",
+        [httpx.ConnectError("name or service not known", request=request)],
+    )
+    error = diagnostics._classify_exception(wrapped)
     assert error.category == "network"
 
 
