@@ -35,15 +35,31 @@ def _extract_domain(email: str) -> str:
     return email.rsplit("@", 1)[1]
 
 
+def _tenant_id_from_claims(claims: dict[str, Any], domain: str) -> str:
+    """Resolve a trusted stable tenant id with legacy domain fallback.
+
+    Both ``tenant_id`` and ``tenantId`` are accepted so OIDC-style custom
+    claims and existing camelCase platform records can converge on the same
+    provider-neutral ``User.tenant_id`` field. Firebase has already verified
+    these claims before this function is called.
+    """
+    explicit = claims.get("tenant_id") or claims.get("tenantId")
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()
+    return domain
+
+
 def _user_from_decoded_token(decoded: dict[str, Any]) -> User:
     """Build the provider-neutral ``User`` from a verified Firebase token."""
     email = decoded.get("email") or ""
+    domain = _extract_domain(email)
     raw_tags = decoded.get("groupTags") or []
     group_tags = frozenset(str(t) for t in raw_tags)
     return User(
         uid=decoded["uid"],
         email=email,
-        domain=_extract_domain(email),
+        domain=domain,
+        tenant_id=_tenant_id_from_claims(decoded, domain),
         group_tags=group_tags,
         auth_mode="firebase",
     )
@@ -75,7 +91,7 @@ async def get_current_user(request: Request) -> User:
 
     user = _apply_derived_group_tags(_user_from_decoded_token(decoded))
     request.state.access = build_access_context(user)
-    logger.info("auth: authenticated uid=%s", user.uid)
+    logger.info("auth: authenticated uid=%s tenant=%s", user.uid, user.tenant_id or user.domain)
     return user
 
 
@@ -122,6 +138,7 @@ def resolve_user_by_uid(uid: str) -> User | None:
         user = None
     else:
         email = getattr(record, "email", None) or ""
+        domain = _extract_domain(email)
         claims = getattr(record, "custom_claims", None) or {}
         raw_tags = claims.get("groupTags") or []
         try:
@@ -133,7 +150,8 @@ def resolve_user_by_uid(uid: str) -> User | None:
             User(
                 uid=uid,
                 email=email,
-                domain=_extract_domain(email),
+                domain=domain,
+                tenant_id=_tenant_id_from_claims(claims, domain),
                 group_tags=group_tags,
                 auth_mode="firebase",
             )
