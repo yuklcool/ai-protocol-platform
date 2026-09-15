@@ -37,12 +37,16 @@ def _content_disposition(disposition: str, filename: str) -> str:
 
 
 def _tenant_namespace(user: User) -> str:
-    domain = (getattr(user, "domain", None) or "").strip().lower()
-    if not domain:
-        email = (getattr(user, "email", None) or "").strip().lower()
-        if "@" in email:
-            domain = email.rsplit("@", 1)[1]
-    return domain or f"user-{user.uid}"
+    """Resolve the stable tenant attached to the authenticated identity.
+
+    ``tenant_id`` is authoritative. Domain remains only as the compatibility
+    mapping for identities that predate first-class tenant claims. We do not
+    parse arbitrary email text and never invent a pseudo tenant from the uid.
+    """
+    tenant_id = (getattr(user, "tenant_id", None) or getattr(user, "domain", None) or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Stable tenant scope is required")
+    return tenant_id
 
 
 def _owned_document(doc_id: str, user: User) -> dict:
@@ -51,16 +55,26 @@ def _owned_document(doc_id: str, user: User) -> dict:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc.get("userId") != user.uid:
         raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
-    tenant_id = doc.get("tenantId")
-    if tenant_id and tenant_id != _tenant_namespace(user):
+
+    viewer_tenant = _tenant_namespace(user)
+    resource_tenant = str(doc.get("tenantId") or "").strip()
+    # ParsedDocument is now a first-class tenant resource. Legacy rows without
+    # tenantId must be explicitly migrated/hydrated; request-time reads do not
+    # guess a tenant from email/domain because that would re-open cross-tenant
+    # access for the same uid.
+    if not resource_tenant or resource_tenant != viewer_tenant:
         raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
+
     doc.setdefault("id", doc_id)
     return doc
 
 
 def _storage_binding(doc: dict, user: User):
-    """Return (storage, tenant_id, key, backend) for new and legacy documents."""
-    tenant_id = doc.get("tenantId") or _tenant_namespace(user)
+    """Return (storage, tenant_id, key, backend) for an authorized document."""
+    tenant_id = str(doc.get("tenantId") or "").strip()
+    if not tenant_id or tenant_id != _tenant_namespace(user):
+        raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
+
     key = (doc.get("storagePath") or "").strip()
     source_url = (doc.get("sourceUrl") or "").strip()
     backend = (doc.get("storageBackend") or "").strip().lower()
@@ -168,23 +182,28 @@ class _DocumentsListResponse(BaseModel):
 
 @router.post("/api/folders", status_code=201)
 def create_folder(body: _CreateFolderRequest, user: _CurrentUser) -> _FolderResponse:
-    return _FolderResponse(**folders_db.create_folder(user_id=user.uid, name=body.name))
+    tenant_id = _tenant_namespace(user)
+    return _FolderResponse(**folders_db.create_folder(user_id=user.uid, name=body.name, tenant_id=tenant_id))
 
 
 @router.get("/api/folders")
 def list_folders(user: _CurrentUser) -> _FoldersListResponse:
-    items = folders_db.list_folders(user_id=user.uid)
+    tenant_id = _tenant_namespace(user)
+    items = folders_db.list_folders(user_id=user.uid, tenant_id=tenant_id)
     return _FoldersListResponse(folders=[_FolderResponse(**f) for f in items])
 
 
 @router.get("/api/folders/{folder_id}/documents")
 def list_folder_documents(folder_id: str, user: _CurrentUser) -> _DocumentsListResponse:
-    folder = folders_db.get_folder(user_id=user.uid, folder_id=folder_id)
+    tenant_id = _tenant_namespace(user)
+    folder = folders_db.get_folder(user_id=user.uid, folder_id=folder_id, tenant_id=tenant_id)
     if folder is None:
         raise HTTPException(status_code=404, detail="Folder not found")
     if folder.get("userId") != user.uid:
         raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
-    return _DocumentsListResponse(documents=folders_db.list_folder_documents(user_id=user.uid, folder_id=folder_id))
+    return _DocumentsListResponse(
+        documents=folders_db.list_folder_documents(user_id=user.uid, folder_id=folder_id, tenant_id=tenant_id)
+    )
 
 
 @router.get("/api/documents/{doc_id}")
@@ -321,6 +340,7 @@ async def delete_document(doc_id: str, user: _CurrentUser) -> None:
                 folder_id,
                 doc_delta=-1,
                 parsed_delta=-1 if doc.get("parseStatus") == "parsed" else 0,
+                tenant_id=tenant_id,
             )
         except Exception as exc:
             log.warning("Failed to decrement folder counts for %s: %s", folder_id, exc)
