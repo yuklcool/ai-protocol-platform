@@ -10,6 +10,7 @@ on:
       - backend/auth/firebase_auth.py
       - backend/auth/admin_roles.py
       - backend/db/tenant_repository.py
+      - backend/db/tenants.py
       - backend/db/clients.py
       - backend/tests/unit/test_tenant_identity.py
       - backend/tests/unit/test_access_context.py
@@ -23,6 +24,7 @@ on:
       - backend/auth/firebase_auth.py
       - backend/auth/admin_roles.py
       - backend/db/tenant_repository.py
+      - backend/db/tenants.py
       - backend/db/clients.py
       - backend/tests/unit/test_tenant_identity.py
       - backend/tests/unit/test_access_context.py
@@ -45,7 +47,7 @@ jobs:
       - name: Build backend
         run: docker compose build backend
 
-      - name: Verify tenant identity and fail-closed repository
+      - name: Verify tenant identity directory and fail-closed repository
         run: |
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=memory \
