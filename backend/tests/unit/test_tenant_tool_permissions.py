@@ -39,12 +39,26 @@ def test_tenant_rule_precedes_legacy_domain_rule() -> None:
         assert can_use_tool("user@a.example", "a.example", "search", tenant_id="tenant-a") is True
 
 
-def test_legacy_domain_rule_remains_fallback_during_migration() -> None:
+def test_legacy_domain_rule_remains_fallback_when_domain_mapping_matches_tenant() -> None:
     docs = {
         "a.example": {"type": "domain", "tools": ["search"], "denied": []},
     }
-    with _docs(docs):
+    with (
+        _docs(docs),
+        patch("db.tenants.tenant_id_for_domain", return_value="tenant-a"),
+    ):
         assert can_use_tool("user@a.example", "a.example", "search", tenant_id="tenant-a") is True
+
+
+def test_legacy_domain_rule_is_not_used_for_a_different_stable_tenant() -> None:
+    docs = {
+        "a.example": {"type": "domain", "tools": ["secret_tool"], "denied": []},
+    }
+    with (
+        _docs(docs),
+        patch("db.tenants.tenant_id_for_domain", return_value="tenant-b"),
+    ):
+        assert can_use_tool("user@a.example", "a.example", "secret_tool", tenant_id="tenant-a") is False
 
 
 def test_other_tenant_rule_is_never_considered() -> None:
@@ -59,20 +73,49 @@ def test_other_tenant_rule_is_never_considered() -> None:
 
 def test_same_email_cache_is_partitioned_by_tenant() -> None:
     docs = {
-        "tenant:tenant-a": {"type": "tenant", "tools": ["search"], "denied": []},
-        "tenant:tenant-b": {"type": "tenant", "tools": [], "denied": ["search"]},
+        "tenant:tenant-a": {"type": "tenant", "tenantId": "tenant-a", "tools": ["search"], "denied": []},
+        "tenant:tenant-b": {"type": "tenant", "tenantId": "tenant-b", "tools": [], "denied": ["search"]},
     }
     with _docs(docs):
         assert can_use_tool("shared@example.com", "example.com", "search", tenant_id="tenant-a") is True
         assert can_use_tool("shared@example.com", "example.com", "search", tenant_id="tenant-b") is False
 
 
-def test_user_specific_rule_still_has_highest_precedence() -> None:
+def test_user_specific_rule_still_has_highest_precedence_when_owned_by_tenant() -> None:
     docs = {
-        "user@a.example": {"type": "user", "tools": [], "denied": ["search"]},
-        "tenant:tenant-a": {"type": "tenant", "tools": ["search"], "denied": []},
+        "user@a.example": {
+            "type": "user",
+            "tenantId": "tenant-a",
+            "tools": [],
+            "denied": ["search"],
+        },
+        "tenant:tenant-a": {"type": "tenant", "tenantId": "tenant-a", "tools": ["search"], "denied": []},
     }
     with _docs(docs):
+        assert can_use_tool("user@a.example", "a.example", "search", tenant_id="tenant-a") is False
+
+
+def test_user_specific_rule_owned_by_other_tenant_cannot_leak() -> None:
+    docs = {
+        "shared@example.com": {
+            "type": "user",
+            "tenantId": "tenant-a",
+            "tools": ["secret_tool"],
+            "denied": [],
+        },
+        "tenant:tenant-b": {"type": "tenant", "tenantId": "tenant-b", "tools": [], "denied": ["secret_tool"]},
+    }
+    with _docs(docs):
+        assert can_use_tool("shared@example.com", "example.com", "secret_tool", tenant_id="tenant-b") is False
+
+
+def test_unattributed_user_rule_only_applies_in_pure_legacy_domain_tenant() -> None:
+    docs = {
+        "user@a.example": {"type": "user", "tools": ["search"], "denied": []},
+    }
+    with _docs(docs):
+        assert can_use_tool("user@a.example", "a.example", "search", tenant_id="a.example") is True
+        clear_cache()
         assert can_use_tool("user@a.example", "a.example", "search", tenant_id="tenant-a") is False
 
 
