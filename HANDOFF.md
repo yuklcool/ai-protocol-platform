@@ -3,13 +3,13 @@
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
 > 状态更新时间：**2026-09-16**  
-> 当前主线：**Self-host 基线已完成；#9 多租户等待 legacy ownership + 真实 E2E；#11 MCP 管理面代码已完成、等待真实部署验收；#10 Provider/Model 管理、Probe、默认模型与 tier mapping 已完成，下一步为可选 Tenant 模型策略 + 真实第三方 Provider E2E。**
+> 当前主线：**Self-host 基线已完成；#9 多租户等待 legacy ownership + 真实 E2E；#11 MCP 管理面代码已完成、等待真实部署验收；#10 Provider/Model 管理、Probe、平台默认/tier mapping、Tenant 模型策略均已完成，剩真实第三方 OpenAI-compatible Provider E2E。**
 
 ---
 
 ## 1. 当前结论
 
-这个仓库已经不是“只做 Roadmap 的 fork”。当前 `main` 已完成 Self-host 核心底座、多租户核心边界、MCP 管理面和动态模型运行时接入，并有 PostgreSQL / Docker / no-GCP / provider routing 等 CI 回归。
+这个仓库已经不是“只做 Roadmap 的 fork”。当前 `main` 已完成 Self-host 核心底座、多租户核心边界、MCP 管理面、动态模型运行时接入、平台默认模型路由和 Tenant 模型访问策略，并有 PostgreSQL / Docker / no-GCP / provider routing 等 CI 回归。
 
 当前平台已具备：
 
@@ -28,11 +28,14 @@
 - 多 OpenAI-compatible Provider 独立 `base_url / api_key_ref`
 - Dynamic Model 实际进入 ADK Agent runtime
 - Platform default + `default/smart/fast` tier mapping 的数据库管理、effective registry overlay 与 runtime 解析
+- First-class Tenant `allowedModels / defaultModel` 策略
+- 已认证 `/api/models` 的 Tenant 白名单过滤
+- Agent runtime 对 Tenant 模型策略的 server-authoritative enforcement
 - Self-host / Core Runtime / Tenant / MCP / Model Provider 专项 CI Gate
 
 当前不应再把工作重点描述为“建设基础架构”。现在主要是：
 
-1. 继续 #10：可选 Tenant 级模型白名单/默认模型，并用真实第三方 OpenAI-compatible endpoint 做 Agent + Tool Calling E2E。
+1. 继续 #10/#2：用真实第三方 OpenAI-compatible endpoint 做 Provider → Model → Skill → Agent → Tool Calling E2E。
 2. 完成 #9 legacy ownership 迁移和 Tenant A/B 真实 E2E。
 3. 完成 #11 MCP 管理流程真实自托管 E2E。
 4. 用真实浏览器/真实 Provider 完成 #1/#2/#3 最终协议验收并收口。
@@ -150,15 +153,15 @@ e07dbe78da4ec5ba06866ca423707c9eb50d9329
 
 需要新的稳定快照时，应创建新的 deploy branch（例如新的日期或 `-r2`），而不是修改 `deploy/2026-09-15`。
 
-当前 `main` 已经包含冻结分支之后的新能力，包括 #19、#20、#21、#23、#24、#25、#26、#27、#28、#29 等后续工作。
+当前 `main` 已经包含冻结分支之后的新能力，包括 #19、#20、#21、#23、#24、#25、#26、#27、#28、#29、#30 等后续工作。
 
 ### 当前 main 最新关键合并
 
 截至本次交接，最近的模型管理合并为：
 
 ```text
-PR #29
-merge SHA: b58fadb92392f564f95027987f1020cf36690069
+PR #30
+merge SHA: 5d55ee76d8a569c3c49b8b9814877a9d93a6ab4f
 ```
 
 ---
@@ -178,12 +181,12 @@ merge SHA: b58fadb92392f564f95027987f1020cf36690069
 - #1 Self-host 全链路基线 — OPEN
 - #2 通用 OpenAI-compatible — OPEN
 - #3 Docker Compose Self-host — OPEN
+- #10 Model Provider 配置中心 — OPEN；代码侧 Provider/Model/Probe/默认路由/Tenant 策略已完成，仅剩真实 Provider E2E
 - #11 MCP Server 管理能力 — OPEN
 
 ### 仍有真实开发/迁移工作
 
 - #9 显式 Tenant / 隔离 / legacy ownership — OPEN
-- #10 Model Provider 配置中心 — OPEN；平台级 Provider/Model/默认模型/tier mapping 已完成，剩 Tenant 模型策略 + 真实 Provider E2E
 
 ---
 
@@ -355,6 +358,8 @@ AUTH_BACKEND=local-jwt
 - `identity_key: tenant_id`
 - `missing_identity_policy: block`
 - 同 UID 跨租户 / public ACL 跨租户等安全回归
+- Tenant Model Policy 使用 first-class `tenants/{tenant_id}.modelPolicy`
+- legacy `clients/{domain}` 不允许通过模型策略 API 被隐式迁移
 
 推荐 tenant budget：
 
@@ -378,6 +383,7 @@ tool_configs:
 ```text
 PR #18 — Tenant/MCP/Audit/PostgreSQL Self-host 修复
 PR #20 — fail-closed tenant budget identity
+PR #30 — Tenant Model Policy（复用 first-class tenant ownership）
 ```
 
 ### 剩余工作
@@ -393,6 +399,7 @@ PR #20 — fail-closed tenant budget identity
    - MCP
    - Audit
    - quota
+   - Model whitelist/default
    均不可串租户。
 
 迁移前，无可信归属的历史记录继续仅允许 platform admin 访问，不通过邮箱猜测 ownership。
@@ -462,9 +469,9 @@ POST /api/admin/mcp-servers/{server_id}/discover
 
 ---
 
-## 10. #10 Model Provider 配置中心 — 当前重点
+## 10. #10 Model Provider 配置中心 — 代码侧基本完成
 
-#10 已经从“只有 models.yaml + 环境变量”推进到了“平台级 Provider / Model / Default / Tier Mapping 全部进入统一 effective registry 与 Agent runtime”。
+#10 已经从“只有 models.yaml + 环境变量”推进到了“Provider / Model / Default / Tier / Tenant Policy 全部进入统一 effective registry 与 Agent runtime”。
 
 ### PR #25 — Provider / Dynamic Model 管理后端
 
@@ -568,93 +575,131 @@ LiteLlm(
 - fallback credential check 能识别 dynamic provider secret reference
 - reasoning / Responses capability 继续与 provider runtime kwargs 合并
 
-PR #27 验证：
+### PR #28 — Model Providers Admin UI + Probe
 
-- Model Provider gate ✅
-- Core Runtime persistence ✅
-- Self-host Baseline ✅
-- Self-host Baseline 内 OpenAI-compatible provider routing ✅
+Merge SHA：
 
----
-
-## 11. #10 Model Providers 管理 UI 与模型探测
-
-本批工作接续 `feat/model-provider-admin-ui`，已于 2026-09-16 合并到 main：
-[PR #28](https://github.com/yuklcool/ai-protocol-platform/pull/28)，merge SHA `2ad75f959a777cb4c3de151e22bd847b71cfedaf`。
-该分支不再是待创建 PR / 待合并任务。
+```text
+2ad75f959a777cb4c3de151e22bd847b71cfedaf
+```
 
 已实现：
 
-- `/admin/model-providers`：Provider / Dynamic Model 新增、编辑、删除、启停；
-  Provider connectivity、Model completion、Tool Calling 探测。
-- Admin 首页平台管理员入口；租户管理员不读取或管理平台 Provider。
-- 仅保存 `${ENV_VAR}` 引用，UI 不接受服务器凭证值作为配置方案。
-- 探测向目标 Provider 实际发送 `/chat/completions`；强制 `platform_probe` 工具，
-  检查函数名称和 JSON 参数结构，不执行返回的工具。
-- 文本探测要求非空文本；畸形 message/tool_calls 不再误报成功或导致 500。
-- 区分配置、网络、认证、协议、能力、schema 错误；网络错误不回显上游异常内容。
-- reasoning 模型不发送 temperature/max_tokens，改用 max_completion_tokens。
-- UI 错误提示、请求期间禁用操作、tier/residency 表单类型修复。
-- Model Provider gate 增加前端类型检查、交互测试、local-jwt 生产构建。
-
-本地验证：后端 Model Provider gate **121 passed**；前端管理页与入口
-**15 passed**；TypeScript 和 local-jwt Next.js 生产构建通过。
-远端验证提交 `54819d1`：Model Provider gate #7（含前端构建）、MCP admin gate #12、
-Core runtime persistence #52 全部通过。
-这里的探测回归使用受控响应，不能替代真实第三方模型的最终验收。
+- `/admin/model-providers` Provider / Model CRUD 与启停
+- Provider connectivity test
+- Model completion probe
+- Tool Calling probe
+- 平台管理员入口与前端错误处理
+- Secret Reference 不回显明文凭证
+- 探测真实发送 `/chat/completions`，但不会执行模型返回的工具调用
+- reasoning / Responses 参数兼容
+- Model Provider frontend/backend CI gate
 
 ### PR #29 — Platform Default + Tier Mapping
 
-已于 2026-09-16 合并到 main，merge SHA：
+Merge SHA：
 
 ```text
 b58fadb92392f564f95027987f1020cf36690069
 ```
 
-新增/完成：
+已实现：
 
 - `/api/admin/model-registry/settings`
-- `model_registry_settings/default` 持久化平台默认模型和受管 tier mapping
+- `model_registry_settings/default`
 - `platform_default`
 - `default / smart / fast` tier mapping
-- 写入前校验目标必须存在于当前 effective registry；未知或 disabled model 拒绝
-- database settings overlay 到 YAML baseline 的 `effective_models`
-- `runtime_models.entry_for()` 直接解析受管 tier，Agent runtime 无需重启即可生效
+- settings 写入前校验目标必须存在于 effective registry
+- database settings overlay 到 YAML baseline
+- Agent runtime 无需重启即可解析受管 tier
 - YAML/GitOps 模式只读
-- stale/out-of-band mapping 不让 registry 崩溃，安全退回 YAML baseline
+- stale/out-of-band mapping 安全回退 YAML baseline
 - `/admin/model-providers` 增加默认模型与 tier mapping 可视化/编辑
-- UI 显示 model source / tier / residency，便于管理员选择
 
-远端验证：
+### PR #30 — Tenant Model Policy
 
-- Model Provider backend ✅
-- Model Provider frontend TypeScript ✅
-- Model Providers UI interaction tests ✅
-- local-jwt production build ✅
+Merge SHA：
+
+```text
+5d55ee76d8a569c3c49b8b9814877a9d93a6ab4f
+```
+
+新增：
+
+```text
+backend/config/tenant_models.py
+backend/admin/tenant_model_policy_routes.py
+```
+
+策略语义：
+
+```text
+modelPolicy.allowedModels missing
+    → unrestricted（兼容已有 Tenant）
+
+modelPolicy.allowedModels = []
+    → deny all
+
+modelPolicy.defaultModel
+    → 仅覆盖逻辑 default alias
+```
+
+规则与安全边界：
+
+- 权威源复用 first-class `tenants/{tenant_id}.modelPolicy`
+- `defaultModel` 必须存在于 effective registry
+- 启用 allow-list 时 `defaultModel` 必须同时在 `allowedModels`
+- Platform Admin 可管理 Tenant Model Policy
+- Tenant Admin 不能自行扩大自己的模型权限
+- legacy `clients/{domain}` 不通过该 API 隐式迁移
+- 已认证 `/api/models` 仅返回该 Tenant 可用模型
+- 匿名 `/api/models` 保留历史公共 metadata 行为
+- primary model 越权在 Provider 构造前阻断
+- fallback 越权在 Provider call 前从 chain 中剔除
+- disabled tenant 被视为 deny all
+- Tenant identity 来自 trusted auth/task context，不接受前端传 tenant id 作为授权依据
+
+PR #30 验证：
+
+- Tenant Isolation gate ✅
+- Model Provider backend/frontend ✅
 - Core Runtime persistence ✅
+- Self-host no-GCP ✅
 - MCP Admin backend/frontend ✅
 
----
-
-## 12. #10 剩余工作
-
-Provider / Dynamic Model / 管理 UI / Model Probe / Platform Default / tier mapping 已合并。
-#10 仍有：
-
-1. 可选 Tenant 级模型白名单 / Tenant 默认模型。
-2. 使用真实非 OpenAI OpenAI-compatible endpoint 完成：
-   - Provider test
-   - Model completion
-   - Skill 选择该 model
-   - Agent conversation
-   - Tool Calling
-3. 最终确认无需修改代码/配置文件即可完成完整 Provider → Model → Skill → Agent 流程。
-
-只有完成上述真实端到端验收后，#10 才应关闭。
+PR #30 期间还修复了 Self-host no-GCP CI 的测试隔离：`docker compose run --no-deps` 的纯单元回归显式使用 `DATA_BACKEND=memory`；后续真实 PostgreSQL Self-host 启动、Session/Memory/A2UI 恢复、capabilities、local-jwt 登录验收仍使用 PostgreSQL，因此没有降低验收强度。
 
 ---
 
-## 13. Secret / Credential 原则
+## 11. #10 当前剩余
+
+Provider / Dynamic Model / Admin UI / Probe / Platform Default / tier mapping / Tenant Model Policy 均已合并。
+
+#10 当前真正剩余的是**真实第三方 Provider 端到端验收**：
+
+1. 准备一个真实非 OpenAI 的 OpenAI-compatible endpoint，例如：
+   - DeepSeek
+   - Qwen compatible endpoint
+   - vLLM
+   - LiteLLM Proxy
+   - OneAPI/NewAPI
+2. 在 `/admin/model-providers` 新增 Provider。
+3. Provider connectivity test 通过。
+4. 新增 Dynamic Model。
+5. Model completion probe 通过。
+6. Tool Calling probe 通过。
+7. Skill Studio 选择该 model。
+8. 发起真实 Agent conversation。
+9. 验证真实 Tool Calling。
+10. 若配置 Tenant whitelist/default，再验证 Tenant A/B 不可跨白名单调用模型。
+
+只有完成这条真实链路后，#10 才应关闭。
+
+Tenant Model Policy 当前已有完整 API/runtime enforcement；是否进一步并入统一 Tenant UI，应和 #9 first-class Tenant 管理面迁移一起设计，不应重新写回 legacy `clients/{domain}` 页面。
+
+---
+
+## 12. Secret / Credential 原则
 
 MCP 和 Model Provider 都必须继续遵守同一原则：
 
@@ -683,7 +728,7 @@ ${ENV_VAR}
 
 ---
 
-## 14. 自托管启动
+## 13. 自托管启动
 
 ### 冻结快照测试
 
@@ -718,7 +763,7 @@ make docker-up
 
 ---
 
-## 15. 当前 CI / 验证边界
+## 14. 当前 CI / 验证边界
 
 当前已有专项 gate：
 
@@ -736,6 +781,7 @@ make docker-up
 - A2UI state reconstruction
 - local ObjectStorage / Artifact reconstruction
 - tenant boundary
+- Tenant model whitelist/default
 - MCP registry/proxy/admin
 - dynamic model effective registry
 - dynamic provider runtime routing
@@ -760,25 +806,43 @@ Issue #1/#2/#3/#9/#10/#11 的最终关闭都必须遵守这个边界。
 
 ---
 
-## 16. 下一步执行顺序
+## 15. 下一步执行顺序
 
-建议按以下顺序继续，不要重新回头改已稳定的 Self-host 基础架构：
+建议按以下顺序继续，不要重新回头改已稳定的 Self-host 基础架构，也不要重新实现 PR #25～#30 已完成的 Model Provider 能力。
 
-### 第一优先：继续 #10 Tenant 模型策略 + 真实 Provider E2E
+### 第一优先：#10 / #2 真实 Provider E2E
 
-PR #28、#29 已合并，Provider/Model 管理、模型探测、默认模型和 tier mapping 不应重复实施。
+Provider/Model 管理、模型探测、平台默认/tier mapping、Tenant whitelist/default 已全部完成。
 
-接下来：
+接下来直接做：
 
-- 设计可选 Tenant 级模型白名单 / Tenant 默认模型；继续保持 server-authoritative / fail-closed。
-- 使用一个真实第三方 OpenAI-compatible endpoint 完成 Provider → Model → Skill → Agent → Tool Calling E2E。
-- 目前受控 probe/CI 回归不等于真实 Provider 最终验收。
+```text
+真实 OpenAI-compatible endpoint
+        ↓
+Provider test
+        ↓
+Dynamic Model
+        ↓
+Completion probe
+        ↓
+Tool Calling probe
+        ↓
+Skill Studio 选择模型
+        ↓
+Agent conversation
+        ↓
+真实 Tool Calling
+```
+
+如果当前没有可用 endpoint / secret，不要用 mock 把 #10 关闭；转而推进第二优先。
 
 ### 第二优先：#9 真实多租户收口
 
 - legacy Audit/user/client/tool ownership migration
 - `clients/{domain}` migration / rollback 文档
+- first-class Tenant 管理面统一
 - Tenant A/B E2E
+- Tenant model whitelist/default 跨租户 E2E
 
 ### 第三优先：#11 真实 MCP 自托管验收
 
@@ -803,7 +867,7 @@ PR #28、#29 已合并，Provider/Model 管理、模型探测、默认模型和 
 
 ---
 
-## 17. 开发约束
+## 16. 开发约束
 
 1. Self-host 默认依赖越少越好。
 2. PostgreSQL 能承担的结构化状态不要拆新数据库。
@@ -815,5 +879,6 @@ PR #28、#29 已合并，Provider/Model 管理、模型探测、默认模型和 
 8. MCP / A2UI / AG-UI 保持标准协议优先。
 9. Dynamic Model 不应绕过统一 Registry / runtime resolver。
 10. Provider API Key / MCP credential 不允许通过普通 API 明文返回。
-11. 不要修改冻结的 `deploy/2026-09-15`；新稳定版本创建新快照分支。
-12. 每个阶段结束后同步 Issue + HANDOFF，避免文档和代码再次发生状态漂移。
+11. Tenant Model Policy 必须基于 first-class tenant id，不写回 legacy domain ownership。
+12. 不要修改冻结的 `deploy/2026-09-15`；新稳定版本创建新快照分支。
+13. 每个阶段结束后同步 Issue + HANDOFF，避免文档和代码再次发生状态漂移。
