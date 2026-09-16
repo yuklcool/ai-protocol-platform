@@ -32,8 +32,12 @@ async function freshModule() {
 }
 
 describe("BRANDING — configurable fork display identity", () => {
-  beforeEach(() => vi.unstubAllEnvs());
-  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   it("uses neutral AI Protocol Platform defaults when overrides are absent", async () => {
     clearAllBrandVars();
