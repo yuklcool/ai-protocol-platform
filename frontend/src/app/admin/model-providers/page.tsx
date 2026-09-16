@@ -34,6 +34,24 @@ type Model = {
   enabled: boolean;
 };
 
+type RegistryModel = {
+  model_id: string;
+  api_name: string;
+  provider: string;
+  provider_id: string | null;
+  tier: "default" | "smart" | "fast";
+  residency: "eu" | "us" | "global";
+  source: string;
+};
+
+type RegistrySettings = {
+  platform_default: string;
+  tier_defaults: { default: string; smart: string; fast: string };
+  available_models: RegistryModel[];
+  source: "yaml" | "database";
+  writable: boolean;
+};
+
 type Probe = {
   ok: boolean;
   category?: string | null;
@@ -45,6 +63,7 @@ type Probe = {
 };
 
 const API = "/api/proxy/api/admin/model-providers";
+const SETTINGS_API = "/api/proxy/api/admin/model-registry/settings";
 
 const emptyProvider = { providerId: "", name: "", baseUrl: "", apiKeyRef: "", enabled: true };
 const emptyModel = {
@@ -62,6 +81,7 @@ const emptyModel = {
   residency: "global" as Model["residency"],
   enabled: true,
 };
+const emptySettingsForm = { platformDefault: "", default: "", smart: "", fast: "" };
 
 async function detail(response: Response, fallback: string) {
   const body = await response.json().catch(() => null);
@@ -73,20 +93,36 @@ export default function ModelProvidersPage() {
   const { state, isAdmin, isPlatform } = useAdminScope(!loading && !!user);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
+  const [registrySettings, setRegistrySettings] = useState<RegistrySettings | null>(null);
   const [providerForm, setProviderForm] = useState(emptyProvider);
   const [modelForm, setModelForm] = useState(emptyModel);
+  const [settingsForm, setSettingsForm] = useState(emptySettingsForm);
   const [notice, setNotice] = useState<string | null>(null);
   const [probe, setProbe] = useState<{ label: string; result: Probe } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const [p, m] = await Promise.all([fetchWithAuth(API), fetchWithAuth(`${API}/models`)]);
-    if (!p.ok || !m.ok) {
-      setNotice(!p.ok ? await detail(p, "Could not load providers.") : await detail(m, "Could not load models."));
+    const [p, m, s] = await Promise.all([
+      fetchWithAuth(API),
+      fetchWithAuth(`${API}/models`),
+      fetchWithAuth(SETTINGS_API),
+    ]);
+    if (!p.ok || !m.ok || !s.ok) {
+      if (!p.ok) setNotice(await detail(p, "Could not load providers."));
+      else if (!m.ok) setNotice(await detail(m, "Could not load models."));
+      else setNotice(await detail(s, "Could not load model defaults."));
       return;
     }
-    setProviders(await p.json());
-    setModels(await m.json());
+    const [providerRows, modelRows, settings] = await Promise.all([p.json(), m.json(), s.json()]);
+    setProviders(providerRows);
+    setModels(modelRows);
+    setRegistrySettings(settings);
+    setSettingsForm({
+      platformDefault: settings.platform_default,
+      default: settings.tier_defaults.default,
+      smart: settings.tier_defaults.smart,
+      fast: settings.tier_defaults.fast,
+    });
   };
 
   useEffect(() => {
@@ -134,6 +170,32 @@ export default function ModelProvidersPage() {
     } catch { setNotice("Could not save configuration. Please retry."); } finally { setBusy(false); }
   };
 
+  const saveSettings = async () => {
+    const values = [settingsForm.platformDefault, settingsForm.default, settingsForm.smart, settingsForm.fast];
+    if (values.some((value) => !value.trim())) {
+      setNotice("Choose a model for the platform default and all three managed tiers.");
+      return;
+    }
+    setBusy(true); setNotice(null);
+    try {
+      const response = await fetchWithAuth(SETTINGS_API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform_default: settingsForm.platformDefault,
+          tier_defaults: {
+            default: settingsForm.default,
+            smart: settingsForm.smart,
+            fast: settingsForm.fast,
+          },
+        }),
+      });
+      if (!response.ok) return setNotice(await detail(response, "Could not save model defaults."));
+      setNotice("Saved platform default and tier mappings. Agent runtime will use the effective registry immediately.");
+      await load();
+    } catch { setNotice("Could not save model defaults. Please retry."); } finally { setBusy(false); }
+  };
+
   const runAction = async (action: () => Promise<void>) => {
     setBusy(true); setNotice(null);
     try { await action(); }
@@ -177,13 +239,15 @@ export default function ModelProvidersPage() {
   if (!isAdmin) return <Centered>Administrative scope required.</Centered>;
   if (!isPlatform) return <Centered>Platform admin required for model provider configuration.</Centered>;
 
+  const registryModels = registrySettings?.available_models ?? [];
+
   return (
     <main className="mx-auto max-w-7xl p-6">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Model Providers</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Configure OpenAI-compatible endpoints and dynamic models. Use an existing server secret reference such as <code>{"${PROVIDER_API_KEY}"}</code>. Probes send real requests and may incur provider charges.
+            Configure OpenAI-compatible endpoints, dynamic models, and the effective runtime model mapping. Use an existing server secret reference such as <code>{"${PROVIDER_API_KEY}"}</code>. Probes send real requests and may incur provider charges.
           </p>
         </div>
         <NextLink href="/admin" className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted/40">Back to Admin</NextLink>
@@ -191,6 +255,26 @@ export default function ModelProvidersPage() {
 
       {notice && <div className="mb-4 rounded-md border px-3 py-2 text-sm">{notice}</div>}
       {probe && <div className="mb-4 rounded-md border p-3 text-sm"><b>{probe.label}</b><pre className="mt-2 overflow-auto text-xs">{JSON.stringify(probe.result, null, 2)}</pre></div>}
+
+      <section className="mb-6 rounded-lg border p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-medium">Default model &amp; tier mapping</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              These references are part of the effective registry. Skills using <code>default</code>, <code>smart</code>, or <code>fast</code> resolve through this mapping at Agent runtime.
+            </p>
+          </div>
+          {registrySettings && <div className="text-xs text-muted-foreground">Source <Badge>{registrySettings.source}</Badge> {registrySettings.writable ? "database overlay enabled" : "GitOps read-only"}</div>}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ModelSelect label="Platform default model" value={settingsForm.platformDefault} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, platformDefault: value })} />
+          <ModelSelect label="Default tier model" value={settingsForm.default} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, default: value })} />
+          <ModelSelect label="Smart tier model" value={settingsForm.smart} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, smart: value })} />
+          <ModelSelect label="Fast tier model" value={settingsForm.fast} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, fast: value })} />
+        </div>
+        <Button onClick={() => void saveSettings()} disabled={busy || !registrySettings?.writable}>Save model routing</Button>
+        {!registrySettings?.writable && registrySettings && <p className="mt-2 text-xs text-muted-foreground">MODEL_REGISTRY_BACKEND is not database; mappings are read from YAML/GitOps and cannot be edited here.</p>}
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="rounded-lg border p-4">
@@ -237,6 +321,9 @@ export default function ModelProvidersPage() {
   );
 }
 
+function ModelSelect({ label, value, models, onChange }: { label: string; value: string; models: RegistryModel[]; onChange: (value: string) => void }) {
+  return <label className="text-sm"><span className="mb-1 block font-medium">{label}</span><select className="w-full rounded-md border bg-background px-2 py-2 text-sm" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}><option value="">Not configured</option>{models.map((model) => <option key={model.model_id} value={model.model_id}>{model.model_id} · {model.tier} · {model.residency} · {model.source}</option>)}</select></label>;
+}
 function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) { return <input className="w-full rounded-md border bg-background px-2 py-2 text-sm" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(e) => onChange(e.target.value)} />; }
 function Button({ children, onClick, disabled = false }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) { return <button type="button" disabled={disabled} onClick={onClick} className="mt-2 rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted/40 disabled:opacity-50">{children}</button>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span className="ml-1 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">{children}</span>; }
