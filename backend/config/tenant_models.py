@@ -1,11 +1,11 @@
 """Tenant-scoped model access policy over the effective model registry.
 
-The durable source is ``tenants/{tenant_id}.modelPolicy``.  A missing
+The durable source is ``tenants/{tenant_id}.modelPolicy``. A missing
 ``allowedModels`` key means unrestricted access for backward compatibility;
-an explicitly empty list means the tenant may not use any model.  Model ids in
+an explicitly empty list means the tenant may not use any model. Model ids in
 this policy are always effective-registry ids, never provider API names.
 
-Runtime callers recover the trusted tenant id from ``tenant_context``.  This
+Runtime callers recover the trusted tenant id from ``tenant_context``. This
 keeps model authorization server-authoritative and prevents request payloads or
 frontend state from selecting another tenant's policy.
 """
@@ -17,7 +17,6 @@ from collections.abc import Iterable
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from db.tenants import get_tenant
-from observability.tenant_context import get_current_tenant_id
 
 
 class TenantModelAccessError(ValueError):
@@ -64,6 +63,16 @@ class TenantModelPolicy(BaseModel):
         return model_id in set(self.allowed_models)
 
 
+def _trusted_current_tenant_id() -> str:
+    # Lazy import is deliberate: runtime model metadata is imported during
+    # backend startup, while tenant_context currently carries provider-specific
+    # auth typing. Self-host startup must not eagerly pull a cloud auth path just
+    # because model policy support is installed.
+    from observability.tenant_context import get_current_tenant_id
+
+    return get_current_tenant_id()
+
+
 def tenant_id_for_user(user: object | None) -> str:
     if user is None:
         return ""
@@ -71,7 +80,7 @@ def tenant_id_for_user(user: object | None) -> str:
     if tenant_id:
         return tenant_id
     # Domain is a migration-only fallback already used by the trusted auth
-    # tenant context.  New identities should always carry tenant_id.
+    # tenant context. New identities should always carry tenant_id.
     return str(getattr(user, "domain", "") or "").strip()
 
 
@@ -79,12 +88,12 @@ def load_tenant_model_policy(tenant_id: str | None = None) -> TenantModelPolicy:
     """Load policy for an explicit or trusted task-local tenant id.
 
     No tenant context and unknown legacy tenants remain unrestricted to preserve
-    existing non-tenant metadata/admin call sites.  A disabled first-class
+    existing non-tenant metadata/admin call sites. A disabled first-class
     tenant is treated as an explicit deny-all policy as an additional runtime
     safety boundary.
     """
 
-    stable_id = (tenant_id if tenant_id is not None else get_current_tenant_id()).strip()
+    stable_id = (tenant_id if tenant_id is not None else _trusted_current_tenant_id()).strip()
     if not stable_id:
         return TenantModelPolicy()
     tenant = get_tenant(stable_id)
@@ -124,7 +133,7 @@ def assert_model_allowed(
     active = policy or load_tenant_model_policy(tenant_id)
     if active.allows(model_id):
         return
-    stable_id = tenant_id if tenant_id is not None else get_current_tenant_id()
+    stable_id = tenant_id if tenant_id is not None else _trusted_current_tenant_id()
     raise TenantModelAccessError(
         f"Model {model_id!r} is not allowed for tenant {stable_id or '(unknown)'!r}"
     )
