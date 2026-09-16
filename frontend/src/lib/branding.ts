@@ -1,168 +1,165 @@
 /**
- * Branding — the single file a public fork rebrands.
+ * Deployment branding configuration.
  *
- * Every user-visible product string in chrome (page titles, marketing
- * copy, contact email, the welcome screen logo path) lives here. A
- * downstream fork rewrites this one file; everything else is generic
- * protocol-stack code.
- *
- * Upstream identity: Sunholo (the public template at
- * sunholo-data/ai-protocol-platform). Downstream consumers (Aitana,
- * AIPLA, etc.) override this object in their own forks.
- *
- * NOT in scope here:
- * - Skill content (lives in Firestore + skill templates)
- * - User-uploaded assets (lives in GCS)
- * - SVG logo file itself (lives in /public/images/logo/, swap the file)
+ * Keep product identity here instead of scattering fork names through protocol
+ * or business components. Runtime protocol identifiers remain independent from
+ * the display brand.
  */
 
-/**
- * Citation URI scheme used by the agent backend to embed document-block links.
- * Format: `{CITATION_SCHEME}://doc/{docId}/block/{blockId}`
- *
- * Forks: set NEXT_PUBLIC_CITATION_SCHEME in .env.local (or Cloud Build substitution)
- * to rebrand this URI without touching component code.
- */
 export const CITATION_SCHEME =
-  process.env.NEXT_PUBLIC_CITATION_SCHEME || "aitana";
+  process.env.NEXT_PUBLIC_CITATION_SCHEME || "aip";
 
-/**
- * Internal transport field name injected into MCP App postMessage payloads.
- * Forks: set NEXT_PUBLIC_APP_SLUG to change the prefix (e.g. "myapp" → "__myappTransport").
- */
-// G20 (template-fork-ergonomics.md): `||` not `??`. Cloud Run + Next pre-declare
-// every NEXT_PUBLIC_* var (build-arg pattern); absent vars arrive as "", which
-// `??` doesn't catch (only null/undefined). `||` treats "" the same as unset.
 export const TRANSPORT_FIELD = `__${process.env.NEXT_PUBLIC_APP_SLUG || "platform"}Transport`;
 
+export type Branding = {
+  appName: string;
+  tagline: string;
+  description: string;
+  logo: {
+    favicon: string;
+    heroAnimated: string;
+    chatAvatar: string;
+  };
+  contact: {
+    email: string;
+    githubRepo: string;
+  };
+  theme: {
+    primaryHsl: string;
+    primaryForegroundHsl: string;
+  };
+  demo: {
+    heroEyebrow: string;
+    heroLineA: string;
+    heroLineB: string;
+    heroBody: string;
+    ctaPrimary: string;
+    ctaSecondary: string;
+    chatHref: string;
+    chatHrefSecondary: string;
+    techHref: string;
+    pillars: Array<{
+      key: string;
+      label: string;
+      tagline: string;
+      spec?: string;
+    }>;
+  };
+};
+
 /**
- * Per-deployment branding (v6.4.0 ONE-DEMO M1).
- *
- * Every field reads NEXT_PUBLIC_BRAND_* from the build environment with the
- * Sunholo strings/paths as fallbacks. The public template at
- * sunholo-data/ai-protocol-platform ships without these env vars set, so
- * Sunholo renders. Each fork sets its own NEXT_PUBLIC_BRAND_* in its
- * FIREBASE_ENV Secret Manager secret to rebrand without touching this file.
- *
- * Why `||` not `??`: Cloud Run + Next.js pre-declare every NEXT_PUBLIC_* var
- * at build time; absent vars arrive as empty strings, which `??` doesn't
- * catch (only null/undefined). `||` treats "" the same as unset, falling
- * back to Sunholo defaults. (Same pattern as TRANSPORT_FIELD above.)
- *
- * See docs/design/v6.6.0/fork-convergence.md.
+ * Empty string means "use the locale dictionary default". This keeps custom
+ * deployment marketing copy possible without forcing English copy into a
+ * Chinese deployment.
  */
-export const BRANDING = {
-  /** Short product name used in page <title>, banners, marketing hero. */
-  appName: process.env.NEXT_PUBLIC_BRAND_APP_NAME || "Sunholo",
+export const BRAND_COPY_OVERRIDES = {
+  heroEyebrow: process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW || "",
+  heroLineA: process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A || "",
+  heroLineB: process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B || "",
+  heroBody: process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_BODY || "",
+  ctaPrimary: process.env.NEXT_PUBLIC_BRAND_DEMO_CTA_PRIMARY || "",
+  ctaSecondary: process.env.NEXT_PUBLIC_BRAND_DEMO_CTA_SECONDARY || "",
+};
 
-  /** One-line product tagline shown under the logo on the welcome screen. */
-  tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE || "AI Protocol Platform",
-
-  /** Long form description used in <meta name="description">. */
+export const BRANDING: Branding = {
+  appName: process.env.NEXT_PUBLIC_BRAND_APP_NAME || "AI Protocol Platform",
+  tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE || "Open Agent Protocol Platform",
   description:
     process.env.NEXT_PUBLIC_BRAND_DESCRIPTION ||
-    "Open-source AI protocol platform — Skills + AG-UI + A2UI + MCP Apps + A2A on Google ADK",
-
-  /** Public-facing logo paths. Swap the files in /public/images/logo/ to
-   * rebrand without touching this object — or set NEXT_PUBLIC_BRAND_LOGO_*
-   * to point at fork-specific files. */
+    "Self-hosted agent platform for Skills, AG-UI, A2UI, MCP and MCP Apps.",
   logo: {
-    /** Browser tab favicon. */
-    favicon: process.env.NEXT_PUBLIC_BRAND_FAVICON || "/images/logo/sunholo-logo.svg",
-    /** Big welcome/landing mark (may be a wide wordmark logo). */
-    heroAnimated: process.env.NEXT_PUBLIC_BRAND_LOGO_HERO || "/images/logo/sunholo-logo.svg",
-    /** The compact brand MARK used everywhere small: the top-left nav mark AND
-     * every chat-bubble avatar. Should fill a circle at ~28px (a tight square
-     * mark), unlike a wide hero wordmark which shrinks to an illegible smudge. */
-    chatAvatar: process.env.NEXT_PUBLIC_BRAND_LOGO_AVATAR || "/images/logo/sunholo-logo.svg",
+    favicon:
+      process.env.NEXT_PUBLIC_BRAND_FAVICON || "/images/logo/platform-mark.svg",
+    heroAnimated:
+      process.env.NEXT_PUBLIC_BRAND_LOGO_HERO || "/images/logo/platform-mark.svg",
+    chatAvatar:
+      process.env.NEXT_PUBLIC_BRAND_LOGO_AVATAR || "/images/logo/platform-mark.svg",
   },
-
-  /** Contact / community links exposed in CONTRIBUTING + workshop docs. */
   contact: {
-    email: process.env.NEXT_PUBLIC_BRAND_EMAIL || "multivac@sunholo.com",
+    email: process.env.NEXT_PUBLIC_BRAND_EMAIL || "",
     githubRepo:
-      process.env.NEXT_PUBLIC_BRAND_GITHUB || "https://github.com/sunholo-data/ai-protocol-platform",
+      process.env.NEXT_PUBLIC_BRAND_GITHUB ||
+      "https://github.com/yuklcool/ai-protocol-platform",
   },
-
-  /**
-   * Landing-page demo copy + CTA targets (v6.4.0 ONE-DEMO M3.5).
-   *
-   * Two CTAs are rendered on the Hero — both navigate to chat skills by
-   * default. Upstream defaults are Sunholo-neutral so the public template
-   * keeps a working demo without ONE-specific content. Each fork overrides
-   * via NEXT_PUBLIC_BRAND_DEMO_* env vars in Cloud Build.
-   *
-   * `pillars` is intentionally a deploy-time constant (not env-driven) —
-   * the protocol stack the platform showcases is the same across forks.
-   * A fork that wants different pillars patches this file.
-   *
-   * `techHref` — empty string disables the "See the full stack" link on
-   * ProtocolStripe. Set it to "/about" or "/tech" if the fork ships that
-   * route (4.1 M2 ships /tech upstream later).
-   */
+  theme: {
+    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "199 89% 48%",
+    primaryForegroundHsl:
+      process.env.NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL || "210 40% 98%",
+  },
   demo: {
-    heroEyebrow:
-      process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW || "Contract intelligence",
-    heroLineA: process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A || "Document review",
-    heroLineB:
-      process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B || "with full traceability",
+    // Backwards-compatible values for components not yet migrated to useI18n.
+    heroEyebrow: BRAND_COPY_OVERRIDES.heroEyebrow || "Open agent platform",
+    heroLineA: BRAND_COPY_OVERRIDES.heroLineA || "Build AI agents",
+    heroLineB: BRAND_COPY_OVERRIDES.heroLineB || "on open protocols",
     heroBody:
-      process.env.NEXT_PUBLIC_BRAND_DEMO_HERO_BODY ||
-      "Compare and analyse documents side-by-side. Every clause extracted, every value cited back to its source.",
-    ctaPrimary: process.env.NEXT_PUBLIC_BRAND_DEMO_CTA_PRIMARY || "Open the assistant",
-    ctaSecondary: process.env.NEXT_PUBLIC_BRAND_DEMO_CTA_SECONDARY || "Compare documents",
-    // Defaults point at the platform's marketplace landing rather than a
-    // specific skill so the public template doesn't 404 when no skills
-    // are installed. Forks override via NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF*
-    // to point at their own primary/secondary skills.
+      BRAND_COPY_OVERRIDES.heroBody ||
+      "Run Skills, AG-UI, A2UI and MCP Apps on a self-hosted platform.",
+    ctaPrimary: BRAND_COPY_OVERRIDES.ctaPrimary || "Open the assistant",
+    ctaSecondary: BRAND_COPY_OVERRIDES.ctaSecondary || "Explore skills",
     chatHref: process.env.NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF || "/",
     chatHrefSecondary:
       process.env.NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF_SECONDARY || "/",
     techHref: process.env.NEXT_PUBLIC_BRAND_DEMO_TECH_HREF || "",
-    // Business-capability pillars — what the platform DOES, not what it's
-    // built on. Each fork's marketing speaks to the buyer of that vertical
-    // (legal, energy, procurement). Forks override the array by patching
-    // this file in their own clone. Protocol-level reference docs live
-    // separately under /tech (forks ship that route when relevant).
+    // Keys stay stable so the i18n layer can translate the visible labels.
     pillars: [
       {
         key: "extract",
-        label: "Clause extraction",
-        tagline: "Every obligation, typed",
-        spec: undefined,
+        label: "Skill orchestration",
+        tagline: "Prompts, tools and runtime policy",
       },
       {
         key: "compare",
-        label: "Side-by-side review",
-        tagline: "Diff any two contracts",
-        spec: undefined,
+        label: "Model Providers",
+        tagline: "Dynamic routing and capabilities",
       },
       {
         key: "benchmark",
-        label: "Market benchmark",
-        tagline: "Priced terms vs live market",
-        spec: undefined,
+        label: "Tenant isolation",
+        tagline: "Server-authoritative boundaries",
       },
       {
         key: "compliance",
-        label: "Compliance check",
-        tagline: "Cross-referenced to regulation",
-        spec: undefined,
+        label: "MCP integrations",
+        tagline: "Tools, resources and Apps",
       },
       {
         key: "citation",
-        label: "Clause-level citation",
-        tagline: "Every value linked to source",
-        spec: undefined,
+        label: "A2UI / AG-UI",
+        tagline: "Structured interactive responses",
       },
       {
         key: "confidential",
-        label: "Confidential by design",
-        tagline: "Your data, your cloud",
-        spec: undefined,
+        label: "Self-hosted",
+        tagline: "Your infrastructure, your data",
       },
     ],
   },
 };
 
-export type Branding = typeof BRANDING;
+/**
+ * First-class extension seam for future tenant-level display branding. The
+ * server remains authoritative for which overrides a tenant may supply; this
+ * helper only defines the safe presentation fields a tenant may eventually
+ * override without touching protocol/runtime identity.
+ */
+export type TenantBrandingOverrides = {
+  appName?: string;
+  tagline?: string;
+  description?: string;
+  logo?: Partial<Branding["logo"]>;
+  theme?: Partial<Branding["theme"]>;
+};
+
+export function resolveBranding(
+  overrides?: TenantBrandingOverrides | null,
+): Branding {
+  if (!overrides) return BRANDING;
+  return {
+    ...BRANDING,
+    ...overrides,
+    logo: { ...BRANDING.logo, ...overrides.logo },
+    theme: { ...BRANDING.theme, ...overrides.theme },
+    contact: BRANDING.contact,
+    demo: BRANDING.demo,
+  };
+}

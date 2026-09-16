@@ -1,21 +1,21 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import { AudienceBand } from "../AudienceBand";
+import { describe, expect, it } from "vitest";
 import { BRANDING } from "@/lib/branding";
+import { AudienceBand } from "../AudienceBand";
 
 describe("AudienceBand", () => {
-  it("renders the section heading", () => {
+  it("renders the platform-team section heading", () => {
     render(<AudienceBand />);
     expect(
-      screen.getByText(/built for the people who read the contract/i),
+      screen.getByText(/built for teams operating ai agents/i),
     ).toBeInTheDocument();
   });
 
-  it("renders all three audience roles", () => {
+  it("renders all three platform audience roles", () => {
     render(<AudienceBand />);
-    expect(screen.getByText(/technical counsel/i)).toBeInTheDocument();
-    expect(screen.getByText(/quants & structurers/i)).toBeInTheDocument();
-    expect(screen.getByText(/ai & legal engineers/i)).toBeInTheDocument();
+    expect(screen.getByText(/platform operators/i)).toBeInTheDocument();
+    expect(screen.getByText(/agent builders/i)).toBeInTheDocument();
+    expect(screen.getByText(/protocol engineers/i)).toBeInTheDocument();
   });
 
   it("interpolates the product name from BRANDING into the engineer column", () => {

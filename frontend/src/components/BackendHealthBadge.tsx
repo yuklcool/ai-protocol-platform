@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
 
 type Status = "loading" | "ok" | "down";
 
 export function BackendHealthBadge() {
+  const { t } = useI18n();
   const [status, setStatus] = useState<Status>("loading");
 
   useEffect(() => {
@@ -21,7 +23,7 @@ export function BackendHealthBadge() {
       }
     }
 
-    check();
+    void check();
     const id = setInterval(check, 30_000);
     return () => {
       cancelled = true;
@@ -31,10 +33,10 @@ export function BackendHealthBadge() {
 
   const label =
     status === "loading"
-      ? "checking backend…"
+      ? t("health.checking")
       : status === "ok"
-        ? "backend ok"
-        : "backend down";
+        ? t("health.ok")
+        : t("health.down");
 
   const color =
     status === "loading"

@@ -2,14 +2,23 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BRANDING } from "@/lib/branding";
+import { useI18n } from "@/contexts/I18nContext";
+import { BRAND_COPY_OVERRIDES, BRANDING } from "@/lib/branding";
 
 interface HeroProps {
   visual?: ReactNode;
 }
 
 export function Hero({ visual }: HeroProps) {
+  const { t } = useI18n();
   const { demo } = BRANDING;
+  const eyebrow = BRAND_COPY_OVERRIDES.heroEyebrow || t("home.hero.eyebrow");
+  const lineA = BRAND_COPY_OVERRIDES.heroLineA || t("home.hero.lineA");
+  const lineB = BRAND_COPY_OVERRIDES.heroLineB || t("home.hero.lineB");
+  const body = BRAND_COPY_OVERRIDES.heroBody || t("home.hero.body");
+  const primary = BRAND_COPY_OVERRIDES.ctaPrimary || t("home.hero.ctaPrimary");
+  const secondary = BRAND_COPY_OVERRIDES.ctaSecondary || t("home.hero.ctaSecondary");
+
   return (
     <section className="relative mx-auto w-full max-w-7xl px-6 pb-24 pt-16 md:px-10 md:pb-32 md:pt-24">
       <div
@@ -20,28 +29,28 @@ export function Hero({ visual }: HeroProps) {
         }
       >
         <div className="flex flex-col gap-8">
-          <Eyebrow text={demo.heroEyebrow} />
+          <Eyebrow text={eyebrow} />
           <h1 className="text-5xl font-bold leading-[0.95] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
-            {demo.heroLineA}
+            {lineA}
             <br />
-            <span className="text-primary">{demo.heroLineB}</span>
+            <span className="text-primary">{lineB}</span>
           </h1>
           <p className="max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
-            {demo.heroBody}
+            {body}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <Link
               href={demo.chatHref}
               className="group inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_0_18px_hsl(var(--primary)/0.25)] transition-all hover:shadow-[0_0_28px_hsl(var(--primary)/0.45)]"
             >
-              {demo.ctaPrimary}
+              {primary}
               <ArrowIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href={demo.chatHrefSecondary}
               className="inline-flex items-center gap-2 rounded-md border border-border px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary/50 hover:text-primary"
             >
-              {demo.ctaSecondary}
+              {secondary}
               <span aria-hidden className="text-muted-foreground">
                 ↗
               </span>

@@ -4,8 +4,7 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { InlineCitation } from "@/components/chat/InlineCitation";
-import { CITATION_SCHEME } from "@/lib/branding";
+import { InlineCitation, isCitationHref } from "@/components/chat/InlineCitation";
 import { CodeBlock, hastLanguage, hastText } from "@/components/chat/CodeBlock";
 import { SVGBlock } from "@/components/chat/media/SVGBlock";
 import { InlineImage } from "@/components/chat/media/InlineImage";
@@ -23,16 +22,11 @@ interface ChatMarkdownProps {
 // highlighter and transforms the text content into React span elements — making
 // String(children) useless inside the code renderer. By replacing svg fences
 // with this sentinel we bypass the pipeline and render SVGBlock directly.
-//
-// IMPORTANT: No leading/trailing underscores or asterisks — GFM would parse
-// __text__ or **text** as bold, breaking the sentinel detection in the p renderer.
-const SVG_SENTINEL_PREFIX = "AITANASVGBLOCK";
+const SVG_SENTINEL_PREFIX = "AIPSVGBLOCK";
 const SVG_SENTINEL_SUFFIX = "END";
 const SVG_FENCE_RE = /```svg\r?\n([\s\S]*?)```/g;
 
 export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
-  // Extract ```svg blocks before react-markdown processes them.
-  // Returns a cleaned content string plus a map of index → raw SVG string.
   const { processedContent, svgBlocks } = useMemo(() => {
     const blocks = new Map<number, string>();
     let idx = 0;
@@ -44,35 +38,26 @@ export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
   }, [content]);
 
   // MEMOISED, and that is load-bearing (v6.19.0, AIPLA #44).
-  //
   // react-markdown treats each entry in `components` as a React element TYPE.
   // A fresh object identity per render therefore makes React REMOUNT the whole
   // rendered subtree rather than re-render it — every message's DOM torn down
-  // and rebuilt on any parent re-render. It surfaced as continuous SVG-diagram
-  // flicker, but the remount cost is generic to every chat message.
-  //
-  // Deps are exactly what the closures below read: `navigateToBlock` (used by
-  // InlineCitation) and `svgBlocks` (used by the code renderer). `svgBlocks` is
-  // itself memoised on `content` above, so this is stable across unrelated
-  // parent renders.
+  // and rebuilt on any parent re-render.
   const components: Components = useMemo(() => ({
     a({ href, children }) {
       const h = href ?? "#";
-      // Citation-scheme links → InlineCitation chip
-      if (h.startsWith(`${CITATION_SCHEME}://`)) {
+      // Current and legacy citation-scheme links → InlineCitation chip.
+      if (isCitationHref(h)) {
         return (
           <InlineCitation href={h} navigateToBlock={navigateToBlock}>
             {children}
           </InlineCitation>
         );
       }
-      // PDF links → card with filename + page count
       const safePdf =
         h.startsWith("https://") || h.startsWith("http://") ? h : null;
       if (safePdf && safePdf.toLowerCase().endsWith(".pdf")) {
         return <PDFCard url={safePdf} />;
       }
-      // External https/http/mailto links → plain anchor
       const safe =
         h.startsWith("https://") || h.startsWith("http://") || h.startsWith("mailto:")
           ? h
@@ -87,12 +72,10 @@ export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
       if (!src || typeof src !== "string") return null;
       return <InlineImage src={src} alt={alt} />;
     },
-    // Strip raw HTML passthrough — prevents XSS from agent output
     html() {
       return null;
     },
     p({ children }) {
-      // Detect SVG block sentinels injected by pre-processing above
       const first = Array.isArray(children) ? children[0] : children;
       if (typeof first === "string") {
         const match = first.match(new RegExp(`^${SVG_SENTINEL_PREFIX}(\\d+)${SVG_SENTINEL_SUFFIX}$`));
@@ -128,7 +111,6 @@ export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
       return <em className="italic">{children}</em>;
     },
     code({ className, children, ...props }) {
-      // rehypeHighlight may prepend 'hljs' class: "hljs language-xml" — check all tokens.
       const classes = className?.split(/\s+/) ?? [];
       const langClass = classes.find((c) => c.startsWith("language-"));
       const isBlock = !!langClass;
@@ -147,9 +129,6 @@ export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
       );
     },
     pre({ children, node }) {
-      // Text is read from the ORIGINAL hast node, not `children` — by now
-      // rehypeHighlight has replaced the text with <span> elements. See the
-      // note at the top of CodeBlock.tsx.
       return (
         <CodeBlock text={hastText(node)} language={hastLanguage(node)}>
           {children}
@@ -188,9 +167,10 @@ export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
       rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
       components={components}
       urlTransform={(url) => {
-        // Allow citation-scheme, https://, http://, mailto: — block everything else
+        // Preserve current + legacy citation URIs before react-markdown sanitizes
+        // them; old persisted conversations must remain navigable after rebrand.
         if (
-          url.startsWith(`${CITATION_SCHEME}://`) ||
+          isCitationHref(url) ||
           url.startsWith("https://") ||
           url.startsWith("http://") ||
           url.startsWith("mailto:")

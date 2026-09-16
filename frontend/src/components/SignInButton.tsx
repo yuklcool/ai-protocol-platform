@@ -2,11 +2,13 @@
 
 import { type FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { isLocalJwtAuthMode } from "@/lib/localJwtAuth";
 import { cn } from "@/lib/utils";
 
 /** Authentication control for Firebase and built-in self-host JWT modes. */
 export function SignInButton() {
+  const { t } = useI18n();
   const { user, loading, signIn, signInWithRedirect, signInWithPassword, signOut } = useAuth();
   const localJwt = isLocalJwtAuthMode();
   const [busy, setBusy] = useState(false);
@@ -42,7 +44,7 @@ export function SignInButton() {
       setPassword("");
       setShowLocalLogin(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Sign-in failed";
+      const message = err instanceof Error ? err.message : t("auth.failed");
       setError(message);
     } finally {
       setBusy(false);
@@ -64,7 +66,7 @@ export function SignInButton() {
   if (loading) {
     return (
       <span className="text-xs text-muted-foreground" data-testid="sign-in-loading">
-        checking auth…
+        {t("auth.checking")}
       </span>
     );
   }
@@ -82,7 +84,7 @@ export function SignInButton() {
             "hover:bg-muted disabled:opacity-50",
           )}
         >
-          Sign out
+          {t("auth.signOut")}
         </button>
       </div>
     );
@@ -103,7 +105,7 @@ export function SignInButton() {
             "hover:opacity-90",
           )}
         >
-          Sign in
+          {t("auth.signIn")}
         </button>
 
         {showLocalLogin && (
@@ -120,15 +122,15 @@ export function SignInButton() {
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <h2 id="local-login-title" className="text-lg font-semibold text-foreground">
-                    Sign in
+                    {t("auth.signIn")}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Use your self-hosted platform account.
+                    {t("auth.localDescription")}
                   </p>
                 </div>
                 <button
                   type="button"
-                  aria-label="Close sign-in"
+                  aria-label={t("auth.closeSignIn")}
                   disabled={busy}
                   onClick={() => setShowLocalLogin(false)}
                   className="rounded-md px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -139,7 +141,7 @@ export function SignInButton() {
 
               <form className="space-y-4" onSubmit={handleLocalSignIn}>
                 <label className="block space-y-1.5">
-                  <span className="text-sm font-medium text-foreground">Email</span>
+                  <span className="text-sm font-medium text-foreground">{t("auth.email")}</span>
                   <input
                     type="email"
                     autoComplete="username"
@@ -152,7 +154,7 @@ export function SignInButton() {
                 </label>
 
                 <label className="block space-y-1.5">
-                  <span className="text-sm font-medium text-foreground">Password</span>
+                  <span className="text-sm font-medium text-foreground">{t("auth.password")}</span>
                   <input
                     type="password"
                     autoComplete="current-password"
@@ -182,7 +184,7 @@ export function SignInButton() {
                     "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
                   )}
                 >
-                  {busy ? "Signing in…" : "Sign in"}
+                  {busy ? t("auth.signingIn") : t("auth.signIn")}
                 </button>
               </form>
             </div>
@@ -204,7 +206,7 @@ export function SignInButton() {
           "font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50",
         )}
       >
-        {busy ? "Signing in…" : "Sign in with Google"}
+        {busy ? t("auth.signingIn") : t("auth.signInWithGoogle")}
       </button>
       {error && (
         <span className="text-xs text-red-600" data-testid="sign-in-error" role="alert">

@@ -1,15 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * Per-deployment branding tests (v6.4.0 ONE-DEMO M1).
- *
- * branding.ts reads NEXT_PUBLIC_BRAND_* at module-load time with Sunholo
- * fallbacks. Tests use `vi.resetModules()` + `vi.stubEnv()` to verify both
- * the override path (fork sets vars) and the fallback path (template
- * defaults render — required so sunholo-data/ai-protocol-platform keeps
- * Sunholo branding).
- */
-
 const ALL_BRAND_VARS = [
   "NEXT_PUBLIC_BRAND_APP_NAME",
   "NEXT_PUBLIC_BRAND_TAGLINE",
@@ -19,6 +9,8 @@ const ALL_BRAND_VARS = [
   "NEXT_PUBLIC_BRAND_LOGO_AVATAR",
   "NEXT_PUBLIC_BRAND_EMAIL",
   "NEXT_PUBLIC_BRAND_GITHUB",
+  "NEXT_PUBLIC_BRAND_PRIMARY_HSL",
+  "NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL",
   "NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW",
   "NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A",
   "NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B",
@@ -31,163 +23,127 @@ const ALL_BRAND_VARS = [
 ] as const;
 
 function clearAllBrandVars() {
-  for (const v of ALL_BRAND_VARS) {
-    vi.stubEnv(v, "");
-  }
+  for (const variable of ALL_BRAND_VARS) vi.stubEnv(variable, "");
 }
 
-async function freshBranding() {
+async function freshModule() {
   vi.resetModules();
-  const mod = await import("@/lib/branding");
-  return mod.BRANDING;
+  return import("@/lib/branding");
 }
 
-describe("BRANDING — env-var driven per-deployment branding", () => {
+describe("BRANDING — configurable fork display identity", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
   });
-
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("falls back to Sunholo defaults when no NEXT_PUBLIC_BRAND_* is set", async () => {
+  it("uses neutral AI Protocol Platform defaults when overrides are absent", async () => {
     clearAllBrandVars();
-    const BRANDING = await freshBranding();
-    expect(BRANDING.appName).toBe("Sunholo");
-    expect(BRANDING.tagline).toBe("AI Protocol Platform");
-    expect(BRANDING.logo.favicon).toBe("/images/logo/sunholo-logo.svg");
-    expect(BRANDING.logo.heroAnimated).toBe("/images/logo/sunholo-logo.svg");
-    expect(BRANDING.logo.chatAvatar).toBe("/images/logo/sunholo-logo.svg");
-    expect(BRANDING.contact.email).toBe("multivac@sunholo.com");
+    const { BRANDING, CITATION_SCHEME } = await freshModule();
+    expect(BRANDING.appName).toBe("AI Protocol Platform");
+    expect(BRANDING.tagline).toBe("Open Agent Protocol Platform");
+    expect(BRANDING.logo.favicon).toBe("/images/logo/platform-mark.svg");
+    expect(BRANDING.logo.heroAnimated).toBe("/images/logo/platform-mark.svg");
+    expect(BRANDING.logo.chatAvatar).toBe("/images/logo/platform-mark.svg");
+    expect(BRANDING.contact.email).toBe("");
     expect(BRANDING.contact.githubRepo).toBe(
-      "https://github.com/sunholo-data/ai-protocol-platform",
+      "https://github.com/yuklcool/ai-protocol-platform",
     );
+    expect(BRANDING.theme.primaryHsl).toBe("199 89% 48%");
+    expect(CITATION_SCHEME).toBe("aip");
   });
 
-  it("uses NEXT_PUBLIC_BRAND_* overrides when a fork sets them (ONE example)", async () => {
+  it("uses NEXT_PUBLIC_BRAND_* overrides field by field", async () => {
+    clearAllBrandVars();
     vi.stubEnv("NEXT_PUBLIC_BRAND_APP_NAME", "Acme Energy");
     vi.stubEnv("NEXT_PUBLIC_BRAND_TAGLINE", "PPA & PtX intelligence");
-    vi.stubEnv(
-      "NEXT_PUBLIC_BRAND_DESCRIPTION",
-      "Power Purchase Agreement and Power-to-X transaction advisory",
-    );
-    vi.stubEnv("NEXT_PUBLIC_BRAND_FAVICON", "/images/logo/acmeenergy-logo.jpg");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_LOGO_HERO", "/images/logo/acmeenergy-logo.jpg");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_LOGO_AVATAR", "/images/logo/acmeenergy-logo.jpg");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_EMAIL", "hello@acmeenergy.com");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_GITHUB", "");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_DESCRIPTION", "Energy advisory platform");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_FAVICON", "/brand/favicon.svg");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_LOGO_HERO", "/brand/hero.svg");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_LOGO_AVATAR", "/brand/avatar.svg");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_EMAIL", "hello@example.com");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_GITHUB", "https://github.com/example/acme");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_PRIMARY_HSL", "220 80% 50%");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL", "0 0% 100%");
 
-    const BRANDING = await freshBranding();
+    const { BRANDING } = await freshModule();
     expect(BRANDING.appName).toBe("Acme Energy");
     expect(BRANDING.tagline).toBe("PPA & PtX intelligence");
-    expect(BRANDING.description).toBe(
-      "Power Purchase Agreement and Power-to-X transaction advisory",
-    );
-    expect(BRANDING.logo.favicon).toBe("/images/logo/acmeenergy-logo.jpg");
-    expect(BRANDING.logo.heroAnimated).toBe("/images/logo/acmeenergy-logo.jpg");
-    expect(BRANDING.logo.chatAvatar).toBe("/images/logo/acmeenergy-logo.jpg");
-    expect(BRANDING.contact.email).toBe("hello@acmeenergy.com");
-    // Empty string falls back to upstream — forks that don't have a public
-    // repo can leave NEXT_PUBLIC_BRAND_GITHUB unset.
-    expect(BRANDING.contact.githubRepo).toBe(
-      "https://github.com/sunholo-data/ai-protocol-platform",
-    );
+    expect(BRANDING.description).toBe("Energy advisory platform");
+    expect(BRANDING.logo).toEqual({
+      favicon: "/brand/favicon.svg",
+      heroAnimated: "/brand/hero.svg",
+      chatAvatar: "/brand/avatar.svg",
+    });
+    expect(BRANDING.contact).toEqual({
+      email: "hello@example.com",
+      githubRepo: "https://github.com/example/acme",
+    });
+    expect(BRANDING.theme).toEqual({
+      primaryHsl: "220 80% 50%",
+      primaryForegroundHsl: "0 0% 100%",
+    });
   });
 
-  it("mixes overrides and fallbacks per-field (partial fork rebrand)", async () => {
+  it("treats empty NEXT_PUBLIC brand variables as unset", async () => {
     clearAllBrandVars();
-    vi.stubEnv("NEXT_PUBLIC_BRAND_APP_NAME", "Acme AI");
-    // Tagline + logos left empty → fall back to Sunholo defaults
-
-    const BRANDING = await freshBranding();
-    expect(BRANDING.appName).toBe("Acme AI");
-    expect(BRANDING.tagline).toBe("AI Protocol Platform");
-    expect(BRANDING.logo.favicon).toBe("/images/logo/sunholo-logo.svg");
+    const { BRANDING } = await freshModule();
+    expect(BRANDING.appName).toBe("AI Protocol Platform");
+    expect(BRANDING.tagline).toBe("Open Agent Protocol Platform");
+    expect(BRANDING.logo.favicon).toBe("/images/logo/platform-mark.svg");
   });
 
-  it("treats empty-string env vars as unset (|| fallback, per G20 pattern)", async () => {
-    // Cloud Run injects NEXT_PUBLIC_* vars as empty strings when not in
-    // FIREBASE_ENV — `??` wouldn't catch these, `||` does. This test
-    // protects the G20 pattern: changing `||` to `??` here would silently
-    // render empty product strings in prod.
-    vi.stubEnv("NEXT_PUBLIC_BRAND_APP_NAME", "");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_TAGLINE", "");
-
-    const BRANDING = await freshBranding();
-    expect(BRANDING.appName).toBe("Sunholo");
-    expect(BRANDING.tagline).toBe("AI Protocol Platform");
-  });
-
-  // ── BRANDING.demo (v6.4.0 ONE-DEMO M3.5) ───────────────────────────────
-
-  it("BRANDING.demo falls back to vertical-neutral document-review defaults when env vars unset", async () => {
+  it("keeps deployment hero-copy overrides optional", async () => {
     clearAllBrandVars();
-    const BRANDING = await freshBranding();
-    expect(BRANDING.demo.heroEyebrow).toBe("Contract intelligence");
-    expect(BRANDING.demo.heroLineA).toBe("Document review");
-    expect(BRANDING.demo.heroLineB).toBe("with full traceability");
-    expect(BRANDING.demo.heroBody).toContain("side-by-side");
+    const { BRAND_COPY_OVERRIDES, BRANDING } = await freshModule();
+    expect(BRAND_COPY_OVERRIDES.heroEyebrow).toBe("");
+    expect(BRAND_COPY_OVERRIDES.heroLineA).toBe("");
+    // Backwards-compatible BRANDING.demo remains usable by components not yet
+    // migrated to the locale dictionary.
+    expect(BRANDING.demo.heroEyebrow).toBe("Open agent platform");
+    expect(BRANDING.demo.heroLineA).toBe("Build AI agents");
     expect(BRANDING.demo.ctaPrimary).toBe("Open the assistant");
-    expect(BRANDING.demo.ctaSecondary).toBe("Compare documents");
-    // Default hrefs land on the marketplace ("/") so a fresh template fork
-    // never 404s when no skills are installed. Forks override via
-    // NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF* to point at their primary skills.
-    expect(BRANDING.demo.chatHref).toBe("/");
-    expect(BRANDING.demo.chatHrefSecondary).toBe("/");
-    expect(BRANDING.demo.techHref).toBe(""); // empty → ProtocolStripe hides "see full stack"
-    // Business-capability pillars (what the platform DOES), not protocol stack.
     expect(BRANDING.demo.pillars).toHaveLength(6);
-    expect(BRANDING.demo.pillars.map((p) => p.key)).toEqual([
-      "extract",
-      "compare",
-      "benchmark",
-      "compliance",
-      "citation",
-      "confidential",
-    ]);
   });
 
-  it("BRANDING.demo uses NEXT_PUBLIC_BRAND_DEMO_* overrides (ONE example)", async () => {
+  it("honours explicit hero copy and CTA overrides", async () => {
+    clearAllBrandVars();
     vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW", "Energy intelligence");
     vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A", "Side-by-side");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B", "PPA contract comparison");
-    vi.stubEnv(
-      "NEXT_PUBLIC_BRAND_DEMO_HERO_BODY",
-      "Compare any two PPA contracts. AILANG-parsed blocks, structured clause extraction, ENTSO-E-grounded price valuation. Built for ONE consultants.",
-    );
-    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_CTA_PRIMARY", "Ask the PPA expert");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B", "PPA comparison");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_HERO_BODY", "Compare contracts.");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_CTA_PRIMARY", "Ask the expert");
     vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_CTA_SECONDARY", "Compare contracts");
-    vi.stubEnv(
-      "NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF",
-      "/chat/@aitana-platform/one-ppa-expert",
-    );
-    vi.stubEnv(
-      "NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF_SECONDARY",
-      "/chat/@aitana-platform/one-doc-compare",
-    );
+    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF", "/chat/expert");
+    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF_SECONDARY", "/chat/compare");
 
-    const BRANDING = await freshBranding();
-    expect(BRANDING.demo.heroEyebrow).toBe("Energy intelligence");
+    const { BRAND_COPY_OVERRIDES, BRANDING } = await freshModule();
+    expect(BRAND_COPY_OVERRIDES.heroEyebrow).toBe("Energy intelligence");
     expect(BRANDING.demo.heroLineA).toBe("Side-by-side");
-    expect(BRANDING.demo.heroLineB).toBe("PPA contract comparison");
-    expect(BRANDING.demo.heroBody).toContain("PPA contracts");
-    expect(BRANDING.demo.ctaPrimary).toBe("Ask the PPA expert");
+    expect(BRANDING.demo.heroLineB).toBe("PPA comparison");
+    expect(BRANDING.demo.heroBody).toBe("Compare contracts.");
+    expect(BRANDING.demo.ctaPrimary).toBe("Ask the expert");
     expect(BRANDING.demo.ctaSecondary).toBe("Compare contracts");
-    expect(BRANDING.demo.chatHref).toBe(
-      "/chat/@aitana-platform/one-ppa-expert",
-    );
-    expect(BRANDING.demo.chatHrefSecondary).toBe(
-      "/chat/@aitana-platform/one-doc-compare",
-    );
+    expect(BRANDING.demo.chatHref).toBe("/chat/expert");
+    expect(BRANDING.demo.chatHrefSecondary).toBe("/chat/compare");
   });
 
-  it("BRANDING.demo empty-string env vars fall back per G20 pattern", async () => {
-    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A", "");
-    vi.stubEnv("NEXT_PUBLIC_BRAND_DEMO_CTA_PRIMARY", "");
+  it("resolves safe tenant display overrides without replacing contacts or demo policy", async () => {
+    clearAllBrandVars();
+    const { BRANDING, resolveBranding } = await freshModule();
+    const resolved = resolveBranding({
+      appName: "Tenant Portal",
+      logo: { chatAvatar: "/tenant/avatar.svg" },
+      theme: { primaryHsl: "180 70% 40%" },
+    });
 
-    const BRANDING = await freshBranding();
-    expect(BRANDING.demo.heroLineA).toBe("Document review");
-    expect(BRANDING.demo.ctaPrimary).toBe("Open the assistant");
+    expect(resolved.appName).toBe("Tenant Portal");
+    expect(resolved.logo.favicon).toBe(BRANDING.logo.favicon);
+    expect(resolved.logo.chatAvatar).toBe("/tenant/avatar.svg");
+    expect(resolved.theme.primaryHsl).toBe("180 70% 40%");
+    expect(resolved.contact).toEqual(BRANDING.contact);
+    expect(resolved.demo).toEqual(BRANDING.demo);
   });
 });

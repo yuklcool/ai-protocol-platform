@@ -1,17 +1,30 @@
 "use client";
 
-// Citation URI scheme links (e.g. inline-citation://doc/{docId}/block/{blockId})
-// are embedded by the agent backend. This component renders them as a teal chip
-// instead of a plain anchor. Clicking calls navigateToBlock.
-// Security: only opens citation-scheme or https://storage.googleapis.com URLs.
-// The scheme is configurable via NEXT_PUBLIC_CITATION_SCHEME (see branding.ts).
+// Citation URI scheme links (e.g. aip://doc/{docId}/block/{blockId}) are
+// embedded by the agent backend. New deployments use CITATION_SCHEME, while
+// older persisted conversations may still contain the historical aitana://
+// form. Both must remain readable so a display-brand migration never breaks
+// existing citations.
 
+import React from "react";
 import { CITATION_SCHEME } from "@/lib/branding";
 
+const LEGACY_CITATION_SCHEMES = ["aitana"] as const;
+const citationSchemes = Array.from(
+  new Set([CITATION_SCHEME, ...LEGACY_CITATION_SCHEMES]),
+);
+const escapedSchemes = citationSchemes
+  .map((scheme) => scheme.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
+
 const CITATION_URI_RE = new RegExp(
-  `^${CITATION_SCHEME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\/\\/doc\\/([^/]+)\\/block\\/([^/]+)$`,
+  `^(?:${escapedSchemes}):\\/\\/doc\\/([^/]+)\\/block\\/([^/]+)$`,
 );
 const GCS_PREFIX = "https://storage.googleapis.com";
+
+export function isCitationHref(href: string): boolean {
+  return CITATION_URI_RE.test(href);
+}
 
 interface InlineCitationProps {
   href: string;
@@ -23,7 +36,6 @@ export function InlineCitation({ href, children, navigateToBlock }: InlineCitati
   const match = href.match(CITATION_URI_RE);
 
   if (!match) {
-    // Not a citation URI — only allow GCS URLs, nothing else
     const safeHref = href.startsWith(GCS_PREFIX) ? href : "#";
     return (
       <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-teal-600 underline">
@@ -60,19 +72,11 @@ export function InlineCitation({ href, children, navigateToBlock }: InlineCitati
   );
 }
 
-import React from "react";
-
-// Regex to find citation-scheme links embedded as markdown-style [text](scheme://...) in plain text.
 const INLINE_LINK_RE = new RegExp(
-  `\\[([^\\]]+)\\]\\((${CITATION_SCHEME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\/\\/[^)]+)\\)`,
+  `\\[([^\\]]+)\\]\\(((?:${escapedSchemes}):\\/\\/[^)]+)\\)`,
   "g",
 );
 
-/**
- * Splits plain text on citation-scheme markdown links and returns an array of
- * React nodes — plain strings interleaved with InlineCitation chips.
- * Used by MessageBubble for the text rendering fallback (before ChatMarkdown exists).
- */
 export function renderWithCitations(
   text: string,
   navigateToBlock: (docId: string, blockId: string) => void,
