@@ -5,6 +5,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateTenantAdmin } from "@/lib/i18n/tenantAdmin";
 
 /** Mirror of backend/db/clients.py ClientConfig (the admin-facing shape). */
 export interface ClientConfig {
@@ -106,11 +108,14 @@ export function SkillMultiSelect({
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
+  const { locale } = useI18n();
+  const t = (key: Parameters<typeof translateTenantAdmin>[1], params: Record<string, string | number> = {}) =>
+    translateTenantAdmin(locale, key, params);
   const optionSlugs = new Set(options.map((o) => o.slug));
   const orphanSlugs = selected.filter((s) => !optionSlugs.has(s));
   const rows: SkillOption[] = [
     ...options,
-    ...orphanSlugs.map((slug) => ({ slug, displayName: `${slug} (not in catalog)` })),
+    ...orphanSlugs.map((slug) => ({ slug, displayName: t("select.notInCatalog", { slug }) })),
   ];
 
   function toggle(slug: string, on: boolean) {
@@ -121,10 +126,9 @@ export function SkillMultiSelect({
   }
 
   if (rows.length === 0) {
-    // NEVER-SILENT: an empty catalog is a visible notice, not a blank box.
     return (
       <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-        No skills available to enable. Leave empty to show the tenant all skills.
+        {t("select.empty")}
       </div>
     );
   }
@@ -153,17 +157,22 @@ export function SkillMultiSelect({
   );
 }
 
-const VERDICT_STYLE: Record<VerdictLevel, { icon: string; className: string; label: string }> = {
-  ok: { icon: "✓", className: "text-green-600", label: "OK" },
-  warning: { icon: "!", className: "text-amber-600", label: "Warning" },
-  error: { icon: "✕", className: "text-red-600", label: "Error" },
-  skipped: { icon: "–", className: "text-muted-foreground", label: "Skipped" },
+const VERDICT_META: Record<VerdictLevel, { icon: string; className: string }> = {
+  ok: { icon: "✓", className: "text-green-600" },
+  warning: { icon: "!", className: "text-amber-600" },
+  error: { icon: "✕", className: "text-red-600" },
+  skipped: { icon: "–", className: "text-muted-foreground" },
 };
 
-/** Render each validation step's verdict. Used after onboard (POST response)
- * and by the editor's "Validate" button. NEVER-SILENT: every check — ok,
- * warning (e.g. bucket IAM-unreachable), error (bad ref), skipped — renders. */
 export function ValidationVerdicts({ validation }: { validation: TenantValidation }) {
+  const { locale } = useI18n();
+  const t = (key: Parameters<typeof translateTenantAdmin>[1]) => translateTenantAdmin(locale, key);
+  const labels: Record<VerdictLevel, string> = {
+    ok: t("verdict.ok"),
+    warning: t("verdict.warning"),
+    error: t("verdict.error"),
+    skipped: t("verdict.skipped"),
+  };
   return (
     <div className="rounded-md border">
       <div
@@ -172,13 +181,11 @@ export function ValidationVerdicts({ validation }: { validation: TenantValidatio
         }`}
         role="status"
       >
-        {validation.ok
-          ? "Validation passed (warnings are non-blocking)."
-          : "Validation failed — fix the errors below."}
+        {validation.ok ? t("verdict.passed") : t("verdict.failed")}
       </div>
       <ul className="divide-y">
         {validation.checks.map((c, i) => {
-          const style = VERDICT_STYLE[c.level] ?? VERDICT_STYLE.skipped;
+          const style = VERDICT_META[c.level] ?? VERDICT_META.skipped;
           return (
             <li key={`${c.field}-${i}`} className="flex items-start gap-2 px-3 py-2 text-sm">
               <span className={`mt-0.5 font-bold ${style.className}`} aria-hidden>
@@ -186,7 +193,7 @@ export function ValidationVerdicts({ validation }: { validation: TenantValidatio
               </span>
               <span className="min-w-0">
                 <span className="font-medium">{c.field}</span>{" "}
-                <span className={`text-xs ${style.className}`}>({style.label})</span>
+                <span className={`text-xs ${style.className}`}>({labels[c.level] ?? labels.skipped})</span>
                 <span className="block text-muted-foreground">{c.message}</span>
               </span>
             </li>
@@ -197,12 +204,12 @@ export function ValidationVerdicts({ validation }: { validation: TenantValidatio
   );
 }
 
-/** Inline "unknown skill refs" banner (the PUT/POST 422 bad-ref path). */
 export function BadRefNotice({ refs }: { refs: string[] }) {
+  const { locale } = useI18n();
   if (refs.length === 0) return null;
   return (
     <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-      Unknown skill slug(s): {refs.join(", ")}. Pick from the list or fix the landing skill.
+      {translateTenantAdmin(locale, "badRefs", { refs: refs.join(", ") })}
     </div>
   );
 }
