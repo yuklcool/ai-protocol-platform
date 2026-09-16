@@ -1,0 +1,95 @@
+name: Tenant live self-host acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/auth/**
+      - backend/admin/**
+      - backend/config/effective_models.py
+      - backend/config/tenant_models.py
+      - backend/db/chat_sessions.py
+      - backend/db/folders.py
+      - backend/db/tenants.py
+      - backend/observability/tenant_context.py
+      - backend/protocols/models_route.py
+      - backend/protocols/sessions_route.py
+      - backend/tools/documents/**
+      - backend/tools/mcp/**
+      - backend/scripts/seed_tenant_acceptance.py
+      - scripts/smoke-tenant-isolation.sh
+      - .github/workflows/tenant-live-acceptance.yml
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/auth/**
+      - backend/admin/**
+      - backend/config/effective_models.py
+      - backend/config/tenant_models.py
+      - backend/db/chat_sessions.py
+      - backend/db/folders.py
+      - backend/db/tenants.py
+      - backend/observability/tenant_context.py
+      - backend/protocols/models_route.py
+      - backend/protocols/sessions_route.py
+      - backend/tools/documents/**
+      - backend/tools/mcp/**
+      - backend/scripts/seed_tenant_acceptance.py
+      - scripts/smoke-tenant-isolation.sh
+      - .github/workflows/tenant-live-acceptance.yml
+
+jobs:
+  tenant-live-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: tenant-live-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-tenant-live-ci
+      JWT_AUDIENCE: ai-protocol-platform-tenant-live-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-tenant-live-platform-password
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
+      TENANT_E2E_PASSWORD_A: ci-tenant-a-password-strong
+      TENANT_E2E_PASSWORD_B: ci-tenant-b-password-strong
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Start PostgreSQL and backend
+        run: |
+          docker compose up -d postgres backend
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend postgres
+          exit 1
+
+      - name: Run real Tenant A/B isolation acceptance
+        env:
+          TENANT_E2E_RUN_ID: ci-${{ github.run_id }}
+        run: bash scripts/smoke-tenant-isolation.sh
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs backend postgres
+
+      - name: Stop services and remove acceptance volumes
+        if: always()
+        run: docker compose down -v --remove-orphans
