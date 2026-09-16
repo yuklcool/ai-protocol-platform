@@ -1,0 +1,184 @@
+name: Upstream sync full regression
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync-regression-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  static-core-provider:
+    if: startsWith(github.head_ref, 'sync/upstream-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GEMINI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      PLATFORM_OWNER_EMAIL: platform@ci.local
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose --profile mcp-example config --quiet
+
+      - name: Frontend typecheck and unit tests
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          CI=true npm run test:run
+
+      - name: Build backend
+        run: docker compose build backend
+
+      - name: Run persistence and model-provider regression suites
+        run: |
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
+            -e SESSION_BACKEND=memory \
+            -e MEMORY_BACKEND=memory \
+            -e PLATFORM_OWNER_EMAIL=platform@ci.local \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q \
+              tests/persistence_tests \
+              tests/unit/test_tools_registry.py \
+              tests/unit/test_rag_corpus.py \
+              tests/api_tests/test_tools_route.py \
+              tests/api_tests/test_admin_tenants.py \
+              tests/api_tests/test_admin_prewarm.py \
+              tests/api_tests/test_buckets.py \
+              tests/api_tests/test_folders.py \
+              tests/api_tests/test_admin_model_providers.py \
+              tests/api_tests/test_admin_model_probe.py \
+              tests/api_tests/test_admin_model_registry_settings.py \
+              tests/api_tests/test_admin_tenant_model_policy.py \
+              tests/api_tests/test_tenant_models_route.py \
+              tests/api_tests/test_admin_cross_tenant_matrix.py \
+              tests/unit/test_model_provider_registry.py \
+              tests/unit/test_effective_models.py \
+              tests/unit/test_runtime_models.py \
+              tests/unit/test_tenant_models.py \
+              tests/unit/test_model_runtime_routing.py
+
+  live-selfhost-tenant:
+    if: startsWith(github.head_ref, 'sync/upstream-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: upstream-sync-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-upstream-sync-ci
+      JWT_AUDIENCE: ai-protocol-platform-upstream-sync-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-upstream-sync-admin-password
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
+      TENANT_E2E_PASSWORD_A: ci-tenant-a-password-strong
+      TENANT_E2E_PASSWORD_B: ci-tenant-b-password-strong
+      SKIP_QUALITY_CHECKS: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Self-host stack
+        run: docker compose build backend mcp-sandbox frontend
+
+      - name: Start production-style Self-host stack
+        run: |
+          docker compose up -d postgres backend mcp-sandbox frontend
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3456/api/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3457/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs postgres backend mcp-sandbox frontend
+          exit 1
+
+      - name: Run no-GCP Self-host smoke
+        run: EXPECT_LOCAL_MODE=false bash scripts/smoke-selfhost.sh
+
+      - name: Run Tenant A/B isolation acceptance
+        env:
+          TENANT_E2E_RUN_ID: upstream-${{ github.run_id }}
+        run: bash scripts/smoke-tenant-isolation.sh
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs postgres backend mcp-sandbox frontend
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  live-mcp-browser:
+    if: startsWith(github.head_ref, 'sync/upstream-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: upstream-mcp-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-upstream-mcp-ci
+      JWT_AUDIENCE: ai-protocol-platform-upstream-mcp-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-upstream-mcp-admin-password
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
+      SKIP_QUALITY_CHECKS: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build MCP browser stack
+        run: docker compose --profile mcp-example build backend mcp-example-map mcp-sandbox frontend
+
+      - name: Start PostgreSQL backend frontend sandbox and real MCP Apps example
+        run: |
+          docker compose --profile mcp-example up -d postgres backend mcp-example-map mcp-sandbox frontend
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3456/api/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3457/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile mcp-example logs backend frontend mcp-sandbox postgres mcp-example-map
+          exit 1
+
+      - name: Run MCP registry binding proxy and Apps resource acceptance
+        env:
+          MCP_E2E_RUN_ID: upstream-${{ github.run_id }}
+        run: bash scripts/smoke-mcp-selfhost.sh
+
+      - name: Install Chromium runner
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run MCP Apps separate-origin browser acceptance
+        working-directory: frontend
+        env:
+          MCP_E2E_RUN_ID: upstream-browser-${{ github.run_id }}
+          MCP_BROWSER_FRONTEND_URL: http://localhost:3456
+          MCP_BROWSER_BACKEND_URL: http://127.0.0.1:1956
+        run: npx playwright test e2e/mcp-apps-live.spec.js --reporter=line --workers=1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose --profile mcp-example logs backend frontend mcp-sandbox postgres mcp-example-map
+
+      - name: Stop services
+        if: always()
+        run: docker compose --profile mcp-example down -v --remove-orphans
