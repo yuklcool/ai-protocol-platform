@@ -54,6 +54,27 @@ def test_tier_resolves_against_effective_registry() -> None:
         assert runtime_models.entry_for("smart") is entry
 
 
+def test_managed_default_and_fast_tiers_reach_runtime_resolver() -> None:
+    entry = _dynamic()
+    cfg = _cfg(entry).model_copy(
+        update={
+            "tier_defaults": {"default": entry.id, "smart": entry.id, "fast": entry.id},
+            "tier_variants": {
+                "default": {"default": entry.id},
+                "smart": {"default": entry.id},
+                "fast": {"default": entry.id},
+            },
+        }
+    )
+    with (
+        patch("config.runtime_models.load_effective_models_config", return_value=cfg),
+        patch("config.runtime_models.active_residency_policy", return_value="unrestricted"),
+    ):
+        assert runtime_models.entry_for("default") is entry
+        assert runtime_models.entry_for("fast") is entry
+        assert runtime_models.api_name_for("default") == "deepseek-chat"
+
+
 def test_dynamic_openai_provider_uses_provider_specific_runtime_kwargs() -> None:
     entry = _dynamic()
     with (
