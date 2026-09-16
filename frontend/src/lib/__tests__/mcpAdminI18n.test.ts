@@ -17,10 +17,12 @@ describe("MCP admin i18n", () => {
     expect(
       translateMcpAdmin("en", "delete.confirm", { id: "maps" }),
     ).toBe('Delete MCP Server "maps"?');
+    expect(translateMcpAdmin("en", "form.headersHelp")).toContain("${ENV_VAR}");
   });
 
-  it("renders Chinese text and interpolation", () => {
+  it("renders Chinese text and interpolation without changing technical references", () => {
     expect(translateMcpAdmin("zh-CN", "title")).toBe("MCP Server 管理");
+    expect(translateMcpAdmin("zh-CN", "form.headersHelp")).toContain("${ENV_VAR}");
     expect(
       translateMcpAdmin("zh-CN", "binding.bound", {
         server: "maps",
