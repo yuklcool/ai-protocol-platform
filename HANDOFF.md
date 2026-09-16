@@ -3,83 +3,37 @@
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
 > 状态更新时间：**2026-09-16**  
-> 当前主线：**Self-host 基线、Tenant 核心边界、MCP 管理面、Model Provider/Model/Tenant Policy、legacy ownership migration 代码均已完成；当前剩余主要是真实 Provider、真实 MCP、真实 Tenant A/B 和浏览器协议验收。**
+> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 剩真实 MCP 全链路验收。**
 
 ---
 
 ## 1. 当前结论
 
-这个仓库已经进入“真实环境验收与发布收口”阶段，不应再把工作重点描述为基础架构建设。
-
 当前 `main` 已具备：
 
-- PostgreSQL Repository / persistence abstraction
-- PostgreSQL ADK Session
-- PostgreSQL durable Memory
-- PostgreSQL 下 A2UI surface / `clientDataModel` / `lastAction` 恢复
-- Local ObjectStorage + Docker Volume
-- ADK `FileArtifactService` 本地持久化
+- PostgreSQL Repository / Persistence
+- PostgreSQL ADK Session + durable Memory
+- PostgreSQL A2UI state reconstruction
+- Local ObjectStorage + Artifact Volume
 - Built-in local JWT
-- 无 GCP 凭证/资源依赖的 Self-host 主路径
-- 显式 `tenant_id` 与 fail-closed tenant boundary
+- 无 GCP 凭证/资源依赖的正式 Self-host 主路径
+- 显式 stable `tenant_id` 与 fail-closed tenant boundary
 - Tenant-aware Session / Document / Folder / Artifact / MCP / Audit / Budget
 - Stable Tenant Tool Permission
 - legacy ownership 可审计迁移 + rollback journal
-- MCP Server Admin API + Admin UI + Health / Discovery + Skill Binding
-- YAML bootstrap + Database dynamic model overlay
-- 多 OpenAI-compatible Provider 独立 `base_url / api_key_ref`
-- Dynamic Model 进入 ADK Agent runtime
-- Platform default + `default/smart/fast` tier mapping
-- First-class Tenant `allowedModels / defaultModel`
-- 已认证 `/api/models` Tenant 白名单过滤
-- Agent runtime Tenant Model Policy enforcement
-- Self-host / Core Runtime / Tenant / MCP / Model Provider 专项 CI Gate
+- 真实 Compose/PostgreSQL/local-jwt Tenant A/B isolation gate
+- MCP Server Admin API/UI + Health / Discovery + Skill Binding
+- Dynamic Model / Provider registry
+- 多 OpenAI-compatible Provider 独立 `baseUrl / apiKeyRef`
+- Platform Default + `default/smart/fast` tier mapping
+- Tenant Model `allowedModels / defaultModel`
+- Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
 
-当前主要剩余：
-
-1. #10 / #2：真实第三方 OpenAI-compatible Provider → Model → Skill → Agent → Tool Calling E2E。
-2. #9：在目标部署执行 legacy migration，并做 Tenant A/B 真实隔离 E2E。
-3. #11：真实 Self-host MCP 管理/Tool Call/MCP Apps E2E。
-4. #1/#2/#3：真实浏览器完成 AG-UI / A2UI / MCP Apps / Skill 等统一协议验收。
-5. 后续推进 #12 中文化、#13 GHCR/版本发布、#14 upstream sync。
+接下来不要重新实现这些基础能力，重点做真实协议和真实部署验收。
 
 ---
 
-## 2. 平台核心架构
-
-```text
-Web Frontend (Next.js / React)
-        │
-        │ AG-UI
-        ▼
-FastAPI Backend
-        │
-        ▼
-Google ADK Agent Runtime
-        │
-        ├── Runtime Skills / SKILL.md
-        ├── Native Tools
-        ├── MCP
-        ├── MCP Apps
-        ├── A2UI
-        └── A2A
-```
-
-Self-host 改造没有替换上游标准协议链路。
-
-继续遵守：
-
-- 不自造 A2UI 协议
-- 不破坏 AG-UI event path
-- MCP Apps 保持独立 sandbox/origin
-- Google Cloud 能力以 adapter/provider 形式保留
-- 新能力优先放 Repository / Provider / Adapter / Config 层
-- Tenant / Auth / Permission 必须 server-authoritative / fail-closed
-- 上游兼容优先
-
----
-
-## 3. Self-host 默认架构
+## 2. Self-host 默认架构
 
 ```text
 Browser
@@ -95,9 +49,9 @@ Backend :1956
    │
    ├── PostgreSQL :5432
    │    ├── platform / tenant data
-   │    ├── ADK Session + events/state
+   │    ├── ADK Session
    │    ├── durable Memory
-   │    ├── MCP Server Registry
+   │    ├── MCP Registry
    │    └── Dynamic Model Registry
    │
    └── /data
@@ -119,13 +73,13 @@ AUTH_BACKEND=local-jwt
 OBJECT_STORAGE_BACKEND=local
 ```
 
-默认不要求 Redis、MinIO、Keycloak、Firebase、GCP project/ADC、独立 Session DB、独立 Memory DB、消息队列或独立向量数据库。
+默认不要求 Redis、MinIO、Keycloak、Firebase、GCP project/ADC、独立 Session DB、独立 Memory DB 或消息队列。
 
 ---
 
-## 4. 冻结部署分支
+## 3. 冻结部署快照
 
-稳定部署快照：
+冻结分支：
 
 ```text
 deploy/2026-09-15
@@ -137,213 +91,13 @@ deploy/2026-09-15
 e07dbe78da4ec5ba06866ca423707c9eb50d9329
 ```
 
-**不要移动、重写或自动合并后续 `main` 到该分支。**
+**禁止移动、重写或把后续 `main` 自动合并到该分支。** 需要新稳定版本时创建新的 deploy branch。
 
-后续需要稳定版本时创建新的 deploy branch，例如：
-
-```text
-deploy/2026-09-16
-deploy/2026-09-16-r2
-```
-
-不要修改原冻结快照。
-
-当前 `main` 已包含冻结分支之后的 #19、#20、#21、#23～#31 等后续能力。
-
-### 当前 main 最近关键合并
-
-```text
-PR #30 — Tenant Model Policy
-merge SHA: 5d55ee76d8a569c3c49b8b9814877a9d93a6ab4f
-
-PR #31 — legacy ownership migration + stable Tenant Tool Permission + rollback journal
-merge SHA: bd75d3abf679a503d9d072754b3873bed350687e
-```
+当前 `main` 已明显领先该冻结快照。
 
 ---
 
-## 5. Issue 总状态
-
-### 已完成 / 已关闭
-
-- #4 PostgreSQL Persistence ✅
-- #5 Session / Memory / A2UI reconstruction ✅
-- #6 ObjectStorage / Artifact ✅
-- #7 Built-in JWT ✅ Closed
-- #8 GCP optionalization ✅ Closed
-
-### 代码主体已完成，等待真实部署 / 协议验收
-
-- #1 Self-host 全链路基线 — OPEN
-- #2 通用 OpenAI-compatible — OPEN
-- #3 Docker Compose Self-host — OPEN
-- #9 显式 Tenant / 隔离 / migration — OPEN
-- #10 Model Provider 配置中心 — OPEN
-- #11 MCP Server 管理能力 — OPEN
-
-这些 Issue 不能只因为单测/CI 通过而关闭。
-
----
-
-## 6. #1 / #2 / #3 Self-host 与 OpenAI-compatible
-
-已有：
-
-- `scripts/smoke-selfhost.sh`
-- Self-host baseline CI
-- Self-host no-GCP gate
-- PostgreSQL Session / Memory / A2UI reconstruction regression
-- MCP / OpenAI-compatible regression
-- local-jwt 登录路径
-- 生产式 Docker Compose
-
-OpenAI-compatible 当前支持：
-
-```text
-YAML / legacy model
-    ↓
-OPENAI_API_BASE + OPENAI_API_KEY
-
-Dynamic Model
-    ↓
-provider_id
-    ↓
-Model Provider Registry
-    ↓
-provider.baseUrl + provider.apiKeyRef
-```
-
-可用于 DeepSeek / Qwen compatible endpoint / vLLM / LiteLLM Proxy / OneAPI / NewAPI / 内部兼容网关。
-
-真实关闭前仍需浏览器/真实 Provider 验证：
-
-1. 普通 Chat
-2. Runtime Skill
-3. 真实 Provider completion
-4. 真实 Tool Calling
-5. MCP Tool
-6. MCP App iframe/resource
-7. A2UI surface
-8. A2UI action round-trip
-
----
-
-## 7. #9 Tenant / 隔离 / legacy ownership — 代码侧已收口
-
-### 已完成
-
-- 稳定 `tenant_id`，domain 仅为兼容 identity mapping
-- User / Skill / Session / Document / Folder / Artifact / MCP / Audit tenant scope
-- tenant-aware 核心资源默认 fail-closed
-- MCP Registry / Proxy / cache tenant partition
-- Audit `tenantId / actorTenantId`
-- PostgreSQL Session / Memory / A2UI 使用稳定租户上下文
-- Local ObjectStorage / Artifact tenant-safe namespace
-- tenant budget extension point
-- `identity_key: tenant_id`
-- `missing_identity_policy: block`
-- 同 UID 跨租户 / public ACL 跨租户安全回归
-- Tenant Model Policy 基于 first-class `tenants/{tenant_id}.modelPolicy`
-- legacy `clients/{domain}` 不允许通过模型策略 API 隐式迁移
-
-### PR #31：Stable Tenant Tool Permission
-
-运行时顺序：
-
-```text
-user-specific rule
-      ↓
-stable tenant rule: tenant:<tenant_id>
-      ↓
-legacy domain rule
-      ↓
-wildcard
-      ↓
-deny
-```
-
-安全语义：
-
-- Permission cache 按 stable tenant 分区
-- 带 `tenantId` 的 user-specific rule 必须匹配当前 trusted tenant
-- legacy domain rule 在 first-class tenant 已存在时必须证明 domain 属于当前 tenant
-- 旧的无归属 user/domain permission 仍可作为 migration bridge，但只能由 Platform Admin 管理
-- Tenant Admin 不能管理其他 Tenant 的 permission
-
-### PR #31：Legacy ownership migration
-
-核心文件：
-
-```text
-backend/scripts/migrate_tenants.py
-backend/scripts/tenant_migration_journal.py
-docs/tenant-ownership-migration.md
-```
-
-迁移支持：
-
-- `clients/{domain}` → first-class `tenants/{tenant_id}` + `tenant_domains`
-- 显式 `domain=tenant_id` mapping
-- 多历史 domain 合并到同一 stable tenant
-- local JWT 缺失 `tenantId` 时可信 backfill
-- 已有显式 `auth_users.tenantId` 保持权威，不按邮箱覆盖
-- `tenant-admin:{domain}` → `tenant-admin:{tenant_id}`
-- agreeing legacy domain Tool Permission → `tenant:<tenant_id>`
-- user-specific Tool Permission 仅在可与可信 local user 精确关联时补 ownership
-- Audit 仅在 target ownership 可明确证明时 backfill
-- 不从 `actorEmail` 推断 Audit Tenant
-- ambiguous ownership 保持 platform-only
-
-默认只 dry-run；实际写入必须显式：
-
-```bash
-uv run python scripts/migrate_tenants.py \
-  --map legacy.example=tenant-a \
-  --apply
-```
-
-每个 apply run 生成 migration run id。
-
-回滚：
-
-```bash
-uv run python scripts/migrate_tenants.py --rollback <RUN_ID>
-```
-
-rollback 特性：
-
-- 先对全部 operation 做 drift preflight
-- 任一迁移后数据发生业务修改则拒绝回滚
-- migration 新建文档回滚时删除
-- pre-existing 文档仅恢复迁移修改过的字段
-- `auth_users.passwordHash` 等敏感字段不复制到 journal
-- journal 查询 provider-neutral，不依赖 Firestore 复合索引
-
-### #9 当前剩余
-
-不得关闭 #9，直到完成：
-
-1. 在目标部署执行 dry-run。
-2. 人工复核 ambiguous ownership。
-3. 执行 apply / verify。
-4. 验证 rollback 路径。
-5. Tenant A/B 真实 E2E：
-   - Session
-   - 文件
-   - Skill 私有配置
-   - MCP
-   - Audit
-   - quota
-   - Tool Permission
-   - Model whitelist/default
-
-Issue #9 已同步到这一状态。
-
----
-
-## 8. #10 Model Provider 配置中心 — 代码侧已完成
-
-关键合并：
+## 4. 最近关键合并
 
 ```text
 PR #25 — Provider / Dynamic Model backend
@@ -363,227 +117,310 @@ b58fadb92392f564f95027987f1020cf36690069
 
 PR #30 — Tenant Model Policy
 5d55ee76d8a569c3c49b8b9814877a9d93a6ab4f
+
+PR #31 — Legacy ownership migration + Stable Tenant Tool Permission + rollback journal
+bd75d3abf679a503d9d072754b3873bed350687e
+
+PR #32 — Real Tenant A/B self-host isolation acceptance
+9a7fe9b06dd30d5d2e9166b669c846719e3c7675
 ```
 
-已实现：
+---
+
+## 5. #9 Tenant / Isolation 状态
+
+#9 的代码侧已经收口，Issue 保持 OPEN 只因为真实目标部署迁移和 LLM-dependent acceptance 尚未完成。
+
+### 已完成的运行时边界
+
+- stable `tenant_id`；domain 仅是 compatibility identity mapping
+- Session / Document / Folder / Artifact / MCP / Audit tenant scope
+- tenant-aware 资源默认 fail-closed
+- tenant budget extension point
+- `identity_key: tenant_id`
+- `missing_identity_policy: block`
+- Tenant Model Policy
+- 同 UID 跨 Tenant 安全回归
+
+### Stable Tenant Tool Permission
+
+查找顺序：
+
+```text
+user-specific
+   ↓
+tenant:<tenant_id>
+   ↓
+legacy domain
+   ↓
+wildcard
+   ↓
+deny
+```
+
+约束：
+
+- cache 按 stable tenant 分区
+- 带 `tenantId` 的 user rule 必须匹配当前 trusted tenant
+- first-class tenant 下 legacy domain rule 必须证明 domain 属于当前 tenant
+- 无可信归属的旧 permission 继续 platform-only
+
+### Production migration
+
+核心文件：
+
+```text
+backend/scripts/migrate_tenants.py
+backend/scripts/tenant_migration_journal.py
+docs/tenant-ownership-migration.md
+```
+
+支持：
+
+- `clients/{domain}` → `tenants/{tenant_id}` + `tenant_domains`
+- 显式 domain→tenant mapping
+- 多历史 domain 合并
+- local JWT 缺失 `tenantId` 的可信 backfill
+- 已存在显式 `tenantId` 保持权威
+- tenant-admin tag rewrite
+- legacy Tool Permission ownership migration
+- 可证明 target ownership 的 Audit backfill
+- ambiguous ownership 保持 platform-only
+- apply run journal
+- drift-safe rollback
+- journal 不复制 password hash 等身份秘密
+
+迁移默认 dry-run：
+
+```bash
+uv run python scripts/migrate_tenants.py --map old.example=tenant-a
+```
+
+实际写入：
+
+```bash
+uv run python scripts/migrate_tenants.py \
+  --map old.example=tenant-a \
+  --apply
+```
+
+回滚：
+
+```bash
+uv run python scripts/migrate_tenants.py --rollback <RUN_ID>
+```
+
+### PR #32：真实非 LLM Tenant A/B E2E
+
+新增：
+
+```text
+backend/scripts/seed_tenant_acceptance.py
+scripts/smoke-tenant-isolation.sh
+.github/workflows/tenant-live-acceptance.yml
+```
+
+该 gate 使用真实：
+
+```text
+Docker Compose
++ PostgreSQL
++ Backend HTTP
++ local-jwt
++ local ObjectStorage
+```
+
+并故意使用**相同 UID、不同 stable tenant** 的两个账号，已通过以下真实验收：
+
+- trusted `/api/auth/whoami` tenant identity
+- Tenant Admin own/cross scope
+- public Session 仍不可跨 Tenant
+- `/api/sessions` 在相同 UID 下仍按 Tenant 分区
+- 相同 UID + 相同文件名真实上传，metadata/ObjectStorage 仍隔离
+- authenticated `/api/models` Tenant policy filtering
+- stable Tool Permission admin scope
+- tenant-scoped MCP config visibility
+- tenant-scoped Admin Audit
+
+PR #32 CI 已通过。
+
+### #9 真正剩余
+
+1. 在目标真实部署对已有 legacy 数据执行 dry-run / review / apply / verify。
+2. 人工处理 ambiguous ownership。
+3. 在目标部署演练 rollback。
+4. 接入真实 Provider 后验证 Tenant A/B 实际模型调用使用独立 quota bucket。
+5. 用真实 Agent Tool Calling 验证 Tool Permission / Model Policy 无法跨 Tenant 绕过。
+
+不要重复实现 Session/文件/MCP config/Audit/Model Policy 的 Tenant A/B 非 LLM 验收；PR #32 已覆盖。
+
+---
+
+## 6. #10 Model Provider 状态
+
+代码侧已完成：
 
 - Provider CRUD
 - Dynamic Model CRUD
 - `${ENV_VAR}` Secret Reference
-- Provider connectivity test
+- Provider connectivity
 - completion probe
 - Tool Calling probe
-- effective registry overlay
-- runtime Provider routing
-- 多 Provider 独立 `baseUrl / apiKeyRef`
+- database overlay + YAML baseline
+- Agent runtime Provider routing
+- 多 Provider 独立 Base URL / Secret
 - Platform default model
-- `default / smart / fast` managed tier mapping
-- Tenant `allowedModels / defaultModel`
-- 已认证 `/api/models` Tenant filter
-- primary/fallback runtime enforcement
-- Platform Admin 管理 Tenant Model Policy
-- legacy tenant 不被 model-policy API 隐式迁移
+- `default/smart/fast` managed tier
+- Tenant `allowedModels/defaultModel`
+- authenticated `/api/models` filter
+- primary/fallback runtime policy enforcement
 
-### #10 当前剩余
+#10 不应再开发第二套 Provider 系统。
 
-必须使用真实第三方 OpenAI-compatible endpoint 验证：
+### #10 当前唯一关键缺口
+
+使用一个真实的非 OpenAI、OpenAI-compatible endpoint 完成：
 
 ```text
-Provider test
-    ↓
+Provider Test
+   ↓
 Dynamic Model
-    ↓
-Completion probe
-    ↓
-Tool Calling probe
-    ↓
-Skill Studio 选择模型
-    ↓
+   ↓
+Completion Probe
+   ↓
+Tool Calling Probe
+   ↓
+Skill Studio model selection
+   ↓
 Agent conversation
-    ↓
-真实 Tool Calling
+   ↓
+Actual Tool Calling
 ```
 
-如果当前没有真实 endpoint / secret，不要使用 mock 关闭 #10。
+没有真实 endpoint / secret 时，不得用 mock 关闭 #10。
 
 ---
 
-## 9. #11 MCP Server 管理 — 代码侧已完成
+## 7. #11 MCP Server 管理状态
 
-已实现：
+代码侧已有：
 
 - MCP Server CRUD
 - Platform / Tenant scope
 - HTTP / SSE / Streamable HTTP
-- Docker service / local network URL
-- Auth Header / Secret Reference
-- Secret redaction / audit redaction
-- Registry cache invalidation
-- Health
-- Discovery
-- `initialize`
-- `tools/list`
-- `resources/list`
-- `prompts/list`
+- local/Docker network URL
+- Secret Reference / redaction
+- Health / real `initialize`
+- Discovery: `tools/list` / `resources/list` / `prompts/list`
 - MCP Apps resource URI summary
 - Admin UI
 - Skill Binding
-- disabled server runtime fail-closed
-- Self-host MCP Server example
+- disabled fail-closed
+- Self-host MCP example
 - `docs/selfhost-mcp-server.md`
 
-### #11 当前剩余
-
-真实 Self-host 部署验证：
-
-1. UI 新增 Server
-2. Health 成功
-3. Discovery 成功
-4. 绑定指定 Skill
-5. Agent 真实 MCP Tool Call
-6. MCP Apps Server 前端真实资源渲染
-
----
-
-## 10. Secret / Credential 原则
+当前剩余真实验收：
 
 ```text
-配置层保存 Secret Reference
-        ↓
-运行时解析
-        ↓
-只传给实际客户端
+UI Add Server
+  ↓
+Health
+  ↓
+Discovery
+  ↓
+Skill Binding
+  ↓
+Agent Tool Call
+  ↓
+MCP Apps resource rendering
 ```
 
-禁止：
-
-- Admin API 返回 API Key 明文
-- Admin UI 回显 API Key 明文
-- Audit 记录 Secret 值
-- migration journal 复制密码哈希/无关身份秘密
-- Secret 缺失时静默切换到其他 Provider 凭证
-
-未来即使加入正式 Secret Store，也继续保留 `secret_ref` 模型。
+其中 Agent Tool Call 依赖真实模型；Health/Discovery/Registry 可继续自动化真实 Self-host acceptance。
 
 ---
 
-## 11. 当前 CI / 验证边界
+## 8. Issue 总状态
 
-专项 gate：
+已关闭/完成基础能力：
+
+- #4 PostgreSQL Persistence ✅
+- #5 Session / Memory / A2UI reconstruction ✅
+- #6 ObjectStorage / Artifact ✅
+- #7 Built-in JWT ✅
+- #8 GCP optionalization ✅
+
+保持 OPEN、等待真实验收：
+
+- #1 Self-host 全链路
+- #2 OpenAI-compatible
+- #3 Docker Compose
+- #9 Tenant / migration / quota + Tool Calling final acceptance
+- #10 Model Provider real Provider E2E
+- #11 MCP real self-host E2E
+
+---
+
+## 9. 当前 CI Gate
 
 - Tenant isolation
+- **Tenant live self-host acceptance**
 - Core runtime persistence
-- Self-host no-GCP
 - Self-host baseline
 - Self-host auth baseline
-- MCP admin gate
-- Model provider gate
+- Self-host no-GCP
+- MCP admin
+- Model provider
 
-PR #31 最新 head 在合并前确认：
+CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI、ObjectStorage、Tenant、MCP、Provider routing 等路径。
 
-- Tenant Isolation ✅
-- Core Runtime Persistence ✅
-- Self-host baseline ✅
-- Self-host auth baseline ✅
-- Self-host no-GCP ✅
-- MCP Admin ✅
-
-Tenant Isolation 包含 stable tenant tool permission、Admin scope、migration apply/rollback、drift rejection、secret exclusion 等回归。
-
-**CI 不能替代真实协议/部署验收。**
+但 CI 不应冒充真实外部 Provider、真实浏览器 UI、真实 Agent Tool Call 验收。
 
 ---
 
-## 12. 自托管启动
-
-冻结快照：
-
-```bash
-git clone https://github.com/yuklcool/ai-protocol-platform.git
-cd ai-protocol-platform
-git checkout deploy/2026-09-15
-cp .env.selfhost.example .env
-docker compose up -d --build
-```
-
-当前 main：
-
-```bash
-cp .env.selfhost.example .env
-make docker-up
-```
-
-端口：
-
-```text
-Frontend      3456
-Backend       1956
-MCP sandbox   3457
-PostgreSQL    5432
-```
-
-注意：`main` 已包含冻结快照之后的 #25～#31 等能力，不等同于 `deploy/2026-09-15`。
-
----
-
-## 13. 下一步执行顺序
+## 10. 下一步执行顺序
 
 ### 第一优先：#10 / #2 真实 Provider E2E
 
-如果有真实 endpoint / secret，直接完成：
+有真实 endpoint + secret 时直接做 Provider → Model → Probe → Skill → Agent → Tool Calling。
 
-```text
-Provider → Model → Completion → Tool Calling → Skill → Agent
-```
+### 第二优先：#11 非 LLM MCP 真实验收继续自动化
 
-没有真实凭证时不要 mock 验收，转第二优先。
+在没有 Provider secret 时优先继续补：
 
-### 第二优先：#9 目标部署 migration + Tenant A/B E2E
+- Compose 内真实 MCP Server
+- Admin API create
+- Health
+- Discovery
+- Tenant scope
+- Skill Binding persistence
 
-代码侧 migration / rollback 已完成，**不要重新实现迁移脚本**。
+不要把最后的 Agent Tool Calling 标成已完成。
 
-接下来做：
+### 第三优先：#9 目标部署 legacy migration
 
-1. dry-run
-2. review mapping / ambiguous ownership
-3. apply
-4. verify
-5. rollback exercise
-6. Tenant A/B E2E
+需要真实现存 legacy 数据，代码已经准备好；不要重新写 migration tooling。
 
-### 第三优先：#11 MCP 真实自托管验收
+### 第四优先：统一浏览器验收
 
-```text
-UI Add Server → Health → Discovery → Binding → Tool Call → MCP Apps rendering
-```
+一次真实 Self-host acceptance 覆盖：Chat / Skill / MCP / MCP Apps / A2UI / OpenAI-compatible。
 
-### 第四优先：#1/#2/#3 统一浏览器协议验收
-
-一次真实 Self-host acceptance 同时覆盖 Chat / Skill / MCP / MCP Apps / A2UI / OpenAI-compatible。
-
-### 后续
-
-- #12 中文化 / Branding
-- #13 GHCR / versioned release
-- #14 upstream sync
-- #16 S3-compatible optional adapter
-- #17 OIDC enterprise extension
+后续：#12 中文化、#13 GHCR/versioned release、#14 upstream sync、#16 S3 adapter、#17 OIDC extension。
 
 ---
 
-## 14. 开发约束
+## 11. 开发约束
 
 1. Self-host 默认依赖越少越好。
 2. PostgreSQL 能承担的结构化状态不要拆新数据库。
-3. 默认文件持久化继续使用 local volume，不强制 MinIO。
-4. Keycloak / OIDC 保持可选，不成为默认部署前置条件。
-5. Firebase / GCP 能力保留 adapter，不阻塞无 GCP 启动。
-6. Tenant / Auth / Permission 一律 server-authoritative / fail-closed。
-7. 不信任前端传入的 tenant / group / role claims。
-8. MCP / A2UI / AG-UI 保持标准协议优先。
-9. Dynamic Model 不得绕过统一 Registry / runtime resolver。
-10. Provider API Key / MCP credential 不允许通过普通 API 明文返回。
-11. Tenant Model Policy 必须基于 first-class tenant id。
-12. migration 只迁可信 ownership；不通过邮箱猜测历史数据归属。
-13. 不要修改冻结的 `deploy/2026-09-15`。
+3. 默认文件持久化使用 local volume，不强制 MinIO。
+4. Keycloak/OIDC 保持可选。
+5. GCP/Firebase 保留 adapter，不阻塞无 GCP 启动。
+6. Tenant/Auth/Permission 必须 server-authoritative / fail-closed。
+7. 不信任浏览器传入的 tenant/group/role。
+8. MCP/A2UI/AG-UI 标准协议优先。
+9. Dynamic Model 不得绕过统一 Registry/runtime resolver。
+10. Provider API Key / MCP credential 不通过普通 API 明文返回。
+11. Tenant Model Policy 必须使用 first-class tenant id。
+12. migration 只迁可信 ownership，不通过邮箱猜历史归属。
+13. 不修改冻结 `deploy/2026-09-15`。
 14. 每个阶段结束后同步 Issue + HANDOFF。
