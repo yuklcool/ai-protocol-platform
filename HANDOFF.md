@@ -3,7 +3,7 @@
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
 > 状态更新时间：**2026-09-16**  
-> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 剩真实 MCP 全链路验收。**
+> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实非 LLM MCP 后端/协议验收，只剩浏览器 iframe 渲染与真实模型驱动 Agent MCP Tool Call。**
 
 ---
 
@@ -23,13 +23,14 @@
 - legacy ownership 可审计迁移 + rollback journal
 - 真实 Compose/PostgreSQL/local-jwt Tenant A/B isolation gate
 - MCP Server Admin API/UI + Health / Discovery + Skill Binding
+- 真实 Self-host MCP Admin → Skill Binding → Proxy → MCP Apps HTML transport gate
 - Dynamic Model / Provider registry
 - 多 OpenAI-compatible Provider 独立 `baseUrl / apiKeyRef`
 - Platform Default + `default/smart/fast` tier mapping
 - Tenant Model `allowedModels / defaultModel`
 - Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
 
-接下来不要重新实现这些基础能力，重点做真实协议和真实部署验收。
+接下来不要重新实现这些基础能力，重点做真实外部 Provider、浏览器与目标部署验收。
 
 ---
 
@@ -123,6 +124,9 @@ bd75d3abf679a503d9d072754b3873bed350687e
 
 PR #32 — Real Tenant A/B self-host isolation acceptance
 9a7fe9b06dd30d5d2e9166b669c846719e3c7675
+
+PR #33 — Real Self-host MCP protocol acceptance
+96d3f03bfe3dcb109b39db5ebd74adc16c466f10
 ```
 
 ---
@@ -230,7 +234,7 @@ Docker Compose
 + local ObjectStorage
 ```
 
-并故意使用**相同 UID、不同 stable tenant** 的两个账号，已通过以下真实验收：
+并故意使用**相同 UID、不同 stable tenant** 的两个账号，已通过：
 
 - trusted `/api/auth/whoami` tenant identity
 - Tenant Admin own/cross scope
@@ -241,8 +245,6 @@ Docker Compose
 - stable Tool Permission admin scope
 - tenant-scoped MCP config visibility
 - tenant-scoped Admin Audit
-
-PR #32 CI 已通过。
 
 ### #9 真正剩余
 
@@ -303,7 +305,9 @@ Actual Tool Calling
 
 ## 7. #11 MCP Server 管理状态
 
-代码侧已有：
+代码侧和非 LLM 真实协议链路已经完成。
+
+已有：
 
 - MCP Server CRUD
 - Platform / Tenant scope
@@ -319,23 +323,68 @@ Actual Tool Calling
 - Self-host MCP example
 - `docs/selfhost-mcp-server.md`
 
-当前剩余真实验收：
+### PR #33：真实 Self-host MCP Protocol Acceptance
+
+新增：
 
 ```text
-UI Add Server
-  ↓
-Health
-  ↓
-Discovery
-  ↓
-Skill Binding
-  ↓
-Agent Tool Call
-  ↓
-MCP Apps resource rendering
+backend/scripts/verify_mcp_proxy_live.py
+scripts/smoke-mcp-selfhost.sh
+.github/workflows/mcp-live-acceptance.yml
 ```
 
-其中 Agent Tool Call 依赖真实模型；Health/Discovery/Registry 可继续自动化真实 Self-host acceptance。
+真实运行：
+
+```text
+Docker Compose
+  ├── PostgreSQL
+  ├── Backend / local-jwt
+  └── mcp-example-map
+       └── upstream modelcontextprotocol/ext-apps map server
+```
+
+真实验收路径已经通过：
+
+```text
+local-jwt login
+  ↓
+/api/skills 创建 private Skill
+  ↓
+/api/admin/mcp-servers 注册真实 Docker-network MCP Server
+  ↓
+Admin Health -> real initialize
+  ↓
+Admin Discovery -> map tool + ui:// resource
+  ↓
+未绑定 Skill：/mcp/{server_id} -> 403
+  ↓
+普通 Skill API 绑定 MCP server
+  ↓
+Python MCP SDK 经平台 /mcp Proxy
+  ↓
+initialize
+  ↓
+tools/list
+  ↓
+resources/list / resources/read
+  ↓
+真实 ui:// 非空 text/html MCP Apps 资源
+  ↓
+Disable Server
+  ↓
+Admin Health 仍可诊断；Runtime Proxy -> 404
+```
+
+首轮 live gate 发现测试夹具 Skill name 不符合真实 lowercase kebab-case 约束，修正夹具后第二轮完整链路全绿；没有降低业务校验。
+
+### #11 真正剩余
+
+只剩：
+
+1. **浏览器真实 MCP Apps iframe/sandbox 渲染与交互**：后端已经证明 HTML 真实传输，但这不等于浏览器已经渲染成功。
+2. **真实 Provider 驱动 Agent MCP Tool Call**：需要模型真正选择并执行绑定 Tool，不能用 mock model 替代。
+
+不要再重复实现 Admin register / Health / Discovery / Binding / Proxy / Apps resource transport；PR #33 已完成真实协议验收。
 
 ---
 
@@ -349,31 +398,34 @@ MCP Apps resource rendering
 - #7 Built-in JWT ✅
 - #8 GCP optionalization ✅
 
-保持 OPEN、等待真实验收：
+保持 OPEN、等待最终真实验收：
 
 - #1 Self-host 全链路
 - #2 OpenAI-compatible
 - #3 Docker Compose
-- #9 Tenant / migration / quota + Tool Calling final acceptance
-- #10 Model Provider real Provider E2E
-- #11 MCP real self-host E2E
+- #9 target migration + quota/Tool Calling final acceptance
+- #10 real Provider E2E
+- #11 browser MCP Apps rendering + real Agent MCP Tool Call
 
 ---
 
 ## 9. 当前 CI Gate
 
 - Tenant isolation
-- **Tenant live self-host acceptance**
+- Tenant live self-host acceptance
 - Core runtime persistence
 - Self-host baseline
 - Self-host auth baseline
 - Self-host no-GCP
 - MCP admin
+- **MCP live self-host acceptance**
 - Model provider
 
 CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI、ObjectStorage、Tenant、MCP、Provider routing 等路径。
 
-但 CI 不应冒充真实外部 Provider、真实浏览器 UI、真实 Agent Tool Call 验收。
+PR #33 已证明真实 `ext-apps` MCP Server 可以经平台 Admin/Registry/Skill Binding/Proxy 完成 MCP 协议与 HTML resource transport。
+
+但 CI 不应冒充真实外部 Provider或真实浏览器 iframe 渲染。
 
 ---
 
@@ -381,30 +433,50 @@ CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI�
 
 ### 第一优先：#10 / #2 真实 Provider E2E
 
-有真实 endpoint + secret 时直接做 Provider → Model → Probe → Skill → Agent → Tool Calling。
+有真实 endpoint + secret 时直接做：
 
-### 第二优先：#11 非 LLM MCP 真实验收继续自动化
+```text
+Provider
+  ↓
+Dynamic Model
+  ↓
+Completion Probe
+  ↓
+Tool Calling Probe
+  ↓
+Skill
+  ↓
+Agent Conversation
+  ↓
+Actual Tool Calling
+```
 
-在没有 Provider secret 时优先继续补：
+该验收可以同时收口 #9 的 quota/Tool Permission final acceptance 与 #11 的 Agent MCP Tool Call。
 
-- Compose 内真实 MCP Server
-- Admin API create
-- Health
-- Discovery
-- Tenant scope
-- Skill Binding persistence
+### 第二优先：真实浏览器协议验收
 
-不要把最后的 Agent Tool Calling 标成已完成。
+重点：
+
+- MCP Apps iframe/sandbox
+- A2UI surface/action
+- Skill Studio model selection
+- Chat/AG-UI
+
+后端返回 HTML 不等于浏览器渲染完成，因此不要提前关闭 #11。
 
 ### 第三优先：#9 目标部署 legacy migration
 
 需要真实现存 legacy 数据，代码已经准备好；不要重新写 migration tooling。
 
-### 第四优先：统一浏览器验收
+### 第四优先：发布收口
 
-一次真实 Self-host acceptance 覆盖：Chat / Skill / MCP / MCP Apps / A2UI / OpenAI-compatible。
+完成真实验收后推进：
 
-后续：#12 中文化、#13 GHCR/versioned release、#14 upstream sync、#16 S3 adapter、#17 OIDC extension。
+- #12 中文化 / Branding
+- #13 GHCR / versioned release
+- #14 upstream sync
+- #16 S3 adapter
+- #17 OIDC extension
 
 ---
 
