@@ -31,7 +31,7 @@
 - Tenant Model `allowedModels / defaultModel`
 - Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
 
-真实 Provider 验收入口：PR #35 增加手动工作流 `Real Provider Agent MCP acceptance`；运行方式见 [docs/real-provider-acceptance.md](docs/real-provider-acceptance.md)。验收资源使用独立随机 ID，避免覆盖已有 MCP 配置。当前仅完成语法检查及 Playwright 用例收集，尚未执行真实模型任务；需要配置 Actions secret `REAL_PROVIDER_API_KEY` 并提供 Base URL / model name。PR CI 通过不能替代真实模型验收，也不能据此关闭 #2/#10/#11。该脚本通过 API 创建 Skill，Skill Studio 模型选择 UI、Tenant LLM quota/policy 与目标数据迁移仍需独立验收。
+真实 Provider 验收入口：PR #35 已合并（`8445d6900b8422a203618de2fa8df9322b179561`），增加手动工作流 `Real Provider Agent MCP acceptance`；运行方式见 [docs/real-provider-acceptance.md](docs/real-provider-acceptance.md)。验收资源使用独立随机 ID，避免覆盖已有 MCP 配置。本地语法检查及 Playwright 用例收集通过；提交 `52f189a` 的 PR 语法 CI 与 MCP live self-host acceptance（含 Chromium）均通过，运行记录：[语法 CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523277)、[MCP live CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523241)。真实模型任务按 PR 触发规则跳过，尚未执行；需要配置 Actions secret `REAL_PROVIDER_API_KEY` 并提供 Base URL / model name。PR CI 通过不能替代真实模型验收，也不能据此关闭 #2/#10/#11。该脚本通过 API 创建 Skill，Skill Studio 模型选择 UI、Tenant LLM quota/policy 与目标数据迁移仍需独立验收。
 
 接下来不要重新实现这些基础能力。当前最高优先级是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
 
