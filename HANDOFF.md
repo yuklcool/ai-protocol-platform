@@ -3,7 +3,7 @@
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
 > 状态更新时间：**2026-09-16**  
-> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实非 LLM MCP 后端/协议验收，只剩浏览器 iframe 渲染与真实模型驱动 Agent MCP Tool Call。**
+> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实 MCP 后端/协议以及 Chromium separate-origin MCP Apps 浏览器渲染验收，只剩真实模型驱动 Agent MCP Tool Call。**
 
 ---
 
@@ -24,13 +24,14 @@
 - 真实 Compose/PostgreSQL/local-jwt Tenant A/B isolation gate
 - MCP Server Admin API/UI + Health / Discovery + Skill Binding
 - 真实 Self-host MCP Admin → Skill Binding → Proxy → MCP Apps HTML transport gate
+- 真实 Chromium MCP Apps separate-origin sandbox/iframe rendering gate
 - Dynamic Model / Provider registry
 - 多 OpenAI-compatible Provider 独立 `baseUrl / apiKeyRef`
 - Platform Default + `default/smart/fast` tier mapping
 - Tenant Model `allowedModels / defaultModel`
 - Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
 
-接下来不要重新实现这些基础能力，重点做真实外部 Provider、浏览器与目标部署验收。
+接下来不要重新实现这些基础能力。当前最高优先级是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
 
 ---
 
@@ -127,6 +128,9 @@ PR #32 — Real Tenant A/B self-host isolation acceptance
 
 PR #33 — Real Self-host MCP protocol acceptance
 96d3f03bfe3dcb109b39db5ebd74adc16c466f10
+
+PR #34 — Real MCP Apps Chromium browser/sandbox acceptance
+aaab15e913d392ac4b84a041be43a4fc2e175105
 ```
 
 ---
@@ -305,7 +309,7 @@ Actual Tool Calling
 
 ## 7. #11 MCP Server 管理状态
 
-代码侧和非 LLM 真实协议链路已经完成。
+除真实模型驱动 Tool Calling 外，MCP 管理、协议和浏览器渲染链路已经完成。
 
 已有：
 
@@ -324,24 +328,6 @@ Actual Tool Calling
 - `docs/selfhost-mcp-server.md`
 
 ### PR #33：真实 Self-host MCP Protocol Acceptance
-
-新增：
-
-```text
-backend/scripts/verify_mcp_proxy_live.py
-scripts/smoke-mcp-selfhost.sh
-.github/workflows/mcp-live-acceptance.yml
-```
-
-真实运行：
-
-```text
-Docker Compose
-  ├── PostgreSQL
-  ├── Backend / local-jwt
-  └── mcp-example-map
-       └── upstream modelcontextprotocol/ext-apps map server
-```
 
 真实验收路径已经通过：
 
@@ -375,16 +361,70 @@ Disable Server
 Admin Health 仍可诊断；Runtime Proxy -> 404
 ```
 
-首轮 live gate 发现测试夹具 Skill name 不符合真实 lowercase kebab-case 约束，修正夹具后第二轮完整链路全绿；没有降低业务校验。
+首轮 live gate 发现测试夹具 Skill name 不符合真实 lowercase kebab-case 约束，修正夹具后完整链路全绿；没有降低业务校验。
+
+### PR #34：真实 Chromium MCP Apps Browser Acceptance
+
+PR #34 没有新造一套 Host，而是复用现有产品链路：
+
+```text
+MessageBubble
+  ↓
+MCPAppToolCallRouter
+  ↓
+@mcp-ui/client AppRenderer
+  ↓
+Browser MCP Client
+  ↓
+Authenticated platform /mcp Proxy
+  ↓
+真实 ext-apps map MCP Server
+  ↓
+listTools + resources/read
+  ↓
+ui://cesium-map/mcp-app.html
+  ↓
+Host :3456
+  ↓
+Separate-origin sandbox :3457
+  ↓
+Inner MCP App iframe
+```
+
+CI 使用真实 Compose：
+
+```text
+PostgreSQL
+Backend / local-jwt
+Frontend :3456
+MCP sandbox :3457
+upstream ext-apps map MCP Server
+Chromium / Playwright
+```
+
+已确认：
+
+- real local-jwt browser session
+- MCP Admin register / Health / Discovery
+- Skill Binding
+- 浏览器 MCP Client 经平台 authenticated Proxy 连接真实 MCP server
+- `show-map` tool definition 可发现
+- 真实 `ui://` HTML resource 可读取
+- Host origin = `http://localhost:3456`
+- Sandbox origin = `http://localhost:3457`
+- Sandbox 创建 inner iframe
+- 真实 MCP App HTML 写入 inner iframe 并可被 Chromium 观察到
+- 无 sandbox ready timeout / origin rejection / listTools / readResource fatal error
+
+该 Gate 只把“LLM 产生 ToolCall”这一环固定为确定性 ToolCall fixture；MCP Client、Proxy、MCP server、resource transport、sandbox 与浏览器渲染全部是真实链路。因此它不能代替真实 Provider Tool Calling，但已经足以关闭“浏览器 MCP Apps iframe/sandbox 是否真实工作”的疑问。
 
 ### #11 真正剩余
 
 只剩：
 
-1. **浏览器真实 MCP Apps iframe/sandbox 渲染与交互**：后端已经证明 HTML 真实传输，但这不等于浏览器已经渲染成功。
-2. **真实 Provider 驱动 Agent MCP Tool Call**：需要模型真正选择并执行绑定 Tool，不能用 mock model 替代。
+1. **真实 Provider 驱动 Agent MCP Tool Call**：模型必须真正选择并执行绑定 MCP Tool，不能用 mock model / 固定 ToolCall fixture 替代。
 
-不要再重复实现 Admin register / Health / Discovery / Binding / Proxy / Apps resource transport；PR #33 已完成真实协议验收。
+不要再重复实现或验收 Admin register / Health / Discovery / Binding / Proxy / Apps resource transport / browser sandbox rendering；PR #33 + #34 已覆盖。
 
 ---
 
@@ -405,7 +445,7 @@ Admin Health 仍可诊断；Runtime Proxy -> 404
 - #3 Docker Compose
 - #9 target migration + quota/Tool Calling final acceptance
 - #10 real Provider E2E
-- #11 browser MCP Apps rendering + real Agent MCP Tool Call
+- #11 real Agent MCP Tool Call
 
 ---
 
@@ -418,14 +458,14 @@ Admin Health 仍可诊断；Runtime Proxy -> 404
 - Self-host auth baseline
 - Self-host no-GCP
 - MCP admin
-- **MCP live self-host acceptance**
+- **MCP live self-host acceptance（包含 Chromium separate-origin MCP Apps browser acceptance）**
 - Model provider
 
 CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI、ObjectStorage、Tenant、MCP、Provider routing 等路径。
 
-PR #33 已证明真实 `ext-apps` MCP Server 可以经平台 Admin/Registry/Skill Binding/Proxy 完成 MCP 协议与 HTML resource transport。
+PR #33 已证明真实 `ext-apps` MCP Server 可以经平台 Admin/Registry/Skill Binding/Proxy 完成 MCP 协议与 HTML resource transport；PR #34 已进一步证明 Chromium 中真实 separate-origin sandbox/iframe 能加载该 MCP Apps HTML。
 
-但 CI 不应冒充真实外部 Provider或真实浏览器 iframe 渲染。
+CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secret 时，不得把固定 ToolCall 或 mock model 当成 #10/#11 最终验收。
 
 ---
 
@@ -444,29 +484,51 @@ Completion Probe
   ↓
 Tool Calling Probe
   ↓
-Skill
+Skill Studio model selection
   ↓
 Agent Conversation
   ↓
-Actual Tool Calling
+模型真实选择 MCP Tool
+  ↓
+真实 MCP Server
+  ↓
+Tool result
+  ↓
+Agent final response
 ```
 
-该验收可以同时收口 #9 的 quota/Tool Permission final acceptance 与 #11 的 Agent MCP Tool Call。
+这一轮可以同时收口：
 
-### 第二优先：真实浏览器协议验收
+- #10 real Provider E2E
+- #11 real Agent MCP Tool Call
+- #9 Tenant quota / Tool Permission / Model Policy 的 LLM-dependent final acceptance
+- #2 OpenAI-compatible 全链路验收
 
-重点：
-
-- MCP Apps iframe/sandbox
-- A2UI surface/action
-- Skill Studio model selection
-- Chat/AG-UI
-
-后端返回 HTML 不等于浏览器渲染完成，因此不要提前关闭 #11。
-
-### 第三优先：#9 目标部署 legacy migration
+### 第二优先：#9 目标部署 legacy migration
 
 需要真实现存 legacy 数据，代码已经准备好；不要重新写 migration tooling。
+
+执行顺序：
+
+```text
+dry-run
+  ↓
+人工 review mapping / ambiguous ownership
+  ↓
+apply
+  ↓
+verify
+  ↓
+rollback drill
+```
+
+### 第三优先：其他真实浏览器/产品体验验收
+
+MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏览器方向重点可放在：
+
+- A2UI surface/action
+- Skill Studio model selection（配合真实 Provider）
+- Chat / AG-UI 完整体验
 
 ### 第四优先：发布收口
 
@@ -496,3 +558,4 @@ Actual Tool Calling
 12. migration 只迁可信 ownership，不通过邮箱猜历史归属。
 13. 不修改冻结 `deploy/2026-09-15`。
 14. 每个阶段结束后同步 Issue + HANDOFF。
+15. 已由真实 gate 覆盖的能力不要重新造第二套验收；新增 gate 应聚焦尚未证明的边界。
