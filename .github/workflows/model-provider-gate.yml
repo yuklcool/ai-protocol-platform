@@ -3,7 +3,12 @@ name: Model provider gate
 on:
   pull_request:
     paths:
+      - frontend/src/app/admin/model-providers/**
+      - frontend/src/app/admin/page.tsx
+      - frontend/src/app/admin/__tests__/AdminHub.test.tsx
+      - frontend/package*.json
       - backend/admin/model_providers_routes.py
+      - backend/admin/model_probe_routes.py
       - backend/admin/routes.py
       - backend/adk/agent.py
       - backend/config/model_provider_registry.py
@@ -11,6 +16,7 @@ on:
       - backend/config/runtime_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
+      - backend/tests/api_tests/test_admin_model_probe.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
@@ -20,7 +26,12 @@ on:
   push:
     branches: [main]
     paths:
+      - frontend/src/app/admin/model-providers/**
+      - frontend/src/app/admin/page.tsx
+      - frontend/src/app/admin/__tests__/AdminHub.test.tsx
+      - frontend/package*.json
       - backend/admin/model_providers_routes.py
+      - backend/admin/model_probe_routes.py
       - backend/admin/routes.py
       - backend/adk/agent.py
       - backend/config/model_provider_registry.py
@@ -28,6 +39,7 @@ on:
       - backend/config/runtime_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
+      - backend/tests/api_tests/test_admin_model_probe.py
       - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
@@ -59,8 +71,36 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/api_tests/test_admin_model_providers.py \
+              tests/api_tests/test_admin_model_probe.py \
               tests/api_tests/test_admin_cross_tenant_matrix.py \
               tests/unit/test_model_provider_registry.py \
               tests/unit/test_effective_models.py \
               tests/unit/test_runtime_models.py \
               tests/unit/test_model_runtime_routing.py
+
+  model-provider-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_AUTH_BACKEND: local-jwt
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Verify provider management interactions
+        run: CI=true npm run test:run -- src/app/admin/model-providers/__tests__/ModelProvidersPage.test.tsx src/app/admin/__tests__/AdminHub.test.tsx
+      - name: Build frontend for local JWT
+        run: npm run build

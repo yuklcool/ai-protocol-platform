@@ -80,7 +80,9 @@ const AREAS: Area[] = [
     href: "/admin/settings",
     title: "Platform",
     question: "Settings that apply across every tenant.",
-    links: [{ href: "/admin/settings", label: "Platform preamble", note: "prepended to every skill's prompt" }],
+    links: [
+      { href: "/admin/model-providers", label: "Model Providers", note: "endpoints, models, completion and Tool Calling tests" },
+      { href: "/admin/settings", label: "Platform preamble", note: "prepended to every skill's prompt" }],
     platformOnly: true,
   },
 ];

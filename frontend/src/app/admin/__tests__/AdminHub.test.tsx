@@ -43,7 +43,7 @@ describe("AdminHub IA", () => {
 
   it("renders five task-shaped areas for a platform admin", async () => {
     render(<AdminHub />);
-    for (const title of ["Your tenant", "People & access", "Skills", "Activity & audit", "Platform"]) {
+    for (const title of ["Your tenant", "People & access", "Skills & MCP", "Activity & audit", "Platform"]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
   });
@@ -63,6 +63,7 @@ describe("AdminHub IA", () => {
     asTenant();
     render(<AdminHub />);
     expect(screen.queryByText("Platform")).toBeNull();
+    expect(screen.queryByText("Model Providers")).toBeNull();
     // ...but the areas they CAN use are still there.
     expect(screen.getByText("Your tenant")).toBeTruthy();
     expect(screen.getByText("People & access")).toBeTruthy();
@@ -85,6 +86,7 @@ describe("AdminHub IA", () => {
       "/admin/analytics",
       "/admin/audit",
       "/admin/settings",
+      "/admin/model-providers",
       "/skills/studio/new",
     ]) {
       expect(hrefs).toContain(route);

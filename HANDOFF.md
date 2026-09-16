@@ -576,62 +576,34 @@ PR #27 验证：
 
 ---
 
-## 11. 当前未合并分支：`feat/model-provider-admin-ui`
+## 11. #10 Model Providers 管理 UI 与模型探测
 
-这是继续完成 #10 的当前工作分支。
+本批工作接续 `feat/model-provider-admin-ui`，已同步 2026-09-16 main 的交接文档。
+分支最终合并状态以 GitHub PR 为准；不要仅凭本节实现记录推断已合并。
 
-当前相对 `main`：
+已实现：
 
-```text
-base main: aaf1d1de443fcd595da23f21117ddac3493fcd09
-ahead_by: 6
-behind_by: 0
-```
+- `/admin/model-providers`：Provider / Dynamic Model 新增、编辑、删除、启停；
+  Provider connectivity、Model completion、Tool Calling 探测。
+- Admin 首页平台管理员入口；租户管理员不读取或管理平台 Provider。
+- 仅保存 `${ENV_VAR}` 引用，UI 不接受服务器凭证值作为配置方案。
+- 探测向目标 Provider 实际发送 `/chat/completions`；强制 `platform_probe` 工具，
+  检查函数名称和 JSON 参数结构，不执行返回的工具。
+- 文本探测要求非空文本；畸形 message/tool_calls 不再误报成功或导致 500。
+- 区分配置、网络、认证、协议、能力、schema 错误；网络错误不回显上游异常内容。
+- reasoning 模型不发送 temperature/max_tokens，改用 max_completion_tokens。
+- UI 错误提示、请求期间禁用操作、tier/residency 表单类型修复。
+- Model Provider gate 增加前端类型检查、交互测试、local-jwt 生产构建。
 
-当前 changed files：
-
-```text
-.github/workflows/model-provider-gate.yml
-backend/admin/model_probe_routes.py
-backend/admin/routes.py
-backend/tests/api_tests/test_admin_model_probe.py
-frontend/src/app/admin/model-providers/page.tsx
-frontend/src/app/admin/page.tsx
-```
-
-### 已在该分支实现、尚未进入 main
-
-1. `/admin/model-providers` 管理页面
-   - Provider 新增 / 编辑 / 删除
-   - Dynamic Model 新增 / 编辑 / 删除
-   - Provider connectivity test
-   - Model completion test
-   - Tool Calling probe
-
-2. Model Test Request
-   - 对指定 dynamic model 实际调用 `/chat/completions`
-   - Tool Calling 模式传入强制工具 `platform_probe`
-   - 校验响应是否真实返回对应 `tool_calls`
-
-3. Admin 首页 Model Providers 入口
-
-4. `test_admin_model_probe.py`
-
-5. Model Provider CI gate 扩展
-
-### 注意
-
-截至本交接文档更新时：
-
-- 该分支**尚未合并到 main**。
-- 之前创建 PR 时 GitHub API 曾返回 timeout / 502；不要把这批工作误写成已经 merge。
-- 下一步应先创建 PR、跑 backend/frontend CI，再决定合并。
+本地验证：后端 Model Provider gate **121 passed**；前端管理页与入口
+**15 passed**；TypeScript 检查通过。生产构建及远端 CI 结果记录在本批 PR。
+这里的探测回归使用受控响应，不能替代真实第三方模型的最终验收。
 
 ---
 
 ## 12. #10 剩余工作
 
-在当前 `feat/model-provider-admin-ui` 合并后，#10 仍有：
+在管理 UI 与探测接口完成合并后，#10 仍有：
 
 1. 默认模型与 tier mapping 管理 / 可视化。
 2. 可选 Tenant 级模型白名单 / Tenant 默认模型。
@@ -756,7 +728,7 @@ Issue #1/#2/#3/#9/#10/#11 的最终关闭都必须遵守这个边界。
 
 建议按以下顺序继续，不要重新回头改已稳定的 Self-host 基础架构：
 
-### 第一优先：完成当前 #10 分支
+### 第一优先：验证并合并当前 #10 管理 UI / 模型探测
 
 ```text
 feat/model-provider-admin-ui
