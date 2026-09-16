@@ -1,6 +1,10 @@
 name: Real Provider Agent MCP acceptance
 
 on:
+  pull_request:
+    paths:
+      - frontend/e2e/provider-agent-mcp-live.spec.js
+      - .github/workflows/real-provider-agent-mcp-acceptance.yml
   workflow_dispatch:
     inputs:
       provider_base_url:
@@ -21,7 +25,16 @@ permissions:
   contents: read
 
 jobs:
+  acceptance-spec-static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate acceptance spec syntax
+        run: node --check frontend/e2e/provider-agent-mcp-live.spec.js
+
   real-provider-agent-mcp:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
