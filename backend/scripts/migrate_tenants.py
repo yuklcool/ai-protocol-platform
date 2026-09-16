@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-"""Migrate legacy ``clients/{domain}`` records into first-class tenants.
+"""Migrate legacy domain ownership into first-class stable tenants.
 
-The migration is intentionally conservative:
+The migration is deliberately conservative and reversible:
 
-* default tenant id is the legacy domain, preserving current behavior;
-* ``--map domain=tenant_id`` may merge multiple domains into one stable tenant;
-* conflicting legacy policy/config values fail fast instead of guessing;
 * dry-run is the default; writes require ``--apply``;
-* local-JWT ``auth_users`` rows are backfilled with the resolved ``tenantId``;
-* legacy ``tenant-admin:{domain}`` grants are rewritten to
-  ``tenant-admin:{tenant_id}`` when a domain is remapped, so administrators do
-  not lose authority during the migration.
+* ``--map domain=tenant_id`` is the authoritative legacy-domain mapping;
+* existing explicit local-user ``tenantId`` values are never overwritten from
+  email/domain inference;
+* domain tool rules become first-class ``tenant:<tenant_id>`` rules only when
+  all merged legacy domains agree on the effective permission set;
+* user tool-rule ownership is backfilled only when an exact local ``auth_users``
+  record provides (or is safely assigned) the tenant;
+* audit rows are backfilled only from explicit target ownership, trusted local
+  user assignments, or this migration's explicit client-domain mapping;
+* every apply run writes a field-level migration journal. ``--rollback RUN_ID``
+  restores it only if the migrated data has not drifted since the run.
+
+No ownership is inferred from ``actorEmail`` or an arbitrary historical email
+address. Ambiguous legacy rows remain platform-only.
 
 Examples:
 
@@ -21,19 +28,32 @@ Examples:
   uv run python scripts/migrate_tenants.py \
       --map acme.com=tenant-acme \
       --map acme-energy.example=tenant-acme \
+      --require-explicit \
       --apply
+
+  # Revert an applied run after reviewing drift checks.
+  uv run python scripts/migrate_tenants.py --rollback <run-id>
 """
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 from auth.admin_roles import TENANT_ADMIN_PREFIX
+from auth.permissions import TENANT_PREFIX, tenant_permission_key
 from db.persistence import get_repository
 from db.repository import Repository
-from db.tenants import TenantConfig, TenantDirectory, normalize_domain, normalize_tenant_id
+from db.tenants import TenantConfig, normalize_domain, normalize_tenant_id
+from scripts.tenant_migration_journal import MigrationJournal, rollback_migration
+
+CLIENT_COLLECTION = "clients"
+TENANT_COLLECTION = "tenants"
+DOMAIN_COLLECTION = "tenant_domains"
+AUTH_USER_COLLECTION = "auth_users"
+TOOL_PERMISSION_COLLECTION = "tool_permissions"
+AUDIT_COLLECTION = "admin_audit"
 
 
 @dataclass
@@ -90,6 +110,55 @@ class PlannedTenant:
             documentsBucket=self.documents_bucket,
             storageNamespace=self.tenant_id,
         ).normalized()
+
+
+@dataclass
+class PlannedUserUpdate:
+    doc_id: str
+    email: str
+    tenant_id: str
+    updates: dict[str, Any]
+    permission_updates: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PlannedPermission:
+    tenant_id: str
+    payload: dict[str, Any]
+    existing_updates: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PlannedAuditUpdate:
+    doc_id: str
+    tenant_id: str
+
+
+@dataclass
+class MigrationResult:
+    configs: list[TenantConfig]
+    users_updated: int = 0
+    tenant_permissions_created: int = 0
+    tenant_permissions_updated: int = 0
+    user_permissions_updated: int = 0
+    audits_updated: int = 0
+    run_id: str | None = None
+
+    # Preserve the historical ``configs, users_updated = migrate(...)`` API for
+    # existing callers/tests while exposing richer production migration data.
+    def __iter__(self) -> Iterator[Any]:
+        yield self.configs
+        yield self.users_updated
+
+    def summary(self) -> dict[str, int]:
+        return {
+            "tenants": len(self.configs),
+            "usersUpdated": self.users_updated,
+            "tenantPermissionsCreated": self.tenant_permissions_created,
+            "tenantPermissionsUpdated": self.tenant_permissions_updated,
+            "userPermissionsUpdated": self.user_permissions_updated,
+            "auditsUpdated": self.audits_updated,
+        }
 
 
 def _merge_scalar(field_name: str, current: Any, incoming: Any, tenant_id: str):
@@ -171,13 +240,7 @@ def _rewrite_tenant_admin_tags(
     tags: object,
     domain_mapping: dict[str, str],
 ) -> tuple[list[str], bool]:
-    """Rewrite exact legacy tenant-admin domain grants to stable tenant ids.
-
-    Tags unrelated to tenant administration are preserved byte-for-byte. The
-    mapping is based on the migration plan rather than the user's own email
-    domain, so a platform operator holding scoped authority for several client
-    domains keeps all of those grants after a multi-domain tenant migration.
-    """
+    """Rewrite exact legacy tenant-admin domain grants to stable tenant ids."""
     raw = [str(tag) for tag in (tags or [])]
     rewritten: list[str] = []
     changed = False
@@ -195,11 +258,239 @@ def _rewrite_tenant_admin_tags(
         rewritten.append(replacement)
         changed = changed or replacement != tag
 
-    # A user may already hold the new stable-id tag alongside the legacy tag;
-    # normalize that to one grant while keeping deterministic persistence.
     deduped = sorted(set(rewritten))
     changed = changed or deduped != sorted(set(raw))
     return deduped, changed
+
+
+def _tenant_document(config: TenantConfig) -> dict[str, Any]:
+    return config.model_dump(by_alias=True, exclude_none=True)
+
+
+def _preflight_directory(repository: Repository, configs: list[TenantConfig]) -> None:
+    """Refuse to overwrite a first-class tenant or conflicting domain mapping."""
+    for config in configs:
+        expected = _tenant_document(config)
+        existing_tenant = repository.get_document(TENANT_COLLECTION, config.tenant_id)
+        if existing_tenant is not None and existing_tenant != expected:
+            raise ValueError(
+                f"tenant {config.tenant_id!r} already exists with different first-class configuration; "
+                "migration will not overwrite it"
+            )
+        for domain in config.domains:
+            existing_mapping = repository.get_document(DOMAIN_COLLECTION, domain)
+            if existing_mapping is None:
+                continue
+            owner = normalize_tenant_id(str(existing_mapping.get("tenantId") or ""))
+            if owner != config.tenant_id:
+                raise ValueError(
+                    f"domain {domain!r} is already mapped to tenant {owner!r}, not {config.tenant_id!r}"
+                )
+
+
+def _canonical_permission(row: dict[str, Any]) -> tuple[list[str], list[str]]:
+    tools = sorted({str(value) for value in (row.get("tools") or []) if str(value)})
+    denied = sorted({str(value) for value in (row.get("denied") or []) if str(value)})
+    return tools, denied
+
+
+def _plan_tenant_permissions(
+    repository: Repository,
+    configs: list[TenantConfig],
+) -> list[PlannedPermission]:
+    planned: list[PlannedPermission] = []
+    for config in configs:
+        source: tuple[list[str], list[str]] | None = None
+        source_domain = ""
+        for domain in config.domains:
+            legacy = repository.get_document(TOOL_PERMISSION_COLLECTION, domain)
+            if legacy is None:
+                continue
+            current = _canonical_permission(legacy)
+            if source is None:
+                source = current
+                source_domain = domain
+            elif source != current:
+                raise ValueError(
+                    f"tenant {config.tenant_id!r}: legacy domain tool permissions disagree: "
+                    f"{source_domain!r} != {domain!r}"
+                )
+        if source is None:
+            continue
+
+        tools, denied = source
+        target_key = tenant_permission_key(config.tenant_id)
+        payload = {
+            "type": "tenant",
+            "tools": tools,
+            "denied": denied,
+            "tenantId": config.tenant_id,
+        }
+        existing = repository.get_document(TOOL_PERMISSION_COLLECTION, target_key)
+        updates: dict[str, Any] = {}
+        if existing is not None:
+            if str(existing.get("type") or "") != "tenant" or _canonical_permission(existing) != source:
+                raise ValueError(
+                    f"tenant permission {target_key!r} already exists with different rules"
+                )
+            explicit_owner = str(existing.get("tenantId") or "").strip()
+            if explicit_owner and explicit_owner != config.tenant_id:
+                raise ValueError(
+                    f"tenant permission {target_key!r} claims conflicting tenantId {explicit_owner!r}"
+                )
+            if not explicit_owner:
+                updates["tenantId"] = config.tenant_id
+        planned.append(
+            PlannedPermission(
+                tenant_id=config.tenant_id,
+                payload=payload,
+                existing_updates=updates,
+            )
+        )
+    return planned
+
+
+def _plan_user_updates(
+    repository: Repository,
+    domain_mapping: dict[str, str],
+) -> tuple[list[PlannedUserUpdate], dict[str, str]]:
+    planned: list[PlannedUserUpdate] = []
+    user_tenants: dict[str, str] = {}
+    for row in repository.query_documents(AUTH_USER_COLLECTION, limit=None):
+        doc_id = str(row.get("__id") or "").strip()
+        if not doc_id:
+            continue
+        email = str(row.get("email") or "").strip().casefold()
+        domain = normalize_domain(str(row.get("domain") or ""))
+        explicit_tenant = normalize_tenant_id(str(row.get("tenantId") or ""))
+        mapped_tenant = domain_mapping.get(domain, "") if domain else ""
+
+        # Existing explicit identity ownership is authoritative. Never rewrite
+        # it just because the account email happens to belong to a mapped domain.
+        tenant_id = explicit_tenant or mapped_tenant
+        updates: dict[str, Any] = {}
+        if not explicit_tenant and mapped_tenant:
+            updates["tenantId"] = mapped_tenant
+
+        group_tags, tags_changed = _rewrite_tenant_admin_tags(row.get("groupTags") or [], domain_mapping)
+        if tags_changed:
+            updates["groupTags"] = group_tags
+
+        permission_updates: dict[str, Any] = {}
+        if email and tenant_id:
+            user_tenants[email] = tenant_id
+            permission = repository.get_document(TOOL_PERMISSION_COLLECTION, email)
+            if permission is not None:
+                permission_owner = normalize_tenant_id(str(permission.get("tenantId") or ""))
+                if permission_owner and permission_owner != tenant_id:
+                    raise ValueError(
+                        f"user tool permission {email!r} belongs to {permission_owner!r}, "
+                        f"but trusted auth user belongs to {tenant_id!r}"
+                    )
+                if not permission_owner:
+                    permission_updates["tenantId"] = tenant_id
+
+        if updates or permission_updates:
+            planned.append(
+                PlannedUserUpdate(
+                    doc_id=doc_id,
+                    email=email,
+                    tenant_id=tenant_id,
+                    updates=updates,
+                    permission_updates=permission_updates,
+                )
+            )
+    return planned, user_tenants
+
+
+def _snapshot_tenant(snapshot: object, domain_mapping: dict[str, str]) -> str:
+    if not isinstance(snapshot, dict):
+        return ""
+    raw = str(snapshot.get("tenantId") or snapshot.get("tenant_id") or "").strip()
+    if not raw:
+        return ""
+    mapped = domain_mapping.get(normalize_domain(raw))
+    return mapped or normalize_tenant_id(raw)
+
+
+def _trusted_audit_tenant(
+    row: dict[str, Any],
+    *,
+    domain_mapping: dict[str, str],
+    user_tenants: dict[str, str],
+    known_tenants: set[str],
+) -> str:
+    """Resolve target ownership only from explicit server-side evidence."""
+    current = str(row.get("tenantId") or "").strip()
+    if current:
+        return domain_mapping.get(normalize_domain(current), normalize_tenant_id(current))
+
+    for snapshot_name in ("after", "before"):
+        owner = _snapshot_tenant(row.get(snapshot_name), domain_mapping)
+        if owner:
+            return owner
+
+    action = str(row.get("action") or "")
+    target = str(row.get("target") or "").strip()
+    if not target:
+        return ""
+
+    # Legacy clients/{domain} administration is safely attributable because the
+    # migration plan itself is the authoritative domain -> tenant mapping.
+    if action in {"upsert_client", "delete_client"}:
+        return domain_mapping.get(normalize_domain(target), "")
+
+    if action in {
+        "onboard_tenant",
+        "edit_tenant",
+        "disable_tenant",
+        "enable_tenant",
+        "update_tenant_model_policy",
+    }:
+        mapped = domain_mapping.get(normalize_domain(target), normalize_tenant_id(target))
+        return mapped if mapped in known_tenants else ""
+
+    if action in {"upsert_tool_permission", "delete_tool_permission"}:
+        if target.startswith(TENANT_PREFIX):
+            candidate = normalize_tenant_id(target[len(TENANT_PREFIX) :])
+            return candidate if candidate in known_tenants else ""
+        domain_owner = domain_mapping.get(normalize_domain(target))
+        if domain_owner:
+            return domain_owner
+        return user_tenants.get(target.casefold(), "")
+
+    # User admin audit can be attributed only when this exact email has a
+    # trusted local auth record. Do not fall back to the email's domain.
+    if action in {"grant_group_tag", "revoke_group_tag", "refresh_claims"}:
+        return user_tenants.get(target.casefold(), "")
+
+    return ""
+
+
+def _plan_audit_updates(
+    repository: Repository,
+    *,
+    domain_mapping: dict[str, str],
+    user_tenants: dict[str, str],
+    known_tenants: set[str],
+) -> list[PlannedAuditUpdate]:
+    planned: list[PlannedAuditUpdate] = []
+    for row in repository.query_documents(AUDIT_COLLECTION, limit=None):
+        doc_id = str(row.get("__id") or "").strip()
+        if not doc_id:
+            continue
+        tenant_id = _trusted_audit_tenant(
+            row,
+            domain_mapping=domain_mapping,
+            user_tenants=user_tenants,
+            known_tenants=known_tenants,
+        )
+        if not tenant_id:
+            continue
+        if str(row.get("tenantId") or "").strip() == tenant_id:
+            continue
+        planned.append(PlannedAuditUpdate(doc_id=doc_id, tenant_id=tenant_id))
+    return planned
 
 
 def migrate(
@@ -208,49 +499,81 @@ def migrate(
     *,
     apply: bool,
     require_explicit: bool,
-) -> tuple[list[TenantConfig], int]:
-    rows = repository.query_documents("clients", limit=None)
+) -> MigrationResult:
+    rows = repository.query_documents(CLIENT_COLLECTION, limit=None)
     plan = build_migration_plan(rows, mapping, require_explicit=require_explicit)
     configs = [plan[key].config() for key in sorted(plan)]
     domain_mapping = _domain_to_tenant(configs)
 
-    users_updated = 0
-    if apply:
-        directory = TenantDirectory(repository)
+    # Complete conflict detection before the first write. The journal protects
+    # interrupted runs; preflight keeps ordinary configuration mistakes from
+    # producing a run that immediately needs rollback.
+    _preflight_directory(repository, configs)
+    tenant_permissions = _plan_tenant_permissions(repository, configs)
+    user_updates, user_tenants = _plan_user_updates(repository, domain_mapping)
+    known_tenants = {config.tenant_id for config in configs}
+    known_tenants.update(
+        normalize_tenant_id(str(row.get("__id") or ""))
+        for row in repository.query_documents(TENANT_COLLECTION, limit=None)
+        if str(row.get("__id") or "").strip()
+    )
+    audit_updates = _plan_audit_updates(
+        repository,
+        domain_mapping=domain_mapping,
+        user_tenants=user_tenants,
+        known_tenants=known_tenants,
+    )
+
+    result = MigrationResult(configs=configs)
+    if not apply:
+        return result
+
+    journal = MigrationJournal.start(repository, mapping=domain_mapping)
+    result.run_id = journal.run_id
+    try:
         for config in configs:
-            directory.put(config)
+            journal.create_document(TENANT_COLLECTION, config.tenant_id, _tenant_document(config))
+            for domain in config.domains:
+                journal.create_document(
+                    DOMAIN_COLLECTION,
+                    domain,
+                    {"domain": domain, "tenantId": config.tenant_id},
+                )
 
-        # Backfill built-in self-host accounts from their authoritative domain
-        # and rewrite any legacy scoped-admin grants. Firebase/OIDC identities
-        # must migrate trusted external claims at their identity provider.
-        for user_row in repository.query_documents("auth_users", limit=None):
-            doc_id = str(user_row.get("__id") or "").strip()
-            if not doc_id:
-                continue
+        for permission in tenant_permissions:
+            key = tenant_permission_key(permission.tenant_id)
+            existing = repository.get_document(TOOL_PERMISSION_COLLECTION, key)
+            if existing is None:
+                if journal.create_document(TOOL_PERMISSION_COLLECTION, key, permission.payload):
+                    result.tenant_permissions_created += 1
+            elif permission.existing_updates:
+                if journal.update_fields(TOOL_PERMISSION_COLLECTION, key, permission.existing_updates):
+                    result.tenant_permissions_updated += 1
 
-            updates: dict[str, Any] = {}
-            domain = normalize_domain(str(user_row.get("domain") or ""))
-            if domain:
-                tenant_id = directory.tenant_id_for_domain(domain)
-                if tenant_id and str(user_row.get("tenantId") or "") != tenant_id:
-                    updates["tenantId"] = tenant_id
+        for user in user_updates:
+            if user.updates and journal.update_fields(AUTH_USER_COLLECTION, user.doc_id, user.updates):
+                result.users_updated += 1
+            if user.permission_updates and user.email:
+                if journal.update_fields(
+                    TOOL_PERMISSION_COLLECTION,
+                    user.email,
+                    user.permission_updates,
+                ):
+                    result.user_permissions_updated += 1
 
-            group_tags, tags_changed = _rewrite_tenant_admin_tags(
-                user_row.get("groupTags") or [],
-                domain_mapping,
-            )
-            if tags_changed:
-                updates["groupTags"] = group_tags
+        for audit in audit_updates:
+            if journal.update_fields(AUDIT_COLLECTION, audit.doc_id, {"tenantId": audit.tenant_id}):
+                result.audits_updated += 1
 
-            if updates:
-                repository.update_document("auth_users", doc_id, updates)
-                users_updated += 1
-
-    return configs, users_updated
+        journal.finish(result.summary())
+    except Exception as exc:
+        journal.fail(exc)
+        raise
+    return result
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Migrate domain-based clients into first-class tenants")
+    parser = argparse.ArgumentParser(description="Migrate domain-based ownership into first-class tenants")
     parser.add_argument(
         "--map",
         action="append",
@@ -266,17 +589,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Write tenants/domain mappings and backfill local auth users. Default is dry-run.",
+        help="Apply the migration and record a rollback journal. Default is dry-run.",
+    )
+    parser.add_argument(
+        "--rollback",
+        metavar="RUN_ID",
+        help="Rollback one prior apply run after drift preflight.",
     )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    repository = get_repository()
+
+    if args.rollback:
+        if args.apply or args.map:
+            raise SystemExit("--rollback cannot be combined with --apply or --map")
+        try:
+            summary = rollback_migration(repository, args.rollback)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(
+            f"Tenant migration rollback {args.rollback}: "
+            f"restored={summary['restored']} deleted={summary['deleted']} "
+            f"already_restored={summary['already_restored']}"
+        )
+        return 0
+
     try:
         mapping = parse_mapping(args.map)
-        repository = get_repository()
-        configs, users_updated = migrate(
+        result = migrate(
             repository,
             mapping,
             apply=args.apply,
@@ -286,17 +629,23 @@ def main() -> int:
         raise SystemExit(str(exc)) from exc
 
     mode = "APPLY" if args.apply else "DRY RUN"
-    print(f"Tenant migration ({mode}): {len(configs)} tenant(s)")
-    for config in configs:
+    print(f"Tenant migration ({mode}): {len(result.configs)} tenant(s)")
+    for config in result.configs:
         print(
             f"  {config.tenant_id}: domains={','.join(config.domains) or '-'} "
             f"storage_namespace={config.storage_namespace}"
         )
     if args.apply:
-        print(f"Updated local auth users: {users_updated}")
-        print("Firebase/OIDC tenant-admin claims must be migrated at the external identity provider.")
+        print(f"Migration run id: {result.run_id}")
+        print(f"Updated local auth users: {result.users_updated}")
+        print(f"Created tenant tool permissions: {result.tenant_permissions_created}")
+        print(f"Updated tenant tool permissions: {result.tenant_permissions_updated}")
+        print(f"Attributed user tool permissions: {result.user_permissions_updated}")
+        print(f"Attributed audit rows: {result.audits_updated}")
+        print("Firebase/OIDC tenant identity claims must be migrated at the external identity provider.")
+        print("Keep the run id; rollback is available with --rollback RUN_ID if no migrated data has drifted.")
     else:
-        print("No writes performed. Re-run with --apply after reviewing the plan.")
+        print("No writes performed. Re-run with --apply after reviewing the plan and taking a database backup.")
     return 0
 
 
