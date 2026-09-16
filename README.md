@@ -34,22 +34,44 @@ postgres      :5432 (internal by default)
 mcp-sandbox   :3457
 ```
 
-Start from a clean host with Docker + Compose v2:
+### Option A — versioned GHCR images (recommended for deployment)
+
+Tagged releases attach `docker-compose.release.yml` and `.env.selfhost.example`, so a server can deploy without cloning or building the repository.
+
+Download those two files from the GitHub Release, then:
 
 ```bash
 cp .env.selfhost.example .env
 # edit .env:
+# - pin APP_VERSION to the release tag, e.g. v1.2.3
 # - set JWT_SIGNING_KEY
 # - set SELFHOST_ADMIN_EMAIL / SELFHOST_ADMIN_PASSWORD for first startup
+# - change POSTGRES_PASSWORD + matching DATABASE_URL password
 # - configure at least one model provider
 
-make docker-up
+docker compose -f docker-compose.release.yml pull
+docker compose -f docker-compose.release.yml up -d
 ```
 
-The equivalent raw Compose command is:
+The release publishes backend, frontend and MCP sandbox images to GHCR for `linux/amd64` and `linux/arm64`. See [docs/selfhost-release-images.md](./docs/selfhost-release-images.md) for image tags, reverse-proxy origins, upgrade/rollback, SBOM/provenance and vulnerability-scan details.
+
+### Option B — build from source
+
+For development or a custom frontend build:
 
 ```bash
+git clone https://github.com/yuklcool/ai-protocol-platform.git
+cd ai-protocol-platform
+cp .env.selfhost.example .env
+# configure the same required secrets/provider values
+
 docker compose up -d --build
+```
+
+The Makefile wrapper is:
+
+```bash
+make docker-up
 ```
 
 Then open:
@@ -58,7 +80,7 @@ Then open:
 http://localhost:3456
 ```
 
-Useful self-host commands:
+Useful source-tree self-host commands:
 
 ```bash
 make docker-ps
@@ -70,7 +92,7 @@ make docker-down
 
 `make docker-down` retains the PostgreSQL and object/artifact named volumes.
 
-The Docker self-host baseline deliberately runs `SELF_HOSTED_MODE=1` and `LOCAL_MODE=0`. PostgreSQL persists platform/domain data, built-in accounts, ADK Session and durable Memory; a backend-mounted Docker Volume persists user objects and ADK Artifacts. Built-in `local-jwt` authentication is the default self-host identity provider. No GCP project, Firebase project, Redis, MinIO or Keycloak is required for the baseline.
+The Docker self-host baseline deliberately runs `SELF_HOSTED_MODE=1` and `LOCAL_MODE=0`. PostgreSQL persists platform/tenant data, built-in accounts, ADK Session and durable Memory; a backend-mounted Docker Volume persists user objects and ADK Artifacts. Built-in `local-jwt` authentication is the default self-host identity provider. No GCP project, Firebase project, Redis, MinIO or Keycloak is required for the baseline.
 
 See [SELFHOST.md](./SELFHOST.md) for Linux deployment, persistence, reverse-proxy and security notes.
 
@@ -140,18 +162,16 @@ make selfhost-smoke
 
 The underlying script verifies the backend health/API surface, frontend reachability and MCP Apps sandbox reachability, and is also exercised by the self-host CI gates.
 
-Automated persistence/auth tests additionally cover PostgreSQL repository state, Session/Memory reconstruction, A2UI replay/state, local ObjectStorage/Artifact persistence, local JWT authentication and complete image builds.
+Automated persistence/auth tests additionally cover PostgreSQL repository state, Session/Memory reconstruction, A2UI replay/state, local ObjectStorage/Artifact persistence, local JWT authentication, real Tenant A/B isolation, real MCP protocol transport and Chromium MCP Apps sandbox rendering.
 
-The final model-dependent/browser acceptance remains manual:
+The remaining final model-dependent acceptance is intentionally not replaced by mocks:
 
-- normal Chat
-- Runtime Skill
-- `Workspace Demo` A2UI surface
-- A2UI action round-trip
-- MCP Tool call
-- MCP App iframe/sandbox rendering
+- normal Chat / Runtime Skill against a real configured Provider;
+- real Provider Tool Calling;
+- real model selection and execution of a bound MCP Tool;
+- final Tenant quota / Tool Permission / Model Policy checks on that live model path.
 
-Issue #1 remains the final real-protocol acceptance gate until those paths have been recorded on an actual deployment.
+Issue #1 remains the final real-protocol acceptance gate until those Provider-dependent paths have been recorded on an actual deployment.
 
 ## Cloud/development mode
 
