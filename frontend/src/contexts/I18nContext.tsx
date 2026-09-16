@@ -26,7 +26,20 @@ type I18nContextValue = {
   t: (key: TranslationKey, params?: TranslationParams) => string;
 };
 
-const I18nContext = createContext<I18nContextValue | null>(null);
+/**
+ * Components are occasionally rendered outside the application provider in
+ * unit tests, Storybook-like previews and embedders. Keep that path useful and
+ * deterministic instead of throwing: isolated rendering falls back to English,
+ * while the real application is always wrapped in I18nProvider and therefore
+ * still defaults to DEFAULT_LOCALE (zh-CN for Self-host).
+ */
+const FALLBACK_CONTEXT: I18nContextValue = {
+  locale: "en",
+  setLocale: () => undefined,
+  t: (key, params) => translate("en", key, params),
+};
+
+const I18nContext = createContext<I18nContextValue>(FALLBACK_CONTEXT);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
@@ -59,9 +72,5 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 }
 
 export function useI18n(): I18nContextValue {
-  const context = useContext(I18nContext);
-  if (!context) {
-    throw new Error("useI18n must be used inside I18nProvider");
-  }
-  return context;
+  return useContext(I18nContext);
 }
