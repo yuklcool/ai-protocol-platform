@@ -45,7 +45,7 @@ No repository checkout is required.
 
 ## 2. Pin the release version
 
-For production, pin the exact semver release:
+For production, pin the exact semver release tag:
 
 ```env
 APP_VERSION=v1.2.3
@@ -137,6 +137,8 @@ Use TLS for any internet-facing deployment. The built-in browser authentication 
 
 ## 6. Pull and start
 
+The published GHCR packages are expected to be public, so normal self-host users do not need a GitHub token or `docker login ghcr.io`.
+
 ```bash
 docker compose -f docker-compose.release.yml pull
 docker compose -f docker-compose.release.yml up -d
@@ -209,10 +211,13 @@ The release workflow:
 
 - builds backend, frontend and MCP sandbox images;
 - builds `linux/amd64` and `linux/arm64` manifests for release tags;
-- publishes semver, `latest`, and `sha-*` tags;
+- publishes the exact Git tag (for example `v1.2.3`), normalized semver, `latest`, and `sha-*` tags;
 - generates BuildKit SBOM and provenance attestations;
 - scans each published image with Trivy for HIGH/CRITICAL vulnerabilities with fixes available;
-- creates GitHub Release notes and attaches the release Compose/env files.
+- verifies all three exact release-tag images can be pulled with an isolated, unauthenticated Docker configuration;
+- only after that anonymous-pull gate succeeds, creates GitHub Release notes and attaches the release Compose/env files.
+
+Before cutting the first production release, verify the three GHCR packages are configured as **Public**. If package visibility is not public, the tag workflow intentionally fails at the anonymous-pull gate and does not create a misleading GitHub Release.
 
 Pull-request builds do not publish packages. They build the release images for `linux/amd64` and run the self-host release gate first.
 
