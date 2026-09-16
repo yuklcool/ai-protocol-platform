@@ -1,11 +1,22 @@
-"""Hermetic tests for runtime dynamic model/provider resolution."""
+"""Hermetic tests for runtime dynamic model/provider and tenant-policy resolution."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-from config.effective_models import EffectiveModelEntry, EffectiveModelsConfig
+import pytest
+
 from config import runtime_models
+from config.effective_models import EffectiveModelEntry, EffectiveModelsConfig
+from config.tenant_models import TenantModelAccessError, TenantModelPolicy
+
+
+@pytest.fixture(autouse=True)
+def _unrestricted_tenant_policy():
+    # Runtime resolution is task-context aware in production. Keep unrelated
+    # unit tests independent from whatever auth context another test installed.
+    with patch("config.runtime_models.load_tenant_model_policy", return_value=TenantModelPolicy()):
+        yield
 
 
 def _cfg(*entries: EffectiveModelEntry) -> EffectiveModelsConfig:
@@ -20,10 +31,10 @@ def _cfg(*entries: EffectiveModelEntry) -> EffectiveModelsConfig:
     )
 
 
-def _dynamic() -> EffectiveModelEntry:
+def _dynamic(model_id: str = "deepseek-v3", api_name: str = "deepseek-chat") -> EffectiveModelEntry:
     return EffectiveModelEntry(
-        id="deepseek-v3",
-        api_name="deepseek-chat",
+        id=model_id,
+        api_name=api_name,
         provider="openai",
         provider_id="deepseek",
         tier="smart",
@@ -73,6 +84,66 @@ def test_managed_default_and_fast_tiers_reach_runtime_resolver() -> None:
         assert runtime_models.entry_for("default") is entry
         assert runtime_models.entry_for("fast") is entry
         assert runtime_models.api_name_for("default") == "deepseek-chat"
+
+
+def test_tenant_default_overrides_only_logical_default_alias() -> None:
+    platform = _dynamic("platform-model", "platform")
+    tenant = _dynamic("tenant-model", "tenant")
+    cfg = _cfg(platform, tenant).model_copy(
+        update={
+            "tier_defaults": {"default": platform.id, "smart": platform.id},
+            "tier_variants": {
+                "default": {"default": platform.id},
+                "smart": {"default": platform.id},
+            },
+        }
+    )
+    policy = TenantModelPolicy(
+        allowedModels=["tenant-model", "platform-model"],
+        defaultModel="tenant-model",
+    )
+    with (
+        patch("config.runtime_models.load_effective_models_config", return_value=cfg),
+        patch("config.runtime_models.load_tenant_model_policy", return_value=policy),
+        patch("config.runtime_models.active_residency_policy", return_value="unrestricted"),
+    ):
+        assert runtime_models.entry_for("default") is tenant
+        assert runtime_models.entry_for("smart") is platform
+
+
+def test_tenant_whitelist_blocks_primary_before_provider_construction() -> None:
+    allowed = _dynamic("allowed-model", "allowed")
+    denied = _dynamic("denied-model", "denied")
+    policy = TenantModelPolicy(allowedModels=["allowed-model"])
+    with (
+        patch("config.runtime_models.load_effective_models_config", return_value=_cfg(allowed, denied)),
+        patch("config.runtime_models.load_tenant_model_policy", return_value=policy),
+    ):
+        assert runtime_models.provider_for("allowed-model") == "openai"
+        with pytest.raises(TenantModelAccessError):
+            runtime_models.provider_for("denied-model")
+
+
+def test_tenant_whitelist_marks_denied_fallback_for_existing_chain_filter() -> None:
+    allowed = _dynamic("allowed-model", "allowed")
+    denied = _dynamic("denied-model", "denied")
+    policy = TenantModelPolicy(allowedModels=["allowed-model"])
+    with (
+        patch("config.runtime_models.load_effective_models_config", return_value=_cfg(allowed, denied)),
+        patch("config.runtime_models.load_tenant_model_policy", return_value=policy),
+    ):
+        assert runtime_models.provider_key_missing("denied-model") == "tenant-model-policy"
+
+
+def test_invalid_tenant_default_fails_closed() -> None:
+    entry = _dynamic("allowed-model", "allowed")
+    policy = TenantModelPolicy(allowedModels=["allowed-model"], defaultModel="missing-model")
+    with (
+        patch("config.runtime_models.load_effective_models_config", return_value=_cfg(entry)),
+        patch("config.runtime_models.load_tenant_model_policy", return_value=policy),
+    ):
+        with pytest.raises(TenantModelAccessError):
+            runtime_models.entry_for("default")
 
 
 def test_dynamic_openai_provider_uses_provider_specific_runtime_kwargs() -> None:

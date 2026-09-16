@@ -104,6 +104,7 @@ jobs:
       - name: Verify OpenAI-compatible local storage and MCP regressions
         run: |
           docker compose run --rm --no-deps \
+            -e DATA_BACKEND=memory \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
             tests/model_tests/test_openai_compatible_routing.py \
