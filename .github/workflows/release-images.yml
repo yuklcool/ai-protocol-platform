@@ -1,0 +1,202 @@
+name: Self-host release images
+
+on:
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - docker-compose.release.yml
+      - .env.selfhost.example
+      - backend/Dockerfile
+      - backend/db/migrations/**
+      - backend/scripts/apply_selfhost_migrations.py
+      - frontend/Dockerfile
+      - frontend/docker-entrypoint.sh
+      - infrastructure/mcp-sandbox/**
+      - scripts/smoke-selfhost.sh
+      - .github/workflows/release-images.yml
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: selfhost-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  release-gate:
+    name: Release self-host gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: release-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-release-ci
+      JWT_AUDIENCE: ai-protocol-platform-release-ci
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: release-ci-admin-password
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
+      SKIP_QUALITY_CHECKS: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate source and release Compose models
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.release.yml config --quiet
+
+      - name: Run frontend typecheck and unit tests
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          CI=true npm run test:run
+
+      - name: Build source self-host stack
+        run: docker compose build backend mcp-sandbox frontend
+
+      - name: Start real self-host stack
+        run: |
+          docker compose up -d postgres backend mcp-sandbox frontend
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3456/api/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3457/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs postgres backend mcp-sandbox frontend
+          exit 1
+
+      - name: Run no-GCP self-host smoke
+        run: bash scripts/smoke-selfhost.sh
+
+      - name: Verify migration journal was created
+        run: |
+          docker compose exec -T postgres psql \
+            -U "${POSTGRES_USER:-aip}" -d "${POSTGRES_DB:-aip}" \
+            -Atc "SELECT version FROM platform_schema_migrations ORDER BY version" \
+            | grep -Fx '001_postgres_documents.sql'
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs postgres backend mcp-sandbox frontend
+
+      - name: Stop release gate stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  images:
+    name: Build ${{ matrix.name }} image
+    needs: release-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            image: ai-protocol-platform-backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+          - name: frontend
+            image: ai-protocol-platform-frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+          - name: mcp-sandbox
+            image: ai-protocol-platform-mcp-sandbox
+            context: ./infrastructure/mcp-sandbox
+            dockerfile: ./infrastructure/mcp-sandbox/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=sha-${{ github.sha }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build or publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SKIP_QUALITY_CHECKS=true
+            NEXT_PUBLIC_LOCAL_MODE=0
+            NEXT_PUBLIC_AUTH_MODE=local-jwt
+            NEXT_PUBLIC_MCP_SANDBOX_URL=__MCP_SANDBOX_PUBLIC_URL__
+            NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Scan published image for HIGH/CRITICAL vulnerabilities
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:sha-${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish generated release notes and deployment assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "AI Protocol Platform ${GITHUB_REF_NAME}" \
+            docker-compose.release.yml \
+            .env.selfhost.example
