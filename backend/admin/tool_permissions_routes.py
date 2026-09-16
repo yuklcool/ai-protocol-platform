@@ -186,7 +186,7 @@ def upsert_tool_permission(doc_id: str, body: ToolPermissionDoc, scope: Scope) -
         actor_email=scope.user.email or "",
         action="upsert_tool_permission",
         target=doc_id,
-        tenant_id=trusted_owner or None,
+        tenant_id=trusted_owner or "",
         before=before,
         after=data,
     )
@@ -209,7 +209,7 @@ def delete_tool_permission(doc_id: str, scope: Scope) -> ToolPermissionEntry:
         actor_email=scope.user.email or "",
         action="delete_tool_permission",
         target=doc_id,
-        tenant_id=owner or None,
+        tenant_id=owner or "",
         before=before,
         after=None,
     )
