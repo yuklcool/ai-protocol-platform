@@ -1,0 +1,108 @@
+name: Upstream compare
+
+on:
+  pull_request:
+    paths:
+      - UPSTREAM.md
+      - .github/workflows/upstream-compare.yml
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-compare-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare fork with upstream main
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/sunholo-data/ai-protocol-platform.git
+          git fetch --no-tags upstream main
+
+      - name: Build divergence report
+        id: report
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fork_sha="$(git rev-parse HEAD)"
+          upstream_sha="$(git rev-parse upstream/main)"
+          merge_base="$(git merge-base HEAD upstream/main || true)"
+
+          read -r fork_ahead upstream_ahead < <(git rev-list --left-right --count HEAD...upstream/main)
+
+          merge_preview="$(mktemp)"
+          if git merge-tree --write-tree HEAD upstream/main >"$merge_preview" 2>&1; then
+            conflict_state="no conflicts detected by git merge-tree"
+          else
+            conflict_state="potential merge conflicts detected — review merge-tree output"
+          fi
+
+          changed="$(mktemp)"
+          git diff --name-status HEAD...upstream/main >"$changed" || true
+          changed_count="$(wc -l <"$changed" | tr -d ' ')"
+
+          {
+            echo "# Upstream divergence report"
+            echo
+            echo "- Fork ref: \`${GITHUB_REF}\`"
+            echo "- Fork SHA: \`${fork_sha}\`"
+            echo "- Upstream: \`sunholo-data/ai-protocol-platform@main\`"
+            echo "- Upstream SHA: \`${upstream_sha}\`"
+            echo "- Merge base: \`${merge_base:-none}\`"
+            echo "- Fork-only commits: **${fork_ahead}**"
+            echo "- Upstream-only commits: **${upstream_ahead}**"
+            echo "- Changed paths from merge-base to upstream: **${changed_count}**"
+            echo "- Merge preview: **${conflict_state}**"
+            echo
+            echo "## Changed paths"
+            echo
+            echo '```text'
+            if [ -s "$changed" ]; then
+              sed -n '1,250p' "$changed"
+              if [ "$changed_count" -gt 250 ]; then
+                echo "... truncated; see uploaded report artifact for the complete list"
+              fi
+            else
+              echo "(none)"
+            fi
+            echo '```'
+            echo
+            echo "## Merge-tree preview"
+            echo
+            echo '```text'
+            sed -n '1,250p' "$merge_preview"
+            echo '```'
+            echo
+            echo "> Reporting only. Follow UPSTREAM.md and use a reviewed sync/upstream-* pull request; this workflow never merges or pushes upstream code."
+          } > upstream-compare.md
+
+          cat upstream-compare.md >> "$GITHUB_STEP_SUMMARY"
+          cp "$changed" upstream-changed-paths.txt
+          cp "$merge_preview" upstream-merge-tree.txt
+
+      - name: Upload comparison artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compare-${{ github.run_id }}
+          path: |
+            upstream-compare.md
+            upstream-changed-paths.txt
+            upstream-merge-tree.txt
+          retention-days: 30
