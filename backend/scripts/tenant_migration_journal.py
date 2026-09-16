@@ -131,14 +131,15 @@ class MigrationJournal:
 
 
 def _operations(repository: Repository, run_id: str) -> list[dict[str, Any]]:
+    # Query only by run id and sort in Python. This avoids requiring a
+    # provider-specific composite index for equality(runId)+order(seq) in
+    # Firestore while preserving identical behavior on PostgreSQL/memory.
     rows = repository.query_documents(
         OP_COLLECTION,
         filters=[("runId", "==", run_id)],
-        order_by="seq",
-        order_direction="DESCENDING",
         limit=None,
     )
-    return rows
+    return sorted(rows, key=lambda row: int(row.get("seq") or 0), reverse=True)
 
 
 def _operation_effect(repository: Repository, op: dict[str, Any]) -> str:
