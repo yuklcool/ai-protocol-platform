@@ -89,6 +89,9 @@ jobs:
           done < <(find src/lib/__tests__ -maxdepth 1 -type f -name '*I18n.test.ts' -print0 | sort -z)
           CI=true npm run test:run -- "${tests[@]}"
 
+      - name: Verify Tenant admin compatibility
+        run: CI=true npm run test:run -- src/components/admin/__tests__/tenantAdmin.test.tsx src/components/admin/__tests__/tenantHealth.test.tsx src/components/admin/__tests__/EffectiveAccessPanel.test.tsx
+
       - name: Build Chinese-default self-host frontend
         run: npm run build
 
