@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import { translateModelProvider } from "@/lib/i18n/modelProvider";
+import {
+  MODEL_PROVIDER_TRANSLATIONS,
+  translateModelProvider,
+} from "@/lib/i18n/modelProvider";
 import ModelProvidersPage from "../page";
 
 const { fetcher, scope, auth } = vi.hoisted(() => ({
@@ -102,6 +105,9 @@ it("restores controls after a failed save", async () => {
   expect(screen.getByRole("button", { name: "Save provider" })).not.toBeDisabled();
 });
 it("ships a Simplified Chinese model-provider locale without changing English contracts", () => {
+  expect(Object.keys(MODEL_PROVIDER_TRANSLATIONS.en)).toEqual(
+    Object.keys(MODEL_PROVIDER_TRANSLATIONS["zh-CN"]),
+  );
   expect(translateModelProvider("en", "models.toolCall")).toBe("Tool call");
   expect(translateModelProvider("zh-CN", "title")).toBe("模型 Provider");
   expect(
