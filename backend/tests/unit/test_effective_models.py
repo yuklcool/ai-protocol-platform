@@ -1,4 +1,4 @@
-"""Tests for YAML bootstrap + dynamic database model overlay."""
+"""Tests for YAML bootstrap + dynamic database model/settings overlay."""
 
 from __future__ import annotations
 
@@ -57,6 +57,7 @@ def test_dynamic_model_is_overlaid_and_exposes_provider_metadata() -> None:
         patch("config.effective_models.load_models_config", return_value=_base()),
         patch("config.effective_models.list_model_documents", return_value=rows),
         patch("config.effective_models.get_provider", return_value=provider),
+        patch("config.effective_models.registry_settings", return_value={}),
     ):
         cfg = load_effective_models_config()
 
@@ -87,6 +88,7 @@ def test_dynamic_model_replaces_same_yaml_id() -> None:
             "config.effective_models.get_provider",
             return_value={"kind": "openai-compatible", "enabled": True},
         ),
+        patch("config.effective_models.registry_settings", return_value={}),
     ):
         cfg = load_effective_models_config()
 
@@ -104,6 +106,7 @@ def test_disabled_or_orphan_dynamic_models_are_not_exposed() -> None:
         patch("config.effective_models.load_models_config", return_value=_base()),
         patch("config.effective_models.list_model_documents", return_value=rows),
         patch("config.effective_models.get_provider", return_value=None),
+        patch("config.effective_models.registry_settings", return_value={}),
     ):
         cfg = load_effective_models_config()
 
@@ -129,9 +132,80 @@ def test_effective_entry_for_resolves_dynamic_model_id() -> None:
             "config.effective_models.get_provider",
             return_value={"kind": "openai-compatible", "enabled": True},
         ),
+        patch("config.effective_models.registry_settings", return_value={}),
     ):
         entry = effective_entry_for("qwen-local")
 
     assert entry is not None
     assert entry.api_name == "qwen3"
     assert entry.provider_id == "vllm"
+
+
+def test_persisted_platform_default_and_managed_tiers_overlay_yaml_baseline() -> None:
+    rows = [
+        {
+            "__id": "daily-model",
+            "apiName": "daily",
+            "providerId": "gateway",
+            "tier": "default",
+            "contextWindow": 128000,
+            "maxOutputTokens": 8192,
+            "enabled": True,
+        },
+        {
+            "__id": "smart-model",
+            "apiName": "smart",
+            "providerId": "gateway",
+            "tier": "smart",
+            "contextWindow": 128000,
+            "maxOutputTokens": 8192,
+            "enabled": True,
+        },
+        {
+            "__id": "fast-model",
+            "apiName": "fast",
+            "providerId": "gateway",
+            "tier": "fast",
+            "contextWindow": 128000,
+            "maxOutputTokens": 8192,
+            "enabled": True,
+        },
+    ]
+    settings = {
+        "platformDefault": "daily-model",
+        "tierDefaults": {"default": "daily-model", "smart": "smart-model", "fast": "fast-model"},
+    }
+    with (
+        patch("config.effective_models.load_models_config", return_value=_base()),
+        patch("config.effective_models.list_model_documents", return_value=rows),
+        patch(
+            "config.effective_models.get_provider",
+            return_value={"kind": "openai-compatible", "enabled": True},
+        ),
+        patch("config.effective_models.registry_settings", return_value=settings),
+    ):
+        cfg = load_effective_models_config()
+
+    assert cfg.platform_default == "daily-model"
+    assert cfg.tier_defaults["default"] == "daily-model"
+    assert cfg.tier_defaults["smart"] == "smart-model"
+    assert cfg.tier_defaults["fast"] == "fast-model"
+    assert cfg.tier_variants["fast"] == {"default": "fast-model"}
+
+
+def test_stale_persisted_mapping_falls_back_to_yaml_baseline() -> None:
+    settings = {
+        "platformDefault": "missing-model",
+        "tierDefaults": {"default": "missing-model", "smart": "missing-model", "fast": "missing-model"},
+    }
+    with (
+        patch("config.effective_models.load_models_config", return_value=_base()),
+        patch("config.effective_models.list_model_documents", return_value=[]),
+        patch("config.effective_models.registry_settings", return_value=settings),
+    ):
+        cfg = load_effective_models_config()
+
+    assert cfg.platform_default == "yaml-model"
+    assert cfg.tier_defaults["default"] == "yaml-model"
+    assert "smart" not in cfg.tier_defaults
+    assert "fast" not in cfg.tier_defaults
