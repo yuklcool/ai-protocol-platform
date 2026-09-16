@@ -4,18 +4,21 @@ on:
   pull_request:
     paths:
       - frontend/src/lib/i18n.ts
+      - frontend/src/lib/i18n/**
       - frontend/src/lib/branding.ts
       - frontend/src/contexts/I18nContext.tsx
       - frontend/src/components/LanguageSwitcher.tsx
       - frontend/src/components/BackendHealthBadge.tsx
       - frontend/src/components/LocalModeBanner.tsx
       - frontend/src/components/SignInButton.tsx
+      - frontend/src/components/admin/**
       - frontend/src/components/home/**
       - frontend/src/components/landing/**
       - frontend/src/app/admin/**
       - frontend/src/app/layout.tsx
       - frontend/src/app/page.tsx
       - frontend/src/lib/__tests__/i18n.test.ts
+      - frontend/src/lib/__tests__/*I18n.test.ts
       - frontend/Dockerfile
       - docker-compose.yml
       - .env.selfhost.example
@@ -24,18 +27,21 @@ on:
     branches: [main]
     paths:
       - frontend/src/lib/i18n.ts
+      - frontend/src/lib/i18n/**
       - frontend/src/lib/branding.ts
       - frontend/src/contexts/I18nContext.tsx
       - frontend/src/components/LanguageSwitcher.tsx
       - frontend/src/components/BackendHealthBadge.tsx
       - frontend/src/components/LocalModeBanner.tsx
       - frontend/src/components/SignInButton.tsx
+      - frontend/src/components/admin/**
       - frontend/src/components/home/**
       - frontend/src/components/landing/**
       - frontend/src/app/admin/**
       - frontend/src/app/layout.tsx
       - frontend/src/app/page.tsx
       - frontend/src/lib/__tests__/i18n.test.ts
+      - frontend/src/lib/__tests__/*I18n.test.ts
       - frontend/Dockerfile
       - docker-compose.yml
       - .env.selfhost.example
@@ -74,7 +80,14 @@ jobs:
         run: npm run typecheck
 
       - name: Verify dictionary parity and interpolation
-        run: CI=true npm run test:run -- src/lib/__tests__/i18n.test.ts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(src/lib/__tests__/i18n.test.ts)
+          while IFS= read -r -d '' file; do
+            tests+=("$file")
+          done < <(find src/lib/__tests__ -maxdepth 1 -type f -name '*I18n.test.ts' -print0 | sort -z)
+          CI=true npm run test:run -- "${tests[@]}"
 
       - name: Build Chinese-default self-host frontend
         run: npm run build
