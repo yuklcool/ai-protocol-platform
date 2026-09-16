@@ -22,6 +22,10 @@ const CITATION_URI_RE = new RegExp(
 );
 const GCS_PREFIX = "https://storage.googleapis.com";
 
+export function isCitationHref(href: string): boolean {
+  return CITATION_URI_RE.test(href);
+}
+
 interface InlineCitationProps {
   href: string;
   children: React.ReactNode;
