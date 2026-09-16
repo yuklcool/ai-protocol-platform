@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import pytest
+
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
@@ -113,3 +116,64 @@ def test_tool_call_probe_reports_capability_failure(monkeypatch) -> None:
 def test_tenant_admin_cannot_probe_models() -> None:
     response = _client(_TENANT).post("/api/admin/model-providers/models/deepseek-v3/test", json={})
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize("message", [None, [], "OK", {}, {"content": ""}, {"content": 123}, {"content": []}])
+def test_malformed_completion_is_not_success(monkeypatch, message):
+    monkeypatch.setenv("PROBE_KEY", "secret")
+    cm, _ = _async_client_response({"choices": [{"message": message}]})
+    with patch("admin.model_probe_routes.get_document", side_effect=_docs), patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm):
+        result = _client(_ADMIN).post("/api/admin/model-providers/models/m/test", json={}).json()
+    assert result["ok"] is False
+    assert result["category"] == "schema"
+
+
+@pytest.mark.parametrize("calls", ["invalid", {}, [None], [{"function": "bad"}], [{"type": "function", "function": {"name": "platform_probe", "arguments": "bad-json"}}], [{"type": "function", "function": {"name": "platform_probe", "arguments": '{"value":123}'}}]])
+def test_malformed_tools_are_not_success(monkeypatch, calls):
+    monkeypatch.setenv("PROBE_KEY", "secret")
+    cm, _ = _async_client_response({"choices": [{"message": {"tool_calls": calls}}]})
+    with patch("admin.model_probe_routes.get_document", side_effect=_docs), patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm):
+        response = _client(_ADMIN).post("/api/admin/model-providers/models/m/test", json={"mode": "tool_call"})
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+
+
+@pytest.mark.parametrize("status,category", [(401,"authentication"),(403,"authentication"),(429,"protocol"),(500,"protocol"),(302,"protocol")])
+def test_http_failures_do_not_echo_upstream_body(monkeypatch, status, category):
+    monkeypatch.setenv("PROBE_KEY", "probe-secret")
+    cm, _ = _async_client_response({"error": "probe-secret"}, status_code=status)
+    with patch("admin.model_probe_routes.get_document", side_effect=_docs), patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm):
+        response = _client(_ADMIN).post("/api/admin/model-providers/models/m/test", json={})
+    assert response.json()["category"] == category
+    assert "probe-secret" not in response.text
+
+
+def test_transport_errors_do_not_expose_credentials(monkeypatch):
+    monkeypatch.setenv("PROBE_KEY", "probe-secret")
+    cm, client = _async_client_response({})
+    client.post.side_effect = httpx.RemoteProtocolError("upstream echoed probe-secret")
+    with patch("admin.model_probe_routes.get_document", side_effect=_docs), patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm):
+        response = _client(_ADMIN).post("/api/admin/model-providers/models/m/test", json={})
+    assert response.json()["category"] == "network"
+    assert "probe-secret" not in response.text
+
+
+def test_missing_secret_prevents_request(monkeypatch):
+    monkeypatch.delenv("PROBE_KEY", raising=False)
+    with patch("admin.model_probe_routes.get_document", side_effect=_docs), patch("admin.model_probe_routes.httpx.AsyncClient") as client:
+        response = _client(_ADMIN).post("/api/admin/model-providers/models/m/test", json={})
+    assert response.json()["category"] == "configuration"
+    client.assert_not_called()
+
+
+def test_reasoning_probe_omits_unsupported_temperature(monkeypatch):
+    monkeypatch.setenv("PROBE_KEY", "probe-secret")
+    def documents(collection, doc_id):
+        return dict(_docs(collection, doc_id), supportsReasoning=True)
+    cm, client = _async_client_response({"choices": [{"message": {"content": "probe-secret OK"}}]})
+    with patch("admin.model_probe_routes.get_document", side_effect=documents), patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm):
+        response = _client(_ADMIN).post("/api/admin/model-providers/models/m/test", json={})
+    payload = client.post.call_args.kwargs["json"]
+    assert "temperature" not in payload and "max_tokens" not in payload
+    assert payload["max_completion_tokens"] == 1024
+    assert "probe-secret" not in response.text

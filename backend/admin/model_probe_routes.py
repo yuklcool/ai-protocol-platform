@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from admin.scope import PlatformScope
 from config.model_provider_registry import MODELS_COLLECTION, PROVIDERS_COLLECTION, resolve_api_key_ref
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/model-providers/models", tags=["admin-model-provider
 
 class ModelProbeRequest(BaseModel):
     mode: Literal["completion", "tool_call"] = "completion"
-    prompt: str = "Reply with the word OK only."
+    prompt: str = Field(default="Reply with the word OK only.", max_length=4000)
 
 
 class ModelProbeResponse(BaseModel):
@@ -43,6 +44,9 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     if provider is None or provider.get("enabled", True) is False:
         return ModelProbeResponse(ok=False, category="configuration", message="Model provider is missing or disabled")
 
+    if str(provider.get("kind") or "openai-compatible") != "openai-compatible":
+        return ModelProbeResponse(ok=False, category="configuration", message="Unsupported provider kind")
+
     try:
         api_key = resolve_api_key_ref(provider.get("apiKeyRef"))
     except RuntimeError as exc:
@@ -56,9 +60,13 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     payload: dict = {
         "model": api_name,
         "messages": [{"role": "user", "content": body.prompt.strip() or "Reply OK."}],
-        "max_tokens": 96,
-        "temperature": 0,
+
     }
+    if model.get("supportsReasoning", False):
+        payload["max_completion_tokens"] = 1024
+    else:
+        payload["max_tokens"] = 96
+        payload["temperature"] = 0
     if body.mode == "tool_call":
         if model.get("supportsTools", True) is False:
             return ModelProbeResponse(ok=False, category="capability", message="Model is configured with supports_tools=false")
@@ -86,13 +94,13 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
-    except (httpx.TimeoutException, httpx.NetworkError) as exc:
-        return ModelProbeResponse(ok=False, category="network", message=str(exc))
+    except httpx.RequestError:
+        return ModelProbeResponse(ok=False, category="network", message="Could not reach the provider")
 
     latency_ms = round((time.monotonic() - started) * 1000)
     if response.status_code in {401, 403}:
         return ModelProbeResponse(ok=False, category="authentication", message=f"HTTP {response.status_code}", latency_ms=latency_ms)
-    if response.status_code >= 400:
+    if not 200 <= response.status_code < 300:
         return ModelProbeResponse(ok=False, category="protocol", message=f"HTTP {response.status_code}", latency_ms=latency_ms)
     try:
         data = response.json()
@@ -100,18 +108,34 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     except (ValueError, KeyError, IndexError, TypeError):
         return ModelProbeResponse(ok=False, category="schema", message="Invalid chat/completions response schema", latency_ms=latency_ms)
 
-    tool_calls = message.get("tool_calls") if isinstance(message, dict) else None
+    if not isinstance(message, dict):
+        return ModelProbeResponse(ok=False, category="schema", message="Invalid message schema", latency_ms=latency_ms)
+    tool_calls = message.get("tool_calls")
     if body.mode == "tool_call":
-        called = bool(tool_calls) and any(
-            isinstance(item, dict) and (item.get("function") or {}).get("name") == "platform_probe"
-            for item in tool_calls
-        )
+        called = False
+        for item in tool_calls if isinstance(tool_calls, list) else []:
+            if not isinstance(item, dict) or item.get("type") != "function":
+                continue
+            function = item.get("function")
+            if not isinstance(function, dict) or function.get("name") != "platform_probe":
+                continue
+            try:
+                arguments = json.loads(function.get("arguments", ""))
+            except (ValueError, TypeError):
+                continue
+            if isinstance(arguments, dict) and isinstance(arguments.get("value"), str):
+                called = True
+                break
         if not called:
             return ModelProbeResponse(ok=False, category="capability", message="Model did not return the requested tool call", tool_called=False, latency_ms=latency_ms)
         return ModelProbeResponse(ok=True, message="Tool calling succeeded", tool_called=True, latency_ms=latency_ms)
 
-    content = message.get("content") if isinstance(message, dict) else None
-    return ModelProbeResponse(ok=True, content=str(content) if content is not None else None, tool_called=bool(tool_calls), latency_ms=latency_ms)
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return ModelProbeResponse(ok=False, category="schema", message="No text completion returned", latency_ms=latency_ms)
+    # A misconfigured upstream may echo request credentials in its response.
+    safe_content = content.replace(api_key, "[REDACTED]") if api_key else content
+    return ModelProbeResponse(ok=True, content=safe_content[:4000], tool_called=bool(tool_calls), latency_ms=latency_ms)
 
 
 __all__ = ["router"]
