@@ -1,0 +1,83 @@
+name: MCP live self-host acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/auth/**
+      - backend/admin/mcp_servers_routes.py
+      - backend/protocols/mcp_proxy.py
+      - backend/tools/mcp/**
+      - backend/skills/**
+      - backend/scripts/verify_mcp_proxy_live.py
+      - infrastructure/mcp-ext-apps-map/**
+      - infrastructure/mcp-sandbox/**
+      - scripts/smoke-mcp-selfhost.sh
+      - .github/workflows/mcp-live-acceptance.yml
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .env.selfhost.example
+      - backend/auth/**
+      - backend/admin/mcp_servers_routes.py
+      - backend/protocols/mcp_proxy.py
+      - backend/tools/mcp/**
+      - backend/skills/**
+      - backend/scripts/verify_mcp_proxy_live.py
+      - infrastructure/mcp-ext-apps-map/**
+      - infrastructure/mcp-sandbox/**
+      - scripts/smoke-mcp-selfhost.sh
+      - .github/workflows/mcp-live-acceptance.yml
+
+jobs:
+  mcp-live-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: mcp-live-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-mcp-live-ci
+      JWT_AUDIENCE: ai-protocol-platform-mcp-live-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-mcp-live-admin-password
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose --profile mcp-example config --quiet
+
+      - name: Build backend and MCP example
+        run: docker compose --profile mcp-example build backend mcp-example-map
+
+      - name: Start PostgreSQL backend and real MCP Apps example
+        run: |
+          docker compose --profile mcp-example up -d postgres backend mcp-example-map
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile mcp-example logs backend postgres mcp-example-map
+          exit 1
+
+      - name: Run real MCP Admin binding proxy and Apps-resource acceptance
+        env:
+          MCP_E2E_RUN_ID: ci-${{ github.run_id }}
+        run: bash scripts/smoke-mcp-selfhost.sh
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose --profile mcp-example logs backend postgres mcp-example-map
+
+      - name: Stop services and remove acceptance volumes
+        if: always()
+        run: docker compose --profile mcp-example down -v --remove-orphans
