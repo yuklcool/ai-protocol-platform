@@ -66,9 +66,10 @@ if ! printf '%s' "$LOGIN" | python3 -c 'import json,sys; d=json.load(sys.stdin);
 fi
 ok "Platform admin local-jwt login"
 
-# Create a real private Skill owned by the authenticated admin. The binding step
-# later uses the same public Skill API as the Admin UI.
-SKILL_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"description":"MCP live acceptance skill","instructions":"Use the bound map MCP server when asked.","displayName":"MCP Live Acceptance","accessControl":{"type":"private"},"skillMetadata":{}}))' "MCP Live $RUN_ID")"
+# Create a real private Skill owned by the authenticated admin. SkillConfig's
+# canonical name is lowercase kebab-case; displayName remains human readable.
+SKILL_NAME="mcp-live-${RUN_ID}"
+SKILL_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"description":"MCP live acceptance skill","instructions":"Use the bound map MCP server when asked.","displayName":"MCP Live Acceptance","accessControl":{"type":"private"},"skillMetadata":{}}))' "$SKILL_NAME")"
 SKILL="$(curl -fsS -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary "$SKILL_PAYLOAD" "$BACKEND_URL/api/skills")"
 SKILL_ID="$(printf '%s' "$SKILL" | json_value 'd.get("skillId","")')"
 [ -n "$SKILL_ID" ] || fail "skill create did not return skillId"
