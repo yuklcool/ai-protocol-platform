@@ -7,6 +7,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { translate } from "@/lib/i18n";
 
 import AdminHub from "../page";
 
@@ -95,7 +96,9 @@ describe("AdminHub IA", () => {
   it("shows a distinct error state rather than implying no access", async () => {
     Object.assign(scope, { state: "error", domains: [], isAdmin: false, isPlatform: false });
     render(<AdminHub />);
-    await waitFor(() => expect(screen.getByText(/couldn't check your access/i)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText(translate("en", "admin.accessCheckFailed"))).toBeTruthy(),
+    );
     expect(screen.queryByText("Admins only")).toBeNull();
   });
 
