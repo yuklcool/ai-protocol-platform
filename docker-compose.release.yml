@@ -1,5 +1,11 @@
 name: ai-protocol-platform
 
+# Standalone self-host deployment using versioned GHCR images.
+# This file intentionally has no source-code bind mounts or build contexts.
+# Download it together with .env.selfhost.example from a GitHub Release, set
+# APP_VERSION to that release tag (for example v1.0.0), then `docker compose
+# -f docker-compose.release.yml up -d`.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,7 +15,6 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-aip-local-change-me}"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./backend/db/migrations/001_postgres_documents.sql:/docker-entrypoint-initdb.d/001_postgres_documents.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aip} -d ${POSTGRES_DB:-aip}"]
       interval: 5s
@@ -19,9 +24,8 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: "${BACKEND_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-backend}:${APP_VERSION:-latest}"
+    pull_policy: always
     command:
       - sh
       - -c
@@ -32,8 +36,6 @@ services:
         uv run uvicorn fast_api_app:app --host 0.0.0.0 --port 1956 --workers 1
     environment:
       PORT: "1956"
-      # Production-style Self-host is deliberately distinct from LOCAL_MODE.
-      # LOCAL_MODE keeps the developer auth stub/in-memory fixture semantics.
       SELF_HOSTED_MODE: "1"
       LOCAL_MODE: "0"
       DATA_BACKEND: "${DATA_BACKEND:-postgres}"
@@ -48,9 +50,6 @@ services:
       ARTIFACT_BACKEND: "${ARTIFACT_BACKEND:-local}"
       ADK_ARTIFACT_ROOT: "${ADK_ARTIFACT_ROOT:-/data/artifacts}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
-      # Root orchestration model is provider-neutral. `lite` preserves the
-      # historical Gemini default; self-host .env may point this at any
-      # registered OpenAI-compatible/Anthropic/Google model or tier.
       PLATFORM_DEFAULT_MODEL: "${PLATFORM_DEFAULT_MODEL:-lite}"
       AUTH_BACKEND: "${AUTH_BACKEND:-local-jwt}"
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-}"
@@ -60,7 +59,6 @@ services:
       JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
       SELFHOST_ADMIN_EMAIL: "${SELFHOST_ADMIN_EMAIL:-}"
       SELFHOST_ADMIN_PASSWORD: "${SELFHOST_ADMIN_PASSWORD:-}"
-      # No implicit GCP/ADC path in the default self-host profile.
       GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-false}"
       TRACE_EXPORT_ENABLED: "${TRACE_EXPORT_ENABLED:-0}"
       CLOUD_LOGGING_ENABLED: "${CLOUD_LOGGING_ENABLED:-0}"
@@ -73,7 +71,7 @@ services:
       GROUP_AUTH_SIGNING_SECRET: "${GROUP_AUTH_SIGNING_SECRET:-}"
       ALLOW_ORIGINS: "${ALLOW_ORIGINS:-http://localhost:3456}"
     ports:
-      - "1956:1956"
+      - "${BACKEND_PORT:-1956}:1956"
     volumes:
       - object-data:/data
     depends_on:
@@ -87,33 +85,14 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # Optional real upstream MCP Apps server for self-host acceptance/testing.
-  # Start it with: docker compose --profile mcp-example up -d --build
-  # Register in Admin -> MCP Servers as:
-  #   URL: http://mcp-example-map:8080/mcp
-  #   Transport: streamable-http
-  # It is intentionally NOT published to the host; backend/agent traffic uses
-  # the Compose network and the browser reaches it only through /mcp/{server_id}.
-  mcp-example-map:
-    profiles: ["mcp-example"]
-    build:
-      context: ./infrastructure/mcp-ext-apps-map
-      dockerfile: Dockerfile
-    environment:
-      PORT: "8080"
-    expose:
-      - "8080"
-    restart: unless-stopped
-
   mcp-sandbox:
-    build:
-      context: ./infrastructure/mcp-sandbox
-      dockerfile: Dockerfile
+    image: "${MCP_SANDBOX_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox}:${APP_VERSION:-latest}"
+    pull_policy: always
     environment:
       PORT: "8080"
       ALLOWED_HOST_ORIGINS: "${MCP_SANDBOX_ALLOWED_HOST_ORIGINS:-http://localhost:3456}"
     ports:
-      - "3457:8080"
+      - "${MCP_SANDBOX_PORT:-3457}:8080"
     healthcheck:
       test:
         [
@@ -129,23 +108,16 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_LOCAL_MODE: "0"
-        NEXT_PUBLIC_AUTH_MODE: "${AUTH_BACKEND:-local-jwt}"
-        NEXT_PUBLIC_BACKEND_URL: "http://localhost:1956"
-        NEXT_PUBLIC_MCP_SANDBOX_URL: "${MCP_SANDBOX_PUBLIC_URL:-http://localhost:3457}"
-        NEXT_PUBLIC_FRONTEND_URL: "${FRONTEND_PUBLIC_URL:-http://localhost:3456}"
-        NEXT_PUBLIC_BRAND_APP_NAME: "${APP_NAME:-AI Protocol Platform}"
-        SKIP_QUALITY_CHECKS: "${SKIP_QUALITY_CHECKS:-false}"
+    image: "${FRONTEND_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-frontend}:${APP_VERSION:-latest}"
+    pull_policy: always
     environment:
       PORT: "8080"
       BACKEND_URL: "http://backend:1956"
+      # Release images replace the build-time placeholder with this value on
+      # container start. Set an externally reachable URL for remote deployments.
       MCP_SANDBOX_PUBLIC_URL: "${MCP_SANDBOX_PUBLIC_URL:-http://localhost:3457}"
     ports:
-      - "3456:8080"
+      - "${FRONTEND_PORT:-3456}:8080"
     depends_on:
       backend:
         condition: service_healthy

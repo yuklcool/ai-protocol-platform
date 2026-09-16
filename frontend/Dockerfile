@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 RUN apk add --no-cache python3 make g++ libc6-compat
 
@@ -129,13 +129,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+COPY docker-entrypoint.sh /usr/local/bin/frontend-entrypoint
+RUN chmod +x /usr/local/bin/frontend-entrypoint
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -144,4 +146,5 @@ ENV PORT=8080
 
 EXPOSE 8080
 
+ENTRYPOINT ["frontend-entrypoint"]
 CMD ["node", "server.js"]

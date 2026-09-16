@@ -1,8 +1,10 @@
 # Self-hosting guide
 
-This document describes the current self-hosted baseline for `ai-protocol-platform`.
+This document describes the current production-style self-host baseline for `ai-protocol-platform`.
 
-The design principle is simple: **use as few infrastructure components as possible**. PostgreSQL is reused for platform data, ADK Session, durable Memory, and built-in account records. A backend-mounted Docker Volume is used for user files and ADK Artifacts. Redis, MinIO, Keycloak, a separate Session database, and a separate Memory database are not part of the default stack.
+The design principle is simple: **use as few infrastructure components as possible**. PostgreSQL is reused for platform data, stable Tenant metadata, built-in accounts, ADK Session and durable Memory. A backend-mounted Docker Volume stores user objects and ADK Artifacts. Redis, MinIO, Keycloak, a separate Session database and a separate Memory database are not required by the default stack.
+
+For versioned prebuilt GHCR images, see [docs/selfhost-release-images.md](./docs/selfhost-release-images.md).
 
 ## What runs
 
@@ -18,19 +20,19 @@ backend :1956
   ├── Google ADK
   ├── Runtime Skills
   ├── AG-UI / A2UI
-  ├── MCP
-  ├── MCP Apps integration
+  ├── MCP / MCP Apps
   ├── built-in JWT auth ───────┐
+  ├── stable Tenant policy ────┤
   ├── ADK Session ─────────────┤
   ├── durable Memory ──────────┼──> PostgreSQL :5432
-  ├── platform/domain data ────┤
+  ├── platform/tenant data ────┤
   └── auth_users ──────────────┘
   │
   ├── user files ─────────────> /data/objects
   └── ADK Artifacts ──────────> /data/artifacts
 
 mcp-sandbox :3457
-  └── separate-origin iframe host
+  └── separate-origin MCP Apps iframe host
 ```
 
 Default Docker services:
@@ -38,9 +40,21 @@ Default Docker services:
 - frontend
 - backend
 - PostgreSQL
-- MCP Apps sandbox (kept separate because MCP Apps require an isolated browser origin)
+- MCP Apps sandbox
 
-The backend still sets `LOCAL_MODE=1` in the current Compose baseline to disable implicit GCP/Firebase/Vertex assumptions. **That no longer means authentication must use the insecure LOCAL_MODE stub.** The checked-in `.env.selfhost.example` selects `AUTH_BACKEND=local-jwt`, so normal self-host deployment uses PostgreSQL-backed accounts and signed JWTs while retaining the no-GCP runtime boundary.
+The production-style Docker path deliberately runs:
+
+```env
+SELF_HOSTED_MODE=1
+LOCAL_MODE=0
+DATA_BACKEND=postgres
+SESSION_BACKEND=postgres
+MEMORY_BACKEND=postgres
+AUTH_BACKEND=local-jwt
+OBJECT_STORAGE_BACKEND=local
+```
+
+`LOCAL_MODE=1` is reserved for the shorter source-development loop and its development substitutes. It is not the normal self-host deployment mode.
 
 ## Requirements
 
@@ -51,62 +65,41 @@ A Linux server needs:
 - outbound HTTPS access to the configured model provider
 - ports 3456, 1956 and 3457 available, or equivalent reverse-proxy mappings
 
-No GCP project, Firebase project, Vertex Agent Engine, Redis, MinIO, or Keycloak is required for the current self-host baseline.
+No GCP project, Firebase project, Vertex Agent Engine, Redis, MinIO or Keycloak is required for the baseline.
 
-## Quick start
+## Deployment choices
+
+### Versioned GHCR images
+
+This is the preferred operational path after a versioned release is published. Download these assets from the GitHub Release:
+
+```text
+docker-compose.release.yml
+.env.selfhost.example
+```
+
+Then:
+
+```bash
+cp .env.selfhost.example .env
+# set APP_VERSION=vX.Y.Z and required secrets/provider values
+
+docker compose -f docker-compose.release.yml pull
+docker compose -f docker-compose.release.yml up -d
+```
+
+The release Compose has no source build contexts and no source-code bind mounts. PostgreSQL migrations are bundled in the backend image and applied before backend startup.
+
+### Build from source
+
+Use this path for development or a custom frontend build:
 
 ```bash
 git clone https://github.com/yuklcool/ai-protocol-platform.git
 cd ai-protocol-platform
 cp .env.selfhost.example .env
-```
+# configure required secrets/provider values
 
-### 1. Configure built-in authentication
-
-Generate a random signing key:
-
-```bash
-openssl rand -base64 48
-```
-
-Put it in `.env` and configure the first platform administrator:
-
-```env
-AUTH_BACKEND=local-jwt
-JWT_SIGNING_KEY=<generated-secret-at-least-32-bytes>
-SELFHOST_ADMIN_EMAIL=admin@example.com
-SELFHOST_ADMIN_PASSWORD=<strong-password-at-least-12-characters>
-```
-
-On the first startup, the backend creates that account with the platform-admin role. Later restarts never overwrite its stored password or roles. Once at least one local account exists, the bootstrap email/password can be removed from `.env`; the signing key must remain stable or existing access tokens will become invalid.
-
-If local-jwt is selected but the signing key is missing/too short, or the first startup has no account and no bootstrap credentials, startup fails loudly instead of exposing a half-configured deployment.
-
-### 2. Configure at least one model provider
-
-Gemini Express Mode:
-
-```env
-GEMINI_API_KEY=your-key
-```
-
-OpenAI:
-
-```env
-OPENAI_API_KEY=your-key
-OPENAI_API_BASE=https://api.openai.com/v1
-```
-
-Any OpenAI-compatible endpoint:
-
-```env
-OPENAI_API_KEY=your-key-or-local-placeholder
-OPENAI_API_BASE=http://model-gateway.example:8000/v1
-```
-
-### 3. Start
-
-```bash
 docker compose up -d --build
 ```
 
@@ -116,36 +109,50 @@ Check status:
 docker compose ps
 ```
 
-Endpoints:
+Default local endpoints:
 
 ```text
-Frontend:         http://SERVER_IP:3456
-Backend API:      http://SERVER_IP:1956/docs
-MCP Apps sandbox: http://SERVER_IP:3457/sandbox.html
+Frontend:         http://localhost:3456
+Backend API:      http://localhost:1956/docs
+MCP Apps sandbox: http://localhost:3457/sandbox.html
 ```
-
-Open the frontend and use **Sign in** with the bootstrap administrator credentials. The browser calls the backend through the existing Next.js `/api/proxy` route; no extra public auth service or CORS origin is required.
 
 ## Authentication
 
 The self-host identity selector is:
 
 ```env
-AUTH_BACKEND=local-jwt   # default in .env.selfhost.example
+AUTH_BACKEND=local-jwt   # production-style self-host default
 AUTH_BACKEND=stub        # LOCAL_MODE development only
 AUTH_BACKEND=firebase    # existing cloud adapter
-AUTH_BACKEND=oidc        # reserved optional adapter; currently fail-closed
+AUTH_BACKEND=oidc        # optional future adapter; currently fail-closed
 ```
 
-Business routes continue to depend on the same `get_current_user` contract, so Skill permissions, tenant-admin checks, session access rules and audit code do not need provider-specific branches.
+### First administrator
+
+Generate a JWT signing key:
+
+```bash
+openssl rand -base64 48
+```
+
+Configure:
+
+```env
+JWT_SIGNING_KEY=<generated-secret-at-least-32-bytes>
+SELFHOST_ADMIN_EMAIL=admin@example.com
+SELFHOST_ADMIN_PASSWORD=<strong-password-at-least-12-characters>
+```
+
+On the first startup, the backend creates that account with platform-admin access. Later restarts do not overwrite its stored password or roles. Once at least one local account exists, bootstrap email/password values may be removed; the signing key must remain stable unless you intentionally rotate it.
+
+If local-jwt is selected but the signing key is missing/too short, or the first startup has no account and no bootstrap credentials, startup fails loudly.
 
 ### Local account storage
 
-Built-in accounts are stored through the normal Repository abstraction in the `auth_users` collection. With the self-host defaults this means PostgreSQL; no second auth database is introduced.
+Built-in accounts are stored through the Repository abstraction in PostgreSQL. Passwords are salted `scrypt` hashes. The login API never returns password hashes and uses a generic authentication failure response.
 
-Passwords are stored as salted `scrypt` hashes. The login endpoint never returns the password hash and returns a generic failure message for bad credentials.
-
-### JWT behavior
+### JWT authorization behavior
 
 Relevant settings:
 
@@ -157,24 +164,29 @@ JWT_AUDIENCE=ai-protocol-platform
 JWT_EXPIRE_MINUTES=60
 ```
 
-The current key signs new HS256 access tokens. `JWT_PREVIOUS_SIGNING_KEYS` can temporarily list prior keys during rotation so already-issued tokens continue to verify until their natural expiry.
+The current key signs new HS256 access tokens. Prior valid keys can be temporarily listed in `JWT_PREVIOUS_SIGNING_KEYS` during rotation.
 
-The token carries only the minimum identity required to locate the account. Authorization is **server-authoritative**: after signature verification the backend re-loads the current account record from Repository/PostgreSQL and rebuilds domain/group/role data. Therefore:
+Authorization is **server-authoritative**. After token verification, the backend reloads the current account and trusted Tenant/role state from persistence rather than trusting browser-provided tenant/group/role values. Therefore role removal, account disabling and Tenant policy changes take effect independently of stale browser claims.
 
-- removing a role takes effect without waiting for token refresh;
-- disabling/deleting an account invalidates an otherwise unexpired token;
-- browser-supplied role/tenant claims are not trusted;
-- existing `aitana-admin` and `tenant-admin:{domain}` checks remain the permission source until #9 introduces explicit tenant IDs.
+The built-in browser session stores the bearer token in `sessionStorage`. Closing the tab drops the browser session. On page reload the frontend calls `/api/auth/whoami` to refresh server-authoritative identity state.
 
-### Browser session
+## Stable Tenant boundary
 
-The built-in browser session currently stores the bearer token in `sessionStorage`. Closing the tab drops the session. On page reload the frontend calls `/api/auth/whoami`, so the user displayed in the browser is refreshed from the server-authoritative account record.
+The current self-host baseline uses explicit stable `tenant_id` as the authority boundary. Historical domain/client identity remains only as a compatibility/migration layer.
 
-The shared bearer-token seam used by `fetchWithAuth` and the AG-UI token subscription understands local-jwt, so existing REST, streaming and agent calls do not require per-call-site auth rewrites.
+Tenant-aware enforcement covers, among other paths:
+
+- Session and chat metadata
+- documents/folders/object namespaces
+- MCP server scope
+- Admin Audit
+- Tool Permission
+- Model Policy (`allowedModels/defaultModel`)
+- budget/quota extension points
+
+The codebase includes auditable legacy ownership migration tooling and a real Compose/PostgreSQL/local-jwt Tenant A/B isolation gate. That gate deliberately uses the same UID in two different stable tenants to prove the Tenant boundary is not accidentally reduced to user ID.
 
 ## Persistence defaults
-
-The Docker self-host path defaults to:
 
 ```env
 DATA_BACKEND=postgres
@@ -183,19 +195,36 @@ MEMORY_BACKEND=postgres
 DATABASE_URL=postgresql://aip:...@postgres:5432/aip
 ```
 
-One PostgreSQL instance therefore carries the default structured/durable state:
+One PostgreSQL instance carries the default structured/durable state:
 
 ```text
 PostgreSQL
-├── platform/domain documents
-├── built-in auth_users
+├── platform + tenant documents
+├── auth_users
+├── model/provider + MCP registries
 ├── ADK Session + events/state
 └── durable ADK Memory
 ```
 
+### Schema migrations
+
+The backend startup path executes:
+
+```text
+scripts/apply_selfhost_migrations.py
+```
+
+before bootstrap seeding and Uvicorn startup. Applied SQL filenames are recorded in:
+
+```text
+platform_schema_migrations
+```
+
+The runner is idempotent. Existing source deployments that originally received `001_postgres_documents.sql` through PostgreSQL initdb are compatible: the `CREATE` statements are idempotent, then the migration is journaled.
+
 ### Session
 
-`SESSION_BACKEND=postgres` reuses Google ADK's own `DatabaseSessionService`. The platform does not maintain a second custom SQL Session implementation.
+`SESSION_BACKEND=postgres` reuses Google ADK's `DatabaseSessionService`. The platform does not maintain a second custom SQL Session implementation.
 
 Existing alternatives remain available:
 
@@ -206,67 +235,26 @@ SESSION_BACKEND=vertex
 
 ### Memory
 
-The fork supplies `PostgresMemoryService` using the existing Repository/PostgreSQL layer. Its current behavior deliberately mirrors the simple semantics of ADK's in-memory memory service:
+`PostgresMemoryService` uses the Repository/PostgreSQL layer and persists ADK memory rows without requiring embeddings, Redis or a vector database. Current recall intentionally mirrors simple ADK in-memory semantics with durable keyword/text search, including substring recall for Chinese text.
 
-- stores ADK events durably;
-- scopes memory by application + user;
-- survives backend/service reconstruction;
-- supports keyword/text recall, including substring recall for Chinese text;
-- does not require embeddings, Redis, or a vector database.
-
-`MEMORY_SEARCH_SCAN_LIMIT` caps the number of recent per-user rows scanned by a recall. If semantic vector recall is needed later, PostgreSQL + pgvector should be evaluated before adding a dedicated vector database.
-
-Existing alternatives remain available:
-
-```env
-MEMORY_BACKEND=memory
-MEMORY_BACKEND=vertex
-```
-
-### Source-only local development
-
-`make dev-local` may continue using memory backends and the LOCAL_MODE stub for the shortest developer loop. The Docker Self-host path is different: the checked-in Self-host env template selects PostgreSQL persistence and local-jwt authentication.
+`MEMORY_SEARCH_SCAN_LIMIT` caps the number of recent per-user rows scanned by a recall. If semantic vector recall is needed later, PostgreSQL + pgvector should be evaluated before adding a separate vector database.
 
 ## File / Artifact storage
 
-The default self-host file backend is the backend-mounted `object-data` Docker Volume. No MinIO or S3 service is required.
+Default self-host storage:
 
 ```env
 OBJECT_STORAGE_BACKEND=local
 OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+ARTIFACT_BACKEND=local
 ADK_ARTIFACT_ROOT=/data/artifacts
 ```
 
-The on-volume layout is intentionally separated:
+PostgreSQL stores document metadata while bytes live on the persistent `object-data` volume under trusted Tenant/user namespaces. ADK `FileArtifactService` uses the same persistent volume under `/data/artifacts`.
 
-```text
-/data
-├── objects/
-│   └── tenants/<tenant-domain>/users/<uid>/docs/<folder>/<file>
-└── artifacts/
-    └── ... ADK FileArtifactService managed layout ...
-```
+Local filesystem paths are never returned as public URLs. Preview/download stays behind authenticated FastAPI routes that resolve authorization and object ownership before reading bytes.
 
-User document metadata remains in the configured Repository/PostgreSQL backend. Binary content lives in ObjectStorage. The existing domain/client tenant model is reused as the object namespace; explicit tenant IDs are tracked in #9.
-
-### Uploads and large files
-
-HTTP uploads use Starlette's spooled `UploadFile`. The backend streams the file-like object into ObjectStorage instead of reading the complete PDF/Office file into Python bytes. Local storage writes in bounded chunks to a temporary file and atomically replaces the destination after `fsync`. Downloads/previews are streamed in chunks as well.
-
-### Controlled download / preview
-
-Local filesystem URLs are never returned to the browser as a public file URL. File access stays behind authenticated FastAPI routes:
-
-```text
-GET /api/documents/{doc_id}/preview
-GET /api/documents/{doc_id}/download
-```
-
-The route verifies ownership/tenant metadata before resolving the ObjectStorage object.
-
-### Delete consistency
-
-A delete is staged because PostgreSQL and filesystem/object storage cannot participate in one ACID transaction:
+Deletion is staged because PostgreSQL and filesystem storage cannot participate in one ACID transaction:
 
 ```text
 metadata -> deletionStatus=deleting
@@ -274,59 +262,60 @@ binary   -> delete
 metadata -> delete
 ```
 
-Failures retain a durable recovery status so an operator/retry job can reconcile the metadata and binary state.
+Failures retain durable recovery state for reconciliation.
 
-### ADK Artifacts
+`OBJECT_STORAGE_BACKEND=gcs` remains an optional cloud adapter. S3-compatible storage is tracked separately and is not required by the default stack.
 
-Self-host Artifact persistence reuses ADK's official `FileArtifactService` rooted at `/data/artifacts`, so versions survive backend container reconstruction on the same Docker Volume.
+## Model providers
 
-### GCS compatibility
+The self-host runtime is registry-driven. It supports OpenAI official, Gemini Developer API, Anthropic and generic OpenAI-compatible gateways, with provider-specific base URL and secret reference configuration.
 
-`OBJECT_STORAGE_BACKEND=gcs` uses the same `ObjectStorage` business contract. Historical GCS documents are handled through a compatibility adapter so cloud users do not need GCS SDK calls in normal document routes.
+A simple OpenAI-compatible environment path is:
 
-### S3-compatible storage
+```env
+PLATFORM_DEFAULT_MODEL=<registered-model-id>
+OPENAI_API_KEY=<provider-key>
+OPENAI_API_BASE=https://your-provider.example/v1
+```
 
-`OBJECT_STORAGE_BACKEND=s3` is reserved as optional Issue #16. It is **not** part of the default Compose stack and MinIO is not deployed automatically.
+Dynamic Provider/Model CRUD, completion/tool probes, default/tier mappings and Tenant model policies are available through the current platform control plane. See [docs/selfhost-openai-compatible.md](./docs/selfhost-openai-compatible.md).
 
-## Backup
+The remaining acceptance boundary is intentionally strict: #10/#11 are not considered finished until a real non-OpenAI OpenAI-compatible endpoint drives an Agent conversation and actual Tool Calling. Mock/fixed ToolCalls do not replace that final provider E2E.
 
-A complete self-host backup needs both:
+## MCP / MCP Apps
+
+The self-host baseline includes:
+
+- MCP Server Admin CRUD
+- Platform/Tenant scope
+- HTTP/SSE/Streamable HTTP transport
+- real `initialize` Health
+- `tools/list`, `resources/list`, `prompts/list` Discovery
+- Skill Binding
+- authenticated `/mcp/{server_id}` browser/runtime proxy
+- separate-origin MCP Apps sandbox
+
+A real Compose acceptance already covers:
 
 ```text
-1. PostgreSQL data
-2. object-data Docker Volume (/data/objects + /data/artifacts)
+Admin register
+  -> Health / initialize
+  -> Discovery
+  -> Skill Binding
+  -> platform MCP Proxy
+  -> tools/list + resources/read
+  -> real ui:// HTML
 ```
 
-PostgreSQL now includes account records in addition to domain metadata, sessions and memory. Losing the database therefore also loses the built-in user identities.
+A Chromium/Playwright gate additionally proves the real `ui://` resource is written into an inner iframe through the separate-origin sandbox. Therefore MCP transport and browser iframe rendering are no longer manual-only acceptance items.
 
-Keep the JWT signing key in a separate protected secret backup. It is deliberately not stored in PostgreSQL.
+The remaining #11 boundary is a **real model choosing and executing the bound MCP Tool**.
 
-## OpenAI-compatible model registry
-
-Provider routing is registry-driven. An OpenAI-compatible model name does not need to begin with `gpt-`.
-
-Example registry entry:
-
-```yaml
-models:
-  deepseek-v3:
-    api_name: "deepseek-chat"
-    provider: openai
-    tier: default
-    supports_tools: true
-    supports_reasoning: false
-    supports_responses_api: false
-    residency: global
-    context_window: 128000
-    max_output_tokens: 8192
-    description: "DeepSeek through an OpenAI-compatible endpoint"
-```
-
-The same mechanism works for Qwen, vLLM-served models, LiteLLM Proxy, OneAPI/NewAPI, and internal OpenAI-compatible gateways.
+See [docs/selfhost-mcp-server.md](./docs/selfhost-mcp-server.md).
 
 ## CI / smoke tests
 
-Basic Self-host smoke:
+Basic self-host smoke:
 
 ```bash
 BACKEND_URL=http://127.0.0.1:1956 \
@@ -335,89 +324,82 @@ SANDBOX_URL=http://127.0.0.1:3457 \
 bash scripts/smoke-selfhost.sh
 ```
 
-The persistence baseline verifies Repository/PostgreSQL, Session/Memory reconstruction, A2UI replay/state, ObjectStorage/Artifact persistence and image builds.
+Dedicated CI gates currently cover:
 
-The dedicated **Self-host auth baseline** additionally verifies:
+- PostgreSQL Repository / Session / Memory / A2UI reconstruction
+- local ObjectStorage / Artifact persistence
+- local-jwt bootstrap and server-authoritative authorization
+- no-GCP startup boundary
+- real stable Tenant A/B isolation
+- Model Provider registry/routing/policy
+- MCP Admin and real MCP protocol transport
+- Chromium separate-origin MCP Apps rendering
+- source self-host image build and smoke
+- versioned self-host release image build pipeline
 
-1. local JWT password/hash/token unit contract;
-2. real PostgreSQL first-admin bootstrap;
-3. password authentication → JWT issue → JWT verification;
-4. server-authoritative role changes on an already-issued token;
-5. idempotent bootstrap that does not reset existing credentials;
-6. frontend build/typecheck with `NEXT_PUBLIC_AUTH_MODE=local-jwt`.
+A release still requires real Provider-dependent acceptance before the overall protocol project can be called fully accepted:
 
-Before treating a release as fully accepted, still manually verify the real protocol path:
+1. normal Agent/Skill conversation against a real configured Provider;
+2. real Provider Tool Calling;
+3. real model selection/execution of a bound MCP Tool;
+4. final Tenant quota / Tool Permission / Model Policy verification on that live model path.
 
-1. a normal Chat turn;
-2. a Runtime Skill turn;
-3. `Workspace Demo` renders an A2UI surface;
-4. an A2UI action reaches the Agent and produces a follow-up result;
-5. at least one MCP Tool executes;
-6. at least one MCP App renders inside the separate sandbox origin.
+## Versioned release images
 
-Those manual protocol checks remain tracked by #1/#3 and are not equivalent to persistence/auth unit tests.
+The release pipeline builds:
+
+```text
+ghcr.io/yuklcool/ai-protocol-platform-backend
+ghcr.io/yuklcool/ai-protocol-platform-frontend
+ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox
+```
+
+Release tags produce `linux/amd64` and `linux/arm64` manifests plus semver, `latest` and exact `sha-*` tags. BuildKit SBOM/provenance attestations are enabled, and published images are scanned for fixable HIGH/CRITICAL vulnerabilities before the GitHub Release is created.
+
+The release frontend image is relocatable: it is compiled with a dedicated sandbox-origin placeholder and replaces that placeholder at container startup from `MCP_SANDBOX_PUBLIC_URL`.
+
+See [docs/selfhost-release-images.md](./docs/selfhost-release-images.md) for exact deployment and rollback commands.
 
 ## Reverse proxy / TLS
 
-For an internet-facing server, place Caddy, Nginx, Traefik, or another TLS reverse proxy in front of the frontend.
+For an internet-facing server, place Caddy, Nginx, Traefik or another TLS reverse proxy in front of the frontend and sandbox.
 
-The browser-facing frontend and MCP sandbox should remain different origins. Example:
+The browser-facing frontend and MCP sandbox must remain different origins. Example:
 
 ```text
 https://ai.example.com  -> frontend:8080
 https://mcp.example.com -> mcp-sandbox:8080
 ```
 
-When changing origins, update the frontend build arguments and sandbox `ALLOWED_HOST_ORIGINS` as well.
+Configure:
 
-Use TLS for any internet-facing local-jwt deployment; the browser bearer token must never cross an unencrypted public network.
-
-## Security boundary
-
-The minimal Self-host authentication boundary is now:
-
-```text
-PostgreSQL
-├── auth_users
-├── domain/tenant metadata
-├── roles/group tags
-└── permissions
-
-FastAPI
-├── scrypt credential verification
-├── JWT issue/verify
-└── server-authoritative User / AccessContext
+```env
+MCP_SANDBOX_PUBLIC_URL=https://mcp.example.com
+MCP_SANDBOX_ALLOWED_HOST_ORIGINS=https://ai.example.com
+ALLOW_ORIGINS=https://ai.example.com
 ```
 
-Firebase remains a compatible provider. Generic OIDC/Keycloak remains an optional enterprise extension and is intentionally **not** a default service.
+Use TLS for any internet-facing local-jwt deployment; browser bearer tokens must never traverse an unencrypted public network.
 
-Current limitations to keep explicit:
+## Backup and rollback
 
-- explicit tenant IDs are still #9; local-jwt currently reuses the existing domain-based tenant model;
-- OIDC is not implemented yet and `AUTH_BACKEND=oidc` fails closed;
-- local-jwt currently uses access-token-only browser sessions rather than a refresh-token flow;
-- internet-facing deployments must provide TLS/reverse-proxy hardening and normal operational secret management.
-
-## Minimal-component roadmap
+A complete self-host backup needs both:
 
 ```text
-Completed core baseline
-  frontend
-  backend
-  postgres
-  built-in local JWT
-  local object/artifact volume
-  mcp-sandbox (isolated origin)
-
-Next
-  #8 remove remaining mandatory GCP assumptions
-  close #1/#2/#3 final protocol/provider/deployment acceptance
-  #9 explicit Tenant model
-  #10 Model Provider UI
-  #11 MCP Server UI
-
-Optional adapters only when required
-  GCS / S3-compatible / Firebase / OIDC / Vertex / pgvector
+1. PostgreSQL data
+2. object-data volume (/data/objects + /data/artifacts)
 ```
 
-The project should not add Redis, MinIO, Keycloak, a dedicated vector database, or a queue merely because those components are common in larger deployments. Add them only after a concrete workload requires them.
+Keep the JWT signing key in a separate protected secret backup.
+
+For image-based deployment, application rollback is normally performed by restoring the previous `APP_VERSION` and pulling/updating Compose again. Database migrations may be forward-only; image rollback does not replace a database restore when an incompatible schema migration has already been applied.
+
+## Current optional extensions / limitations
+
+- OIDC/Keycloak is not implemented as a default auth adapter and `AUTH_BACKEND=oidc` remains fail-closed.
+- local-jwt currently uses access-token-only browser sessions rather than a refresh-token flow.
+- S3-compatible ObjectStorage remains an optional adapter, not a default service.
+- real external Provider Tool Calling acceptance still requires endpoint credentials supplied by the deployment owner.
+- internet-facing installations remain responsible for TLS, secret management, backups and normal operational hardening.
+
+The project should not add Redis, MinIO, Keycloak, a dedicated vector database or a queue merely because those components are common in larger deployments. Add optional infrastructure only when a concrete workload requires it.
