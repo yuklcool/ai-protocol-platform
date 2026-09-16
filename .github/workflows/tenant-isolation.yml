@@ -9,13 +9,17 @@ on:
       - backend/auth/local_jwt.py
       - backend/auth/firebase_auth.py
       - backend/auth/admin_roles.py
+      - backend/auth/permissions.py
       - backend/auth/routes.py
       - backend/admin/audit*.py
+      - backend/admin/tool_permissions_routes.py
       - backend/admin/tenant_model_policy_routes.py
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/api_tests/test_admin_audit_read.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_stream_skill.py
+      - backend/tests/api_tests/test_admin_tool_permissions.py
+      - backend/tests/api_tests/test_admin_tenant_tool_permissions.py
       - backend/tests/api_tests/test_admin_tenant_model_policy.py
       - backend/tests/api_tests/test_tenant_models_route.py
       - backend/admin/scope.py
@@ -38,9 +42,13 @@ on:
       - backend/adk/artifact_backend.py
       - backend/adk/tenant_artifact_service.py
       - backend/scripts/migrate_tenants.py
+      - backend/scripts/tenant_migration_journal.py
       - backend/tools/mcp/**
       - backend/protocols/mcp_proxy.py
       - backend/scripts/seed_mcp_servers.py
+      - backend/tests/unit/test_permissions.py
+      - backend/tests/unit/test_tenant_tool_permissions.py
+      - backend/tests/unit/test_tenant_ownership_migration.py
       - backend/tests/unit/test_mcp_tenant_isolation.py
       - backend/tests/unit/test_mcp_seed_scope.py
       - backend/tests/tool_tests/test_mcp_registry*.py
@@ -66,13 +74,17 @@ on:
       - backend/auth/local_jwt.py
       - backend/auth/firebase_auth.py
       - backend/auth/admin_roles.py
+      - backend/auth/permissions.py
       - backend/auth/routes.py
       - backend/admin/audit*.py
+      - backend/admin/tool_permissions_routes.py
       - backend/admin/tenant_model_policy_routes.py
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/api_tests/test_admin_audit_read.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_stream_skill.py
+      - backend/tests/api_tests/test_admin_tool_permissions.py
+      - backend/tests/api_tests/test_admin_tenant_tool_permissions.py
       - backend/tests/api_tests/test_admin_tenant_model_policy.py
       - backend/tests/api_tests/test_tenant_models_route.py
       - backend/admin/scope.py
@@ -95,9 +107,13 @@ on:
       - backend/adk/artifact_backend.py
       - backend/adk/tenant_artifact_service.py
       - backend/scripts/migrate_tenants.py
+      - backend/scripts/tenant_migration_journal.py
       - backend/tools/mcp/**
       - backend/protocols/mcp_proxy.py
       - backend/scripts/seed_mcp_servers.py
+      - backend/tests/unit/test_permissions.py
+      - backend/tests/unit/test_tenant_tool_permissions.py
+      - backend/tests/unit/test_tenant_ownership_migration.py
       - backend/tests/unit/test_mcp_tenant_isolation.py
       - backend/tests/unit/test_mcp_seed_scope.py
       - backend/tests/tool_tests/test_mcp_registry*.py
@@ -133,7 +149,7 @@ jobs:
       - name: Build backend
         run: docker compose build backend
 
-      - name: Verify tenant identity admin model session document artifact boundaries and fail-closed repository
+      - name: Verify tenant identity ownership migration admin model session document artifact boundaries and fail-closed repository
         run: |
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=memory \
@@ -147,8 +163,13 @@ jobs:
             tests/api_tests/test_admin_audit_read.py \
             tests/api_tests/test_sessions_route.py \
             tests/api_tests/test_stream_skill.py \
+            tests/api_tests/test_admin_tool_permissions.py \
+            tests/api_tests/test_admin_tenant_tool_permissions.py \
             tests/api_tests/test_admin_tenant_model_policy.py \
             tests/api_tests/test_tenant_models_route.py \
+            tests/unit/test_permissions.py \
+            tests/unit/test_tenant_tool_permissions.py \
+            tests/unit/test_tenant_ownership_migration.py \
             tests/unit/test_tenant_models.py \
             tests/unit/test_runtime_models.py \
             tests/unit/test_mcp_tenant_isolation.py \
