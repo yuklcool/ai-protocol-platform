@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
+import {
+  MODEL_PROVIDER_TRANSLATIONS,
+  translateModelProvider,
+} from "@/lib/i18n/modelProvider";
 import ModelProvidersPage from "../page";
 
 const { fetcher, scope, auth } = vi.hoisted(() => ({
@@ -7,7 +11,7 @@ const { fetcher, scope, auth } = vi.hoisted(() => ({
   scope: { state: "platform", isAdmin: true, isPlatform: true },
   auth: { user: { uid: "admin" }, loading: false },
 }));
-vi.mock("@/lib/apiClient", () => ({ fetchWithAuth: fetcher }));
+vi.mock("@/lib/apiClient", () => ({ useApiClient: undefined, fetchWithAuth: fetcher }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 vi.mock("@/hooks/useAdminScope", () => ({ useAdminScope: () => scope }));
 vi.mock("@/components/chat/SignInRequired", () => ({ SignInRequired: () => <div>Sign in</div> }));
@@ -99,4 +103,14 @@ it("restores controls after a failed save", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Save provider" }));
   await screen.findByText(/Could not save configuration/);
   expect(screen.getByRole("button", { name: "Save provider" })).not.toBeDisabled();
+});
+it("ships a Simplified Chinese model-provider locale without changing English contracts", () => {
+  expect(Object.keys(MODEL_PROVIDER_TRANSLATIONS.en)).toEqual(
+    Object.keys(MODEL_PROVIDER_TRANSLATIONS["zh-CN"]),
+  );
+  expect(translateModelProvider("en", "models.toolCall")).toBe("Tool call");
+  expect(translateModelProvider("zh-CN", "title")).toBe("模型 Provider");
+  expect(
+    translateModelProvider("zh-CN", "delete.providerConfirm", { id: "gateway" }),
+  ).toContain("gateway");
 });

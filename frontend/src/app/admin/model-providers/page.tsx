@@ -5,8 +5,13 @@ import { useEffect, useState } from "react";
 
 import { SignInRequired } from "@/components/chat/SignInRequired";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useAdminScope } from "@/hooks/useAdminScope";
 import { fetchWithAuth } from "@/lib/apiClient";
+import {
+  translateModelProvider,
+  type ModelProviderTranslationKey,
+} from "@/lib/i18n/modelProvider";
 
 type Provider = {
   provider_id: string;
@@ -65,7 +70,14 @@ type Probe = {
 const API = "/api/proxy/api/admin/model-providers";
 const SETTINGS_API = "/api/proxy/api/admin/model-registry/settings";
 
-const emptyProvider = { providerId: "", name: "", baseUrl: "", apiKeyRef: "", enabled: true };
+const emptyProvider = {
+  providerId: "",
+  name: "",
+  baseUrl: "",
+  apiKeyRef: "",
+  enabled: true,
+};
+
 const emptyModel = {
   modelId: "",
   apiName: "",
@@ -81,15 +93,26 @@ const emptyModel = {
   residency: "global" as Model["residency"],
   enabled: true,
 };
-const emptySettingsForm = { platformDefault: "", default: "", smart: "", fast: "" };
+
+const emptySettingsForm = {
+  platformDefault: "",
+  default: "",
+  smart: "",
+  fast: "",
+};
 
 async function detail(response: Response, fallback: string) {
   const body = await response.json().catch(() => null);
-  return typeof body?.detail === "string" ? body.detail : body?.detail ? JSON.stringify(body.detail) : fallback;
+  return typeof body?.detail === "string"
+    ? body.detail
+    : body?.detail
+      ? JSON.stringify(body.detail)
+      : fallback;
 }
 
 export default function ModelProvidersPage() {
   const { user, loading } = useAuth();
+  const { locale } = useI18n();
   const { state, isAdmin, isPlatform } = useAdminScope(!loading && !!user);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -101,6 +124,11 @@ export default function ModelProvidersPage() {
   const [probe, setProbe] = useState<{ label: string; result: Probe } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const t = (
+    key: ModelProviderTranslationKey,
+    params: Record<string, string | number> = {},
+  ) => translateModelProvider(locale, key, params);
+
   const load = async () => {
     const [p, m, s] = await Promise.all([
       fetchWithAuth(API),
@@ -108,12 +136,16 @@ export default function ModelProvidersPage() {
       fetchWithAuth(SETTINGS_API),
     ]);
     if (!p.ok || !m.ok || !s.ok) {
-      if (!p.ok) setNotice(await detail(p, "Could not load providers."));
-      else if (!m.ok) setNotice(await detail(m, "Could not load models."));
-      else setNotice(await detail(s, "Could not load model defaults."));
+      if (!p.ok) setNotice(await detail(p, t("load.providers")));
+      else if (!m.ok) setNotice(await detail(m, t("load.models")));
+      else setNotice(await detail(s, t("load.defaults")));
       return;
     }
-    const [providerRows, modelRows, settings] = await Promise.all([p.json(), m.json(), s.json()]);
+    const [providerRows, modelRows, settings] = await Promise.all([
+      p.json(),
+      m.json(),
+      s.json(),
+    ]);
     setProviders(providerRows);
     setModels(modelRows);
     setRegistrySettings(settings);
@@ -126,17 +158,21 @@ export default function ModelProvidersPage() {
   };
 
   useEffect(() => {
-    if (!loading && user && isPlatform) void load().catch(() => setNotice("Could not load model configuration. Please retry."));
+    if (!loading && user && isPlatform) {
+      void load().catch(() => setNotice(t("load.configuration")));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, user, isPlatform]);
+  }, [loading, user, isPlatform, locale]);
 
   const saveProvider = async () => {
     const id = providerForm.providerId.trim();
     if (!id || !providerForm.baseUrl.trim()) return;
-    setBusy(true); setNotice(null);
+    setBusy(true);
+    setNotice(null);
     try {
       const response = await fetchWithAuth(`${API}/${encodeURIComponent(id)}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: providerForm.name.trim() || id,
           kind: "openai-compatible",
@@ -145,38 +181,69 @@ export default function ModelProvidersPage() {
           enabled: providerForm.enabled,
         }),
       });
-      if (!response.ok) return setNotice(await detail(response, `Could not save ${id}.`));
-      setProviderForm(emptyProvider); setNotice(`Saved provider ${id}.`); await load();
-    } catch { setNotice("Could not save configuration. Please retry."); } finally { setBusy(false); }
+      if (!response.ok) {
+        return setNotice(await detail(response, t("save.providerFailed", { id })));
+      }
+      setProviderForm(emptyProvider);
+      setNotice(t("save.providerOk", { id }));
+      await load();
+    } catch {
+      setNotice(t("save.configurationFailed"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveModel = async () => {
     const id = modelForm.modelId.trim();
     if (!id || !modelForm.apiName.trim() || !modelForm.providerId) return;
-    setBusy(true); setNotice(null);
+    setBusy(true);
+    setNotice(null);
     try {
       const response = await fetchWithAuth(`${API}/models/${encodeURIComponent(id)}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          api_name: modelForm.apiName.trim(), provider_id: modelForm.providerId, tier: modelForm.tier,
-          context_window: Number(modelForm.contextWindow), max_output_tokens: Number(modelForm.maxOutputTokens),
-          description: modelForm.description.trim(), supports_tools: modelForm.supportsTools,
-          supports_reasoning: modelForm.supportsReasoning, supports_responses_api: modelForm.supportsResponsesApi,
-          supports_vision: modelForm.supportsVision, residency: modelForm.residency, enabled: modelForm.enabled,
+          api_name: modelForm.apiName.trim(),
+          provider_id: modelForm.providerId,
+          tier: modelForm.tier,
+          context_window: Number(modelForm.contextWindow),
+          max_output_tokens: Number(modelForm.maxOutputTokens),
+          description: modelForm.description.trim(),
+          supports_tools: modelForm.supportsTools,
+          supports_reasoning: modelForm.supportsReasoning,
+          supports_responses_api: modelForm.supportsResponsesApi,
+          supports_vision: modelForm.supportsVision,
+          residency: modelForm.residency,
+          enabled: modelForm.enabled,
         }),
       });
-      if (!response.ok) return setNotice(await detail(response, `Could not save ${id}.`));
-      setModelForm(emptyModel); setNotice(`Saved model ${id}. It is available when the model and provider are enabled in database registry mode.`); await load();
-    } catch { setNotice("Could not save configuration. Please retry."); } finally { setBusy(false); }
+      if (!response.ok) {
+        return setNotice(await detail(response, t("save.modelFailed", { id })));
+      }
+      setModelForm(emptyModel);
+      setNotice(t("save.modelOk", { id }));
+      await load();
+    } catch {
+      setNotice(t("save.configurationFailed"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveSettings = async () => {
-    const values = [settingsForm.platformDefault, settingsForm.default, settingsForm.smart, settingsForm.fast];
+    const values = [
+      settingsForm.platformDefault,
+      settingsForm.default,
+      settingsForm.smart,
+      settingsForm.fast,
+    ];
     if (values.some((value) => !value.trim())) {
-      setNotice("Choose a model for the platform default and all three managed tiers.");
+      setNotice(t("save.chooseRouting"));
       return;
     }
-    setBusy(true); setNotice(null);
+    setBusy(true);
+    setNotice(null);
     try {
       const response = await fetchWithAuth(SETTINGS_API, {
         method: "PUT",
@@ -190,54 +257,95 @@ export default function ModelProvidersPage() {
           },
         }),
       });
-      if (!response.ok) return setNotice(await detail(response, "Could not save model defaults."));
-      setNotice("Saved platform default and tier mappings. Agent runtime will use the effective registry immediately.");
+      if (!response.ok) {
+        return setNotice(await detail(response, t("save.defaultsFailed")));
+      }
+      setNotice(t("save.defaultsOk"));
       await load();
-    } catch { setNotice("Could not save model defaults. Please retry."); } finally { setBusy(false); }
+    } catch {
+      setNotice(t("save.defaultsRetry"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const runAction = async (action: () => Promise<void>) => {
-    setBusy(true); setNotice(null);
-    try { await action(); }
-    catch { setNotice("Request failed. Check your connection and retry."); }
-    finally { setBusy(false); }
+    setBusy(true);
+    setNotice(null);
+    try {
+      await action();
+    } catch {
+      setNotice(t("request.failed"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const removeProvider = async (item: Provider) => {
-    if (!window.confirm(`Delete provider ${item.provider_id}?`)) return;
-    const response = await fetchWithAuth(`${API}/${encodeURIComponent(item.provider_id)}`, { method: "DELETE" });
-    if (!response.ok) return setNotice(await detail(response, "Could not delete provider."));
-    setNotice(`Deleted ${item.provider_id}.`); await load();
+    if (!window.confirm(t("delete.providerConfirm", { id: item.provider_id }))) return;
+    const response = await fetchWithAuth(
+      `${API}/${encodeURIComponent(item.provider_id)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      return setNotice(await detail(response, t("delete.providerFailed")));
+    }
+    setNotice(t("delete.ok", { id: item.provider_id }));
+    await load();
   };
 
   const removeModel = async (item: Model) => {
-    if (!window.confirm(`Delete model ${item.model_id}?`)) return;
-    const response = await fetchWithAuth(`${API}/models/${encodeURIComponent(item.model_id)}`, { method: "DELETE" });
-    if (!response.ok) return setNotice(await detail(response, "Could not delete model."));
-    setNotice(`Deleted ${item.model_id}.`); await load();
+    if (!window.confirm(t("delete.modelConfirm", { id: item.model_id }))) return;
+    const response = await fetchWithAuth(
+      `${API}/models/${encodeURIComponent(item.model_id)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      return setNotice(await detail(response, t("delete.modelFailed")));
+    }
+    setNotice(t("delete.ok", { id: item.model_id }));
+    await load();
   };
 
   const testProvider = async (item: Provider) => {
     setProbe(null);
-    const response = await fetchWithAuth(`${API}/${encodeURIComponent(item.provider_id)}/test`, { method: "POST" });
-    if (!response.ok) return setNotice(await detail(response, "Provider test failed."));
-    setProbe({ label: `Provider ${item.provider_id}`, result: await response.json() });
+    const response = await fetchWithAuth(
+      `${API}/${encodeURIComponent(item.provider_id)}/test`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      return setNotice(await detail(response, t("probe.providerFailed")));
+    }
+    setProbe({
+      label: t("probe.providerLabel", { id: item.provider_id }),
+      result: await response.json(),
+    });
   };
 
   const testModel = async (item: Model, mode: "completion" | "tool_call") => {
     setProbe(null);
-    const response = await fetchWithAuth(`${API}/models/${encodeURIComponent(item.model_id)}/test`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+    const response = await fetchWithAuth(
+      `${API}/models/${encodeURIComponent(item.model_id)}/test`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      },
+    );
+    if (!response.ok) {
+      return setNotice(await detail(response, t("probe.modelFailed")));
+    }
+    setProbe({
+      label: `${item.model_id} · ${mode}`,
+      result: await response.json(),
     });
-    if (!response.ok) return setNotice(await detail(response, "Model test failed."));
-    setProbe({ label: `${item.model_id} · ${mode}`, result: await response.json() });
   };
 
-  if (loading || state === "loading") return <Centered>Loading…</Centered>;
+  if (loading || state === "loading") return <Centered>{t("state.loading")}</Centered>;
   if (!user) return <SignInRequired />;
-  if (state === "error") return <Centered>Couldn&apos;t reach the admin service.</Centered>;
-  if (!isAdmin) return <Centered>Administrative scope required.</Centered>;
-  if (!isPlatform) return <Centered>Platform admin required for model provider configuration.</Centered>;
+  if (state === "error") return <Centered>{t("state.adminUnavailable")}</Centered>;
+  if (!isAdmin) return <Centered>{t("state.adminRequired")}</Centered>;
+  if (!isPlatform) return <Centered>{t("state.platformRequired")}</Centered>;
 
   const registryModels = registrySettings?.available_models ?? [];
 
@@ -245,86 +353,451 @@ export default function ModelProvidersPage() {
     <main className="mx-auto max-w-7xl p-6">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Model Providers</h1>
+          <h1 className="text-xl font-semibold">{t("title")}</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Configure OpenAI-compatible endpoints, dynamic models, and the effective runtime model mapping. Use an existing server secret reference such as <code>{"${PROVIDER_API_KEY}"}</code>. Probes send real requests and may incur provider charges.
+            {t("description", { secret: "${PROVIDER_API_KEY}" })}
           </p>
         </div>
-        <NextLink href="/admin" className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted/40">Back to Admin</NextLink>
+        <NextLink
+          href="/admin"
+          className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted/40"
+        >
+          {t("back")}
+        </NextLink>
       </header>
 
-      {notice && <div className="mb-4 rounded-md border px-3 py-2 text-sm">{notice}</div>}
-      {probe && <div className="mb-4 rounded-md border p-3 text-sm"><b>{probe.label}</b><pre className="mt-2 overflow-auto text-xs">{JSON.stringify(probe.result, null, 2)}</pre></div>}
+      {notice && (
+        <div className="mb-4 rounded-md border px-3 py-2 text-sm">{notice}</div>
+      )}
+      {probe && (
+        <div className="mb-4 rounded-md border p-3 text-sm">
+          <b>{probe.label}</b>
+          <pre className="mt-2 overflow-auto text-xs">
+            {JSON.stringify(probe.result, null, 2)}
+          </pre>
+        </div>
+      )}
 
       <section className="mb-6 rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-medium">Default model &amp; tier mapping</h2>
+            <h2 className="font-medium">{t("routing.title")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              These references are part of the effective registry. Skills using <code>default</code>, <code>smart</code>, or <code>fast</code> resolve through this mapping at Agent runtime.
+              {t("routing.description")}
             </p>
           </div>
-          {registrySettings && <div className="text-xs text-muted-foreground">Source <Badge>{registrySettings.source}</Badge> {registrySettings.writable ? "database overlay enabled" : "GitOps read-only"}</div>}
+          {registrySettings && (
+            <div className="text-xs text-muted-foreground">
+              {t("routing.source")} <Badge>{registrySettings.source}</Badge>{" "}
+              {registrySettings.writable
+                ? t("routing.database")
+                : t("routing.gitops")}
+            </div>
+          )}
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ModelSelect label="Platform default model" value={settingsForm.platformDefault} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, platformDefault: value })} />
-          <ModelSelect label="Default tier model" value={settingsForm.default} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, default: value })} />
-          <ModelSelect label="Smart tier model" value={settingsForm.smart} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, smart: value })} />
-          <ModelSelect label="Fast tier model" value={settingsForm.fast} models={registryModels} onChange={(value) => setSettingsForm({ ...settingsForm, fast: value })} />
+          <ModelSelect
+            label={t("routing.platformDefault")}
+            emptyLabel={t("routing.notConfigured")}
+            value={settingsForm.platformDefault}
+            models={registryModels}
+            onChange={(value) =>
+              setSettingsForm({ ...settingsForm, platformDefault: value })
+            }
+          />
+          <ModelSelect
+            label={t("routing.defaultTier")}
+            emptyLabel={t("routing.notConfigured")}
+            value={settingsForm.default}
+            models={registryModels}
+            onChange={(value) => setSettingsForm({ ...settingsForm, default: value })}
+          />
+          <ModelSelect
+            label={t("routing.smartTier")}
+            emptyLabel={t("routing.notConfigured")}
+            value={settingsForm.smart}
+            models={registryModels}
+            onChange={(value) => setSettingsForm({ ...settingsForm, smart: value })}
+          />
+          <ModelSelect
+            label={t("routing.fastTier")}
+            emptyLabel={t("routing.notConfigured")}
+            value={settingsForm.fast}
+            models={registryModels}
+            onChange={(value) => setSettingsForm({ ...settingsForm, fast: value })}
+          />
         </div>
-        <Button onClick={() => void saveSettings()} disabled={busy || !registrySettings?.writable}>Save model routing</Button>
-        {!registrySettings?.writable && registrySettings && <p className="mt-2 text-xs text-muted-foreground">MODEL_REGISTRY_BACKEND is not database; mappings are read from YAML/GitOps and cannot be edited here.</p>}
+        <Button
+          onClick={() => void saveSettings()}
+          disabled={busy || !registrySettings?.writable}
+        >
+          {t("routing.save")}
+        </Button>
+        {!registrySettings?.writable && registrySettings && (
+          <p className="mt-2 text-xs text-muted-foreground">{t("routing.readonly")}</p>
+        )}
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="rounded-lg border p-4">
-          <h2 className="font-medium">Providers</h2>
+          <h2 className="font-medium">{t("providers.title")}</h2>
           <div className="mt-3 space-y-3">
-            {providers.map((item) => <div key={item.provider_id} className="rounded-md border p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2"><div><b>{item.provider_id}</b> <Badge>{item.enabled ? "enabled" : "disabled"}</Badge></div><div className="flex gap-2"><Button disabled={busy} onClick={() => void runAction(() => testProvider(item))}>Test</Button><Button onClick={() => { setProviderForm({ providerId: item.provider_id, name: item.name, baseUrl: item.base_url, apiKeyRef: item.api_key_ref ?? "", enabled: item.enabled }); }}>Edit</Button><Button disabled={busy} onClick={() => void runAction(() => removeProvider(item))}>Delete</Button></div></div>
-              <p className="mt-1 break-all text-xs text-muted-foreground">{item.base_url}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Secret: {item.has_api_key ? item.api_key_ref ?? "configured" : "none"}</p>
-            </div>)}
+            {providers.map((item) => (
+              <div key={item.provider_id} className="rounded-md border p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <b>{item.provider_id}</b>{" "}
+                    <Badge>
+                      {item.enabled ? t("providers.enabled") : t("providers.disabled")}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      disabled={busy}
+                      onClick={() => void runAction(() => testProvider(item))}
+                    >
+                      {t("providers.test")}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setProviderForm({
+                          providerId: item.provider_id,
+                          name: item.name,
+                          baseUrl: item.base_url,
+                          apiKeyRef: item.api_key_ref ?? "",
+                          enabled: item.enabled,
+                        });
+                      }}
+                    >
+                      {t("providers.edit")}
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      onClick={() => void runAction(() => removeProvider(item))}
+                    >
+                      {t("providers.delete")}
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-1 break-all text-xs text-muted-foreground">
+                  {item.base_url}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("providers.secret", {
+                    value: item.has_api_key
+                      ? item.api_key_ref ?? t("providers.secretConfigured")
+                      : t("providers.secretNone"),
+                  })}
+                </p>
+              </div>
+            ))}
           </div>
-          <div className="mt-5 border-t pt-4"><h3 className="text-sm font-medium">Add / edit provider</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <Input placeholder="provider id" value={providerForm.providerId} onChange={(v) => setProviderForm({ ...providerForm, providerId: v })}/>
-            <Input placeholder="display name" value={providerForm.name} onChange={(v) => setProviderForm({ ...providerForm, name: v })}/>
-            <div className="sm:col-span-2"><Input placeholder="https://api.example.com/v1" value={providerForm.baseUrl} onChange={(v) => setProviderForm({ ...providerForm, baseUrl: v })}/></div>
-            <div className="sm:col-span-2"><Input placeholder="${PROVIDER_API_KEY}" value={providerForm.apiKeyRef} onChange={(v) => setProviderForm({ ...providerForm, apiKeyRef: v })}/></div>
-            <label className="text-sm"><input type="checkbox" checked={providerForm.enabled} onChange={(e) => setProviderForm({ ...providerForm, enabled: e.target.checked })}/> <span className="ml-1">Enabled</span></label>
-          </div><Button onClick={() => void saveProvider()} disabled={busy}>Save provider</Button></div>
+
+          <div className="mt-5 border-t pt-4">
+            <h3 className="text-sm font-medium">{t("providers.formTitle")}</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <Input
+                placeholder={t("providers.id")}
+                value={providerForm.providerId}
+                onChange={(value) =>
+                  setProviderForm({ ...providerForm, providerId: value })
+                }
+              />
+              <Input
+                placeholder={t("providers.name")}
+                value={providerForm.name}
+                onChange={(value) => setProviderForm({ ...providerForm, name: value })}
+              />
+              <div className="sm:col-span-2">
+                <Input
+                  placeholder="https://api.example.com/v1"
+                  value={providerForm.baseUrl}
+                  onChange={(value) =>
+                    setProviderForm({ ...providerForm, baseUrl: value })
+                  }
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Input
+                  placeholder="${PROVIDER_API_KEY}"
+                  value={providerForm.apiKeyRef}
+                  onChange={(value) =>
+                    setProviderForm({ ...providerForm, apiKeyRef: value })
+                  }
+                />
+              </div>
+              <label className="text-sm">
+                <input
+                  type="checkbox"
+                  checked={providerForm.enabled}
+                  onChange={(event) =>
+                    setProviderForm({
+                      ...providerForm,
+                      enabled: event.target.checked,
+                    })
+                  }
+                />{" "}
+                <span className="ml-1">{t("providers.enabledLabel")}</span>
+              </label>
+            </div>
+            <Button onClick={() => void saveProvider()} disabled={busy}>
+              {t("providers.save")}
+            </Button>
+          </div>
         </section>
 
         <section className="rounded-lg border p-4">
-          <h2 className="font-medium">Dynamic models</h2>
+          <h2 className="font-medium">{t("models.title")}</h2>
           <div className="mt-3 space-y-3">
-            {models.map((item) => <div key={item.model_id} className="rounded-md border p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2"><div><b>{item.model_id}</b> <Badge>{item.provider_id}</Badge> <Badge>{item.tier}</Badge></div><div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void runAction(() => testModel(item, "completion"))}>Completion</Button><Button disabled={busy || !item.supports_tools} onClick={() => void runAction(() => testModel(item, "tool_call"))} >Tool call</Button><Button onClick={() => { setModelForm({ modelId: item.model_id, apiName: item.api_name, providerId: item.provider_id, tier: item.tier, contextWindow: String(item.context_window), maxOutputTokens: String(item.max_output_tokens), description: item.description, supportsTools: item.supports_tools, supportsReasoning: item.supports_reasoning, supportsResponsesApi: item.supports_responses_api, supportsVision: item.supports_vision, residency: item.residency, enabled: item.enabled }); }}>Edit</Button><Button disabled={busy} onClick={() => void runAction(() => removeModel(item))}>Delete</Button></div></div>
-              <p className="mt-1 font-mono text-xs text-muted-foreground">{item.api_name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">context {item.context_window.toLocaleString()} · output {item.max_output_tokens.toLocaleString()} · {item.residency}</p>
-            </div>)}
+            {models.map((item) => (
+              <div key={item.model_id} className="rounded-md border p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <b>{item.model_id}</b> <Badge>{item.provider_id}</Badge>{" "}
+                    <Badge>{item.tier}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      disabled={busy}
+                      onClick={() => void runAction(() => testModel(item, "completion"))}
+                    >
+                      {t("models.completion")}
+                    </Button>
+                    <Button
+                      disabled={busy || !item.supports_tools}
+                      onClick={() => void runAction(() => testModel(item, "tool_call"))}
+                    >
+                      {t("models.toolCall")}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setModelForm({
+                          modelId: item.model_id,
+                          apiName: item.api_name,
+                          providerId: item.provider_id,
+                          tier: item.tier,
+                          contextWindow: String(item.context_window),
+                          maxOutputTokens: String(item.max_output_tokens),
+                          description: item.description,
+                          supportsTools: item.supports_tools,
+                          supportsReasoning: item.supports_reasoning,
+                          supportsResponsesApi: item.supports_responses_api,
+                          supportsVision: item.supports_vision,
+                          residency: item.residency,
+                          enabled: item.enabled,
+                        });
+                      }}
+                    >
+                      {t("models.edit")}
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      onClick={() => void runAction(() => removeModel(item))}
+                    >
+                      {t("models.delete")}
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                  {item.api_name}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("models.stats", {
+                    context: item.context_window.toLocaleString(),
+                    output: item.max_output_tokens.toLocaleString(),
+                    residency: item.residency,
+                  })}
+                </p>
+              </div>
+            ))}
           </div>
-          <div className="mt-5 border-t pt-4"><h3 className="text-sm font-medium">Add / edit model</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <Input placeholder="model id" value={modelForm.modelId} onChange={(v) => setModelForm({ ...modelForm, modelId: v })}/>
-            <Input placeholder="provider id" value={modelForm.providerId} onChange={(v) => setModelForm({ ...modelForm, providerId: v })}/>
-            <Input placeholder="API model name" value={modelForm.apiName} onChange={(v) => setModelForm({ ...modelForm, apiName: v })}/>
-            <select className="rounded-md border bg-background px-2 py-2 text-sm" aria-label="Model tier" value={modelForm.tier} onChange={(e) => setModelForm({ ...modelForm, tier: e.target.value as Model["tier"] })}><option value="default">default</option><option value="smart">smart</option><option value="fast">fast</option></select>
-            <Input placeholder="context window" value={modelForm.contextWindow} onChange={(v) => setModelForm({ ...modelForm, contextWindow: v })}/>
-            <Input placeholder="max output tokens" value={modelForm.maxOutputTokens} onChange={(v) => setModelForm({ ...modelForm, maxOutputTokens: v })}/>
-            <div className="sm:col-span-2"><Input placeholder="description" value={modelForm.description} onChange={(v) => setModelForm({ ...modelForm, description: v })}/></div>
-            <select className="rounded-md border bg-background px-2 py-2 text-sm" aria-label="Model residency" value={modelForm.residency} onChange={(e) => setModelForm({ ...modelForm, residency: e.target.value as Model["residency"] })}><option value="global">global</option><option value="eu">eu</option><option value="us">us</option></select>
-            <div className="flex flex-wrap gap-3 text-xs">{([['supportsTools','tools'],['supportsReasoning','reasoning'],['supportsResponsesApi','responses'],['supportsVision','vision'],['enabled','enabled']] as const).map(([key,label]) => <label key={key}><input type="checkbox" checked={modelForm[key]} onChange={(e) => setModelForm({ ...modelForm, [key]: e.target.checked })}/> {label}</label>)}</div>
-          </div><Button onClick={() => void saveModel()} disabled={busy}>Save model</Button></div>
+
+          <div className="mt-5 border-t pt-4">
+            <h3 className="text-sm font-medium">{t("models.formTitle")}</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <Input
+                placeholder={t("models.id")}
+                value={modelForm.modelId}
+                onChange={(value) => setModelForm({ ...modelForm, modelId: value })}
+              />
+              <Input
+                placeholder={t("models.providerId")}
+                value={modelForm.providerId}
+                onChange={(value) => setModelForm({ ...modelForm, providerId: value })}
+              />
+              <Input
+                placeholder={t("models.apiName")}
+                value={modelForm.apiName}
+                onChange={(value) => setModelForm({ ...modelForm, apiName: value })}
+              />
+              <select
+                className="rounded-md border bg-background px-2 py-2 text-sm"
+                aria-label={t("models.tier")}
+                value={modelForm.tier}
+                onChange={(event) =>
+                  setModelForm({
+                    ...modelForm,
+                    tier: event.target.value as Model["tier"],
+                  })
+                }
+              >
+                <option value="default">default</option>
+                <option value="smart">smart</option>
+                <option value="fast">fast</option>
+              </select>
+              <Input
+                placeholder={t("models.contextWindow")}
+                value={modelForm.contextWindow}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, contextWindow: value })
+                }
+              />
+              <Input
+                placeholder={t("models.maxOutput")}
+                value={modelForm.maxOutputTokens}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, maxOutputTokens: value })
+                }
+              />
+              <div className="sm:col-span-2">
+                <Input
+                  placeholder={t("models.description")}
+                  value={modelForm.description}
+                  onChange={(value) =>
+                    setModelForm({ ...modelForm, description: value })
+                  }
+                />
+              </div>
+              <select
+                className="rounded-md border bg-background px-2 py-2 text-sm"
+                aria-label={t("models.residency")}
+                value={modelForm.residency}
+                onChange={(event) =>
+                  setModelForm({
+                    ...modelForm,
+                    residency: event.target.value as Model["residency"],
+                  })
+                }
+              >
+                <option value="global">global</option>
+                <option value="eu">eu</option>
+                <option value="us">us</option>
+              </select>
+              <div className="flex flex-wrap gap-3 text-xs">
+                {(
+                  [
+                    ["supportsTools", "models.cap.tools"],
+                    ["supportsReasoning", "models.cap.reasoning"],
+                    ["supportsResponsesApi", "models.cap.responses"],
+                    ["supportsVision", "models.cap.vision"],
+                    ["enabled", "models.cap.enabled"],
+                  ] as const
+                ).map(([key, labelKey]) => (
+                  <label key={key}>
+                    <input
+                      type="checkbox"
+                      checked={modelForm[key]}
+                      onChange={(event) =>
+                        setModelForm({ ...modelForm, [key]: event.target.checked })
+                      }
+                    />{" "}
+                    {t(labelKey)}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <Button onClick={() => void saveModel()} disabled={busy}>
+              {t("models.save")}
+            </Button>
+          </div>
         </section>
       </div>
     </main>
   );
 }
 
-function ModelSelect({ label, value, models, onChange }: { label: string; value: string; models: RegistryModel[]; onChange: (value: string) => void }) {
-  return <label className="text-sm"><span className="mb-1 block font-medium">{label}</span><select className="w-full rounded-md border bg-background px-2 py-2 text-sm" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}><option value="">Not configured</option>{models.map((model) => <option key={model.model_id} value={model.model_id}>{model.model_id} · {model.tier} · {model.residency} · {model.source}</option>)}</select></label>;
+function ModelSelect({
+  label,
+  emptyLabel,
+  value,
+  models,
+  onChange,
+}: {
+  label: string;
+  emptyLabel: string;
+  value: string;
+  models: RegistryModel[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="text-sm">
+      <span className="mb-1 block font-medium">{label}</span>
+      <select
+        className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">{emptyLabel}</option>
+        {models.map((model) => (
+          <option key={model.model_id} value={model.model_id}>
+            {model.model_id} · {model.tier} · {model.residency} · {model.source}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
-function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) { return <input className="w-full rounded-md border bg-background px-2 py-2 text-sm" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(e) => onChange(e.target.value)} />; }
-function Button({ children, onClick, disabled = false }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) { return <button type="button" disabled={disabled} onClick={onClick} className="mt-2 rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted/40 disabled:opacity-50">{children}</button>; }
-function Badge({ children }: { children: React.ReactNode }) { return <span className="ml-1 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">{children}</span>; }
-function Centered({ children }: { children: React.ReactNode }) { return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>; }
+
+function Input({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+      value={value}
+      placeholder={placeholder}
+      aria-label={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+function Button({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="mt-2 rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted/40 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="ml-1 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
+}
