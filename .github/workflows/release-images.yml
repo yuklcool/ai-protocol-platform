@@ -6,6 +6,8 @@ on:
       - docker-compose.yml
       - docker-compose.release.yml
       - .env.selfhost.example
+      - README.md
+      - docs/selfhost-release-images.md
       - backend/Dockerfile
       - backend/db/migrations/**
       - backend/scripts/apply_selfhost_migrations.py
@@ -158,6 +160,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -170,6 +173,15 @@ jobs:
           provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Verify frontend release image accepts runtime sandbox origin
+        if: github.event_name == 'pull_request' && matrix.name == 'frontend'
+        run: |
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/${{ matrix.image }}:sha-${GITHUB_SHA}"
+          docker run --rm \
+            -e MCP_SANDBOX_PUBLIC_URL=https://mcp.release-ci.example \
+            "$IMAGE" \
+            sh -c 'grep -RIl "https://mcp.release-ci.example" /app/.next >/dev/null && ! grep -RIl "__MCP_SANDBOX_PUBLIC_URL__" /app/.next >/dev/null'
 
       - name: Scan published image for HIGH/CRITICAL vulnerabilities
         if: github.event_name != 'pull_request'
