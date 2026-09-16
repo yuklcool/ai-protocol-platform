@@ -7,18 +7,8 @@ WORKDIR /app
 
 ARG SKIP_QUALITY_CHECKS=false
 
-# ─────────────────────────────────────────────────────────────────────────────
-# IMPORTANT: Every NEXT_PUBLIC_* variable used in the Next.js app MUST be
-# declared below as an ARG + ENV pair. Docker silently ignores --build-arg
-# values for undeclared ARGs — the build succeeds, but Next.js sees `undefined`
-# at build time and the feature is wrong-but-running (not a build error).
-#
-# When adding a new NEXT_PUBLIC_ variable:
-#   1. Add it to this Dockerfile (ARG line + ENV line below)
-#   2. Add it to the FIREBASE_ENV secret format (see docs/ops/secrets.md)
-#   3. Add it to cloudbuild.yaml's --build-arg list in get-firebase-config.sh
-# ─────────────────────────────────────────────────────────────────────────────
-# Firebase config (injected from Secret Manager via get-firebase-config.sh)
+# Every NEXT_PUBLIC_* variable used in the Next.js app must be declared as an
+# ARG + ENV pair because those values are compiled into the browser bundle.
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
 ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
@@ -28,23 +18,14 @@ ARG NEXT_PUBLIC_FIREBASE_APP_ID
 ARG NEXT_PUBLIC_ADMIN_EMAIL
 ARG NEXT_PUBLIC_BACKEND_URL
 ARG NEXT_PUBLIC_MCP_SANDBOX_URL
-# LOCAL_MODE is intentionally a build-time switch for the browser bundle.
-# Cloud builds leave it unset; docker-compose self-host builds set it to 1.
 ARG NEXT_PUBLIC_LOCAL_MODE
-# Feature flag: expose the Skill Studio authoring UI (/skills/studio).
 ARG NEXT_PUBLIC_ENABLE_SKILL_STUDIO
-# Feature flag: show the read-aloud (TTS) button on assistant messages.
-# NEXT_PUBLIC_* is inlined at COMPILE time, so an unset value here is not a
-# runtime toggle — it compiles the button out of the bundle entirely.
 ARG NEXT_PUBLIC_ENABLE_READ_ALOUD
-# Auth + branding (fork-configurable; see docs/ops/secrets.md)
 ARG NEXT_PUBLIC_AUTH_MODE
 ARG NEXT_PUBLIC_APP_SLUG
 ARG NEXT_PUBLIC_CITATION_SCHEME
 ARG NEXT_PUBLIC_FRONTEND_URL
-# Per-deployment branding (Sunholo defaults in branding.ts when unset).
-# Forks override these in their FIREBASE_ENV secret to rebrand without touching code.
-# See docs/design/v6.4.0/multi-tenant-demo-readiness.md.
+ARG NEXT_PUBLIC_DEFAULT_LOCALE
 ARG NEXT_PUBLIC_BRAND_APP_NAME
 ARG NEXT_PUBLIC_BRAND_TAGLINE
 ARG NEXT_PUBLIC_BRAND_DESCRIPTION
@@ -53,7 +34,8 @@ ARG NEXT_PUBLIC_BRAND_LOGO_HERO
 ARG NEXT_PUBLIC_BRAND_LOGO_AVATAR
 ARG NEXT_PUBLIC_BRAND_EMAIL
 ARG NEXT_PUBLIC_BRAND_GITHUB
-# v6.4.0 ONE-DEMO M3.5: Hero + ProtocolStripe copy + CTA targets.
+ARG NEXT_PUBLIC_BRAND_PRIMARY_HSL
+ARG NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL
 ARG NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW
 ARG NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A
 ARG NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B
@@ -63,7 +45,6 @@ ARG NEXT_PUBLIC_BRAND_DEMO_CTA_SECONDARY
 ARG NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF
 ARG NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF_SECONDARY
 ARG NEXT_PUBLIC_BRAND_DEMO_TECH_HREF
-# Optional observability + integration URLs (fork-configurable)
 ARG NEXT_PUBLIC_LANGFUSE_PUBLIC_KEY
 ARG NEXT_PUBLIC_LANGFUSE_HOST
 ARG NEXT_PUBLIC_LANGFUSE_BASE_URL
@@ -86,6 +67,7 @@ ENV NEXT_PUBLIC_AUTH_MODE=$NEXT_PUBLIC_AUTH_MODE
 ENV NEXT_PUBLIC_APP_SLUG=$NEXT_PUBLIC_APP_SLUG
 ENV NEXT_PUBLIC_CITATION_SCHEME=$NEXT_PUBLIC_CITATION_SCHEME
 ENV NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+ENV NEXT_PUBLIC_DEFAULT_LOCALE=$NEXT_PUBLIC_DEFAULT_LOCALE
 ENV NEXT_PUBLIC_BRAND_APP_NAME=$NEXT_PUBLIC_BRAND_APP_NAME
 ENV NEXT_PUBLIC_BRAND_TAGLINE=$NEXT_PUBLIC_BRAND_TAGLINE
 ENV NEXT_PUBLIC_BRAND_DESCRIPTION=$NEXT_PUBLIC_BRAND_DESCRIPTION
@@ -94,6 +76,8 @@ ENV NEXT_PUBLIC_BRAND_LOGO_HERO=$NEXT_PUBLIC_BRAND_LOGO_HERO
 ENV NEXT_PUBLIC_BRAND_LOGO_AVATAR=$NEXT_PUBLIC_BRAND_LOGO_AVATAR
 ENV NEXT_PUBLIC_BRAND_EMAIL=$NEXT_PUBLIC_BRAND_EMAIL
 ENV NEXT_PUBLIC_BRAND_GITHUB=$NEXT_PUBLIC_BRAND_GITHUB
+ENV NEXT_PUBLIC_BRAND_PRIMARY_HSL=$NEXT_PUBLIC_BRAND_PRIMARY_HSL
+ENV NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL=$NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL
 ENV NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW=$NEXT_PUBLIC_BRAND_DEMO_HERO_EYEBROW
 ENV NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A=$NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_A
 ENV NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B=$NEXT_PUBLIC_BRAND_DEMO_HERO_LINE_B
@@ -114,7 +98,6 @@ RUN npm cache clean --force && npm ci --no-audit --no-fund
 
 COPY . .
 
-# Quality checks (lint + typecheck + tests)
 RUN if [ "$SKIP_QUALITY_CHECKS" != "true" ]; then \
       echo "Running quality checks..." && \
       npm run lint && \
@@ -124,11 +107,9 @@ RUN if [ "$SKIP_QUALITY_CHECKS" != "true" ]; then \
       echo "Skipping quality checks"; \
     fi
 
-# Build
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# Production stage
 FROM node:20-alpine
 
 WORKDIR /app
