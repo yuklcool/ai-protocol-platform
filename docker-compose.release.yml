@@ -1,0 +1,148 @@
+name: ai-protocol-platform
+
+# Standalone self-host deployment using versioned GHCR images.
+# This file intentionally has no source-code bind mounts or build contexts.
+# Download it together with .env.selfhost.example from a GitHub Release, set
+# APP_VERSION to that release tag (for example v1.0.0), then `docker compose
+# -f docker-compose.release.yml up -d`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-aip}"
+      POSTGRES_USER: "${POSTGRES_USER:-aip}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-aip-local-change-me}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aip} -d ${POSTGRES_DB:-aip}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  backend:
+    image: "${BACKEND_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-backend}:${APP_VERSION:-latest}"
+    pull_policy: always
+    command:
+      - sh
+      - -c
+      - >-
+        uv run python scripts/apply_selfhost_migrations.py &&
+        uv run python scripts/seed_selfhost_persistence.py &&
+        uv run python scripts/seed_selfhost_admin.py &&
+        uv run uvicorn fast_api_app:app --host 0.0.0.0 --port 1956 --workers 1
+    environment:
+      PORT: "1956"
+      SELF_HOSTED_MODE: "1"
+      LOCAL_MODE: "0"
+      DATA_BACKEND: "${DATA_BACKEND:-postgres}"
+      SESSION_BACKEND: "${SESSION_BACKEND:-postgres}"
+      MEMORY_BACKEND: "${MEMORY_BACKEND:-postgres}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql://aip:aip-local-change-me@postgres:5432/aip}"
+      POSTGRES_POOL_MIN_SIZE: "${POSTGRES_POOL_MIN_SIZE:-1}"
+      POSTGRES_POOL_MAX_SIZE: "${POSTGRES_POOL_MAX_SIZE:-10}"
+      MEMORY_SEARCH_SCAN_LIMIT: "${MEMORY_SEARCH_SCAN_LIMIT:-2000}"
+      OBJECT_STORAGE_BACKEND: "${OBJECT_STORAGE_BACKEND:-local}"
+      OBJECT_STORAGE_LOCAL_ROOT: "${OBJECT_STORAGE_LOCAL_ROOT:-/data/objects}"
+      ARTIFACT_BACKEND: "${ARTIFACT_BACKEND:-local}"
+      ADK_ARTIFACT_ROOT: "${ADK_ARTIFACT_ROOT:-/data/artifacts}"
+      MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
+      PLATFORM_DEFAULT_MODEL: "${PLATFORM_DEFAULT_MODEL:-lite}"
+      AUTH_BACKEND: "${AUTH_BACKEND:-local-jwt}"
+      JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-}"
+      JWT_PREVIOUS_SIGNING_KEYS: "${JWT_PREVIOUS_SIGNING_KEYS:-}"
+      JWT_ISSUER: "${JWT_ISSUER:-ai-protocol-platform}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:-ai-protocol-platform}"
+      JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
+      SELFHOST_ADMIN_EMAIL: "${SELFHOST_ADMIN_EMAIL:-}"
+      SELFHOST_ADMIN_PASSWORD: "${SELFHOST_ADMIN_PASSWORD:-}"
+      GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-false}"
+      TRACE_EXPORT_ENABLED: "${TRACE_EXPORT_ENABLED:-0}"
+      CLOUD_LOGGING_ENABLED: "${CLOUD_LOGGING_ENABLED:-0}"
+      VERTEX_SEARCH_ENABLED: "${VERTEX_SEARCH_ENABLED:-0}"
+      OTEL_SDK_DISABLED: "${OTEL_SDK_DISABLED:-true}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_API_BASE: "${OPENAI_API_BASE:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      GROUP_AUTH_SIGNING_SECRET: "${GROUP_AUTH_SIGNING_SECRET:-}"
+      ALLOW_ORIGINS: "${ALLOW_ORIGINS:-http://localhost:3456}"
+    ports:
+      - "${BACKEND_PORT:-1956}:1956"
+    volumes:
+      - object-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:1956/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  mcp-sandbox:
+    image: "${MCP_SANDBOX_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox}:${APP_VERSION:-latest}"
+    pull_policy: always
+    environment:
+      PORT: "8080"
+      ALLOWED_HOST_ORIGINS: "${MCP_SANDBOX_ALLOWED_HOST_ORIGINS:-http://localhost:3456}"
+    ports:
+      - "${MCP_SANDBOX_PORT:-3457}:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/sandbox.html').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    image: "${FRONTEND_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-frontend}:${APP_VERSION:-latest}"
+    pull_policy: always
+    environment:
+      PORT: "8080"
+      BACKEND_URL: "http://backend:1956"
+      # Release images replace the build-time placeholder with this value on
+      # container start. Set an externally reachable URL for remote deployments.
+      MCP_SANDBOX_PUBLIC_URL: "${MCP_SANDBOX_PUBLIC_URL:-http://localhost:3457}"
+    ports:
+      - "${FRONTEND_PORT:-3456}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+      mcp-sandbox:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    name: ai-protocol-platform-postgres-data
+  object-data:
+    name: ai-protocol-platform-object-data
+
+networks:
+  default:
+    name: ai-protocol-platform
