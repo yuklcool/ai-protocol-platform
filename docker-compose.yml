@@ -32,8 +32,6 @@ services:
         uv run uvicorn fast_api_app:app --host 0.0.0.0 --port 1956 --workers 1
     environment:
       PORT: "1956"
-      # Production-style Self-host is deliberately distinct from LOCAL_MODE.
-      # LOCAL_MODE keeps the developer auth stub/in-memory fixture semantics.
       SELF_HOSTED_MODE: "1"
       LOCAL_MODE: "0"
       DATA_BACKEND: "${DATA_BACKEND:-postgres}"
@@ -48,9 +46,6 @@ services:
       ARTIFACT_BACKEND: "${ARTIFACT_BACKEND:-local}"
       ADK_ARTIFACT_ROOT: "${ADK_ARTIFACT_ROOT:-/data/artifacts}"
       MODEL_RESIDENCY_POLICY: "${MODEL_RESIDENCY_POLICY:-unrestricted}"
-      # Root orchestration model is provider-neutral. `lite` preserves the
-      # historical Gemini default; self-host .env may point this at any
-      # registered OpenAI-compatible/Anthropic/Google model or tier.
       PLATFORM_DEFAULT_MODEL: "${PLATFORM_DEFAULT_MODEL:-lite}"
       AUTH_BACKEND: "${AUTH_BACKEND:-local-jwt}"
       JWT_SIGNING_KEY: "${JWT_SIGNING_KEY:-}"
@@ -60,7 +55,6 @@ services:
       JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
       SELFHOST_ADMIN_EMAIL: "${SELFHOST_ADMIN_EMAIL:-}"
       SELFHOST_ADMIN_PASSWORD: "${SELFHOST_ADMIN_PASSWORD:-}"
-      # No implicit GCP/ADC path in the default self-host profile.
       GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-false}"
       TRACE_EXPORT_ENABLED: "${TRACE_EXPORT_ENABLED:-0}"
       CLOUD_LOGGING_ENABLED: "${CLOUD_LOGGING_ENABLED:-0}"
@@ -87,13 +81,6 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # Optional real upstream MCP Apps server for self-host acceptance/testing.
-  # Start it with: docker compose --profile mcp-example up -d --build
-  # Register in Admin -> MCP Servers as:
-  #   URL: http://mcp-example-map:8080/mcp
-  #   Transport: streamable-http
-  # It is intentionally NOT published to the host; backend/agent traffic uses
-  # the Compose network and the browser reaches it only through /mcp/{server_id}.
   mcp-example-map:
     profiles: ["mcp-example"]
     build:
@@ -138,7 +125,19 @@ services:
         NEXT_PUBLIC_BACKEND_URL: "http://localhost:1956"
         NEXT_PUBLIC_MCP_SANDBOX_URL: "${MCP_SANDBOX_PUBLIC_URL:-http://localhost:3457}"
         NEXT_PUBLIC_FRONTEND_URL: "${FRONTEND_PUBLIC_URL:-http://localhost:3456}"
+        NEXT_PUBLIC_DEFAULT_LOCALE: "${DEFAULT_LOCALE:-zh-CN}"
+        NEXT_PUBLIC_APP_SLUG: "${APP_SLUG:-platform}"
+        NEXT_PUBLIC_CITATION_SCHEME: "${CITATION_SCHEME:-aip}"
         NEXT_PUBLIC_BRAND_APP_NAME: "${APP_NAME:-AI Protocol Platform}"
+        NEXT_PUBLIC_BRAND_TAGLINE: "${APP_TAGLINE:-Open Agent Protocol Platform}"
+        NEXT_PUBLIC_BRAND_DESCRIPTION: "${APP_DESCRIPTION:-Self-hosted agent platform for Skills, AG-UI, A2UI, MCP and MCP Apps.}"
+        NEXT_PUBLIC_BRAND_FAVICON: "${APP_FAVICON:-/images/logo/platform-mark.svg}"
+        NEXT_PUBLIC_BRAND_LOGO_HERO: "${APP_LOGO_HERO:-/images/logo/platform-mark.svg}"
+        NEXT_PUBLIC_BRAND_LOGO_AVATAR: "${APP_LOGO_AVATAR:-/images/logo/platform-mark.svg}"
+        NEXT_PUBLIC_BRAND_EMAIL: "${APP_CONTACT_EMAIL:-}"
+        NEXT_PUBLIC_BRAND_GITHUB: "${APP_GITHUB_REPO:-https://github.com/yuklcool/ai-protocol-platform}"
+        NEXT_PUBLIC_BRAND_PRIMARY_HSL: "${APP_PRIMARY_HSL:-199 89% 48%}"
+        NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL: "${APP_PRIMARY_FOREGROUND_HSL:-210 40% 98%}"
         SKIP_QUALITY_CHECKS: "${SKIP_QUALITY_CHECKS:-false}"
     environment:
       PORT: "8080"
