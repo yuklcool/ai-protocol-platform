@@ -1,13 +1,10 @@
-// TenantEditor — edit an EXISTING tenant's clients/{domain} config via
-// PUT /api/admin/clients/{domain}, with a dry-run "Validate" button hitting
-// GET /api/admin/tenants/{domain}/validate. Extracted from the inline editor in
-// app/admin/tenants/page.tsx (v6.9.0 M4). enabled_skills is a multi-select over
-// the REAL /api/skills list (not free-text); API 422 bad-ref and bucket
-// IAM-unreachable verdicts render inline (NEVER-SILENT).
+// TenantEditor — edit an existing tenant config and validate it in place.
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { translateTenantAdmin } from "@/lib/i18n/tenantAdmin";
 import {
   BadRefNotice,
   ClientConfig,
@@ -26,7 +23,7 @@ interface Draft {
   documents_bucket: string;
   default_skill: string;
   enabled_skills: string[];
-  derived_group_tags: string; // comma-separated (no registry to pick from yet)
+  derived_group_tags: string;
 }
 
 function toDraft(c: ClientConfig): Draft {
@@ -52,6 +49,11 @@ export function TenantEditor({
   onCancel: () => void;
   onDeleted: () => void;
 }) {
+  const { locale } = useI18n();
+  const t = (
+    key: Parameters<typeof translateTenantAdmin>[1],
+    params: Record<string, string | number> = {},
+  ) => translateTenantAdmin(locale, key, params);
   const [draft, setDraft] = useState<Draft>(() => toDraft(tenant));
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -80,28 +82,25 @@ export function TenantEditor({
         },
       );
       if (r.status === 403) {
-        setNotice("You need the aitana-admin group to change tenant config.");
+        setNotice(t("editor.forbiddenSave"));
         return;
       }
       if (r.status === 422) {
         const data = await r.json().catch(() => ({}));
         const refs = parseUnknownSkillRefs(data?.detail);
         setBadRefs(refs);
-        setNotice(refs.length ? null : detailMessage(data?.detail, "Validation failed."));
+        setNotice(refs.length ? null : detailMessage(data?.detail, t("common.validationFailed")));
         return;
       }
       if (!r.ok) {
-        setNotice(`Save failed: HTTP ${r.status}`);
+        setNotice(t("editor.saveFailedHttp", { status: r.status }));
         return;
       }
-      // Refresh the list (updates the overview's bucket/health badges), then
-      // auto-validate the now-stored config so a newly-set bucket is checked for
-      // SA access right here — no separate Validate click needed.
       onSaved();
       await validate();
-      setNotice("Saved ✓ — config re-checked below.");
+      setNotice(t("editor.saved"));
     } catch (e) {
-      setNotice(`Save failed: ${e instanceof Error ? e.message : "error"}`);
+      setNotice(t("editor.saveFailed", { error: e instanceof Error ? e.message : t("common.error") }));
     } finally {
       setSaving(false);
     }
@@ -116,27 +115,29 @@ export function TenantEditor({
         `/api/proxy/api/admin/tenants/${encodeURIComponent(tenant.domain)}/validate`,
       );
       if (r.status === 403) {
-        setNotice("You are not an admin for this tenant.");
+        setNotice(t("editor.forbiddenValidate"));
         return;
       }
       if (r.status === 404) {
-        setNotice("Save the tenant first, then re-validate.");
+        setNotice(t("editor.saveFirst"));
         return;
       }
       if (!r.ok) {
-        setNotice(`Validation failed: HTTP ${r.status}`);
+        setNotice(t("editor.validationFailedHttp", { status: r.status }));
         return;
       }
       setValidation((await r.json()) as TenantValidation);
     } catch (e) {
-      setNotice(`Validation failed: ${e instanceof Error ? e.message : "error"}`);
+      setNotice(
+        t("editor.validationFailed", { error: e instanceof Error ? e.message : t("common.error") }),
+      );
     } finally {
       setValidating(false);
     }
   }
 
   async function remove() {
-    if (!window.confirm(`Delete tenant config for ${tenant.domain}? This cannot be undone.`)) return;
+    if (!window.confirm(t("editor.deleteConfirm", { domain: tenant.domain }))) return;
     setNotice(null);
     try {
       const r = await fetchWithAuth(
@@ -144,18 +145,18 @@ export function TenantEditor({
         { method: "DELETE" },
       );
       if (!r.ok && r.status !== 404) {
-        setNotice(`Delete failed: HTTP ${r.status}`);
+        setNotice(t("editor.deleteFailedHttp", { status: r.status }));
         return;
       }
       onDeleted();
     } catch (e) {
-      setNotice(`Delete failed: ${e instanceof Error ? e.message : "error"}`);
+      setNotice(t("editor.deleteFailed", { error: e instanceof Error ? e.message : t("common.error") }));
     }
   }
 
   return (
     <section className="mt-6 rounded-lg border p-4">
-      <h2 className="mb-3 text-base font-semibold">Edit {tenant.domain}</h2>
+      <h2 className="mb-3 text-base font-semibold">{t("editor.title", { domain: tenant.domain })}</h2>
 
       {notice && (
         <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm" role="status">
@@ -169,20 +170,20 @@ export function TenantEditor({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Display name">
+        <Field label={t("common.displayName")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.display_name}
             onChange={(e) => setDraft({ ...draft, display_name: e.target.value })}
           />
         </Field>
-        <Field label="Landing skill (default_skill)" hint="Skill users land on with no prior chat.">
+        <Field label={t("common.landingSkill")} hint={t("common.landingSkillHint")}>
           <select
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.default_skill}
             onChange={(e) => setDraft({ ...draft, default_skill: e.target.value })}
           >
-            <option value="">— marketplace default —</option>
+            <option value="">{t("common.marketplaceDefault")}</option>
             {availableSkills.map((s) => (
               <option key={s.slug} value={s.slug}>
                 {s.displayName} ({s.slug})
@@ -190,18 +191,20 @@ export function TenantEditor({
             ))}
             {draft.default_skill &&
               !availableSkills.some((s) => s.slug === draft.default_skill) && (
-                <option value={draft.default_skill}>{draft.default_skill} (not in catalog)</option>
+                <option value={draft.default_skill}>
+                  {t("editor.notInCatalog", { slug: draft.default_skill })}
+                </option>
               )}
           </select>
         </Field>
-        <Field label="Documents bucket" hint="Per-tenant GCS bucket. Validate checks SA read access.">
+        <Field label={t("common.documentsBucket")} hint={t("editor.bucketHint")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.documents_bucket}
             onChange={(e) => setDraft({ ...draft, documents_bucket: e.target.value })}
           />
         </Field>
-        <Field label="Derived group tags" hint="Comma-separated. Granted to EVERY user of this domain.">
+        <Field label={t("common.derivedTags")} hint={t("common.derivedTagsHint")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.derived_group_tags}
@@ -210,7 +213,7 @@ export function TenantEditor({
           />
         </Field>
         <div className="sm:col-span-2">
-          <Field label="Enabled skills" hint="Empty = tenant sees all skills. Admins bypass this filter.">
+          <Field label={t("common.enabledSkills")} hint={t("editor.enabledHint")}>
             <SkillMultiSelect
               options={availableSkills}
               selected={draft.enabled_skills}
@@ -232,23 +235,23 @@ export function TenantEditor({
           onClick={() => void save()}
           disabled={saving}
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("editor.saving") : t("editor.save")}
         </button>
         <button
           className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-60"
           onClick={() => void validate()}
           disabled={validating}
         >
-          {validating ? "Validating…" : "Validate"}
+          {validating ? t("editor.validating") : t("editor.validate")}
         </button>
         <button className="rounded-md border px-3 py-1.5 text-sm" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           className="ml-auto rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600"
           onClick={() => void remove()}
         >
-          Delete tenant
+          {t("editor.delete")}
         </button>
       </div>
     </section>
