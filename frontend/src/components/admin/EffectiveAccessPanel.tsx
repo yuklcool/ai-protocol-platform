@@ -1,22 +1,17 @@
 // EffectiveAccessPanel — "what your users actually see" (v6.16.0 Phase 2).
-//
-// Answers the question that motivated the whole admin sprint: an admin looking
-// at their own skill list is looking at a STRICTLY WIDER set than their users
-// get, because skill-admins bypass the tenant's enabled_skills narrowing. There
-// was no way to tell which entries an ordinary user would lose — so the tenant
-// screen appeared to list skills ONE's users don't have.
-//
-// Every verdict and reason string here comes from the backend
-// (POST /api/admin/access/check with includeSkills). This component deliberately
-// does NOT re-derive access: a second implementation would drift from
-// enforcement, and the backend already routes both this and GET /api/skills
-// through one evaluator so they cannot disagree. (Axiom #10 — thin client.)
+// Backend-authored verdict/reason strings remain verbatim; this component only
+// localizes its own explanatory and control copy.
 
 "use client";
 
 import { useCallback, useState } from "react";
 
+import { useI18n } from "@/contexts/I18nContext";
 import { fetchWithAuth } from "@/lib/apiClient";
+import {
+  translateTenantAdmin,
+  type TenantAdminTranslationKey,
+} from "@/lib/i18n/tenantAdmin";
 
 interface SkillRow {
   skillId: string;
@@ -51,7 +46,11 @@ type State =
   | { kind: "error"; message: string }
   | { kind: "ready"; email: string; userFound: boolean; plane: VisibilityPlane };
 
+type TenantT = (key: TenantAdminTranslationKey, params?: Record<string, string | number>) => string;
+
 export function EffectiveAccessPanel({ domain }: { domain: string }) {
+  const { locale } = useI18n();
+  const t: TenantT = (key, params = {}) => translateTenantAdmin(locale, key, params);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -67,17 +66,16 @@ export function EffectiveAccessPanel({ domain }: { domain: string }) {
           body: JSON.stringify({ email: addr, includeSkills: true }),
         });
         if (!r.ok) {
-          // Never-silent: name the likely cause rather than failing blank.
           const detail =
             r.status === 403
-              ? `${addr} is outside your tenant scope — you can only inspect users in ${domain}.`
-              : `The access check failed (HTTP ${r.status}).`;
+              ? t("access.outOfScope", { email: addr, domain })
+              : t("access.checkFailed", { status: r.status });
           setState({ kind: "error", message: detail });
           return;
         }
         const body = (await r.json()) as CheckResponse;
         if (!body.skillVisibility) {
-          setState({ kind: "error", message: "The backend returned no visibility data for this user." });
+          setState({ kind: "error", message: t("access.noVisibility") });
           return;
         }
         setState({
@@ -87,19 +85,16 @@ export function EffectiveAccessPanel({ domain }: { domain: string }) {
           plane: body.skillVisibility,
         });
       } catch {
-        setState({ kind: "error", message: "Couldn't reach the admin service. This is a connection problem." });
+        setState({ kind: "error", message: t("access.connectionFailed") });
       }
     },
-    [domain],
+    [domain, locale],
   );
 
   return (
     <div className="rounded-lg border border-border p-4">
-      <h3 className="text-sm font-semibold text-foreground">What your users actually see</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Your own skill list isn&apos;t a preview of theirs — admins bypass the tenant&apos;s enabled-skills
-        filter. Check a specific user to see their real list.
-      </p>
+      <h3 className="text-sm font-semibold text-foreground">{t("access.title")}</h3>
+      <p className="mt-1 text-xs text-muted-foreground">{t("access.description")}</p>
 
       <form
         className="mt-3 flex flex-wrap gap-2"
@@ -113,7 +108,7 @@ export function EffectiveAccessPanel({ domain }: { domain: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={`someone@${domain}`}
-          aria-label="User email to inspect"
+          aria-label={t("access.emailAria")}
           className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm"
         />
         <button
@@ -121,7 +116,7 @@ export function EffectiveAccessPanel({ domain }: { domain: string }) {
           disabled={!email.trim() || state.kind === "loading"}
           className="rounded border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
         >
-          {state.kind === "loading" ? "Checking…" : "Check"}
+          {state.kind === "loading" ? t("access.checking") : t("access.check")}
         </button>
       </form>
 
@@ -131,12 +126,12 @@ export function EffectiveAccessPanel({ domain }: { domain: string }) {
         </p>
       )}
 
-      {state.kind === "ready" && <Result state={state} />}
+      {state.kind === "ready" && <Result state={state} t={t} />}
     </div>
   );
 }
 
-function Result({ state }: { state: Extract<State, { kind: "ready" }> }) {
+function Result({ state, t }: { state: Extract<State, { kind: "ready" }>; t: TenantT }) {
   const { plane, email, userFound } = state;
   const hidden = plane.hiddenByTenantFilter;
 
@@ -144,38 +139,37 @@ function Result({ state }: { state: Extract<State, { kind: "ready" }> }) {
     <div className="mt-3 space-y-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
         <span className="font-medium text-foreground">
-          {plane.visibleCount} of {plane.totalCount} skills visible to {email}
+          {t("access.visibleSummary", {
+            visible: plane.visibleCount,
+            total: plane.totalCount,
+            email,
+          })}
         </span>
         {!userFound && (
-          // Meaningful distinction: an address that has never signed in has no
-          // direct claims, so the answer is a projection, not a fact.
-          <span className="text-amber-600 dark:text-amber-500">
-            this user hasn&apos;t signed in yet — shown from domain rules only
-          </span>
+          <span className="text-amber-600 dark:text-amber-500">{t("access.notSignedIn")}</span>
         )}
       </div>
 
       {plane.enabledSkills === null ? (
-        <p className="text-xs text-muted-foreground">
-          This tenant has no enabled-skills filter, so users see everything access control allows.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("access.noFilter")}</p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Tenant filter active: <code className="text-[11px]">{plane.enabledSkills.join(", ") || "(empty)"}</code>
+          {t("access.filterActive")}{" "}
+          <code className="text-[11px]">{plane.enabledSkills.join(", ") || t("access.emptyFilter")}</code>
         </p>
       )}
 
       {hidden.length > 0 && (
-        // The headline answer to "why does my list show more than theirs?".
         <p className="rounded border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-500">
-          You can see {hidden.length} skill{hidden.length === 1 ? "" : "s"} that this user cannot:{" "}
-          <span className="font-medium">{hidden.join(", ")}</span>. Add {hidden.length === 1 ? "it" : "them"} to
-          the tenant&apos;s enabled skills if that&apos;s not intended.
+          {t(hidden.length === 1 ? "access.hiddenOne" : "access.hiddenMany", {
+            count: hidden.length,
+            skills: hidden.join(", "),
+          })}
         </p>
       )}
 
       {plane.skills.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No skills were returned.</p>
+        <p className="text-xs text-muted-foreground">{t("access.noSkills")}</p>
       ) : (
         <ul className="divide-y divide-border rounded border border-border">
           {plane.skills.map((s) => (
@@ -183,24 +177,29 @@ function Result({ state }: { state: Extract<State, { kind: "ready" }> }) {
               <span
                 aria-hidden
                 className={
-                  "mt-1 h-2 w-2 shrink-0 rounded-full " + (s.visible ? "bg-emerald-500" : "bg-muted-foreground/40")
+                  "mt-1 h-2 w-2 shrink-0 rounded-full " +
+                  (s.visible ? "bg-emerald-500" : "bg-muted-foreground/40")
                 }
               />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span
-                    className={"text-sm " + (s.visible ? "text-foreground" : "text-muted-foreground line-through")}
+                    className={
+                      "text-sm " +
+                      (s.visible ? "text-foreground" : "text-muted-foreground line-through")
+                    }
                   >
                     {s.label || s.slug}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">{s.visible ? "visible" : "hidden"}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {s.visible ? t("access.visible") : t("access.hidden")}
+                  </span>
                   {s.adminBypass && !s.tenantAllowed && (
                     <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-500">
-                      you only see this as an admin
+                      {t("access.adminBypass")}
                     </span>
                   )}
                 </div>
-                {/* Reason text is authored by the backend — do not synthesise it here. */}
                 <p className="mt-0.5 text-xs text-muted-foreground">{s.reason}</p>
               </div>
             </li>

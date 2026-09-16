@@ -1,11 +1,10 @@
 // TenantOnboardWizard — atomic tenant onboarding via POST /api/admin/tenants.
-// Renders each validation step's verdict from the response (NEVER-SILENT: 422
-// bad-ref, 409 already-exists, bucket IAM-unreachable warning, and the per-step
-// verdict list all render). v6.9.0 M4.
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { translateTenantAdmin } from "@/lib/i18n/tenantAdmin";
 import {
   BadRefNotice,
   ClientConfig,
@@ -52,6 +51,11 @@ export function TenantOnboardWizard({
   onCreated: () => void;
   onCancel: () => void;
 }) {
+  const { locale } = useI18n();
+  const t = (
+    key: Parameters<typeof translateTenantAdmin>[1],
+    params: Record<string, string | number> = {},
+  ) => translateTenantAdmin(locale, key, params);
   const [draft, setDraft] = useState<Draft>({ ...EMPTY });
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -63,7 +67,7 @@ export function TenantOnboardWizard({
     setNotice(null);
     setBadRefs([]);
     if (!domain || !domain.includes(".")) {
-      setNotice("Enter a valid email domain (e.g. acme-corp.com).");
+      setNotice(t("onboard.invalidDomain"));
       return;
     }
     setSubmitting(true);
@@ -82,44 +86,45 @@ export function TenantOnboardWizard({
         body: JSON.stringify(body),
       });
       if (r.status === 403) {
-        setNotice("You are not an admin for this domain (tenant-admin or aitana-admin required).");
+        setNotice(t("onboard.forbidden"));
         return;
       }
       if (r.status === 409) {
-        setNotice(`Tenant ${domain} already exists — edit it from the list instead.`);
+        setNotice(t("onboard.exists", { domain }));
         return;
       }
       if (r.status === 422) {
         const data = await r.json().catch(() => ({}));
         const refs = parseUnknownSkillRefs(data?.detail);
         setBadRefs(refs);
-        setNotice(refs.length ? null : detailMessage(data?.detail, "Validation failed."));
+        setNotice(refs.length ? null : detailMessage(data?.detail, t("common.validationFailed")));
         return;
       }
       if (!r.ok) {
-        setNotice(`Onboard failed: HTTP ${r.status}`);
+        setNotice(t("onboard.failedHttp", { status: r.status }));
         return;
       }
       setResult((await r.json()) as OnboardResponse);
     } catch (e) {
-      setNotice(`Onboard failed: ${e instanceof Error ? e.message : "error"}`);
+      setNotice(t("onboard.failed", { error: e instanceof Error ? e.message : t("common.error") }));
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Terminal success state: show the per-step verdicts (bucket warnings etc.).
   if (result) {
     return (
       <section className="mt-6 rounded-lg border p-4">
-        <h2 className="mb-3 text-base font-semibold">Onboarded {result.domain}</h2>
+        <h2 className="mb-3 text-base font-semibold">
+          {t("onboard.successTitle", { domain: result.domain })}
+        </h2>
         <ValidationVerdicts validation={result.validation} />
         <div className="mt-4 flex gap-2">
           <button
             className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
             onClick={onCreated}
           >
-            Done
+            {t("onboard.done")}
           </button>
         </div>
       </section>
@@ -128,10 +133,8 @@ export function TenantOnboardWizard({
 
   return (
     <section className="mt-6 rounded-lg border p-4">
-      <h2 className="mb-1 text-base font-semibold">Onboard a new tenant</h2>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Validates skill references, probes the documents bucket, and creates the tenant in one step.
-      </p>
+      <h2 className="mb-1 text-base font-semibold">{t("onboard.title")}</h2>
+      <p className="mb-3 text-sm text-muted-foreground">{t("onboard.description")}</p>
 
       {notice && (
         <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm" role="status">
@@ -145,7 +148,7 @@ export function TenantOnboardWizard({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Email domain" hint="The doc key, e.g. acme-corp.com">
+        <Field label={t("onboard.emailDomain")} hint={t("onboard.emailDomainHint")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.domain}
@@ -153,20 +156,20 @@ export function TenantOnboardWizard({
             placeholder="acme-corp.com"
           />
         </Field>
-        <Field label="Display name">
+        <Field label={t("common.displayName")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.display_name}
             onChange={(e) => setDraft({ ...draft, display_name: e.target.value })}
           />
         </Field>
-        <Field label="Landing skill (default_skill)" hint="Skill users land on with no prior chat.">
+        <Field label={t("common.landingSkill")} hint={t("common.landingSkillHint")}>
           <select
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.default_skill}
             onChange={(e) => setDraft({ ...draft, default_skill: e.target.value })}
           >
-            <option value="">— marketplace default —</option>
+            <option value="">{t("common.marketplaceDefault")}</option>
             {availableSkills.map((s) => (
               <option key={s.slug} value={s.slug}>
                 {s.displayName} ({s.slug})
@@ -174,14 +177,14 @@ export function TenantOnboardWizard({
             ))}
           </select>
         </Field>
-        <Field label="Documents bucket" hint="Per-tenant GCS bucket. Reachability is probed on submit.">
+        <Field label={t("common.documentsBucket")} hint={t("onboard.bucketHint")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.documents_bucket}
             onChange={(e) => setDraft({ ...draft, documents_bucket: e.target.value })}
           />
         </Field>
-        <Field label="Derived group tags" hint="Comma-separated. Granted to EVERY user of this domain.">
+        <Field label={t("common.derivedTags")} hint={t("common.derivedTagsHint")}>
           <input
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={draft.derived_group_tags}
@@ -190,7 +193,7 @@ export function TenantOnboardWizard({
           />
         </Field>
         <div className="sm:col-span-2">
-          <Field label="Enabled skills" hint="Empty = tenant sees all skills.">
+          <Field label={t("common.enabledSkills")} hint={t("onboard.enabledHint")}>
             <SkillMultiSelect
               options={availableSkills}
               selected={draft.enabled_skills}
@@ -206,10 +209,10 @@ export function TenantOnboardWizard({
           onClick={() => void submit()}
           disabled={submitting}
         >
-          {submitting ? "Onboarding…" : "Onboard tenant"}
+          {submitting ? t("onboard.submitting") : t("onboard.submit")}
         </button>
         <button className="rounded-md border px-3 py-1.5 text-sm" onClick={onCancel}>
-          Cancel
+          {t("common.cancel")}
         </button>
       </div>
     </section>

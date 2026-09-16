@@ -1,16 +1,12 @@
-// Tenant-Admin — manage client-org (domain) config in the app instead of by hand
-// Firestore edits. Lists tenants over GET /api/admin/clients, and hosts:
-//   - TenantOnboardWizard (POST /api/admin/tenants)  — atomic, validated onboard
-//   - TenantEditor        (PUT/DELETE /api/admin/clients/{domain})
-// The backend enforces admin gating, so this page is gated by auth + a clean 403
-// state. enabled_skills / default_skill are picked from the REAL /api/skills
-// list (not free-text). v6.9.0 domain-tenant-administration.md (M4).
+// Tenant-Admin — manage client-org (domain) config in the app instead of by hand.
 
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { translateTenantAdmin } from "@/lib/i18n/tenantAdmin";
 import { EffectiveAccessPanel } from "@/components/admin/EffectiveAccessPanel";
 import { SignInRequired } from "@/components/chat/SignInRequired";
 import { TenantEditor } from "@/components/admin/TenantEditor";
@@ -18,13 +14,13 @@ import { TenantOnboardWizard } from "@/components/admin/TenantOnboardWizard";
 import type { ClientConfig, SkillOption, TenantValidation } from "@/components/admin/tenantAdmin";
 import { HealthBadge, type HealthState, ReachDot } from "@/components/admin/tenantHealth";
 
-// The subset of a /api/skills entry this page needs.
 interface SkillLite {
   slug?: string | null;
   displayName?: string;
   name?: string;
 }
 
+// Technical owner id used by the existing Skill API. This is not display branding.
 const PLATFORM_OWNER_UID = "aitana-platform";
 
 type Status =
@@ -41,6 +37,11 @@ type Panel =
 
 export default function TenantAdminPage() {
   const { user, loading: authLoading } = useAuth();
+  const { locale } = useI18n();
+  const t = (
+    key: Parameters<typeof translateTenantAdmin>[1],
+    params: Record<string, string | number> = {},
+  ) => translateTenantAdmin(locale, key, params);
   const [status, setStatus] = useState<Status>({ kind: "loading" });
   const [tenants, setTenants] = useState<ClientConfig[]>([]);
   const [skills, setSkills] = useState<SkillOption[]>([]);
@@ -49,8 +50,6 @@ export default function TenantAdminPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [health, setHealth] = useState<Record<string, HealthState>>({});
 
-  // Fire one validate call per tenant, in parallel, updating each row's badge as
-  // it resolves. Best-effort — a failed probe degrades to "—", never blocks the list.
   const loadHealth = useCallback(async (domains: string[]) => {
     setHealth(Object.fromEntries(domains.map((d) => [d, { kind: "loading" } as HealthState])));
     await Promise.all(
@@ -82,11 +81,14 @@ export default function TenantAdminPage() {
       data.sort((a, b) => a.domain.localeCompare(b.domain));
       setTenants(data);
       setStatus({ kind: "ready" });
-      void loadHealth(data.map((t) => t.domain));
+      void loadHealth(data.map((item) => item.domain));
     } catch (e) {
-      setStatus({ kind: "error", message: e instanceof Error ? e.message : "Failed to load" });
+      setStatus({
+        kind: "error",
+        message: e instanceof Error ? e.message : translateTenantAdmin(locale, "page.loadFailed"),
+      });
     }
-  }, [loadHealth]);
+  }, [loadHealth, locale]);
 
   const loadSkills = useCallback(async () => {
     setSkillNotice(null);
@@ -96,25 +98,30 @@ export default function TenantAdminPage() {
         fetchWithAuth(`/api/proxy/api/skills?ownerId=${encodeURIComponent(PLATFORM_OWNER_UID)}`),
       ]);
       if (!ownRes.ok && !platformRes.ok) {
-        setSkillNotice("Could not load the skills list — enabled-skills selection is unavailable.");
+        setSkillNotice(translateTenantAdmin(locale, "page.skillsUnavailable"));
         return;
       }
       const own: SkillLite[] = ownRes.ok ? await ownRes.json() : [];
       const platform: SkillLite[] = platformRes.ok ? await platformRes.json() : [];
       const bySlug = new Map<string, SkillOption>();
-      for (const s of [...own, ...platform]) {
-        if (!s.slug) continue; // only slugged skills are enable-able
-        if (!bySlug.has(s.slug)) {
-          bySlug.set(s.slug, { slug: s.slug, displayName: s.displayName || s.name || s.slug });
+      for (const skill of [...own, ...platform]) {
+        if (!skill.slug) continue;
+        if (!bySlug.has(skill.slug)) {
+          bySlug.set(skill.slug, {
+            slug: skill.slug,
+            displayName: skill.displayName || skill.name || skill.slug,
+          });
         }
       }
       setSkills([...bySlug.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)));
     } catch (e) {
       setSkillNotice(
-        `Could not load the skills list: ${e instanceof Error ? e.message : "error"}.`,
+        translateTenantAdmin(locale, "page.skillsLoadFailed", {
+          error: e instanceof Error ? e.message : translateTenantAdmin(locale, "common.error"),
+        }),
       );
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -130,18 +137,15 @@ export default function TenantAdminPage() {
   }
 
   if (authLoading || status.kind === "loading") {
-    return <Centered>Loading…</Centered>;
+    return <Centered>{t("page.loading")}</Centered>;
   }
   if (!user) return <SignInRequired />;
   if (status.kind === "forbidden") {
     return (
       <Centered>
         <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">Admins only</h1>
-          <p className="text-sm text-muted-foreground">
-            Tenant administration requires an admin group (<code>aitana-admin</code> or{" "}
-            <code>tenant-admin:&lt;domain&gt;</code>). Ask a platform admin to grant it, then reload.
-          </p>
+          <h1 className="mb-2 text-lg font-semibold">{t("page.adminOnly")}</h1>
+          <p className="text-sm text-muted-foreground">{t("page.adminOnlyDescription")}</p>
         </div>
       </Centered>
     );
@@ -150,9 +154,11 @@ export default function TenantAdminPage() {
     return (
       <Centered>
         <div className="text-center">
-          <p className="mb-3 text-sm text-red-600">Couldn&apos;t load tenants: {status.message}</p>
+          <p className="mb-3 text-sm text-red-600">
+            {t("page.loadTenantsFailed", { error: status.message })}
+          </p>
           <button className="rounded border px-3 py-1.5 text-sm" onClick={() => void loadTenants()}>
-            Retry
+            {t("page.retry")}
           </button>
         </div>
       </Centered>
@@ -161,13 +167,10 @@ export default function TenantAdminPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-6">
-      <header className="mb-6 flex items-center justify-between">
+      <header className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Tenant administration</h1>
-          <p className="text-sm text-muted-foreground">
-            Per-domain config: the documents bucket and its live reachability, which skills a tenant
-            sees, where its users land, and the group tags they inherit.
-          </p>
+          <h1 className="text-xl font-semibold">{t("page.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("page.description")}</p>
         </div>
         <button
           className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
@@ -176,7 +179,7 @@ export default function TenantAdminPage() {
             setPanel({ mode: "new" });
           }}
         >
-          + New tenant
+          {t("page.newTenant")}
         </button>
       </header>
 
@@ -198,12 +201,12 @@ export default function TenantAdminPage() {
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
             <tr>
-              <th className="px-3 py-2">Domain</th>
-              <th className="px-3 py-2">Documents bucket</th>
-              <th className="px-3 py-2">Health</th>
-              <th className="px-3 py-2">Landing skill</th>
-              <th className="px-3 py-2">Enabled skills</th>
-              <th className="px-3 py-2">Group tags</th>
+              <th className="px-3 py-2">{t("page.domain")}</th>
+              <th className="px-3 py-2">{t("page.documentsBucket")}</th>
+              <th className="px-3 py-2">{t("page.health")}</th>
+              <th className="px-3 py-2">{t("page.landingSkill")}</th>
+              <th className="px-3 py-2">{t("page.enabledSkills")}</th>
+              <th className="px-3 py-2">{t("page.groupTags")}</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -211,59 +214,59 @@ export default function TenantAdminPage() {
             {tenants.length === 0 && (
               <tr>
                 <td className="px-3 py-4 text-muted-foreground" colSpan={7}>
-                  No tenants configured yet.
+                  {t("page.noTenants")}
                 </td>
               </tr>
             )}
-            {tenants.map((t) => (
-              <tr key={t.domain} className="border-t align-top">
+            {tenants.map((tenant) => (
+              <tr key={tenant.domain} className="border-t align-top">
                 <td className="px-3 py-2 font-medium">
-                  {t.domain}
-                  {t.display_name ? (
+                  {tenant.domain}
+                  {tenant.display_name ? (
                     <span className="block text-xs font-normal text-muted-foreground">
-                      {t.display_name}
+                      {tenant.display_name}
                     </span>
                   ) : null}
                 </td>
                 <td className="px-3 py-2">
-                  {t.documents_bucket ? (
+                  {tenant.documents_bucket ? (
                     <span className="inline-flex items-center gap-1.5">
-                      <ReachDot state={health[t.domain]} />
-                      <span className="font-mono text-xs">{t.documents_bucket}</span>
+                      <ReachDot state={health[tenant.domain]} />
+                      <span className="font-mono text-xs">{tenant.documents_bucket}</span>
                     </span>
                   ) : (
                     <Dim>—</Dim>
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <HealthBadge state={health[t.domain]} />
+                  <HealthBadge state={health[tenant.domain]} />
                 </td>
-                <td className="px-3 py-2">{t.default_skill || <Dim>—</Dim>}</td>
+                <td className="px-3 py-2">{tenant.default_skill || <Dim>—</Dim>}</td>
                 <td className="px-3 py-2">
-                  {t.enabled_skills?.length ? t.enabled_skills.join(", ") : <Dim>all</Dim>}
+                  {tenant.enabled_skills?.length ? tenant.enabled_skills.join(", ") : <Dim>{t("page.allSkills")}</Dim>}
                 </td>
                 <td className="px-3 py-2">
-                  {t.derived_group_tags?.length ? t.derived_group_tags.join(", ") : <Dim>—</Dim>}
+                  {tenant.derived_group_tags?.length ? tenant.derived_group_tags.join(", ") : <Dim>—</Dim>}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right whitespace-nowrap">
                   <button
                     className="rounded border px-2 py-1 text-xs"
                     onClick={() => {
                       setNotice(null);
-                      setPanel({ mode: "access", tenant: t });
+                      setPanel({ mode: "access", tenant });
                     }}
-                    title="See the skill list a real user in this tenant gets"
+                    title={t("page.accessTitle")}
                   >
-                    What users see
+                    {t("page.whatUsersSee")}
                   </button>
                   <button
                     className="ml-2 rounded border px-2 py-1 text-xs"
                     onClick={() => {
                       setNotice(null);
-                      setPanel({ mode: "edit", tenant: t });
+                      setPanel({ mode: "edit", tenant });
                     }}
                   >
-                    Edit
+                    {t("page.edit")}
                   </button>
                 </td>
               </tr>
@@ -275,32 +278,28 @@ export default function TenantAdminPage() {
       {panel.mode === "new" && (
         <TenantOnboardWizard
           availableSkills={skills}
-          onCreated={() => afterMutation("Tenant onboarded.")}
+          onCreated={() => afterMutation(t("page.onboarded"))}
           onCancel={() => setPanel({ mode: "none" })}
         />
       )}
       {panel.mode === "access" && (
-        // key by domain so switching tenants remounts with fresh state (no stale carry-over).
         <div className="mt-4" key={`access-${panel.tenant.domain}`}>
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold">{panel.tenant.domain}</h2>
             <button className="text-xs underline" onClick={() => setPanel({ mode: "none" })}>
-              Close
+              {t("page.close")}
             </button>
           </div>
           <EffectiveAccessPanel domain={panel.tenant.domain} />
         </div>
       )}
       {panel.mode === "edit" && (
-        // key by domain: the editor seeds its draft from `tenant` ONCE (useState
-        // initializer), so without a per-domain key, clicking Edit on a second
-        // tenant reuses the same instance and shows the FIRST tenant's config.
         <TenantEditor
           key={`edit-${panel.tenant.domain}`}
           tenant={panel.tenant}
           availableSkills={skills}
           onSaved={() => void loadTenants()}
-          onDeleted={() => afterMutation(`Deleted ${panel.tenant.domain}.`)}
+          onDeleted={() => afterMutation(t("page.deleted", { domain: panel.tenant.domain }))}
           onCancel={() => setPanel({ mode: "none" })}
         />
       )}
