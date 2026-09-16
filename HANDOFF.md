@@ -3,7 +3,7 @@
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
 > 状态更新时间：**2026-09-16**  
-> 当前主线：**Self-host 基线已完成；#9 多租户等待 legacy ownership + 真实 E2E；#11 MCP 管理面代码已完成、等待真实部署验收；#10 Model Provider 配置中心正在继续实施。**
+> 当前主线：**Self-host 基线已完成；#9 多租户等待 legacy ownership + 真实 E2E；#11 MCP 管理面代码已完成、等待真实部署验收；#10 管理 UI / Model Probe 已合并，下一步为默认模型与 tier 管理。**
 
 ---
 
@@ -31,7 +31,7 @@
 
 当前不应再把工作重点描述为“建设基础架构”。现在主要是：
 
-1. 完成 #10 Model Provider 配置中心剩余 UI / Model Probe / 默认模型与 tier 管理。
+1. 继续 #10 默认模型与 tier mapping 管理；管理 UI / Model Probe 已由 PR #28 合并。
 2. 完成 #9 legacy ownership 迁移和 Tenant A/B 真实 E2E。
 3. 完成 #11 MCP 管理流程真实自托管 E2E。
 4. 用真实浏览器/真实 Provider 完成 #1/#2/#3 最终协议验收并收口。
@@ -153,11 +153,11 @@ e07dbe78da4ec5ba06866ca423707c9eb50d9329
 
 ### 当前 main 最新关键合并
 
-截至本次交接，最近的模型运行时合并为：
+截至本次交接，最近的模型管理合并为：
 
 ```text
-PR #27
-merge SHA: aaf1d1de443fcd595da23f21117ddac3493fcd09
+PR #28
+merge SHA: 2ad75f959a777cb4c3de151e22bd847b71cfedaf
 ```
 
 ---
@@ -578,8 +578,9 @@ PR #27 验证：
 
 ## 11. #10 Model Providers 管理 UI 与模型探测
 
-本批工作接续 `feat/model-provider-admin-ui`，已同步 2026-09-16 main 的交接文档。
-分支最终合并状态以 GitHub PR 为准；不要仅凭本节实现记录推断已合并。
+本批工作接续 `feat/model-provider-admin-ui`，已于 2026-09-16 合并到 main：
+[PR #28](https://github.com/yuklcool/ai-protocol-platform/pull/28)，merge SHA `2ad75f959a777cb4c3de151e22bd847b71cfedaf`。
+该分支不再是待创建 PR / 待合并任务。
 
 已实现：
 
@@ -596,14 +597,16 @@ PR #27 验证：
 - Model Provider gate 增加前端类型检查、交互测试、local-jwt 生产构建。
 
 本地验证：后端 Model Provider gate **121 passed**；前端管理页与入口
-**15 passed**；TypeScript 检查通过。生产构建及远端 CI 结果记录在本批 PR。
+**15 passed**；TypeScript 和 local-jwt Next.js 生产构建通过。
+远端验证提交 `54819d1`：Model Provider gate #7（含前端构建）、MCP admin gate #12、
+Core runtime persistence #52 全部通过。
 这里的探测回归使用受控响应，不能替代真实第三方模型的最终验收。
 
 ---
 
 ## 12. #10 剩余工作
 
-在管理 UI 与探测接口完成合并后，#10 仍有：
+管理 UI 与探测接口已合并，#10 仍有：
 
 1. 默认模型与 tier mapping 管理 / 可视化。
 2. 可选 Tenant 级模型白名单 / Tenant 默认模型。
@@ -728,25 +731,15 @@ Issue #1/#2/#3/#9/#10/#11 的最终关闭都必须遵守这个边界。
 
 建议按以下顺序继续，不要重新回头改已稳定的 Self-host 基础架构：
 
-### 第一优先：验证并合并当前 #10 管理 UI / 模型探测
+### 第一优先：继续 #10 默认模型与 tier mapping
 
-```text
-feat/model-provider-admin-ui
-    ↓
-创建 PR
-    ↓
-Model Provider gate
-Frontend build / Self-host build
-    ↓
-修复
-    ↓
-合并 main
-```
+PR #28 已合并，管理 UI / 模型探测不应重复实施。
 
-然后继续：
+接下来：
 
-- default model / tier mapping 管理
-- 真实 OpenAI-compatible endpoint E2E
+- 默认模型与 default/smart/fast tier mapping 的管理、校验与可视化。
+- 确保设置实际进入统一 effective registry 和 Agent runtime，而不是仅保存 UI 配置。
+- 真实 OpenAI-compatible endpoint E2E；目前受控回归不等于真实 Provider 验收。
 
 ### 第二优先：#9 真实多租户收口
 
