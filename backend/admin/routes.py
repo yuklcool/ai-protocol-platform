@@ -21,6 +21,7 @@ from admin.auth import _assert_caller_is_service_account
 from admin.mcp_servers_routes import router as mcp_servers_router
 from admin.model_probe_routes import router as model_probe_router
 from admin.model_providers_routes import router as model_providers_router
+from admin.model_registry_settings_routes import router as model_registry_settings_router
 from admin.scope import resolve_admin_scope
 from auth import User, get_current_user
 
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 router.include_router(mcp_servers_router)
 router.include_router(model_providers_router)
 router.include_router(model_probe_router)
+router.include_router(model_registry_settings_router)
 
 
 class AdminWhoAmI(BaseModel):
