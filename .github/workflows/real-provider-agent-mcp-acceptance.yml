@@ -1,0 +1,118 @@
+name: Real Provider Agent MCP acceptance
+
+on:
+  pull_request:
+    paths:
+      - docs/real-provider-acceptance.md
+      - frontend/e2e/provider-agent-mcp-live.spec.js
+      - .github/workflows/real-provider-agent-mcp-acceptance.yml
+  workflow_dispatch:
+    inputs:
+      provider_base_url:
+        description: "OpenAI-compatible base URL, e.g. https://api.example.com/v1"
+        required: true
+        type: string
+      model_api_name:
+        description: "Upstream model name exposed by /models and /chat/completions"
+        required: true
+        type: string
+      supports_reasoning:
+        description: "Use max_completion_tokens instead of max_tokens in the probe"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance-spec-static:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate acceptance spec syntax
+        run: node --check frontend/e2e/provider-agent-mcp-live.spec.js
+
+  real-provider-agent-mcp:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: real-provider-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-real-provider-ci
+      JWT_AUDIENCE: ai-protocol-platform-real-provider-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-real-provider-admin-password
+      PLATFORM_DEFAULT_MODEL: lite
+      OPENAI_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}
+      REAL_PROVIDER_BASE_URL: ${{ inputs.provider_base_url }}
+      REAL_PROVIDER_MODEL: ${{ inputs.model_api_name }}
+      REAL_PROVIDER_SUPPORTS_REASONING: ${{ inputs.supports_reasoning }}
+      SKIP_QUALITY_CHECKS: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require the real provider secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "REAL_PROVIDER_API_KEY repository/environment secret is required." >&2
+            exit 1
+          fi
+          case "${REAL_PROVIDER_BASE_URL}" in
+            http://*|https://*) ;;
+            *) echo "provider_base_url must be an absolute http(s) URL" >&2; exit 1 ;;
+          esac
+          [ -n "${REAL_PROVIDER_MODEL}" ] || { echo "model_api_name is required" >&2; exit 1; }
+
+      - name: Validate acceptance spec syntax
+        run: node --check frontend/e2e/provider-agent-mcp-live.spec.js
+
+      - name: Validate Compose model
+        run: docker compose --profile mcp-example config --quiet
+
+      - name: Build real Provider acceptance stack
+        run: docker compose --profile mcp-example build backend mcp-example-map mcp-sandbox frontend
+
+      - name: Start PostgreSQL backend frontend sandbox and real MCP Apps example
+        run: |
+          docker compose --profile mcp-example up -d postgres backend mcp-example-map mcp-sandbox frontend
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3456/api/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3457/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile mcp-example logs backend frontend mcp-sandbox postgres mcp-example-map
+          exit 1
+
+      - name: Install Chromium acceptance runner
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run real Provider to Agent to MCP Tool Calling acceptance
+        working-directory: frontend
+        env:
+          PROVIDER_E2E_RUN_ID: provider-${{ github.run_id }}
+          PROVIDER_E2E_FRONTEND_URL: http://localhost:3456
+          PROVIDER_E2E_BACKEND_URL: http://127.0.0.1:1956
+        run: npx playwright test e2e/provider-agent-mcp-live.spec.js --reporter=line --workers=1
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose --profile mcp-example logs backend frontend mcp-sandbox postgres mcp-example-map
+
+      - name: Stop services and remove acceptance volumes
+        if: always()
+        run: docker compose --profile mcp-example down -v --remove-orphans

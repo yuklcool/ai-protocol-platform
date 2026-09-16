@@ -167,7 +167,7 @@ jobs:
             SKIP_QUALITY_CHECKS=true
             NEXT_PUBLIC_LOCAL_MODE=0
             NEXT_PUBLIC_AUTH_MODE=local-jwt
-            NEXT_PUBLIC_MCP_SANDBOX_URL=__MCP_SANDBOX_PUBLIC_URL__
+            NEXT_PUBLIC_MCP_SANDBOX_URL=https://mcp-sandbox.runtime.invalid
             NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
           sbom: ${{ github.event_name != 'pull_request' }}
           provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
@@ -181,7 +181,7 @@ jobs:
           docker run --rm \
             -e MCP_SANDBOX_PUBLIC_URL=https://mcp.release-ci.example \
             "$IMAGE" \
-            sh -c 'grep -RIl "https://mcp.release-ci.example" /app/.next >/dev/null && ! grep -RIl "__MCP_SANDBOX_PUBLIC_URL__" /app/.next >/dev/null'
+            sh -c 'grep -RIl "https://mcp.release-ci.example" /app/.next >/dev/null && ! grep -RIl "https://mcp-sandbox.runtime.invalid" /app/.next >/dev/null'
 
       - name: Scan published image for HIGH/CRITICAL vulnerabilities
         if: github.event_name != 'pull_request'
