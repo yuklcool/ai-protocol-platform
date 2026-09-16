@@ -1,0 +1,141 @@
+name: Live Provider Agent acceptance
+
+# Intentionally manual-only. A PR must never spend external model quota or turn
+# a missing third-party credential into a fake/green acceptance result.
+on:
+  workflow_dispatch:
+    inputs:
+      provider_base_url:
+        description: "OpenAI-compatible API base URL, including /v1 when the provider requires it"
+        required: true
+        type: string
+      provider_api_model:
+        description: "Provider model name sent on the wire (for example deepseek-chat or qwen-plus)"
+        required: true
+        type: string
+      context_window:
+        description: "Model context window"
+        required: true
+        default: "131072"
+        type: string
+      max_output_tokens:
+        description: "Model maximum output tokens"
+        required: true
+        default: "8192"
+        type: string
+      supports_reasoning:
+        description: "Enable runtime reasoning parameters for this model"
+        required: true
+        default: false
+        type: boolean
+      supports_responses_api:
+        description: "Route OpenAI reasoner through Responses API"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  live-provider-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: live-provider-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-live-provider
+      JWT_AUDIENCE: ai-protocol-platform-live-provider
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: live-provider-admin-password
+      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
+      # Startup only: the global root agent is constructed before the dynamic
+      # acceptance model is registered. No request in this workflow invokes it.
+      OPENAI_API_KEY: bootstrap-placeholder-not-a-real-key
+      OPENAI_API_BASE: http://model-gateway.invalid/v1
+      MODEL_RESIDENCY_POLICY: unrestricted
+      LIVE_PROVIDER_API_KEY: ${{ secrets.LIVE_PROVIDER_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require real Provider secret
+        shell: bash
+        run: |
+          if [[ -z "${LIVE_PROVIDER_API_KEY:-}" ]]; then
+            echo "::error::Repository secret LIVE_PROVIDER_API_KEY is required for the manual live Provider acceptance."
+            exit 1
+          fi
+
+      - name: Create secret-injection Compose override
+        shell: bash
+        run: |
+          cat > /tmp/live-provider.override.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                LIVE_PROVIDER_API_KEY: "${LIVE_PROVIDER_API_KEY}"
+          YAML
+
+      - name: Validate Compose model
+        run: docker compose -f docker-compose.yml -f /tmp/live-provider.override.yml --profile mcp-example config --quiet
+
+      - name: Start real self-host backend and MCP server
+        shell: bash
+        run: |
+          docker compose -f docker-compose.yml -f /tmp/live-provider.override.yml --profile mcp-example \
+            up -d --build postgres backend mcp-example-map
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.yml -f /tmp/live-provider.override.yml --profile mcp-example \
+            logs backend postgres mcp-example-map
+          exit 1
+
+      - name: Run Provider to Agent to real MCP Tool Calling acceptance
+        shell: bash
+        run: |
+          provider_id="live-provider-${GITHUB_RUN_ID}"
+          model_id="live-model-${GITHUB_RUN_ID}"
+          mcp_server_id="live-map-${GITHUB_RUN_ID}"
+          skill_name="live-provider-mcp-${GITHUB_RUN_ID}"
+
+          extra_flags=()
+          if [[ "${{ inputs.supports_reasoning }}" == "true" ]]; then
+            extra_flags+=(--supports-reasoning)
+          fi
+          if [[ "${{ inputs.supports_responses_api }}" == "true" ]]; then
+            extra_flags+=(--supports-responses-api)
+          fi
+
+          docker compose -f docker-compose.yml -f /tmp/live-provider.override.yml --profile mcp-example \
+            exec -T backend uv run python scripts/verify_live_provider_agent.py \
+              --admin-email "$SELFHOST_ADMIN_EMAIL" \
+              --admin-password "$SELFHOST_ADMIN_PASSWORD" \
+              --provider-id "$provider_id" \
+              --provider-name "Live OpenAI-compatible Provider" \
+              --provider-base-url "${{ inputs.provider_base_url }}" \
+              --provider-api-model "${{ inputs.provider_api_model }}" \
+              --model-id "$model_id" \
+              --context-window "${{ inputs.context_window }}" \
+              --max-output-tokens "${{ inputs.max_output_tokens }}" \
+              --mcp-server-id "$mcp_server_id" \
+              --skill-name "$skill_name" \
+              "${extra_flags[@]}"
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f /tmp/live-provider.override.yml --profile mcp-example \
+            logs backend postgres mcp-example-map
+
+      - name: Stop services and remove acceptance volumes
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f /tmp/live-provider.override.yml --profile mcp-example \
+            down -v --remove-orphans
