@@ -64,7 +64,6 @@ describe("AdminHub IA", () => {
     render(<AdminHub />);
     expect(screen.queryByText("Platform")).toBeNull();
     expect(screen.queryByText("Model Providers")).toBeNull();
-    // ...but the areas they CAN use are still there.
     expect(screen.getByText("Your tenant")).toBeTruthy();
     expect(screen.getByText("People & access")).toBeTruthy();
   });
@@ -106,12 +105,10 @@ describe("AdminHub IA", () => {
     expect(screen.getByText("Admins only")).toBeTruthy();
   });
 
-  it("offers a token re-check, because a just-granted tag isn't in the current token", () => {
-    // Without this the newly-appointed admin sees no link, no error, and no
-    // explanation for ~1h — a silent failure, not a permissions one.
+  it("offers a token re-check after a just-granted role", () => {
     Object.assign(scope, { state: "none", domains: [], isAdmin: false, isPlatform: false });
     render(<AdminHub />);
-    expect(screen.getByText(/only lands when your sign-in token refreshes/i)).toBeTruthy();
+    expect(screen.getByText(/granted access just now/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /re-check my access/i }));
     expect(recheck).toHaveBeenCalled();
   });
