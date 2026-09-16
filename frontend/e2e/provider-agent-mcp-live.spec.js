@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { randomUUID } = require("node:crypto");
 
 const FRONTEND_URL = process.env.PROVIDER_E2E_FRONTEND_URL || "http://localhost:3456";
 const BACKEND_URL = process.env.PROVIDER_E2E_BACKEND_URL || "http://127.0.0.1:1956";
@@ -10,11 +11,12 @@ const MODEL_SUPPORTS_REASONING = process.env.REAL_PROVIDER_SUPPORTS_REASONING ==
 const RUN_ID = (process.env.PROVIDER_E2E_RUN_ID || `${Date.now()}`)
   .toLowerCase()
   .replace(/[^a-z0-9-]/g, "-")
-  .slice(0, 20);
+  .slice(0, 20) + `-${randomUUID().slice(0, 8)}`;
 
 const PROVIDER_ID = `real-e2e-${RUN_ID}`;
 const MODEL_ID = `real-e2e-model-${RUN_ID}`;
-const SERVER_ID = "ext-apps-map";
+// Never overwrite/delete a pre-existing MCP configuration during acceptance.
+const SERVER_ID = `real-e2e-map-${RUN_ID}`;
 const UPSTREAM_URL = "http://mcp-example-map:8080/mcp";
 const SESSION_KEY = "aitana:local_jwt_session";
 const FINAL_MARKER = "AGENT-MCP-E2E-PASS";

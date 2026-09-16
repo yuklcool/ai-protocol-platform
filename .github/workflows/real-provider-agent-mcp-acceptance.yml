@@ -3,6 +3,7 @@ name: Real Provider Agent MCP acceptance
 on:
   pull_request:
     paths:
+      - docs/real-provider-acceptance.md
       - frontend/e2e/provider-agent-mcp-live.spec.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   workflow_dispatch:
