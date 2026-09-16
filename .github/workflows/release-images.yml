@@ -85,7 +85,7 @@ jobs:
           exit 1
 
       - name: Run no-GCP self-host smoke
-        run: bash scripts/smoke-selfhost.sh
+        run: EXPECT_LOCAL_MODE=false bash scripts/smoke-selfhost.sh
 
       - name: Verify migration journal was created
         run: |
