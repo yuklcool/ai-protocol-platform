@@ -3,7 +3,7 @@
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
 > 状态更新时间：**2026-09-16**  
-> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实 MCP 后端/协议以及 Chromium separate-origin MCP Apps 浏览器渲染验收，只剩真实模型驱动 Agent MCP Tool Call。**
+> 当前阶段：**核心 Self-host / Tenant / Provider / MCP 能力已经完成，当前同时推进真实 Provider 最终验收与 versioned GHCR 发布收口。PR #35 是真实 Provider + Agent + MCP 的最终验收 harness；PR #36 是 GHCR/Release 发布链。**
 
 ---
 
@@ -31,7 +31,12 @@
 - Tenant Model `allowedModels / defaultModel`
 - Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
 
-接下来不要重新实现这些基础能力。当前最高优先级是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
+当前**不要重新实现**以上基础能力。
+
+现在真正剩余的是两条主线：
+
+1. **真实 Provider 最终验收**：#10 / #11 / #9 / #2 的 LLM-dependent 边界。
+2. **发布收口**：#13 GHCR/versioned release，目前由 PR #36 推进。
 
 ---
 
@@ -93,13 +98,15 @@ deploy/2026-09-15
 e07dbe78da4ec5ba06866ca423707c9eb50d9329
 ```
 
-**禁止移动、重写或把后续 `main` 自动合并到该分支。** 需要新稳定版本时创建新的 deploy branch。
+**禁止移动、重写或把后续 `main` 自动合并到该分支。**
 
-当前 `main` 已明显领先该冻结快照。
+需要新稳定版本时创建新的 deploy branch。
 
 ---
 
-## 4. 最近关键合并
+## 4. 最近关键合并与当前开放 PR
+
+### 已合并
 
 ```text
 PR #25 — Provider / Dynamic Model backend
@@ -132,6 +139,74 @@ PR #33 — Real Self-host MCP protocol acceptance
 PR #34 — Real MCP Apps Chromium browser/sandbox acceptance
 aaab15e913d392ac4b84a041be43a4fc2e175105
 ```
+
+### 当前开放
+
+#### PR #35 — `test(provider): add real Provider Agent MCP acceptance`
+
+分支：
+
+```text
+feat/real-provider-agent-mcp-acceptance
+```
+
+Head：
+
+```text
+5aba8b77f15bb609f2018abee290096d74f6cdb4
+```
+
+状态：**OPEN，mergeable。**
+
+该 PR 新增最终真实 Provider 验收 harness，但**没有声称真实第三方 Provider 已通过**。真实 job 仅通过 `workflow_dispatch` 运行，并要求 operator 提供真实 OpenAI-compatible endpoint / model / secret。
+
+验收目标：
+
+```text
+Persisted Provider
+  ↓
+Provider /models connectivity
+  ↓
+Dynamic Model
+  ↓
+real completion probe
+  ↓
+real forced tool-calling probe
+  ↓
+真实 ext-apps MCP Server
+  ↓
+private Skill + Dynamic Model + MCP binding
+  ↓
+正常 Chromium /chat/{skillId}
+  ↓
+真实用户输入
+  ↓
+模型真实选择并执行 show-map
+  ↓
+MCP App iframe
+  ↓
+post-tool assistant final response
+```
+
+缺少 `REAL_PROVIDER_API_KEY`、endpoint、模型或任意一步失败都应 fail closed。
+
+#### PR #36 — `feat(release): add versioned GHCR self-host delivery`
+
+分支：
+
+```text
+feat/ghcr-selfhost-release
+```
+
+当前 Head（更新 HANDOFF 前）：
+
+```text
+07936bf26a0fb4b0ddd1c6e746c200c31b2e49b6
+```
+
+状态：**OPEN，mergeable；当前正在修 frontend release image CI blocker。**
+
+本交接文档当前就是在该分支更新。
 
 ---
 
@@ -303,6 +378,8 @@ Agent conversation
 Actual Tool Calling
 ```
 
+PR #35 已经把这条验收链做成 manual-only fail-closed workflow；下一步是提供真实 endpoint / secret 并跑通。
+
 没有真实 endpoint / secret 时，不得用 mock 关闭 #10。
 
 ---
@@ -361,11 +438,9 @@ Disable Server
 Admin Health 仍可诊断；Runtime Proxy -> 404
 ```
 
-首轮 live gate 发现测试夹具 Skill name 不符合真实 lowercase kebab-case 约束，修正夹具后完整链路全绿；没有降低业务校验。
-
 ### PR #34：真实 Chromium MCP Apps Browser Acceptance
 
-PR #34 没有新造一套 Host，而是复用现有产品链路：
+PR #34 复用现有正式产品 Host 链路，没有新造第二套 Host：
 
 ```text
 MessageBubble
@@ -391,44 +466,186 @@ Separate-origin sandbox :3457
 Inner MCP App iframe
 ```
 
-CI 使用真实 Compose：
-
-```text
-PostgreSQL
-Backend / local-jwt
-Frontend :3456
-MCP sandbox :3457
-upstream ext-apps map MCP Server
-Chromium / Playwright
-```
+CI 使用真实 Compose + PostgreSQL + Backend/local-jwt + Frontend + MCP sandbox + upstream ext-apps map MCP Server + Chromium/Playwright。
 
 已确认：
 
 - real local-jwt browser session
 - MCP Admin register / Health / Discovery
 - Skill Binding
-- 浏览器 MCP Client 经平台 authenticated Proxy 连接真实 MCP server
+- authenticated Proxy
 - `show-map` tool definition 可发现
 - 真实 `ui://` HTML resource 可读取
-- Host origin = `http://localhost:3456`
-- Sandbox origin = `http://localhost:3457`
+- Host origin 与 Sandbox origin 分离
 - Sandbox 创建 inner iframe
-- 真实 MCP App HTML 写入 inner iframe 并可被 Chromium 观察到
+- 真实 MCP App HTML 写入 iframe 并被 Chromium 观察到
 - 无 sandbox ready timeout / origin rejection / listTools / readResource fatal error
 
-该 Gate 只把“LLM 产生 ToolCall”这一环固定为确定性 ToolCall fixture；MCP Client、Proxy、MCP server、resource transport、sandbox 与浏览器渲染全部是真实链路。因此它不能代替真实 Provider Tool Calling，但已经足以关闭“浏览器 MCP Apps iframe/sandbox 是否真实工作”的疑问。
+该 gate 只固定“LLM 产生 ToolCall”这一环；其余 MCP/Browser/Sandbox 链路都是真实的。
 
 ### #11 真正剩余
 
 只剩：
 
-1. **真实 Provider 驱动 Agent MCP Tool Call**：模型必须真正选择并执行绑定 MCP Tool，不能用 mock model / 固定 ToolCall fixture 替代。
+1. **真实 Provider 驱动 Agent MCP Tool Call**。
+
+这已经由 PR #35 的 manual acceptance harness 覆盖测试设计；尚缺真实 Provider secret/endpoint 的实际执行结果。
 
 不要再重复实现或验收 Admin register / Health / Discovery / Binding / Proxy / Apps resource transport / browser sandbox rendering；PR #33 + #34 已覆盖。
 
 ---
 
-## 8. Issue 总状态
+## 8. #13 GHCR / Versioned Release 状态（PR #36）
+
+这是当前正在推进的新主线。
+
+### 8.1 目标
+
+让 Self-host 用户不需要 clone 仓库、不需要本地 build，直接使用 versioned prebuilt images 部署：
+
+```text
+GitHub Release assets
++ docker-compose.release.yml
++ .env.selfhost.example
++ GHCR backend image
++ GHCR frontend image
++ GHCR mcp-sandbox image
+```
+
+### 8.2 PR #36 已实现的代码
+
+新增/修改包括：
+
+```text
+.github/workflows/release-images.yml
+docker-compose.release.yml
+backend/scripts/apply_selfhost_migrations.py
+backend/Dockerfile
+frontend/Dockerfile
+frontend/docker-entrypoint.sh
+docs/selfhost-release-images.md
+README.md
+SELFHOST.md
+scripts/smoke-selfhost.sh
+```
+
+核心能力：
+
+- backend / frontend / mcp-sandbox 三个 GHCR release image
+- SHA tag
+- semver tag
+- release `latest` tag
+- tag release 时 `linux/amd64 + linux/arm64`
+- BuildKit SBOM
+- provenance attestation
+- Trivy HIGH/CRITICAL vulnerability gate
+- GitHub Release 自动生成 release notes
+- Release 附带 `docker-compose.release.yml` 与 `.env.selfhost.example`
+- `docker-compose.release.yml` 不含 build context，不依赖源码 bind mount
+- backend image 自带 PostgreSQL migration runner
+- migration journal：`platform_schema_migrations`
+- source Self-host 路径同样改为幂等 migration runner
+- frontend release image 支持 MCP Sandbox URL runtime relocation 设计
+- Self-host 文档已经修正旧的 `LOCAL_MODE=1`、旧 tenant/domain 和 MCP 手工验收描述
+
+### 8.3 已通过的真实 Release Gate
+
+Workflow run：
+
+```text
+35060818996
+```
+
+`Release self-host gate` 已完整成功，证明：
+
+1. source Compose 可解析。
+2. release Compose 可解析。
+3. frontend typecheck + unit tests 通过。
+4. source backend / frontend / mcp-sandbox 三镜像 build 通过。
+5. 真实 PostgreSQL + backend + frontend + sandbox 栈启动成功。
+6. `LOCAL_MODE=0` 的 production-style no-GCP smoke 通过。
+7. backend 启动时 bundled migration 实际执行成功。
+8. PostgreSQL 中实际存在：
+
+```text
+platform_schema_migrations
+└── 001_postgres_documents.sql
+```
+
+因此，**镜像内 migration runner / 启动顺序 / production-mode Self-host smoke 已经真实验证通过。**
+
+### 8.4 Release image matrix 当前结果
+
+同一 run：
+
+```text
+backend image      ✅ success
+mcp-sandbox image  ✅ success
+frontend image     ❌ failure
+```
+
+frontend 当前硬阻塞并不是 TypeScript 或 Next.js 编译错误，而是 release build 使用的专用 placeholder：
+
+```text
+__MCP_SANDBOX_PUBLIC_URL__
+```
+
+在 Next.js prerender `/dev/mcp-apps/active` 时被 `new URL(...)` 提前解析，导致：
+
+```text
+TypeError: Invalid URL
+input: '__MCP_SANDBOX_PUBLIC_URL__'
+ERR_INVALID_URL
+```
+
+因此当前 frontend release image 尚未成功生成，后面的“启动容器后把 placeholder 替换成 `MCP_SANDBOX_PUBLIC_URL`”验证也尚未执行。
+
+### 8.5 当前正确的修复方向
+
+不要放弃“同一预构建 frontend image 可部署到任意域名”这个目标。
+
+需要把 placeholder 改成**build-time 也合法的 URL 字符串**，同时保持它足够唯一，容器 entrypoint 仍可在启动时替换成：
+
+```env
+MCP_SANDBOX_PUBLIC_URL=https://mcp.example.com
+```
+
+修复后必须重新验证：
+
+```text
+frontend release image build
+  ↓
+container entrypoint runtime replacement
+  ↓
+placeholder 完全消失
+  ↓
+目标 MCP_SANDBOX_PUBLIC_URL 出现在 .next runtime assets
+```
+
+### 8.6 额外观察
+
+frontend Dockerfile 仍基于 Node 18；当前依赖里已经出现多个 `>=20` engine warning，包括 `@modelcontextprotocol/ext-apps` / jsdom 相关包。
+
+这不是本轮 hard failure 的直接原因，但在 release image 稳定化时应考虑把 frontend build/runtime Node 基线提升到 Node 20/24，避免后续依赖升级直接变成安装/构建失败。
+
+### 8.7 #13 还不能关闭的原因
+
+PR event 下目前还**没有**证明：
+
+- frontend release image build 成功
+- runtime sandbox URL replacement 成功
+- tag 触发的 GHCR push 成功
+- `linux/amd64 + linux/arm64` 真正发布成功
+- SBOM/provenance 真正随 release image 生成
+- Trivy 发布后镜像扫描通过
+- GitHub Release 实际创建成功
+- 完全 no-clone、pull-only 的 `docker-compose.release.yml` 从 GHCR 冷启动成功
+
+所以 #13 当前应保持 OPEN。
+
+---
+
+## 9. Issue 总状态
 
 已关闭/完成基础能力：
 
@@ -438,18 +655,21 @@ Chromium / Playwright
 - #7 Built-in JWT ✅
 - #8 GCP optionalization ✅
 
-保持 OPEN、等待最终真实验收：
+保持 OPEN、等待最终真实验收或发布收口：
 
 - #1 Self-host 全链路
-- #2 OpenAI-compatible
-- #3 Docker Compose
+- #2 OpenAI-compatible real Provider E2E
+- #3 Docker Compose release acceptance
 - #9 target migration + quota/Tool Calling final acceptance
 - #10 real Provider E2E
 - #11 real Agent MCP Tool Call
+- #13 GHCR / versioned release（PR #36）
 
 ---
 
-## 9. 当前 CI Gate
+## 10. 当前 CI Gate
+
+当前已有：
 
 - Tenant isolation
 - Tenant live self-host acceptance
@@ -458,22 +678,83 @@ Chromium / Playwright
 - Self-host auth baseline
 - Self-host no-GCP
 - MCP admin
-- **MCP live self-host acceptance（包含 Chromium separate-origin MCP Apps browser acceptance）**
+- MCP live self-host acceptance
+- Chromium separate-origin MCP Apps browser acceptance
 - Model provider
+- **Self-host release images（PR #36 新增）**
 
-CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI、ObjectStorage、Tenant、MCP、Provider routing 等路径。
+### 真实能力边界
 
-PR #33 已证明真实 `ext-apps` MCP Server 可以经平台 Admin/Registry/Skill Binding/Proxy 完成 MCP 协议与 HTML resource transport；PR #34 已进一步证明 Chromium 中真实 separate-origin sandbox/iframe 能加载该 MCP Apps HTML。
+已经被真实 CI 证明：
 
-CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secret 时，不得把固定 ToolCall 或 mock model 当成 #10/#11 最终验收。
+- PostgreSQL persistence / Session / Memory / A2UI
+- no-GCP Self-host
+- local-jwt
+- Tenant A/B 非 LLM isolation
+- MCP Admin / Binding / Proxy / HTML resource transport
+- Chromium MCP Apps separate-origin sandbox rendering
+- release stack production-mode no-GCP boot
+- bundled PostgreSQL migration journal
+- backend / mcp-sandbox release image PR build
+
+仍不能由当前 CI 冒充：
+
+- 真实第三方 Provider
+- 真实 Agent MCP Tool Calling
+- tag GHCR publish
+- tag multi-arch publish
+- tag SBOM/provenance/Trivy
+- pull-only release Compose 冷启动
 
 ---
 
-## 10. 下一步执行顺序
+## 11. 下一步执行顺序
 
-### 第一优先：#10 / #2 真实 Provider E2E
+### 第一优先：收口 PR #36
 
-有真实 endpoint + secret 时直接做：
+当前立即动作：
+
+```text
+修 frontend build-safe placeholder
+  ↓
+重新跑 Self-host release images
+  ↓
+frontend image build 成功
+  ↓
+runtime MCP_SANDBOX_PUBLIC_URL replacement 验证成功
+  ↓
+确认所有相关 PR checks 全绿
+  ↓
+merge PR #36
+```
+
+PR #36 merge 后再做一次真正的 release/tag acceptance：
+
+```text
+创建新 version tag
+  ↓
+GHCR 三镜像 push
+  ↓
+amd64 + arm64
+  ↓
+SBOM + provenance
+  ↓
+Trivy
+  ↓
+GitHub Release assets
+  ↓
+只下载 compose/env
+  ↓
+docker compose pull/up
+  ↓
+no-clone cold-start smoke
+```
+
+只有这一步通过后，才能真正认为 #13 的发布链收口。
+
+### 第二优先：PR #35 / #10 / #11 / #2 真实 Provider E2E
+
+有真实 endpoint + secret 时执行：
 
 ```text
 Provider
@@ -494,6 +775,8 @@ Agent Conversation
   ↓
 Tool result
   ↓
+MCP App iframe
+  ↓
 Agent final response
 ```
 
@@ -504,11 +787,11 @@ Agent final response
 - #9 Tenant quota / Tool Permission / Model Policy 的 LLM-dependent final acceptance
 - #2 OpenAI-compatible 全链路验收
 
-### 第二优先：#9 目标部署 legacy migration
+### 第三优先：#9 目标部署 legacy migration
 
 需要真实现存 legacy 数据，代码已经准备好；不要重新写 migration tooling。
 
-执行顺序：
+执行：
 
 ```text
 dry-run
@@ -522,27 +805,18 @@ verify
 rollback drill
 ```
 
-### 第三优先：其他真实浏览器/产品体验验收
+### 后续优化
 
-MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏览器方向重点可放在：
-
-- A2UI surface/action
-- Skill Studio model selection（配合真实 Provider）
-- Chat / AG-UI 完整体验
-
-### 第四优先：发布收口
-
-完成真实验收后推进：
+核心验收/发布稳定后再推进：
 
 - #12 中文化 / Branding
-- #13 GHCR / versioned release
 - #14 upstream sync
 - #16 S3 adapter
 - #17 OIDC extension
 
 ---
 
-## 11. 开发约束
+## 12. 开发约束
 
 1. Self-host 默认依赖越少越好。
 2. PostgreSQL 能承担的结构化状态不要拆新数据库。
@@ -559,3 +833,6 @@ MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏
 13. 不修改冻结 `deploy/2026-09-15`。
 14. 每个阶段结束后同步 Issue + HANDOFF。
 15. 已由真实 gate 覆盖的能力不要重新造第二套验收；新增 gate 应聚焦尚未证明的边界。
+16. PR CI 只证明 PR event 实际执行的步骤；tag-only GHCR push / multi-arch / SBOM / provenance / Trivy / GitHub Release 不能提前标记为已通过。
+17. Release frontend 必须保持可重定位，不能重新把固定 `localhost:3457` 编译进通用 GHCR 镜像。
+18. 未经真实 endpoint / secret 执行，不得把 PR #35 当成 real Provider acceptance 已通过。
