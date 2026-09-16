@@ -17,6 +17,7 @@ const MODEL_ID = `real-e2e-model-${RUN_ID}`;
 const SERVER_ID = "ext-apps-map";
 const UPSTREAM_URL = "http://mcp-example-map:8080/mcp";
 const SESSION_KEY = "aitana:local_jwt_session";
+const FINAL_MARKER = "AGENT-MCP-E2E-PASS";
 
 async function api(path, init = {}) {
   const response = await fetch(`${BACKEND_URL}${path}`, init);
@@ -150,7 +151,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
           name: `real-provider-mcp-${RUN_ID}`,
           description: "Real Provider Agent MCP acceptance skill",
           instructions:
-            "When the user asks for a map, you MUST call the available show-map MCP tool before answering. Never claim a map was shown unless the tool succeeded.",
+            `When the user asks for a map, you MUST call the available show-map MCP tool before answering. Never claim a map was shown unless the tool succeeded. After a successful map tool call, include the exact marker ${FINAL_MARKER} in your final answer.`,
           displayName: "Real Provider MCP Acceptance",
           accessControl: { type: "private" },
           skillMetadata: {
@@ -184,7 +185,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const composer = page.locator('textarea[placeholder="Message…"]');
       await expect(composer).toBeVisible({ timeout: 30_000 });
       await composer.fill(
-        "Use the map tool to display Munich, Germany. You must call show-map before answering. After the tool succeeds, reply with a short confirmation that includes the word Munich.",
+        "Use the map tool to display Munich, Germany. You must call show-map before answering. After the tool succeeds, give me a short confirmation.",
       );
       await composer.press("Enter");
 
@@ -201,7 +202,14 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         )
         .toBeGreaterThan(0);
 
-      await expect(page.getByText(/Munich/i).last()).toBeVisible({ timeout: 90_000 });
+      // User text does not contain FINAL_MARKER. Restrict to assistant bubble
+      // shape so the final assertion proves the real Agent continued after the
+      // tool result and authored a final response rather than stopping at ToolCall.
+      const assistantFinal = page
+        .locator("div.flex.items-start.gap-3:not(.justify-end)")
+        .filter({ hasText: FINAL_MARKER });
+      await expect(assistantFinal.last()).toBeVisible({ timeout: 90_000 });
+      await expect(assistantFinal.last()).toContainText(/Munich/i);
 
       const fatalDiagnostics = diagnostics.filter((line) =>
         [
