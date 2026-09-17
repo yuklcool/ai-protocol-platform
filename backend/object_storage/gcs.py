@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import Any, BinaryIO
 
 from object_storage.base import ObjectInfo
 from object_storage.local import _validate_key, _validate_tenant_id
+
+_MAX_SIGNED_URL_SECONDS = 7 * 24 * 60 * 60
+
+
+def _validate_signed_url_expiry(expires_in: int) -> int:
+    value = int(expires_in)
+    if value <= 0 or value > _MAX_SIGNED_URL_SECONDS:
+        raise ValueError("expires_in must be between 1 and 604800 seconds")
+    return value
 
 
 class GcsObjectStorage:
@@ -108,6 +118,40 @@ class GcsObjectStorage:
         result.sort(key=lambda item: item.key)
         return result
 
+    def generate_presigned_download_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+    ) -> str:
+        blob, _ = self._blob(tenant_id, key)
+        return str(
+            blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(seconds=_validate_signed_url_expiry(expires_in)),
+                method="GET",
+            )
+        )
+
+    def generate_presigned_upload_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+        content_type: str | None = None,
+    ) -> str:
+        blob, _ = self._blob(tenant_id, key)
+        kwargs: dict[str, Any] = {
+            "version": "v4",
+            "expiration": timedelta(seconds=_validate_signed_url_expiry(expires_in)),
+            "method": "PUT",
+        }
+        if content_type:
+            kwargs["content_type"] = content_type
+        return str(blob.generate_signed_url(**kwargs))
+
 
 class LegacyGcsObjectStorage(GcsObjectStorage):
     """Read/delete compatibility for pre-ObjectStorage GCS objects."""
@@ -125,3 +169,13 @@ class LegacyGcsObjectStorage(GcsObjectStorage):
 
     def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]:  # pragma: no cover
         raise RuntimeError("LegacyGcsObjectStorage does not expose namespace listing")
+
+    def generate_presigned_upload_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+        content_type: str | None = None,
+    ) -> str:  # pragma: no cover
+        raise RuntimeError("LegacyGcsObjectStorage is read/delete compatibility only")
