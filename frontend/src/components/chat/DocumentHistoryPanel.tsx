@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { type SessionFilter, useDocumentSessions } from "@/hooks/useDocumentSessions";
+import { useDocumentSessions } from "@/hooks/useDocumentSessions";
 import type { ChatSessionSummary } from "@/hooks/useDocumentSessions";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { notifySessionsChanged } from "@/lib/sessionEvents";
+import { useI18n } from "@/contexts/I18nContext";
+import type { Locale } from "@/lib/i18n";
+import { translateChat } from "@/lib/i18n/chat";
 
 export interface DocumentHistoryPanelProps {
   documentId: string;
@@ -12,19 +15,16 @@ export interface DocumentHistoryPanelProps {
   currentUserUid: string;
   onSelectSession: (sessionId: string, ownerUid: string) => void;
   onNewSession: () => void;
-  /** Called when the user deletes the currently-active session — lets
-   * the parent clear the URL ?session= so the chat surface resets to
-   * a fresh state (same code path as "+ New conversation"). */
   onDeleteActive?: () => void;
 }
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, locale: Locale): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return translateChat(locale, "time.minutesAgo", { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  if (hrs < 24) return translateChat(locale, "time.hoursAgo", { count: hrs });
+  return translateChat(locale, "time.daysAgo", { count: Math.floor(hrs / 24) });
 }
 
 interface SessionRowProps {
@@ -33,14 +33,18 @@ interface SessionRowProps {
   isOwner: boolean;
   onClick: () => void;
   onRename: (newTitle: string) => Promise<void>;
-  /** Owner-only delete affordance. When omitted, no trash icon is shown
-   * (used for non-owner team rows). */
   onDelete?: () => void;
 }
 
 function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }: SessionRowProps) {
-  const initialTitle = session.title ?? "Untitled conversation";
-  const time = relativeTime(session.last_message_at);
+  const { locale } = useI18n();
+  const initialTitle = session.title ?? translateChat(locale, "history.untitled");
+  const time = relativeTime(session.last_message_at, locale);
+  const turns = translateChat(
+    locale,
+    session.turn_count === 1 ? "history.turnOne" : "history.turnMany",
+    { count: session.turn_count },
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(initialTitle);
   const [saving, setSaving] = useState(false);
@@ -57,8 +61,6 @@ function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }:
       await onRename(trimmed);
       setIsEditing(false);
     } catch {
-      // Revert; the parent's refetch will resync if the request actually
-      // succeeded but raised on a transient.
       setDraft(initialTitle);
       setIsEditing(false);
     } finally {
@@ -90,10 +92,10 @@ function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }:
           }}
           disabled={saving}
           className="w-full bg-transparent font-medium text-gray-900 outline-none"
-          aria-label="Rename conversation"
+          aria-label={translateChat(locale, "history.renameAria")}
         />
         <div className="text-xs text-gray-400 mt-0.5">
-          {time} · {session.turn_count} turn{session.turn_count !== 1 ? "s" : ""}
+          {time} · {turns}
         </div>
       </div>
     );
@@ -111,7 +113,7 @@ function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }:
       <button onClick={onClick} className="min-w-0 flex-1 text-left">
         <div className="font-medium truncate">{initialTitle}</div>
         <div className="text-xs text-gray-400 mt-0.5">
-          {time} · {session.turn_count} turn{session.turn_count !== 1 ? "s" : ""}
+          {time} · {turns}
         </div>
       </button>
       {isOwner && (
@@ -122,8 +124,8 @@ function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }:
             setDraft(initialTitle);
             setIsEditing(true);
           }}
-          aria-label={`Rename ${initialTitle}`}
-          title="Rename"
+          aria-label={translateChat(locale, "history.renameAriaWithTitle", { title: initialTitle })}
+          title={translateChat(locale, "history.rename")}
           className="shrink-0 rounded p-1 text-gray-400 opacity-0 hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -138,8 +140,8 @@ function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }:
             e.stopPropagation();
             onDelete();
           }}
-          aria-label={`Delete ${initialTitle}`}
-          title="Delete"
+          aria-label={translateChat(locale, "history.deleteAriaWithTitle", { title: initialTitle })}
+          title={translateChat(locale, "history.delete")}
           className="shrink-0 rounded p-1 text-gray-400 opacity-0 hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -152,22 +154,18 @@ function SessionRow({ session, isActive, isOwner, onClick, onRename, onDelete }:
 }
 
 async function renameSession(sessionId: string, title: string): Promise<void> {
-  const res = await fetchWithAuth(
-    `/api/proxy/api/sessions/${encodeURIComponent(sessionId)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    },
-  );
+  const res = await fetchWithAuth(`/api/proxy/api/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
 async function deleteSession(sessionId: string): Promise<void> {
-  const res = await fetchWithAuth(
-    `/api/proxy/api/sessions/${encodeURIComponent(sessionId)}`,
-    { method: "DELETE" },
-  );
+  const res = await fetchWithAuth(`/api/proxy/api/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
@@ -179,14 +177,8 @@ export default function DocumentHistoryPanel({
   onNewSession,
   onDeleteActive,
 }: DocumentHistoryPanelProps) {
-  // G28 (template-chat-surface-defaults.md): default-collapsed so a
-  // high-traffic doc with 50+ sessions doesn't push the actual
-  // DocumentPanel off-screen. Header carries the count so users see the
-  // history exists without needing to expand.
+  const { locale } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
-  // refetch is exposed by the hook but unused here — cross-panel sync is
-  // handled via the sessions-changed event bus, which the hook subscribes
-  // to itself.
   const { sessions, isLoading, error } = useDocumentSessions(documentId);
 
   const mine = sessions.filter((s) => s.owner_uid === currentUserUid);
@@ -195,50 +187,33 @@ export default function DocumentHistoryPanel({
 
   async function handleRename(sessionId: string, title: string): Promise<void> {
     await renameSession(sessionId, title);
-    // Both the skill-level panel and any other doc panel showing this
-    // session's title need to update — the bus fans this out.
     notifySessionsChanged();
   }
 
   async function handleDelete(sessionId: string): Promise<void> {
-    // Soft-delete on the backend (archivedAt). Confirm dialog gates the
-    // destructive action; backend stays the single source of truth so a
-    // network failure here is fully recoverable (the row reappears on the
-    // next refetch). See docs/design/v6.1.0/session-delete-ui.md.
-    if (
-      !window.confirm(
-        "Delete this conversation? This can't be undone from the UI.",
-      )
-    ) {
-      return;
-    }
+    if (!window.confirm(translateChat(locale, "history.deleteConfirm"))) return;
     try {
       await deleteSession(sessionId);
       notifySessionsChanged({ deletedSessionId: sessionId });
-      if (sessionId === activeSessionId) {
-        onDeleteActive?.();
-      }
+      if (sessionId === activeSessionId) onDeleteActive?.();
     } catch {
-      // Backend rejected. Refetch reconciles any partial state — if the
-      // row is still there the user sees it return.
       notifySessionsChanged();
     }
   }
 
   return (
     <div className="border-b border-gray-200">
-      {/* Header */}
       <button
         onClick={() => setIsOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
         aria-expanded={isOpen}
       >
         <span className="flex items-center gap-2">
-          Conversations
+          {translateChat(locale, "history.conversations")}
           {totalCount > 0 && (
             <span
               className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-              aria-label={`${totalCount} conversations`}
+              aria-label={translateChat(locale, "history.conversationCount", { count: totalCount })}
             >
               {totalCount}
             </span>
@@ -248,25 +223,19 @@ export default function DocumentHistoryPanel({
       </button>
 
       {isOpen && (
-        // G28: cap height + scroll internally so an expanded list with
-        // 50+ sessions never pushes sibling components out of the viewport.
         <div className="max-h-[25vh] overflow-y-auto px-3 pb-3 space-y-3">
           {isLoading && (
-            <p className="text-xs text-gray-400 px-1">Loading…</p>
+            <p className="text-xs text-gray-400 px-1">{translateChat(locale, "history.loading")}</p>
           )}
-          {error && (
-            <p className="text-xs text-red-500 px-1">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-500 px-1">{error}</p>}
 
-          {/* Mine section — hidden entirely when load failed; the error
-              banner above is the only message. */}
           {!error && (
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-1">
-                Mine
+                {translateChat(locale, "history.mine")}
               </p>
               {mine.length === 0 && !isLoading && (
-                <p className="text-xs text-gray-400 px-1">No conversations yet</p>
+                <p className="text-xs text-gray-400 px-1">{translateChat(locale, "history.none")}</p>
               )}
               <div className="space-y-1">
                 {mine.map((s) => (
@@ -284,11 +253,10 @@ export default function DocumentHistoryPanel({
             </div>
           )}
 
-          {/* Team section — only shown when there are team sessions */}
           {!error && team.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-1">
-                Team
+                {translateChat(locale, "history.team")}
               </p>
               <div className="space-y-1">
                 {team.map((s) => (
@@ -305,12 +273,11 @@ export default function DocumentHistoryPanel({
             </div>
           )}
 
-          {/* New conversation */}
           <button
             onClick={onNewSession}
             className="w-full text-left px-3 py-2 rounded text-sm text-blue-600 hover:bg-blue-50 transition-colors"
           >
-            + New conversation
+            {translateChat(locale, "history.newConversation")}
           </button>
         </div>
       )}

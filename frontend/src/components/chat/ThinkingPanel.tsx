@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface ThinkingPanelProps {
   content: string;
@@ -9,6 +11,7 @@ interface ThinkingPanelProps {
 
 export function ThinkingPanel({ content, isThinking }: ThinkingPanelProps) {
   const [expanded, setExpanded] = useState(true);
+  const { locale } = useI18n();
 
   // Auto-collapse when thinking finishes
   useEffect(() => {
@@ -27,7 +30,7 @@ export function ThinkingPanel({ content, isThinking }: ThinkingPanelProps) {
             className="h-3 w-3 animate-spin shrink-0"
             viewBox="0 0 24 24"
             fill="none"
-            aria-label="Thinking"
+            aria-label={translateChat(locale, "thinking.aria")}
           >
             <circle
               className="opacity-25"
@@ -44,7 +47,11 @@ export function ThinkingPanel({ content, isThinking }: ThinkingPanelProps) {
             />
           </svg>
         )}
-        <span className="font-medium">{isThinking ? "Thinking…" : "Thought process"}</span>
+        <span className="font-medium">
+          {isThinking
+            ? translateChat(locale, "thinking.active")
+            : translateChat(locale, "thinking.process")}
+        </span>
         <svg
           className={`ml-auto h-3 w-3 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
           viewBox="0 0 16 16"

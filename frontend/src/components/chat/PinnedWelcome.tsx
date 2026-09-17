@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface PinnedWelcomeProps {
   /** Markdown body — typically the skill's `welcome.intro_message` or
@@ -12,29 +14,12 @@ interface PinnedWelcomeProps {
   skillId: string;
   /** Optional skill display name surfaced as part of the header label. */
   skillDisplayName?: string;
-  /** Custom header label (overrides skillDisplayName-based default). */
+  /** Custom Skill-authored header label. When present it stays authoritative. */
   headerLabel?: string;
 }
 
 const KEY_PREFIX = "aitana.welcome.collapsed:";
 
-/**
- * PinnedWelcome — collapsible header that pins the skill's intro / starter
- * prompts to the top of the chat shell. Stays visible across all messages
- * (unlike the one-shot {@link AssistantIntroBubble} that falls off after
- * the first user turn).
- *
- * Use this when the intro is genuine pedagogical scaffolding (e.g. "Open
- * the sim, then ask me a question") that you want students/users to be
- * able to re-reach after they've started talking. For a single ice-
- * breaker that should fall away once the conversation begins, prefer
- * AssistantIntroBubble.
- *
- * Collapse state is per-skill (so one skill's preference doesn't leak
- * into another) and persists in sessionStorage. Ported from CPH UNI's
- * AIPLA fork 2026-06-11; key prefix renamed to `aitana.welcome.collapsed:`
- * so existing AIPLA users don't clobber upstream state via shared origin.
- */
 export function PinnedWelcome({
   content,
   skillId,
@@ -42,9 +27,8 @@ export function PinnedWelcome({
   headerLabel,
 }: PinnedWelcomeProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { locale } = useI18n();
 
-  // Restore collapse state in an effect (not as initial useState value)
-  // so SSR doesn't read sessionStorage and React doesn't hydrate mismatch.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.sessionStorage.getItem(KEY_PREFIX + skillId);
@@ -64,7 +48,10 @@ export function PinnedWelcome({
   };
 
   const label =
-    headerLabel ?? `How to get started${skillDisplayName ? ` with ${skillDisplayName}` : ""}`;
+    headerLabel ??
+    (skillDisplayName
+      ? translateChat(locale, "welcome.getStartedWith", { skill: skillDisplayName })
+      : translateChat(locale, "welcome.getStarted"));
 
   return (
     <div className="border-b bg-muted/30">

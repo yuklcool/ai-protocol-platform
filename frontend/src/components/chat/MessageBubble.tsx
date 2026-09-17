@@ -24,6 +24,9 @@ import { ToolCallChip } from "@/components/chat/ToolCallChip";
 import { useSurfaceRegistry } from "@/providers/SurfaceRegistry";
 import { useVoiceConfig } from "@/hooks/useVoiceConfig";
 import type { SkillMessage, ToolCallState } from "@/hooks/useSkillAgent";
+import { useI18n } from "@/contexts/I18nContext";
+import type { Locale } from "@/lib/i18n";
+import { translateChat } from "@/lib/i18n/chat";
 
 /** Read-aloud is opt-in per deployment. Read once at module scope
  * (matches the NEXT_PUBLIC_* flag pattern used elsewhere, e.g.
@@ -123,9 +126,9 @@ export function parseA2UIResult(
   }
 }
 
-function formatTime(timestamp?: number): string {
+function formatTime(timestamp: number | undefined, locale: Locale): string {
   const when = typeof timestamp === "number" && Number.isFinite(timestamp) ? new Date(timestamp) : new Date();
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", {
     hour: "numeric",
     minute: "2-digit",
   }).format(when);
@@ -147,8 +150,9 @@ export const MessageBubble = React.memo(function MessageBubble({
   sessionId,
   timestamp,
 }: MessageBubbleProps) {
+  const { locale } = useI18n();
   const isBot = message.role === "assistant";
-  const time = formatTime(timestamp);
+  const time = formatTime(timestamp, locale);
   // A2UI form submissions arrive as `[a2ui:action] {json}` chat messages —
   // render them as a clean "Submitted …" summary, not raw JSON (6.11 polish).
   const submission = !isBot ? parseA2uiSubmission(message.content) : null;
@@ -307,7 +311,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
-                Submitted
+                {translateChat(locale, "message.submitted")}
               </span>
               {submission.fields.length > 0 && (
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">

@@ -26,7 +26,10 @@ import { A2UISurfaceMount } from "@/components/protocols/A2UISurfaceMount";
 import { useSurfaceState } from "@/providers/SurfaceRegistry";
 import { ArrowIcon, StatusDot, WrenchIcon } from "@/components/activity/bits";
 import { ToolCallDetails, hasToolDetail } from "@/components/activity/ToolCallDetails";
-import { absoluteTime, formatRelative, useNow } from "@/components/activity/format";
+import { absoluteTime, useNow } from "@/components/activity/format";
+import { useI18n } from "@/contexts/I18nContext";
+import type { Locale } from "@/lib/i18n";
+import { translateChat } from "@/lib/i18n/chat";
 
 /** Session context shown in the pinned header row (model + voice config). */
 export interface ActivityContext {
@@ -134,8 +137,22 @@ function useModelLabel(tier?: string): string {
   return label;
 }
 
+function formatActivityRelative(ts: number, now: number, locale: Locale): string {
+  if (!ts) return "";
+  const diff = Math.max(0, now - ts);
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 5) return translateChat(locale, "time.justNow");
+  if (seconds < 60) return translateChat(locale, "time.secondsAgo", { count: seconds });
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return translateChat(locale, "time.minutesAgo", { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return translateChat(locale, "time.hoursAgo", { count: hours });
+  return new Date(ts).toLocaleDateString(locale === "zh-CN" ? "zh-CN" : "en");
+}
+
 /** Pinned header showing the model + read-aloud config the session runs with. */
 function ContextRow({ context }: { context: ActivityContext }) {
+  const { locale } = useI18n();
   const modelLabel = useModelLabel(context.modelTier);
   const voice = context.voice;
   return (
@@ -143,7 +160,7 @@ function ContextRow({ context }: { context: ActivityContext }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {context.modelTier && (
           <span>
-            <span className="text-muted-foreground/60">Model </span>
+            <span className="text-muted-foreground/60">{translateChat(locale, "activity.model")} </span>
             <span className="font-medium text-foreground/80">{modelLabel || context.modelTier}</span>
             {modelLabel && modelLabel !== context.modelTier && (
               <span className="text-muted-foreground/50"> · {context.modelTier}</span>
@@ -152,8 +169,8 @@ function ContextRow({ context }: { context: ActivityContext }) {
         )}
         {voice && (
           <span>
-            <span className="text-muted-foreground/60">Read-aloud </span>
-            <span className="font-medium text-foreground/80">{voice.enabled ? "on" : "off"}</span>
+            <span className="text-muted-foreground/60">{translateChat(locale, "activity.readAloud")} </span>
+            <span className="font-medium text-foreground/80">{translateChat(locale, voice.enabled ? "activity.on" : "activity.off")}</span>
             {voice.enabled && voice.language ? (
               <span className="text-muted-foreground/50"> · {voice.language}</span>
             ) : null}
@@ -165,6 +182,7 @@ function ContextRow({ context }: { context: ActivityContext }) {
 }
 
 function ToolRow({ entry, now }: { entry: Extract<Entry, { kind: "tool" }>; now: number }) {
+  const { locale } = useI18n();
   const [open, setOpen] = useState(false);
   const hasDetail = hasToolDetail(entry.argsJson, entry.resultContent);
 
@@ -185,7 +203,7 @@ function ToolRow({ entry, now }: { entry: Extract<Entry, { kind: "tool" }>; now:
             title={absoluteTime(entry.ts)}
             className="shrink-0 tabular-nums text-[10px] text-muted-foreground/70"
           >
-            {formatRelative(entry.ts, now)}
+            {formatActivityRelative(entry.ts, now, locale)}
           </time>
         ) : null}
         <StatusDot status={entry.status} />
@@ -206,6 +224,7 @@ function ToolRow({ entry, now }: { entry: Extract<Entry, { kind: "tool" }>; now:
 
 /** A simple icon + label + time row (delegation / document / session). */
 function SimpleRow({ icon, children, ts, now }: { icon: ReactNode; children: ReactNode; ts: number; now: number }) {
+  const { locale } = useI18n();
   return (
     <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted/40">
       {icon}
@@ -216,7 +235,7 @@ function SimpleRow({ icon, children, ts, now }: { icon: ReactNode; children: Rea
           title={absoluteTime(ts)}
           className="shrink-0 tabular-nums text-[10px] text-muted-foreground/70"
         >
-          {formatRelative(ts, now)}
+          {formatActivityRelative(ts, now, locale)}
         </time>
       ) : null}
     </li>
@@ -236,6 +255,7 @@ export function ActivityPanel({
   runError = null,
   compactions,
 }: ActivityPanelProps) {
+  const { locale } = useI18n();
   const now = useNow();
   const [showInternal, setShowInternal] = useState(false);
   // A skill may push structured rich detail into the same tab via the A2UI
@@ -288,8 +308,7 @@ export function ActivityPanel({
     return (
       <div className="flex h-full items-center justify-center p-6 text-center">
         <p className="max-w-xs text-xs text-muted-foreground">
-          The assistant&apos;s activity — tools it calls, specialists it hands off to, and its reasoning —
-          shows up here as it works, then quietly stays available.
+          {translateChat(locale, "activity.empty")}
         </p>
       </div>
     );
@@ -307,7 +326,7 @@ export function ActivityPanel({
 
         {bodyEmpty ? (
           <p className="px-2 py-1 text-xs text-muted-foreground">
-            No activity yet — tools, hand-offs and documents show up here as the assistant works.
+            {translateChat(locale, "activity.none")}
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
@@ -320,7 +339,7 @@ export function ActivityPanel({
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80"
               >
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400 animate-pulse" />
-                <span className="font-medium">{runStageLabel || "Running…"}</span>
+                <span className="font-medium">{runStageLabel || translateChat(locale, "activity.running")}</span>
               </li>
             )}
             {runError && (
@@ -335,7 +354,7 @@ export function ActivityPanel({
             {isThinking && (
               <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400 animate-pulse" />
-                <span>Reasoning…</span>
+                <span>{translateChat(locale, "activity.reasoning")}</span>
               </li>
             )}
             {internalToolCount > 0 && (
@@ -349,8 +368,17 @@ export function ActivityPanel({
                 >
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/30" />
                   <span>
-                    {showInternal ? "Hide" : "Show"} {internalToolCount} internal step
-                    {internalToolCount === 1 ? "" : "s"}
+                    {translateChat(
+                      locale,
+                      showInternal
+                        ? internalToolCount === 1
+                          ? "activity.hideInternalOne"
+                          : "activity.hideInternalMany"
+                        : internalToolCount === 1
+                          ? "activity.showInternalOne"
+                          : "activity.showInternalMany",
+                      { count: internalToolCount },
+                    )}
                   </span>
                 </button>
               </li>
@@ -363,14 +391,14 @@ export function ActivityPanel({
               if (e.kind === "delegation")
                 return (
                   <SimpleRow key={e.id} icon={<ArrowIcon />} ts={e.ts} now={now}>
-                    {e.mode === "suggest" ? "Suggested " : "Delegated to "}
+                    {translateChat(locale, e.mode === "suggest" ? "activity.suggested" : "activity.delegatedTo")}{" "}
                     <span className="font-medium text-foreground/80">{e.name}</span>
                   </SimpleRow>
                 );
               if (e.kind === "document")
                 return (
                   <SimpleRow key={e.id} icon={<DocIcon className="h-3.5 w-3.5 text-muted-foreground" />} ts={e.ts} now={now}>
-                    Added <span className="font-medium text-foreground/80">{e.name}</span>
+                    {translateChat(locale, "activity.added")} <span className="font-medium text-foreground/80">{e.name}</span>
                   </SimpleRow>
                 );
               // COMPACTION-WIRE M4 — history was summarised. The user keeps
@@ -385,15 +413,18 @@ export function ActivityPanel({
                     ts={e.ts}
                     now={now}
                   >
-                    <span className="font-medium text-foreground/80">History summarised</span>
+                    <span className="font-medium text-foreground/80">{translateChat(locale, "activity.historySummarised")}</span>
                     {" — "}
-                    {e.eventsCompacted} earlier {e.eventsCompacted === 1 ? "entry" : "entries"} condensed to keep
-                    the conversation within its context limit
+                    {translateChat(
+                      locale,
+                      e.eventsCompacted === 1 ? "activity.compactionOne" : "activity.compactionMany",
+                      { count: e.eventsCompacted },
+                    )}
                   </SimpleRow>
                 );
               return (
                 <SimpleRow key={e.id} icon={<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" />} ts={e.ts} now={now}>
-                  Session started
+                  {translateChat(locale, "activity.sessionStarted")}
                 </SimpleRow>
               );
             })}
