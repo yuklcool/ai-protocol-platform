@@ -167,3 +167,28 @@ class LocalObjectStorage:
                 raise StoragePathError("storage tree contains a path outside the tenant namespace") from exc
             result.append(self._info(tenant_id, rel, resolved))
         return result
+
+    def generate_presigned_download_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+    ) -> str:
+        self._resolve(tenant_id, key)
+        raise NotImplementedError(
+            "LocalObjectStorage uses authenticated application download endpoints instead of presigned URLs"
+        )
+
+    def generate_presigned_upload_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+        content_type: str | None = None,
+    ) -> str:
+        self._resolve(tenant_id, key)
+        raise NotImplementedError(
+            "LocalObjectStorage uses authenticated application upload endpoints instead of presigned URLs"
+        )
