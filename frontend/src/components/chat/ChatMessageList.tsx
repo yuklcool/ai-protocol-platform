@@ -22,6 +22,8 @@ import { AssistantIntroBubble } from "./AssistantIntroBubble";
 import { PinnedWelcome } from "./PinnedWelcome";
 import { ChatPlacementForm, useChatSurfaces, type ChatSurfaceItem } from "./ChatPlacementForms";
 import type React from "react";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface ChatMessageListProps {
   messages: SkillMessage[];
@@ -165,6 +167,7 @@ export function ChatMessageList({
   chatSurfaces,
   formSkillId,
 }: ChatMessageListProps) {
+  const { locale } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   // First-seen client arrival time per message id — SkillMessage has no
@@ -408,11 +411,9 @@ export function ChatMessageList({
               data-testid="transcript-unavailable"
               className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground"
             >
-              <p className="font-medium">This conversation&rsquo;s messages are no longer available.</p>
+              <p className="font-medium">{translateChat(locale, "message.transcriptUnavailableTitle")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                The conversation is still listed, but its transcript was removed from the
-                session store and can&rsquo;t be recovered. You can keep chatting here — new
-                messages will be saved.
+                {translateChat(locale, "message.transcriptUnavailable")}
               </p>
             </div>
           )}
@@ -461,7 +462,7 @@ export function ChatMessageList({
               ))}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <div className="flex-1 border-t" />
-                <span>Earlier in this conversation</span>
+                <span>{translateChat(locale, "message.earlier")}</span>
                 <div className="flex-1 border-t" />
               </div>
             </>
@@ -473,7 +474,7 @@ export function ChatMessageList({
             !error &&
             !isLoading && (
               <p className="text-sm text-muted-foreground">
-                Send a message to start the conversation.
+                {translateChat(locale, "message.startConversation")}
               </p>
             )}
 
@@ -553,9 +554,7 @@ export function ChatMessageList({
           type="button"
           onClick={() => scrollToBottom("smooth")}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium shadow-md hover:bg-muted"
-        >
-          ↓ New message
-        </button>
+        >{translateChat(locale, "message.new")}</button>
       )}
     </div>
   );

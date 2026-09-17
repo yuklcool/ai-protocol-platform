@@ -1,29 +1,22 @@
 // Workshop W5b — AG-UI: text events → chat bubbles
 // TypingIndicator is shown between RUN_STARTED and the first TEXT_MESSAGE_CONTENT.
-// Surfaces three layers of progress, in priority order:
-//   1. stageLabel — server-authored STAGE_PROGRESS Custom event (Reading 2 documents…,
-//      Thinking…). Wins over toolName so the per-stage breakdown the agent emits
-//      stays the source of truth — see docs/design/v6.1.0/ttft-instrumentation.md.
-//   2. activeToolName — fallback when no stage label, but a tool is running.
-//   3. Bouncing dots — pure waiting, no signal yet.
-// Disappears on first token.
-// See: docs/talks/workshop.md §W5
+// Server-authored stage labels and runtime tool names stay authoritative; only
+// frontend fallback chrome is localized.
 
 "use client";
 
 import { BrandAvatar } from "@/components/chat/BrandAvatar";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface TypingIndicatorProps {
-  /**
-   * Server-authored stage label from AG-UI STAGE_PROGRESS Custom events.
-   * Takes priority over activeToolName so the agent's own progress signal
-   * stays canonical. Null when no STAGE_PROGRESS has fired this run.
-   */
+  /** Server-authored stage label; never retranslated by the frontend. */
   stageLabel?: string | null;
   activeToolName?: string | null;
 }
 
 export function TypingIndicator({ stageLabel, activeToolName }: TypingIndicatorProps) {
+  const { locale } = useI18n();
   const labelText = stageLabel ?? null;
   const toolText = !labelText && activeToolName ? activeToolName : null;
 
@@ -39,7 +32,7 @@ export function TypingIndicator({ stageLabel, activeToolName }: TypingIndicatorP
         ) : toolText ? (
           <>
             <span className="text-xs text-muted-foreground">
-              Using <span className="font-medium text-orange-600">{toolText}</span>…
+              {translateChat(locale, "typing.using", { tool: toolText })}
             </span>
             <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
           </>

@@ -8,6 +8,8 @@
 "use client";
 
 import type { ToolCallState } from "@/hooks/useSkillAgent";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 const MAX_TOOL_NAME = 32;
 
@@ -16,6 +18,7 @@ interface ToolCallChipProps {
 }
 
 export function ToolCallChip({ toolCall }: ToolCallChipProps) {
+  const { locale } = useI18n();
   const name =
     toolCall.name.length > MAX_TOOL_NAME
       ? toolCall.name.slice(0, MAX_TOOL_NAME) + "…"
@@ -23,21 +26,21 @@ export function ToolCallChip({ toolCall }: ToolCallChipProps) {
 
   return (
     <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-      {toolCall.status === "running" && <Spinner />}
-      {toolCall.status === "success" && <CheckIcon />}
-      {toolCall.status === "error" && <ErrorIcon />}
+      {toolCall.status === "running" && <Spinner label={translateChat(locale, "tool.running")} />}
+      {toolCall.status === "success" && <CheckIcon label={translateChat(locale, "tool.success")} />}
+      {toolCall.status === "error" && <ErrorIcon label={translateChat(locale, "tool.error")} />}
       <span className="font-mono">{name}</span>
     </div>
   );
 }
 
-function Spinner() {
+function Spinner({ label }: { label: string }) {
   return (
     <svg
       className="h-3 w-3 animate-spin text-orange-500"
       viewBox="0 0 24 24"
       fill="none"
-      aria-label="Running"
+      aria-label={label}
     >
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
@@ -49,7 +52,7 @@ function Spinner() {
   );
 }
 
-function CheckIcon() {
+function CheckIcon({ label }: { label: string }) {
   return (
     <svg
       className="h-3 w-3 text-green-600"
@@ -57,14 +60,14 @@ function CheckIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      aria-label="Success"
+      aria-label={label}
     >
       <path d="M3 8l3.5 3.5L13 4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function ErrorIcon() {
+function ErrorIcon({ label }: { label: string }) {
   return (
     <svg
       className="h-3 w-3 text-red-600"
@@ -72,7 +75,7 @@ function ErrorIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      aria-label="Error"
+      aria-label={label}
     >
       <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
     </svg>
