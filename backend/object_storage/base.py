@@ -28,6 +28,10 @@ class ObjectStorage(Protocol):
     memory bounded for large files. ``put_bytes`` remains convenient for small
     generated payloads and tests. Implementations must treat ``tenant_id`` as a
     hard namespace boundary and reject keys that can escape that namespace.
+
+    Remote providers may expose time-limited direct transfer URLs. Local
+    storage keeps transfers behind the authenticated application endpoint and
+    therefore raises ``NotImplementedError`` for the presigned URL methods.
     """
 
     def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo: ...
@@ -56,3 +60,20 @@ class ObjectStorage(Protocol):
     def delete(self, tenant_id: str, key: str) -> None: ...
 
     def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]: ...
+
+    def generate_presigned_download_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+    ) -> str: ...
+
+    def generate_presigned_upload_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+        content_type: str | None = None,
+    ) -> str: ...
