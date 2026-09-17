@@ -97,7 +97,7 @@ jobs:
         run: CI=true npm run test:run -- src/components/admin/__tests__/tenantAdmin.test.tsx src/components/admin/__tests__/tenantHealth.test.tsx src/components/admin/__tests__/EffectiveAccessPanel.test.tsx
 
       - name: Verify Skill Studio compatibility
-        run: CI=true npm run test:run -- src/components/studio/__tests__/AccessControlEditor.test.tsx src/components/studio/__tests__/AuthoringCopilot.test.tsx src/components/studio/__tests__/DelegationEditor.test.tsx
+        run: CI=true npm run test:run -- src/components/studio/__tests__/AccessControlEditor.test.tsx src/components/studio/__tests__/AuthoringCopilot.test.tsx src/components/studio/__tests__/DelegationEditor.test.tsx src/components/studio/__tests__/StudioBuilderForm.test.tsx
 
       - name: Build Chinese-default self-host frontend
         run: npm run build
