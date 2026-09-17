@@ -36,7 +36,9 @@ describe("SkillNotFound", () => {
     );
     render(<SkillNotFound slug="one-ppa-expert" />);
     expect(screen.getByText(/Skill not found/i)).toBeInTheDocument();
-    expect(screen.getByText("one-ppa-expert")).toBeInTheDocument();
+    expect(
+      screen.getByText("You don't have access to one-ppa-expert."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("wrong-user@example.com")).toBeInTheDocument();
