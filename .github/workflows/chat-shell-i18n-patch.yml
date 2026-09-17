@@ -1,0 +1,41 @@
+name: One-shot ChatShell i18n patch
+
+on:
+  push:
+    branches:
+      - feat/i18n-chat-shell
+    paths:
+      - scripts/i18n_chat_shell_patch.py
+      - .github/workflows/chat-shell-i18n-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/i18n-chat-shell
+          fetch-depth: 0
+
+      - name: Apply deterministic ChatShell patch
+        run: python scripts/i18n_chat_shell_patch.py
+
+      - name: Verify patch formatting
+        run: git diff --check
+
+      - name: Commit patched ChatShell
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- frontend/src/components/chat/ChatShell.tsx; then
+            echo "ChatShell already patched."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/components/chat/ChatShell.tsx
+          git commit -m "feat(i18n): localize ChatShell chrome"
+          git push origin HEAD:feat/i18n-chat-shell
