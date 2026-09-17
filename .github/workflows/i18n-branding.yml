@@ -102,7 +102,19 @@ jobs:
         run: CI=true npm run test:run -- src/components/studio/__tests__/AccessControlEditor.test.tsx src/components/studio/__tests__/AuthoringCopilot.test.tsx src/components/studio/__tests__/DelegationEditor.test.tsx src/components/studio/__tests__/StudioBuilderForm.test.tsx
 
       - name: Verify Chat core compatibility
-        run: CI=true npm run test:run -- src/components/chat/__tests__/ChatCoreLabels.test.tsx src/components/chat/__tests__/AssistantIntroBubble.test.tsx src/components/chat/__tests__/ChatPlacementForms.test.tsx
+        run: >-
+          CI=true npm run test:run --
+          src/components/chat/__tests__/ChatCoreLabels.test.tsx
+          src/components/chat/__tests__/AssistantIntroBubble.test.tsx
+          src/components/chat/__tests__/ChatPlacementForms.test.tsx
+          src/components/chat/__tests__/InContextBadge.test.tsx
+          src/components/chat/__tests__/SkillSessionPanel.test.tsx
+          src/components/chat/__tests__/WorkbenchHome.test.tsx
+          src/components/chat/__tests__/WorkbenchIndex.test.tsx
+          src/components/chat/__tests__/ChatShell.composer.test.tsx
+          src/components/chat/__tests__/ChatShell.workspaceHome.test.tsx
+          src/components/chat/__tests__/ChatShell.closeArtefactTab.test.tsx
+          src/components/chat/__tests__/ChatShell.pricesArtefact.test.tsx
 
       - name: Build Chinese-default self-host frontend
         run: npm run build
