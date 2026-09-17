@@ -72,6 +72,8 @@ import { shouldShowCompareLauncher } from "@/lib/compareLauncher";
 import { forgetFocusedResult, nextFocusedResult } from "@/lib/workbenchFocus";
 import { DocumentPanel } from "@/components/document/DocumentPanel";
 import { LatencyHUD } from "@/components/dev/LatencyHUD";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 /**
  * v6.23.0 WORKSPACE-HOME-PERSISTENCE — workbench tab ids for the two jobs the
@@ -96,13 +98,6 @@ const WORKSPACE_RESULT_TAB_ID = "workspace-result";
  * that is what `WorkbenchHome.onOpen` hands to `onWorkbenchTabChange` — the
  * index addresses tabs, not surfaces.
  */
-const WORKSPACE_RESULT_INDEX_ENTRY = {
-  surfaceId: WORKSPACE_RESULT_TAB_ID,
-  createdAt: 0,
-  kind: "workspace",
-  title: "Assistant",
-  description: "The assistant's structured output for this conversation",
-} as const;
 
 /**
  * MULTI-SURFACE-A2UI M3 — chat page surface mounts.
@@ -400,6 +395,7 @@ function WorkbenchPane({
    * SurfaceRegistryProvider, which only wraps the JSX subtree. */
   onContentChange?: (hasContent: boolean) => void;
 }) {
+  const { locale } = useI18n();
   const workspaceSurface = useSurfaceState("workspace");
   // 7.5 workbench artifacts: each tool result is its own artifact surface (with
   // metadata) → its own workbench tab. `useArtifacts()` is the reactive, ordered
@@ -548,13 +544,7 @@ function WorkbenchPane({
   const registry = useSurfaceRegistry();
   const handleCloseResult = useCallback(
     (surfaceId: string, tabId: string, name: string) => {
-      if (
-        !window.confirm(
-          `Close "${name}"?\n\n` +
-            `This removes the result from your workbench and can't be undone. ` +
-            `Getting it back means re-running the query or analysis.`,
-        )
-      ) {
+      if (!window.confirm(translateChat(locale, "shell.closeResultConfirm", { name }))) {
         return;
       }
       registry.clearSurface(surfaceId);
@@ -568,16 +558,16 @@ function WorkbenchPane({
       // resolves. Home always exists, so this is now always a real destination.
       if (workbenchTabId === tabId) onWorkbenchTabChange(HOME_TAB_ID);
     },
-    [registry, workbenchTabId, onWorkbenchTabChange],
+    [locale, registry, workbenchTabId, onWorkbenchTabChange],
   );
   const handleCloseArtifact = useCallback(
     (artifact: A2uiArtifactEntry) =>
       handleCloseResult(
         artifact.surfaceId,
         artifact.surfaceId,
-        artifact.title || artifact.kind || "this result",
+        artifact.title || artifact.kind || translateChat(locale, "shell.resultFallback"),
       ),
-    [handleCloseResult],
+    [handleCloseResult, locale],
   );
 
   // 2026-06-11 auto-fold: report to the parent whether anything worth
@@ -612,11 +602,11 @@ function WorkbenchPane({
   // `workspace` surface, which gets an equivalent tab of its own below.
   const artifactTabs: WorkbenchTab[] = workbenchArtifacts.map((a) => ({
     id: a.surfaceId,
-    eyebrow: "Result",
+    eyebrow: translateChat(locale, "shell.result"),
     // Label is the tool/kind ("Clauses", "Comparison") — NOT the filename (that
     // duplicates the Document tabs). Full detail (filename, counts) is the
     // hover tooltip. Multiple same-kind tabs are fine — ids stay distinct.
-    label: a.title || a.kind || "Result",
+    label: a.title || a.kind || translateChat(locale, "shell.result"),
     tooltip: a.description || a.title,
     onClose: () => handleCloseArtifact(a),
     content:
@@ -656,7 +646,7 @@ function WorkbenchPane({
           />
         </div>
       ),
-    emptyBody: a.description || "This result's view will appear here.",
+    emptyBody: a.description || translateChat(locale, "shell.resultEmpty"),
   }));
   // v6.23.0 WORKSPACE-HOME-PERSISTENCE — the dominant `workspace` A2UI surface
   // gets its own Result tab, exactly like a clauses/prices/sources artifact.
@@ -675,10 +665,15 @@ function WorkbenchPane({
   const workspaceResultTab: WorkbenchTab | null = workspaceSurface?.surface
     ? {
         id: WORKSPACE_RESULT_TAB_ID,
-        eyebrow: "Result",
-        label: "Assistant",
-        tooltip: "The assistant's structured output for this conversation",
-        onClose: () => handleCloseResult("workspace", WORKSPACE_RESULT_TAB_ID, "Assistant"),
+        eyebrow: translateChat(locale, "shell.result"),
+        label: translateChat(locale, "shell.assistant"),
+        tooltip: translateChat(locale, "shell.assistantStructuredOutput"),
+        onClose: () =>
+          handleCloseResult(
+            "workspace",
+            WORKSPACE_RESULT_TAB_ID,
+            translateChat(locale, "shell.assistant"),
+          ),
         content: (
           <div className="h-full p-3">
             <A2UISurfaceMount
@@ -690,7 +685,7 @@ function WorkbenchPane({
             />
           </div>
         ),
-        emptyBody: "This result's view will appear here.",
+        emptyBody: translateChat(locale, "shell.resultEmpty"),
       }
     : null;
 
@@ -704,6 +699,13 @@ function WorkbenchPane({
   // single condition (`showHome = !workspaceHasContent && hasArtifacts`) was the
   // whole bug — Dana, 2026-08-06 UAT, raised 4×.
   const showIndex = hasArtifacts || Boolean(activeTabId);
+  const workspaceResultIndexEntry = {
+    surfaceId: WORKSPACE_RESULT_TAB_ID,
+    createdAt: 0,
+    kind: "workspace",
+    title: translateChat(locale, "shell.assistant"),
+    description: translateChat(locale, "shell.assistantStructuredOutput"),
+  };
   const homeContent =
     showLauncher || showPicker || showIndex ? (
       <div className="flex h-full min-h-0 flex-col gap-1 overflow-auto">
@@ -732,7 +734,7 @@ function WorkbenchPane({
         )}
         {showIndex && (
           <WorkbenchHome
-            artifacts={workspaceResultTab ? [...workbenchArtifacts, WORKSPACE_RESULT_INDEX_ENTRY] : workbenchArtifacts}
+            artifacts={workspaceResultTab ? [...workbenchArtifacts, workspaceResultIndexEntry] : workbenchArtifacts}
             onOpen={onWorkbenchTabChange}
             openDocId={activeTabId}
             onOpenDocument={() => onWorkbenchTabChange("document")}
@@ -740,8 +742,7 @@ function WorkbenchPane({
         )}
       </div>
     ) : null;
-  const workspaceEmptyBody =
-    "The assistant's structured outputs — clause cards, comparisons, charts — appear here as it works on your question.";
+  const workspaceEmptyBody = translateChat(locale, "shell.workspaceEmpty");
 
   // The Home tab. Permanent furniture: never closable, never an auto-focus
   // target, never replaced by a result. Tab stays labelled "Workspace" (v6.11.0
@@ -749,8 +750,8 @@ function WorkbenchPane({
   // carries the distinction from the Result tabs beside it.
   const homeTab: WorkbenchTab = {
     id: HOME_TAB_ID,
-    eyebrow: "Home",
-    label: "Workspace",
+    eyebrow: translateChat(locale, "shell.home"),
+    label: translateChat(locale, "shell.workspace"),
     badged: workspaceBadged,
     content: homeContent,
     emptyBody: workspaceEmptyBody,
@@ -762,7 +763,7 @@ function WorkbenchPane({
     ...(workspaceResultTab ? [workspaceResultTab] : []),
     {
       id: "document",
-      label: "Document",
+      label: translateChat(locale, "shell.document"),
       content: activeTabId ? (
         <div className="flex h-full flex-col">
           <div className="min-h-0 flex-1 overflow-auto">
@@ -778,13 +779,12 @@ function WorkbenchPane({
           />
         </div>
       ) : null,
-      emptyBody:
-        "Click a document in the sidebar to read it here alongside the conversation.",
+      emptyBody: translateChat(locale, "shell.documentEmpty"),
     },
     {
       id: "activity",
-      eyebrow: "Live",
-      label: "Activity",
+      eyebrow: translateChat(locale, "shell.live"),
+      label: translateChat(locale, "shell.activity"),
       badged: activityBadged,
       content: (
         <ActivityPanel
@@ -822,6 +822,7 @@ function StreamErrorBanner({
   onRetry: () => void;
   onDismiss: () => void;
 }) {
+  const { locale } = useI18n();
   // Rate-limit / quota renders amber ("wait & retry") to visually distinguish a
   // key/quota issue from a red "the demo is broken" error.
   const amber = error.kind === "rate_limited";
@@ -841,7 +842,7 @@ function StreamErrorBanner({
             onClick={onRetry}
             className={`rounded border px-2 py-0.5 text-xs ${btnTone}`}
           >
-            Try again
+            {translateChat(locale, "shell.retry")}
           </button>
         )}
         <button
@@ -849,7 +850,7 @@ function StreamErrorBanner({
           onClick={onDismiss}
           className="rounded border border-destructive/20 px-2 py-0.5 text-xs text-destructive/70 hover:bg-destructive/10"
         >
-          Dismiss
+          {translateChat(locale, "shell.dismiss")}
         </button>
       </div>
     </div>
@@ -865,6 +866,7 @@ export function ChatShell({
   pathPrefix: string;
   user: User;
 }) {
+  const { locale } = useI18n();
   const {
     sessionId: agentSessionId,
     messages,
@@ -1232,7 +1234,7 @@ export function ChatShell({
   }, [agentSessionId, skillId]);
 
   const userInitial = (user.displayName ?? user.email ?? "U").charAt(0).toUpperCase();
-  const userDisplayName = user.displayName ?? user.email ?? "You";
+  const userDisplayName = user.displayName ?? user.email ?? translateChat(locale, "shell.you");
 
   // Documents currently included in agent context. Every open tab defaults to
   // included; users uncheck the box on a tab to exclude it without closing it.
@@ -1428,9 +1430,7 @@ export function ChatShell({
       // mounted useDocumentSessions listen for, so both panels reconcile)
       // + clear URL if the deleted session is active.
       if (
-        !window.confirm(
-          "Delete this conversation? This can't be undone from the UI.",
-        )
+        !window.confirm(translateChat(locale, "shell.deleteConversationConfirm"))
       ) {
         return;
       }
@@ -1449,7 +1449,7 @@ export function ChatShell({
         notifySessionsChanged();
       }
     },
-    [sessionId, handleNewSession],
+    [locale, sessionId, handleNewSession],
   );
 
   const handleDocClick = useCallback((doc: ParsedDocument) => {
@@ -1592,8 +1592,8 @@ export function ChatShell({
           </svg>
           <span>
             {skillMetaLoading
-              ? "Loading skill…"
-              : "Connecting to assistant… you can start typing in a moment."}
+              ? translateChat(locale, "shell.loadingSkill")
+              : translateChat(locale, "shell.connectingAssistant")}
           </span>
         </div>
       )}
@@ -1608,7 +1608,7 @@ export function ChatShell({
           aria-live="polite"
         >
           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500/70" />
-          <span>Tidying up the conversation history — you can keep typing.</span>
+          <span>{translateChat(locale, "shell.tidying")}</span>
         </div>
       )}
       {/* v6.4.0 INTERNAL-SHELL M3: in-context caption — disambiguates multi-doc
@@ -1643,13 +1643,17 @@ export function ChatShell({
             }
           }}
           rows={1}
-          placeholder={chatReady ? "Message…" : "Connecting…"}
+          placeholder={
+            chatReady
+              ? translateChat(locale, "shell.messagePlaceholder")
+              : translateChat(locale, "shell.connectingPlaceholder")
+          }
           className="max-h-48 flex-1 resize-none overflow-y-auto rounded-md border px-3 py-2 text-sm"
           disabled={inputDisabled}
         />
         {isLoading ? (
           <button type="button" onClick={stop} className="rounded-md border px-3 py-2 text-sm">
-            Stop
+            {translateChat(locale, "shell.stop")}
           </button>
         ) : (
           <button
@@ -1657,7 +1661,7 @@ export function ChatShell({
             className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
             disabled={!draft.trim() || inputDisabled}
           >
-            Send
+            {translateChat(locale, "shell.send")}
           </button>
         )}
       </form>
@@ -1728,7 +1732,7 @@ export function ChatShell({
                 skill declares welcome.bucket_browser. */}
             {skillWelcome?.bucketBrowser?.bucket && (
               <SidebarSection
-                title={skillWelcome.bucketBrowser.label || "Library"}
+                title={skillWelcome.bucketBrowser.label || translateChat(locale, "shell.library")}
                 persistId="library"
                 defaultOpen={skillWelcome.bucketBrowser.defaultOpen ?? true}
               >
@@ -1755,7 +1759,12 @@ export function ChatShell({
             <SidebarSurfaceRegion sessionId={sessionId ?? agentSessionId} />
 
             {/* Generic workspace utility — the user's own uploaded files. */}
-            <SidebarSection title="Your files" persistId="files" defaultOpen={true} bodyClassName="">
+            <SidebarSection
+              title={translateChat(locale, "shell.yourFiles")}
+              persistId="files"
+              defaultOpen={true}
+              bodyClassName=""
+            >
               <div className="max-h-[30vh] overflow-y-auto">
                 <DocListView uid={user.uid} onDocClick={handleDocClick} />
               </div>
@@ -1766,7 +1775,11 @@ export function ChatShell({
 
             {/* Generic workspace utility — chat history. Lowest priority while
                 working, so it sits at the bottom. */}
-            <SidebarSection title="Past conversations" persistId="conversations" defaultOpen={true}>
+            <SidebarSection
+              title={translateChat(locale, "shell.pastConversations")}
+              persistId="conversations"
+              defaultOpen={true}
+            >
               <div className="max-h-40 overflow-y-auto">
                 <SkillSessionPanel
                   sessions={sessions}
@@ -1829,7 +1842,7 @@ export function ChatShell({
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground/70">
                     <div className="h-px flex-1 bg-border" />
-                    <span>or start from a document</span>
+                    <span>{translateChat(locale, "shell.startFromDocument")}</span>
                     <div className="h-px flex-1 bg-border" />
                   </div>
                   <div className="rounded-lg border bg-muted/20">
@@ -1919,8 +1932,8 @@ export function ChatShell({
             type="button"
             onClick={toggleWorkbenchCollapsed}
             className="group flex h-full w-6 shrink-0 flex-col items-center justify-center border-l bg-muted/40 transition-colors hover:bg-muted"
-            aria-label="Expand workbench"
-            title="Expand workbench"
+            aria-label={translateChat(locale, "shell.expandWorkbench")}
+            title={translateChat(locale, "shell.expandWorkbench")}
           >
             <svg
               className="h-3 w-3 text-muted-foreground group-hover:text-foreground"
@@ -1935,7 +1948,7 @@ export function ChatShell({
               <polyline points="8 2 4 6 8 10" />
             </svg>
             <span className="mt-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl] [transform:rotate(180deg)]">
-              Workbench
+              {translateChat(locale, "shell.workbench")}
             </span>
           </button>
         )}
@@ -1972,8 +1985,8 @@ export function ChatShell({
             type="button"
             onClick={toggleWorkbenchCollapsed}
             className="absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Collapse workbench"
-            title="Collapse workbench"
+            aria-label={translateChat(locale, "shell.collapseWorkbench")}
+            title={translateChat(locale, "shell.collapseWorkbench")}
           >
             <svg
               className="h-3 w-3"
