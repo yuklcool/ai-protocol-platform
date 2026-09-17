@@ -18,14 +18,17 @@ describe("Skill Studio i18n", () => {
     expect(translateSkillStudio("en", "delegation.enableAria")).toBe("Enable delegation");
   });
 
-  it("ships Chinese authoring, access and delegation copy", () => {
+  it("ships Chinese authoring, access, delegation and builder copy", () => {
     expect(translateSkillStudio("zh-CN", "copilot.title")).toBe("创作 Copilot");
     expect(translateSkillStudio("zh-CN", "access.title")).toContain("Skill");
     expect(translateSkillStudio("zh-CN", "delegation.ceiling")).toContain("不会授予额外权限");
+    expect(translateSkillStudio("zh-CN", "builder.interaction.concise")).toBe("简洁");
   });
 
-  it("preserves important technical references in translated guidance", () => {
-    expect(translateSkillStudio("zh-CN", "builder.folderPathHint")).toContain("aitana3/PPAs/longform/");
+  it("keeps protocol references but removes legacy brand examples from user-facing copy", () => {
+    const folderHint = translateSkillStudio("zh-CN", "builder.folderPathHint");
+    expect(folderHint).toContain("documents/PPAs/longform/");
+    expect(folderHint).not.toMatch(/aitana|sunholo/i);
     expect(translateSkillStudio("zh-CN", "model.pinned")).toContain("eu-strict");
   });
 });
