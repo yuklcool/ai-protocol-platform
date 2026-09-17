@@ -9,7 +9,7 @@ describe("Chat i18n", () => {
     );
   });
 
-  it("interpolates runtime skill, folder and model display values", () => {
+  it("interpolates runtime skill, folder, model and result display values", () => {
     expect(translateChat("en", "signIn.openSkill", { skill: "Lighting Analyst" })).toBe(
       "You need to sign in to open Lighting Analyst.",
     );
@@ -19,12 +19,18 @@ describe("Chat i18n", () => {
     expect(
       translateChat("zh-CN", "fallback.aria", { from: "model-a", to: "model-b" }),
     ).toContain("model-b");
+    expect(
+      translateChat("zh-CN", "shell.closeResultConfirm", { name: "比较结果" }),
+    ).toContain("比较结果");
   });
 
-  it("ships Chinese chat-state and safety/transparency labels", () => {
+  it("ships Chinese chat, session and workbench labels", () => {
     expect(translateChat("zh-CN", "signIn.required")).toBe("需要登录");
     expect(translateChat("zh-CN", "placement.submitted")).toBe("已提交");
     expect(translateChat("zh-CN", "delegation.delegated")).toBe("已转交给");
     expect(translateChat("zh-CN", "intro.notStored")).toContain("不保存");
+    expect(translateChat("zh-CN", "sessions.allAgents")).toBe("全部智能体");
+    expect(translateChat("zh-CN", "workbench.openDocument")).toBe("打开文档");
+    expect(translateChat("zh-CN", "shell.send")).toBe("发送");
   });
 });
