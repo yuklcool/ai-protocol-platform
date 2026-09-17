@@ -1,5 +1,8 @@
 "use client";
 
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
+
 interface ReadOnlyComposerProps {
   onContinue: () => void;
 }
@@ -10,16 +13,17 @@ interface ReadOnlyComposerProps {
  * button opens a new session — fork endpoint is deferred to v6.1.
  */
 export default function ReadOnlyComposer({ onContinue }: ReadOnlyComposerProps) {
+  const { locale } = useI18n();
   return (
     <div className="border-t border-gray-200 bg-gray-50 p-4 flex items-center gap-3">
       <p className="flex-1 text-sm text-gray-500">
-        You are viewing a shared conversation. Your messages will not be sent.
+        {translateChat(locale, "readOnly.description")}
       </p>
       <button
         onClick={onContinue}
         className="shrink-0 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
       >
-        Continue from here as new session
+        {translateChat(locale, "readOnly.continue")}
       </button>
     </div>
   );
