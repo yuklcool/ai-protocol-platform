@@ -1,5 +1,8 @@
 "use client";
 
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
+
 export interface ActiveDocumentContext {
   folderName: string;
   docCount: number;
@@ -10,7 +13,14 @@ interface ContextBannerProps {
 }
 
 export function ContextBanner({ context }: ContextBannerProps) {
+  const { locale } = useI18n();
   if (!context) return null;
+
+  const key = context.docCount === 1 ? "context.analyzingOne" : "context.analyzingMany";
+  const label = translateChat(locale, key, {
+    count: context.docCount,
+    folder: context.folderName,
+  });
 
   return (
     <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
@@ -27,11 +37,7 @@ export function ContextBanner({ context }: ContextBannerProps) {
           strokeLinejoin="round"
         />
       </svg>
-      <span>
-        Analyzing <strong className="font-semibold text-foreground">{context.docCount}</strong>{" "}
-        {context.docCount === 1 ? "document" : "documents"} from{" "}
-        <strong className="font-semibold text-foreground">{context.folderName}</strong>
-      </span>
+      <span>{label}</span>
     </div>
   );
 }

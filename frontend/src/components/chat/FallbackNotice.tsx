@@ -1,13 +1,11 @@
-// MODEL-RELIABILITY M3 — a persistent, low-key inline notice in the transcript
-// recording that a backup model answered (or that a benched provider was
-// skipped). Degradation is announced, never hidden: the user deserves to know
-// which model produced the answer they're reading (axioms #2 EARNED TRUST +
-// #5 GRACEFUL DEGRADATION). Mirrors DelegationMarker. Presentational only.
+// MODEL-RELIABILITY M3 — persistent inline notice that a backup model answered.
+// Degradation remains explicit; model ids stay verbatim technical identifiers.
 
 "use client";
 
-/** "anthropic/claude-opus-4-7" → "claude-opus-4-7" — drop provider prefixes
- *  for display; the full id stays in the tooltip. */
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
+
 function displayName(model: string): string {
   return model.includes("/") ? model.split("/").pop()! : model;
 }
@@ -20,17 +18,22 @@ interface FallbackNoticeProps {
 }
 
 export function FallbackNotice({ fromModel, toModel, reason }: FallbackNoticeProps) {
-  const verb = reason === "provider_cooldown" ? "unavailable — answered by backup" : "was unavailable — answered by backup";
+  const { locale } = useI18n();
+  const from = displayName(fromModel);
+  const to = displayName(toModel);
+  const verb = translateChat(
+    locale,
+    reason === "provider_cooldown" ? "fallback.cooldownVerb" : "fallback.failedVerb",
+  );
 
   return (
     <div
       className="flex items-center gap-2 py-0.5 text-xs text-muted-foreground"
       role="note"
-      aria-label={`Backup model ${displayName(toModel)} answered because ${displayName(fromModel)} was unavailable`}
+      aria-label={translateChat(locale, "fallback.aria", { from, to })}
       title={`${fromModel} → ${toModel}${reason ? ` (${reason})` : ""}`}
     >
       <span className="ml-10 flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2 py-0.5">
-        {/* shuffle/switch (SVG, no emoji) */}
         <svg
           width="12"
           height="12"
@@ -50,8 +53,8 @@ export function FallbackNotice({ fromModel, toModel, reason }: FallbackNoticePro
           <path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45" />
         </svg>
         <span>
-          <span className="font-medium text-foreground/70">{displayName(fromModel)}</span> {verb}{" "}
-          <span className="font-medium text-foreground/70">{displayName(toModel)}</span>
+          <span className="font-medium text-foreground/70">{from}</span> {verb}{" "}
+          <span className="font-medium text-foreground/70">{to}</span>
         </span>
       </span>
     </div>
