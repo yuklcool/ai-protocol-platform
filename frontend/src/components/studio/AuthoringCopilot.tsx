@@ -1,84 +1,60 @@
 // Skill Studio — authoring copilot panel.
-//
-// A chat panel that talks to the `skill-authoring-assistant` skill via the
-// platform's existing AG-UI stack (AGUIProvider → HttpAgent → useSkillAgent).
-// It does NOT hand-roll SSE: the parent wraps this component in
-// <AGUIProvider skillId="skill-authoring-assistant" …> and we consume the same
-// `useSkillAgent()` hook the main chat uses.
-//
-// As assistant turns stream in, `parseProposals()` turns fenced ```json
-// proposal blocks into Apply / Edit / Dismiss cards. Applying calls
-// `onApplyProposal` (a local draft mutation) — it NEVER writes to the network.
 
 "use client";
 
 import { Check, Pencil, X } from "lucide-react";
 import { SendIcon } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 import { useSkillAgent } from "@/hooks/useSkillAgent";
+import { translateSkillStudio } from "@/lib/i18n/skillStudio";
 import {
   parseProposals,
   type Proposal,
 } from "@/components/studio/applyProposal";
 
 interface AuthoringCopilotProps {
-  /** The skill being edited (NOT the copilot's own skill id). Used to key the
-   * persisted copilot thread so each edited skill resumes its own conversation. */
   skillId: string;
-  /** Apply a proposal to the Studio draft. Local only — never a network write. */
   onApplyProposal: (proposal: Proposal) => void;
 }
 
-/** A proposal card lifted out of an assistant message, with a stable key so
- * React keeps its inline-edit state across re-renders. */
 interface ProposalCard {
   key: string;
   proposal: Proposal;
 }
 
-/** localStorage key for the copilot's per-edited-skill thread id. Exported so
- * the Studio page can seed AGUIProvider's sessionId from the same key. */
 export function threadStorageKey(skillId: string): string {
   return `studio-copilot-thread:${skillId}`;
 }
 
-/** Stable-ish identity for a proposal so cards don't reshuffle as the message
- * list grows. Message id + index within that message + kind is enough. */
 function cardKey(messageId: string, index: number, p: Proposal): string {
   return `${messageId}:${index}:${p.kind}`;
 }
 
 export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotProps) {
-  const { sessionId, messages, sendMessage, isLoading, error, clearError } =
-    useSkillAgent();
+  const { locale } = useI18n();
+  const t = (key: Parameters<typeof translateSkillStudio>[1]) => translateSkillStudio(locale, key);
+  const { sessionId, messages, sendMessage, isLoading, error, clearError } = useSkillAgent();
   const [draft, setDraft] = useState("");
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Persist the copilot threadId per edited skill so a reload resumes the same
-  // conversation. `sessionId` is the HttpAgent threadId (seeded by AGUIProvider
-  // from the same localStorage key on mount — see studio/[skillId]/page.tsx).
-  // Writing it here keeps the stored value fresh once the agent settles on an id.
   useEffect(() => {
     if (typeof window === "undefined" || !sessionId) return;
     try {
       window.localStorage?.setItem(threadStorageKey(skillId), sessionId);
     } catch {
-      // localStorage may be unavailable (private mode, quota, test env) —
-      // thread persistence is a nicety, not a correctness requirement.
+      // Thread persistence is optional.
     }
   }, [skillId, sessionId]);
 
-  // Auto-scroll to the latest message as the conversation grows.
   useEffect(() => {
     const el = scrollRef.current;
-    // jsdom doesn't implement Element.scrollTo; guard so tests don't throw.
     if (el && typeof el.scrollTo === "function") {
       el.scrollTo({ top: el.scrollHeight });
     }
   }, [messages]);
 
-  // Flatten all assistant messages into proposal cards, skipping dismissed ones.
   const cards: ProposalCard[] = useMemo(() => {
     const acc: ProposalCard[] = [];
     for (const m of messages) {
@@ -111,19 +87,13 @@ export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotP
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header className="border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">Authoring copilot</h2>
-        <p className="text-xs text-muted-foreground">
-          Describe the skill you want. Apply proposals to the draft — nothing
-          saves until you click Save.
-        </p>
+        <h2 className="text-sm font-semibold">{t("copilot.title")}</h2>
+        <p className="text-xs text-muted-foreground">{t("copilot.description")}</p>
       </header>
 
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
         {messages.length === 0 && !isLoading && (
-          <p className="text-sm text-muted-foreground">
-            Ask the copilot to draft a skill, e.g. &ldquo;Make a concise
-            contract-review assistant that uses the search tool.&rdquo;
-          </p>
+          <p className="text-sm text-muted-foreground">{t("copilot.empty")}</p>
         )}
 
         {messages.map((m) => (
@@ -132,14 +102,14 @@ export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotP
 
         {isLoading && (
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            Thinking…
+            {t("copilot.thinking")}
           </p>
         )}
 
         {cards.length > 0 && (
           <div className="space-y-2 pt-2" data-testid="proposal-cards">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Proposals
+              {t("copilot.proposals")}
             </p>
             {cards.map((c) => (
               <ProposalCardView
@@ -157,12 +127,8 @@ export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotP
       {error && (
         <div className="border-t border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive">
           <span>{error.message}</span>
-          <button
-            type="button"
-            onClick={clearError}
-            className="ml-2 underline"
-          >
-            dismiss
+          <button type="button" onClick={clearError} className="ml-2 underline">
+            {t("copilot.dismissError")}
           </button>
         </div>
       )}
@@ -177,8 +143,8 @@ export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotP
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Message the copilot…"
-          aria-label="Message the authoring copilot"
+          placeholder={t("copilot.placeholder")}
+          aria-label={t("copilot.inputAria")}
           className="flex-1 rounded-md border px-3 py-2 text-sm"
           disabled={isLoading}
         />
@@ -188,7 +154,7 @@ export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotP
           disabled={!draft.trim() || isLoading}
         >
           <SendIcon className="h-4 w-4" />
-          Send
+          {t("copilot.send")}
         </button>
       </form>
     </div>
@@ -196,6 +162,7 @@ export function AuthoringCopilot({ skillId, onApplyProposal }: AuthoringCopilotP
 }
 
 function MessageRow({ role, content }: { role: "user" | "assistant"; content: string }) {
+  const { locale } = useI18n();
   const isUser = role === "user";
   return (
     <div className={isUser ? "flex justify-end" : "flex justify-start"}>
@@ -205,17 +172,12 @@ function MessageRow({ role, content }: { role: "user" | "assistant"; content: st
           (isUser ? "bg-primary/10" : "bg-muted/40")
         }
       >
-        {content || <span className="text-muted-foreground">(no text)</span>}
+        {content || <span className="text-muted-foreground">{translateSkillStudio(locale, "copilot.noText")}</span>}
       </div>
     </div>
   );
 }
 
-/**
- * One proposal card: label + Apply / Edit / Dismiss. Edit reveals an inline
- * editor for the proposal's `value` (string / string[]) or `spec` (JSON),
- * letting the user tweak before applying. Applying is a local draft mutation.
- */
 function ProposalCardView({
   cardKey,
   proposal,
@@ -227,6 +189,11 @@ function ProposalCardView({
   onApply: (p: Proposal) => void;
   onDismiss: (key: string) => void;
 }) {
+  const { locale } = useI18n();
+  const t = (
+    key: Parameters<typeof translateSkillStudio>[1],
+    params: Record<string, string | number> = {},
+  ) => translateSkillStudio(locale, key, params);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(() => proposalToEditText(proposal));
   const [editError, setEditError] = useState<string | null>(null);
@@ -240,9 +207,7 @@ function ProposalCardView({
     }
     const edited = editTextToProposal(proposal, editText);
     if (edited === null) {
-      setEditError(
-        usesSpec ? "Invalid JSON for spec" : "Could not parse the edited value",
-      );
+      setEditError(usesSpec ? t("copilot.invalidSpec") : t("copilot.invalidValue"));
       return;
     }
     setEditError(null);
@@ -264,7 +229,7 @@ function ProposalCardView({
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            aria-label={`Edit ${proposal.label}`}
+            aria-label={t("copilot.editAria", { label: proposal.label })}
             rows={usesSpec ? 4 : 2}
             className="w-full rounded border px-2 py-1 font-mono text-xs"
           />
@@ -281,7 +246,7 @@ function ProposalCardView({
           className="inline-flex items-center gap-1 rounded border bg-primary px-2 py-1 text-xs text-primary-foreground"
         >
           <Check className="h-3.5 w-3.5" aria-hidden />
-          Apply
+          {t("copilot.apply")}
         </button>
         <button
           type="button"
@@ -289,7 +254,7 @@ function ProposalCardView({
           className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"
         >
           <Pencil className="h-3.5 w-3.5" aria-hidden />
-          {editing ? "Cancel edit" : "Edit"}
+          {editing ? t("copilot.cancelEdit") : t("copilot.edit")}
         </button>
         <button
           type="button"
@@ -297,7 +262,7 @@ function ProposalCardView({
           className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs text-muted-foreground"
         >
           <X className="h-3.5 w-3.5" aria-hidden />
-          Dismiss
+          {t("copilot.dismiss")}
         </button>
       </div>
     </div>
@@ -319,15 +284,12 @@ function ProposalPreview({ proposal }: { proposal: Proposal }) {
   );
 }
 
-/** Serialise a proposal's payload for the inline editor. */
 function proposalToEditText(p: Proposal): string {
   if (p.spec !== undefined) return JSON.stringify(p.spec, null, 2);
   if (Array.isArray(p.value)) return p.value.join(", ");
   return p.value ?? "";
 }
 
-/** Parse the inline-editor text back into a proposal. Returns null on failure
- * so the caller can surface an error instead of applying garbage. */
 function editTextToProposal(p: Proposal, text: string): Proposal | null {
   if (p.spec !== undefined) {
     try {

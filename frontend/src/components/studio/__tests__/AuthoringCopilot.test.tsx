@@ -2,9 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proposal } from "@/components/studio/applyProposal";
 
-// --- Mock the AG-UI chat layer so no real network / SSE happens ---
-// The component consumes useSkillAgent(); we return a fixed message list whose
-// assistant turn carries a fenced proposals block.
 const assistantContent = [
   "Sure — here's a proposal:",
   "```json",
@@ -45,8 +42,14 @@ describe("AuthoringCopilot", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Track any accidental network call.
     vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  it("keeps the existing English fallback contract outside an I18nProvider", () => {
+    render(<AuthoringCopilot skillId="skill-123" onApplyProposal={vi.fn()} />);
+    expect(screen.getByText("Authoring copilot")).toBeInTheDocument();
+    expect(screen.getByLabelText("Message the authoring copilot")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
   });
 
   it("renders a proposal card from an assistant proposals block", () => {
