@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { SignInButton } from "@/components/SignInButton";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface SignInRequiredProps {
   /** Optional skill display name to personalise the headline copy. */
@@ -9,28 +11,26 @@ interface SignInRequiredProps {
 }
 
 /**
- * Sign-in gate panel (v6.4.0 INTERNAL-SHELL M3).
- *
- * Replaces the previous silent `router.replace("/")` on unauthenticated
- * chat URLs. Stays on the chat URL so post-sign-in Firebase auth re-renders
- * directly into the chat the user originally wanted — no need to navigate
- * back from the homepage.
- *
- * Ported from gde-ap-agent app/chat/[...path]/page.tsx lines 524–549.
+ * Sign-in gate panel. Stays on the chat URL so successful authentication
+ * re-renders directly into the chat the user originally wanted.
  */
 export function SignInRequired({ skillName }: SignInRequiredProps) {
+  const { locale } = useI18n();
+  const headline = skillName
+    ? translateChat(locale, "signIn.openSkill", { skill: skillName })
+    : translateChat(locale, "signIn.openChat");
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
       <div className="max-w-md space-y-3">
         <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Sign-in required
+          {translateChat(locale, "signIn.required")}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-          You need to sign in to {skillName ? `open ${skillName}` : "open this chat"}.
+          {headline}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Sessions, document history, and audit traces are scoped to your
-          account. Sign in to continue — you&apos;ll land straight back here.
+          {translateChat(locale, "signIn.description")}
         </p>
       </div>
       <SignInButton />
@@ -38,7 +38,7 @@ export function SignInRequired({ skillName }: SignInRequiredProps) {
         href="/"
         className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
       >
-        ← Back to homepage
+        {translateChat(locale, "signIn.backHome")}
       </Link>
     </main>
   );
