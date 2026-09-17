@@ -36,6 +36,9 @@ export function SkillNotFound({ slug }: SkillNotFoundProps) {
 
   const email = identity?.email ?? user?.email ?? translateChat(locale, "notFound.unknownAccount");
   const tags = identity?.groupTags ?? null;
+  const headline = slug
+    ? translateChat(locale, "notFound.withSlug", { slug })
+    : translateChat(locale, "notFound.generic");
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
@@ -44,14 +47,7 @@ export function SkillNotFound({ slug }: SkillNotFoundProps) {
           {translateChat(locale, "notFound.eyebrow")}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-          {slug ? (
-            <>
-              {translateChat(locale, "notFound.withSlug", { slug: "" }).replace(/\s*[。.]?$/, "")}{" "}
-              <code className="font-mono text-[0.85em]">{slug}</code>.
-            </>
-          ) : (
-            translateChat(locale, "notFound.generic")
-          )}
+          {headline}
         </h1>
         <p className="text-sm text-muted-foreground">
           {translateChat(locale, "notFound.description")}
