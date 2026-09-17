@@ -79,6 +79,7 @@ const en = {
   "workbench.tabsAria": "Workbench tabs",
   "workbench.newContent": "new content",
   "workbench.closeAria": "Close {label}",
+  "workbench.resizeAria": "Resize workbench",
 
   "shell.result": "Result",
   "shell.assistant": "Assistant",
@@ -171,10 +172,21 @@ const en = {
   "readAloud.stop": "Stop reading aloud",
   "readAloud.read": "Read aloud",
 
+  "code.copyFailedTitle": "Copying failed — select and copy manually",
+  "code.copyTitle": "Copy to clipboard",
+  "code.copyAria": "Copy code to clipboard",
+  "code.copied": "Copied",
+  "code.copyFailed": "Copy failed",
+  "code.copy": "Copy",
+  "code.fallbackLanguage": "code",
+
   "message.submitted": "Submitted",
   "message.new": "↓ New message",
   "message.historyError": "Could not load conversation history: {error}",
-  "message.transcriptUnavailable": "This conversation is listed, but its saved messages are no longer available.",
+  "message.transcriptUnavailableTitle": "This conversation’s messages are no longer available.",
+  "message.transcriptUnavailable": "The conversation is still listed, but its transcript was removed from the session store and can’t be recovered. You can keep chatting here — new messages will be saved.",
+  "message.earlier": "Earlier in this conversation",
+  "message.startConversation": "Send a message to start the conversation.",
 } as const;
 
 export type ChatTranslationKey = keyof typeof en;
@@ -258,6 +270,7 @@ const zhCN = {
   "workbench.tabsAria": "工作台标签页",
   "workbench.newContent": "有新内容",
   "workbench.closeAria": "关闭 {label}",
+  "workbench.resizeAria": "调整工作台宽度",
 
   "shell.result": "结果",
   "shell.assistant": "助手",
@@ -350,10 +363,21 @@ const zhCN = {
   "readAloud.stop": "停止朗读",
   "readAloud.read": "朗读",
 
+  "code.copyFailedTitle": "复制失败，请手动选择并复制",
+  "code.copyTitle": "复制到剪贴板",
+  "code.copyAria": "复制代码到剪贴板",
+  "code.copied": "已复制",
+  "code.copyFailed": "复制失败",
+  "code.copy": "复制",
+  "code.fallbackLanguage": "代码",
+
   "message.submitted": "已提交",
   "message.new": "↓ 新消息",
   "message.historyError": "无法加载对话历史：{error}",
-  "message.transcriptUnavailable": "该对话仍在列表中，但已保存的消息内容已不可用。",
+  "message.transcriptUnavailableTitle": "此对话的历史消息已不可用。",
+  "message.transcriptUnavailable": "该对话仍保留在列表中，但历史消息已从会话存储中移除且无法恢复。你可以继续在这里对话，新消息会正常保存。",
+  "message.earlier": "本次对话的较早消息",
+  "message.startConversation": "发送一条消息开始对话。",
 } satisfies Record<ChatTranslationKey, string>;
 
 const dictionaries: Record<Locale, Record<ChatTranslationKey, string>> = {

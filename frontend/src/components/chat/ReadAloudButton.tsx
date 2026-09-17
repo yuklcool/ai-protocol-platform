@@ -24,6 +24,8 @@ import { VolumeX } from "lucide-react";
 import { VoiceIcon } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface ReadAloudButtonProps {
   /** Text to speak. Stripped of markdown / HTML before utterance. */
@@ -160,6 +162,7 @@ export function ReadAloudButton({
   skillId,
   className,
 }: ReadAloudButtonProps) {
+  const { locale } = useI18n();
   const useGCP = provider !== "browser";
   // We only need Web Speech availability for the browser-native path. The
   // GCP path uses the standard Audio() element, available everywhere.
@@ -370,7 +373,9 @@ export function ReadAloudButton({
     speakViaBrowser(plainTextForSpeech(text));
   }
 
-  const label = isSpeaking ? "Stop reading aloud" : "Read aloud";
+  const label = isSpeaking
+    ? translateChat(locale, "readAloud.stop")
+    : translateChat(locale, "readAloud.read");
   const Icon = isSpeaking ? VolumeX : VoiceIcon;
   return (
     <button
