@@ -15,7 +15,7 @@ describe("TypingIndicator", () => {
     expect(screen.getByRole("img", { name: BRANDING.appName })).toBeInTheDocument();
   });
 
-  it("shows the localized fallback sentence while preserving the runtime tool name", () => {
+  it("shows tool name when activeToolName is provided", () => {
     render(<TypingIndicator activeToolName="web_search" />);
     expect(screen.getByText("Using web_search…")).toBeInTheDocument();
     expect(screen.queryAllByRole("presentation").length).toBeGreaterThanOrEqual(0);
@@ -50,7 +50,7 @@ describe("TypingIndicator", () => {
       expect(screen.queryByText(/other_tool/)).not.toBeInTheDocument();
     });
 
-    it("falls back to the localized tool sentence when stageLabel is null", () => {
+    it("falls back to activeToolName when stageLabel is null", () => {
       render(<TypingIndicator stageLabel={null} activeToolName="ai_search" />);
       expect(screen.getByText("Using ai_search…")).toBeInTheDocument();
     });
