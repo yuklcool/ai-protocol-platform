@@ -12,44 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Report likely user-visible English literals
+      - name: Print remaining localization contexts
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          root = Path('frontend/src/components/chat')
-          patterns = [
-              re.compile(r'>[^<{]*[A-Za-z][^<{]*<'),
-              re.compile(r'\b(?:aria-label|title|placeholder)="[^"]*[A-Za-z][^"]*"'),
-              re.compile(r'window\.confirm\([^\n]*["\']'),
-              re.compile(r'\?\s*["\'][A-Za-z][^"\']*["\']\s*:\s*["\'][A-Za-z]'),
-              re.compile(r'\|\|\s*["\'][A-Za-z][^"\']*["\']'),
-              re.compile(r'\?\?\s*["\'][A-Za-z][^"\']*["\']'),
-          ]
-          skip_markers = ('translateChat(', 'className=', 'data-testid=', 'type="', 'role="')
-          hits = 0
-          for path in sorted(root.glob('*.tsx')):
-              lines = path.read_text(encoding='utf-8').splitlines()
-              in_block_comment = False
-              file_hits = []
-              for no, raw in enumerate(lines, 1):
-                  line = raw.strip()
-                  if '/*' in line:
-                      in_block_comment = True
-                  comment_line = in_block_comment or line.startswith('//') or line.startswith('*')
-                  if '*/' in line:
-                      in_block_comment = False
-                      continue
-                  if comment_line or not line:
-                      continue
-                  if any(p.search(line) for p in patterns) and not all(m in line for m in skip_markers[:1]):
-                      file_hits.append((no, raw))
-              if file_hits:
-                  print(f'### {path}')
-                  for no, raw in file_hits:
-                      print(f'{no}: {raw}')
-                      hits += 1
-          print(f'\nTOTAL_LIKELY_LITERALS={hits}')
-          PY
+          echo '=== ChatMessageList 390-480 ==='
+          sed -n '390,480p' frontend/src/components/chat/ChatMessageList.tsx
+          echo '=== ActivityPanel 300-410 ==='
+          sed -n '300,410p' frontend/src/components/chat/ActivityPanel.tsx
+          echo '=== MessageBubble 285-330 ==='
+          sed -n '285,330p' frontend/src/components/chat/MessageBubble.tsx
+          echo '=== ReadAloudButton 365-385 ==='
+          sed -n '365,385p' frontend/src/components/chat/ReadAloudButton.tsx
+          echo '=== CodeBlock 75-135 ==='
+          sed -n '75,135p' frontend/src/components/chat/CodeBlock.tsx
+          echo '=== WorkbenchResizeHandle 145-170 ==='
+          sed -n '145,170p' frontend/src/components/chat/WorkbenchResizeHandle.tsx
