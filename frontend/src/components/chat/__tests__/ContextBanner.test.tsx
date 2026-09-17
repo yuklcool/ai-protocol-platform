@@ -7,15 +7,14 @@ describe("ContextBanner", () => {
     render(
       <ContextBanner context={{ folderName: "Q1 Financial Review", docCount: 14 }} />,
     );
-    expect(screen.getByText(/analyzing/i)).toBeInTheDocument();
-    expect(screen.getByText("14")).toBeInTheDocument();
-    expect(screen.getByText("Q1 Financial Review")).toBeInTheDocument();
+    expect(
+      screen.getByText("Analyzing 14 documents from Q1 Financial Review"),
+    ).toBeInTheDocument();
   });
 
   it("uses singular 'document' for count of 1", () => {
     render(<ContextBanner context={{ folderName: "Budget", docCount: 1 }} />);
-    expect(screen.getByText(/1/)).toBeInTheDocument();
-    expect(screen.getByText(/document\b/)).toBeInTheDocument();
+    expect(screen.getByText("Analyzing 1 document from Budget")).toBeInTheDocument();
     expect(screen.queryByText(/documents/)).toBeNull();
   });
 
