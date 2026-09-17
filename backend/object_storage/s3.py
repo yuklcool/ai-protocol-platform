@@ -1,8 +1,9 @@
 """S3-compatible adapter for the provider-neutral ObjectStorage API.
 
-The adapter works with AWS S3 and S3-compatible endpoints such as MinIO and
-LocalStack. Objects always live beneath ``tenants/<tenant_id>/`` so switching
-providers does not weaken the platform's tenant namespace boundary.
+The adapter works with AWS S3 and S3-compatible endpoints such as Cloudflare
+R2, MinIO/AIStor, Ceph RGW, Garage and LocalStack. Objects always live beneath
+``tenants/<tenant_id>/`` so switching providers does not weaken the platform's
+tenant namespace boundary.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from object_storage.local import _validate_key, _validate_tenant_id
 
 _MIN_MULTIPART_CHUNK = 5 * 1024 * 1024
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound", "NoSuchBucket"}
+_MAX_PRESIGN_SECONDS = 7 * 24 * 60 * 60
 
 
 def _is_not_found(exc: Exception) -> bool:
@@ -31,13 +33,20 @@ def _is_not_found(exc: Exception) -> bool:
     return code in _NOT_FOUND_CODES or status == 404
 
 
+def _validate_presign_expiry(expires_in: int) -> int:
+    value = int(expires_in)
+    if value <= 0 or value > _MAX_PRESIGN_SECONDS:
+        raise ValueError("expires_in must be between 1 and 604800 seconds")
+    return value
+
+
 class S3ObjectStorage:
     """Store tenant objects in an S3-compatible bucket.
 
     Explicit credentials are optional. When access/secret keys are omitted,
     boto3's normal credential provider chain is used (for example IAM roles in
-    AWS). Self-hosted MinIO deployments normally provide explicit credentials
-    plus ``endpoint_url`` and ``addressing_style="path"``.
+    AWS). Self-hosted S3-compatible deployments normally provide explicit
+    credentials plus ``endpoint_url`` and ``addressing_style='path'``.
     """
 
     def __init__(
@@ -85,8 +94,14 @@ class S3ObjectStorage:
 
     def _get_client(self):
         if self._client is None:
-            import boto3
-            from botocore.config import Config
+            try:
+                import boto3
+                from botocore.config import Config
+            except ImportError as exc:  # pragma: no cover - exercised by deployment packaging
+                raise RuntimeError(
+                    "S3 object storage requires the boto3 optional dependency; "
+                    "install the backend with the S3 dependency enabled"
+                ) from exc
 
             kwargs: dict[str, Any] = {
                 "region_name": self.region_name,
@@ -133,7 +148,13 @@ class S3ObjectStorage:
     ) -> ObjectInfo:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
-        from boto3.s3.transfer import TransferConfig
+        try:
+            from boto3.s3.transfer import TransferConfig
+        except ImportError as exc:  # pragma: no cover - exercised by deployment packaging
+            raise RuntimeError(
+                "S3 object storage requires the boto3 optional dependency; "
+                "install the backend with the S3 dependency enabled"
+            ) from exc
 
         object_name, normalized = self._object_name(tenant_id, key)
         transfer_chunk = max(chunk_size, _MIN_MULTIPART_CHUNK)
@@ -214,3 +235,43 @@ class S3ObjectStorage:
                 )
         result.sort(key=lambda item: item.key)
         return result
+
+    def generate_presigned_download_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+    ) -> str:
+        """Return a time-limited GET URL scoped to one tenant object."""
+
+        object_name, _ = self._object_name(tenant_id, key)
+        return str(
+            self._get_client().generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket_name, "Key": object_name},
+                ExpiresIn=_validate_presign_expiry(expires_in),
+            )
+        )
+
+    def generate_presigned_upload_url(
+        self,
+        tenant_id: str,
+        key: str,
+        *,
+        expires_in: int = 900,
+        content_type: str | None = None,
+    ) -> str:
+        """Return a time-limited PUT URL scoped to one tenant object."""
+
+        object_name, _ = self._object_name(tenant_id, key)
+        params: dict[str, str] = {"Bucket": self.bucket_name, "Key": object_name}
+        if content_type:
+            params["ContentType"] = content_type
+        return str(
+            self._get_client().generate_presigned_url(
+                "put_object",
+                Params=params,
+                ExpiresIn=_validate_presign_expiry(expires_in),
+            )
+        )
