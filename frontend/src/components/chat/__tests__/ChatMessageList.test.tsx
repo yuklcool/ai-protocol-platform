@@ -161,7 +161,7 @@ describe("ChatMessageList", () => {
         toolCalls={[{ id: "tc1", name: "web_search", status: "running" }]}
       />,
     );
-    expect(screen.getByText("web_search")).toBeInTheDocument();
+    expect(screen.getByText("Using web_search…")).toBeInTheDocument();
   });
 
   it("shows StreamingBubble when last message is assistant and isLoading", () => {
@@ -184,8 +184,7 @@ describe("ChatMessageList", () => {
         activeDocumentContext={{ folderName: "Q1 Docs", docCount: 5 }}
       />,
     );
-    expect(screen.getByText(/q1 docs/i)).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("Analyzing 5 documents from Q1 Docs")).toBeInTheDocument();
   });
 
   it("does not show ContextBanner when activeDocumentContext is undefined", () => {
