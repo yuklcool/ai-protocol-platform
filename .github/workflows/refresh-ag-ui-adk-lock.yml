@@ -1,0 +1,34 @@
+name: Refresh ag-ui-adk lock
+
+on:
+  push:
+    branches: [fix/upgrade-ag-ui-adk-065]
+    paths:
+      - backend/pyproject.toml
+      - .github/workflows/refresh-ag-ui-adk-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    if: "!contains(github.event.head_commit.message, 'chore(deps): refresh ag-ui-adk lock')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/upgrade-ag-ui-adk-065
+      - uses: astral-sh/setup-uv@v6
+      - name: Refresh only ag-ui-adk resolution
+        working-directory: backend
+        run: uv lock --upgrade-package ag-ui-adk
+      - name: Commit lock and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/refresh-ag-ui-adk-lock.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/uv.lock .github/workflows/refresh-ag-ui-adk-lock.yml
+          git commit -m "chore(deps): refresh ag-ui-adk lock"
+          git push origin HEAD:fix/upgrade-ag-ui-adk-065
