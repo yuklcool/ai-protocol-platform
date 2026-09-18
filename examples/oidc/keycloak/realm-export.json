@@ -1,0 +1,54 @@
+{
+  "realm": "ai-protocol-platform",
+  "enabled": true,
+  "displayName": "AI Protocol Platform OIDC Demo",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "ai-protocol-platform",
+      "name": "AI Protocol Platform",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3456/auth/oidc/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3456"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "username": "oidc-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "owner@example.com",
+      "firstName": "OIDC",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "oidc-demo-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
