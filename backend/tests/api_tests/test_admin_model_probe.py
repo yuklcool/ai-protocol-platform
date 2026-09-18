@@ -208,6 +208,70 @@ def test_http_failures_do_not_echo_upstream_body(monkeypatch, status, category):
     assert "probe-secret" not in response.text
 
 
+
+
+def test_probe_retries_transient_transport_error(monkeypatch) -> None:
+    monkeypatch.setenv("PROBE_KEY", "secret")
+
+    accepted = MagicMock()
+    accepted.status_code = 200
+    accepted.json.return_value = {"choices": [{"message": {"content": "OK"}}]}
+
+    client = AsyncMock()
+    client.post.side_effect = [
+        httpx.RemoteProtocolError("temporary reset"),
+        accepted,
+    ]
+    cm = AsyncMock()
+    cm.__aenter__.return_value = client
+    cm.__aexit__.return_value = None
+
+    with (
+        patch("admin.model_probe_routes.get_document", side_effect=_docs),
+        patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm),
+        patch("admin.model_probe_routes.asyncio.sleep", new=AsyncMock()),
+    ):
+        response = _client(_ADMIN).post(
+            "/api/admin/model-providers/models/deepseek-v3/test",
+            json={"mode": "completion"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert client.post.await_count == 2
+
+
+def test_probe_retries_transient_http_status(monkeypatch) -> None:
+    monkeypatch.setenv("PROBE_KEY", "secret")
+
+    throttled = MagicMock()
+    throttled.status_code = 429
+    throttled.json.return_value = {"error": {"type": "rate_limit"}}
+
+    accepted = MagicMock()
+    accepted.status_code = 200
+    accepted.json.return_value = {"choices": [{"message": {"content": "OK"}}]}
+
+    client = AsyncMock()
+    client.post.side_effect = [throttled, accepted]
+    cm = AsyncMock()
+    cm.__aenter__.return_value = client
+    cm.__aexit__.return_value = None
+
+    with (
+        patch("admin.model_probe_routes.get_document", side_effect=_docs),
+        patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm),
+        patch("admin.model_probe_routes.asyncio.sleep", new=AsyncMock()),
+    ):
+        response = _client(_ADMIN).post(
+            "/api/admin/model-providers/models/deepseek-v3/test",
+            json={"mode": "completion"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert client.post.await_count == 2
+
 def test_transport_errors_do_not_expose_credentials(monkeypatch):
     monkeypatch.setenv("PROBE_KEY", "probe-secret")
     cm, client = _async_client_response({})
