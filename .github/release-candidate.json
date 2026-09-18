@@ -3,5 +3,6 @@
   "version": "v1.0.0",
   "provider_base_url": "https://sub2api.yukl.qzz.io/v1",
   "model_api_name": "auto",
-  "supports_reasoning": false
+  "supports_reasoning": false,
+  "attempt": 3
 }
