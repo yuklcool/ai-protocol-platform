@@ -52,6 +52,7 @@ class OidcSettings:
     issuer: str
     client_id: str
     client_secret: str
+    token_endpoint_auth_method: str
     redirect_uri: str
     scopes: tuple[str, ...]
     email_claim: str
@@ -144,6 +145,7 @@ def oidc_settings() -> OidcSettings:
         issuer=issuer,
         client_id=client_id,
         client_secret=os.environ.get("OIDC_CLIENT_SECRET", "").strip(),
+        token_endpoint_auth_method=os.environ.get("OIDC_TOKEN_ENDPOINT_AUTH_METHOD", "auto").strip().lower() or "auto",
         redirect_uri=redirect_uri,
         scopes=scopes,
         email_claim=os.environ.get("OIDC_EMAIL_CLAIM", "email").strip() or "email",
@@ -155,6 +157,15 @@ def oidc_settings() -> OidcSettings:
         http_timeout_seconds=_env_float("OIDC_HTTP_TIMEOUT_SECONDS", 10.0, minimum=1.0, maximum=60.0),
         clock_skew_seconds=_env_int("OIDC_CLOCK_SKEW_SECONDS", 60, minimum=0, maximum=600),
     )
+    if settings.token_endpoint_auth_method not in {"auto", "client_secret_basic", "client_secret_post", "none"}:
+        raise OidcConfigurationError(
+            "OIDC_TOKEN_ENDPOINT_AUTH_METHOD must be auto, client_secret_basic, client_secret_post, or none"
+        )
+    if settings.token_endpoint_auth_method.startswith("client_secret_") and not settings.client_secret:
+        raise OidcConfigurationError("OIDC_CLIENT_SECRET is required for the selected token endpoint auth method")
+    if settings.token_endpoint_auth_method == "none" and settings.client_secret:
+        raise OidcConfigurationError("OIDC_CLIENT_SECRET must be empty when token endpoint auth method is none")
+
     _validate_url(settings.issuer, "OIDC_ISSUER", settings.allow_insecure_http)
     redirect_host = (urlparse(settings.redirect_uri).hostname or "").lower()
     redirect_allows_http = settings.allow_insecure_http or redirect_host in {"localhost", "127.0.0.1", "::1"}
@@ -187,7 +198,7 @@ def clear_oidc_cache() -> None:
 async def _fetch_json(url: str, settings: OidcSettings) -> dict[str, Any]:
     _validate_url(url, "OIDC provider endpoint", settings.allow_insecure_http)
     try:
-        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds, follow_redirects=False) as client:
             response = await client.get(url, headers={"Accept": "application/json"})
             response.raise_for_status()
             payload = response.json()
@@ -214,6 +225,13 @@ async def get_oidc_discovery(*, force_refresh: bool = False) -> dict[str, Any]:
     metadata = await _fetch_json(discovery_url, settings)
     if metadata.get("issuer") != settings.issuer:
         raise OidcProtocolError("OIDC discovery issuer does not match OIDC_ISSUER")
+
+    response_types = metadata.get("response_types_supported")
+    if isinstance(response_types, list) and "code" not in response_types:
+        raise OidcProtocolError("OIDC provider does not advertise Authorization Code flow")
+    pkce_methods = metadata.get("code_challenge_methods_supported")
+    if isinstance(pkce_methods, list) and "S256" not in pkce_methods:
+        raise OidcProtocolError("OIDC provider does not advertise PKCE S256")
 
     for field in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
         value = metadata.get(field)
@@ -337,6 +355,9 @@ def _load_linked_user(settings: OidcSettings, subject: str) -> User | None:
         raise HTTPException(status_code=403, detail="OIDC account is not provisioned")
     if str(record.get("uid") or "") != str(link.get("uid") or ""):
         raise HTTPException(status_code=403, detail="OIDC identity link no longer matches the local account")
+    reverse = persistence.get_document(OIDC_LINK_COLLECTION, _user_link_id(settings.issuer, str(record.get("uid") or "")))
+    if reverse is None or str(reverse.get("subject") or "") != subject:
+        raise HTTPException(status_code=403, detail="OIDC identity reverse link is missing or conflicts")
     return _record_to_oidc_user(record)
 
 
@@ -416,6 +437,25 @@ async def public_oidc_configuration() -> dict[str, Any]:
     }
 
 
+def _select_token_endpoint_auth_method(discovery: dict[str, Any], settings: OidcSettings) -> str:
+    configured = settings.token_endpoint_auth_method
+    if configured != "auto":
+        return configured
+    if not settings.client_secret:
+        return "none"
+
+    supported = discovery.get("token_endpoint_auth_methods_supported")
+    if isinstance(supported, list):
+        if "client_secret_basic" in supported:
+            return "client_secret_basic"
+        if "client_secret_post" in supported:
+            return "client_secret_post"
+        raise OidcProtocolError("OIDC provider does not support a compatible client-secret token auth method")
+    # RFC 6749 requires authorization servers to support HTTP Basic for clients
+    # issued a client password, so use it when discovery omits the optional list.
+    return "client_secret_basic"
+
+
 async def exchange_authorization_code(
     *,
     code: str,
@@ -443,7 +483,12 @@ async def exchange_authorization_code(
         "redirect_uri": settings.redirect_uri,
         "code_verifier": code_verifier,
     }
-    if settings.client_secret:
+    token_auth_method = _select_token_endpoint_auth_method(discovery, settings)
+    request_auth: httpx.BasicAuth | None = None
+    if token_auth_method == "client_secret_basic":
+        request_auth = httpx.BasicAuth(settings.client_id, settings.client_secret)
+        data.pop("client_id", None)
+    elif token_auth_method == "client_secret_post":
         data["client_secret"] = settings.client_secret
 
     try:
@@ -452,6 +497,7 @@ async def exchange_authorization_code(
                 token_endpoint,
                 data=data,
                 headers={"Accept": "application/json"},
+                auth=request_auth,
             )
             response.raise_for_status()
             payload = response.json()
