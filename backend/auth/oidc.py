@@ -166,7 +166,6 @@ def _validate_url(
     value: str,
     label: str,
     allow_insecure_http: bool,
-    *,
 ) -> None:
     parsed = urlparse(value)
     if not parsed.scheme or not parsed.netloc:
