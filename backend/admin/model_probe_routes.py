@@ -90,12 +90,34 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
+    probe_payloads = [payload]
+    if body.mode == "tool_call":
+        # OpenAI-compatible gateways differ on which tool_choice spelling they
+        # accept. Keep the success criterion strict (the requested function must
+        # actually be returned), but retry request-shape compatibility on 400/422:
+        # exact named function -> required -> auto.
+        for portable_tool_choice in ("required", "auto"):
+            fallback_payload = dict(payload)
+            fallback_payload["tool_choice"] = portable_tool_choice
+            probe_payloads.append(fallback_payload)
+
     started = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+            response = None
+            for index, candidate_payload in enumerate(probe_payloads):
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers=headers,
+                    json=candidate_payload,
+                )
+                if response.status_code not in {400, 422} or index == len(probe_payloads) - 1:
+                    break
     except httpx.RequestError:
         return ModelProbeResponse(ok=False, category="network", message="Could not reach the provider")
+
+    if response is None:  # Defensive: probe_payloads is always non-empty.
+        return ModelProbeResponse(ok=False, category="network", message="Provider request was not attempted")
 
     latency_ms = round((time.monotonic() - started) * 1000)
     if response.status_code in {401, 403}:
