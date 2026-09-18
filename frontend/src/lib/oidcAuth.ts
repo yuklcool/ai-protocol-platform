@@ -145,13 +145,14 @@ export async function completeOidcSignIn(
     user: payload.user,
   };
   writeOidcSession(session);
-  return {
-    session,
-    returnTo:
-      typeof payload.return_to === "string" && payload.return_to.startsWith("/")
-        ? payload.return_to
-        : "/",
-  };
+  const returnTo =
+    typeof payload.return_to === "string" &&
+    payload.return_to.startsWith("/") &&
+    !payload.return_to.startsWith("//") &&
+    !payload.return_to.includes("\\")
+      ? payload.return_to
+      : "/";
+  return { session, returnTo };
 }
 
 export async function validateOidcSession(
