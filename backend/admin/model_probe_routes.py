@@ -32,6 +32,26 @@ class ModelProbeResponse(BaseModel):
     latency_ms: int | None = None
 
 
+def _has_requested_probe_tool_call(message: object) -> bool:
+    """Return True only for a valid platform_probe function call."""
+    if not isinstance(message, dict):
+        return False
+    tool_calls = message.get("tool_calls")
+    for item in tool_calls if isinstance(tool_calls, list) else []:
+        if not isinstance(item, dict) or item.get("type") != "function":
+            continue
+        function = item.get("function")
+        if not isinstance(function, dict) or function.get("name") != "platform_probe":
+            continue
+        try:
+            arguments = json.loads(function.get("arguments", ""))
+        except (ValueError, TypeError):
+            continue
+        if isinstance(arguments, dict) and isinstance(arguments.get("value"), str):
+            return True
+    return False
+
+
 @router.post("/{model_id}/test", response_model=ModelProbeResponse)
 async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: PlatformScope) -> ModelProbeResponse:
     model = get_document(MODELS_COLLECTION, model_id)
@@ -94,8 +114,10 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     probe_payloads = [payload]
     if body.mode == "tool_call":
         # OpenAI-compatible gateways differ on which tool_choice spelling they
-        # accept. Keep the success criterion strict (the requested function must
-        # actually be returned), but retry request-shape compatibility on 400/422:
+        # honor. Keep the success criterion strict (the requested function must
+        # actually be returned), but retry request-shape compatibility both when
+        # the gateway rejects a spelling (400/422) and when it returns HTTP 2xx
+        # while silently ignoring that spelling:
         # exact named function -> required -> auto.
         for portable_tool_choice in ("required", "auto"):
             fallback_payload = dict(payload)
@@ -137,8 +159,25 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
                 # Exhausted transport retries for this request shape. Retrying a
                 # different tool_choice spelling cannot repair a network failure.
                 break
-            if response.status_code not in {400, 422} or index == len(probe_payloads) - 1:
-                break
+
+            is_last_shape = index == len(probe_payloads) - 1
+            if response.status_code in {400, 422} and not is_last_shape:
+                continue
+
+            if body.mode == "tool_call" and 200 <= response.status_code < 300 and not is_last_shape:
+                try:
+                    candidate_message = response.json()["choices"][0]["message"]
+                except (ValueError, KeyError, IndexError, TypeError):
+                    # A malformed success response is a schema failure, not a
+                    # tool_choice compatibility signal.
+                    break
+                if isinstance(candidate_message, dict) and not _has_requested_probe_tool_call(candidate_message):
+                    # Some OpenAI-compatible gateways accept an unsupported
+                    # tool_choice shape but ignore it. Try the next portable
+                    # spelling while still requiring a real structured tool call.
+                    continue
+
+            break
 
     if response is None:
         message = "Could not reach the provider" if last_request_error else "Provider request was not attempted"
@@ -159,21 +198,7 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
         return ModelProbeResponse(ok=False, category="schema", message="Invalid message schema", latency_ms=latency_ms)
     tool_calls = message.get("tool_calls")
     if body.mode == "tool_call":
-        called = False
-        for item in tool_calls if isinstance(tool_calls, list) else []:
-            if not isinstance(item, dict) or item.get("type") != "function":
-                continue
-            function = item.get("function")
-            if not isinstance(function, dict) or function.get("name") != "platform_probe":
-                continue
-            try:
-                arguments = json.loads(function.get("arguments", ""))
-            except (ValueError, TypeError):
-                continue
-            if isinstance(arguments, dict) and isinstance(arguments.get("value"), str):
-                called = True
-                break
-        if not called:
+        if not _has_requested_probe_tool_call(message):
             return ModelProbeResponse(ok=False, category="capability", message="Model did not return the requested tool call", tool_called=False, latency_ms=latency_ms)
         return ModelProbeResponse(ok=True, message="Tool calling succeeded", tool_called=True, latency_ms=latency_ms)
 
