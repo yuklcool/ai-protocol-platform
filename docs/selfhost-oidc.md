@@ -41,9 +41,10 @@ OIDC_SCOPES=openid profile email
 OIDC_TRANSACTION_TTL_SECONDS=300
 ```
 
-`OIDC_AUDIENCE` defaults to `OIDC_CLIENT_ID`. The default accepted signing
-algorithm is `RS256`; `none` can never be enabled. `OIDC_SCOPES` must include
-`openid`.
+`OIDC_AUDIENCE` defaults to `OIDC_CLIENT_ID`. The browser PKCE flow requires
+those values to match because the verified ID token is the browser session
+credential. The default accepted signing algorithm is `RS256`; `none` can never
+be enabled. `OIDC_SCOPES` must include `openid`.
 
 For a public client:
 
