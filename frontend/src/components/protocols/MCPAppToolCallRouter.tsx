@@ -389,14 +389,19 @@ function RoutedToolCall({
   }
 
   const renderedApp = (
-    <AppRenderer
-      client={client}
-      toolName={unprefixedName}
-      toolInput={toolInput}
-      toolResult={toolResult}
-      html={resource.html}
-      sandbox={sandboxConfig}
-      onMessage={async (params) => {
+    <div
+      data-testid="mcp-app-tool"
+      data-tool-name={unprefixedName}
+      data-tool-call-id={toolCall.id}
+    >
+      <AppRenderer
+        client={client}
+        toolName={unprefixedName}
+        toolInput={toolInput}
+        toolResult={toolResult}
+        html={resource.html}
+        sandbox={sandboxConfig}
+        onMessage={async (params) => {
         const text = notificationToChatMessage(params);
         if (text && onChatMessage) onChatMessage(text);
         return {};
@@ -449,10 +454,11 @@ function RoutedToolCall({
         }
         return {};
       }}
-      onError={(err: Error) => {
-        console.warn("MCPAppToolCallRouter: AppRenderer error", err);
-      }}
-    />
+        onError={(err: Error) => {
+          console.warn("MCPAppToolCallRouter: AppRenderer error", err);
+        }}
+      />
+    </div>
   );
 
   // Sprint 2.13 — warn variant: wrap the AppRenderer with the yellow
