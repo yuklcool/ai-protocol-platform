@@ -8,7 +8,6 @@ from starlette.requests import Request
 
 from auth.local_jwt import create_local_user
 from auth.oidc import (
-    OIDC_LINK_COLLECTION,
     OidcConfigurationError,
     clear_oidc_cache,
     exchange_authorization_code,
