@@ -27,8 +27,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Start real Keycloak
-        run: docker compose -f docker-compose.keycloak.yml up -d keycloak
+      - name: Start real Keycloak on the platform network
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.keycloak.yml \
+            up -d --no-deps keycloak
 
       - name: Wait for Keycloak realm discovery
         run: |
@@ -50,4 +54,8 @@ jobs:
 
       - name: Show Keycloak logs on failure
         if: failure()
-        run: docker compose -f docker-compose.keycloak.yml logs keycloak
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.keycloak.yml \
+            logs keycloak
