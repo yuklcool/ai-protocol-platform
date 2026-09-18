@@ -53,7 +53,7 @@ For production, use the exact semver release tag shipped in the release asset:
 APP_VERSION=v1.2.3
 ```
 
-The downloaded release `.env.selfhost.example` is pre-pinned to that exact tag. `latest` is convenient for evaluation, but should not be used as the production rollback boundary. Pre-release tags such as `v1.2.3-rc.1` do not move `latest`; only stable `vX.Y.Z` releases do.
+The downloaded release `.env.selfhost.example` is pre-pinned to that exact tag. `latest` is convenient for evaluation, but should not be used as the production rollback boundary. The production release workflow currently accepts stable `vX.Y.Z` tags only.
 
 Every published image also receives an exact source tag:
 
