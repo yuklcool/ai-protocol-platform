@@ -230,11 +230,20 @@ async def test_authorization_request_stores_pkce_transaction_server_side(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "return_to",
+    [
+        "https://evil.example/steal",
+        "//evil.example/steal",
+        "/\\\\evil.example/steal",
+    ],
+)
 async def test_authorization_request_blocks_external_return_url(
     monkeypatch: pytest.MonkeyPatch,
+    return_to: str,
 ) -> None:
     monkeypatch.setattr("auth.oidc.get_discovery", _fake_discovery)
-    result = await create_oidc_authorization_request(return_to="https://evil.example/steal")
+    result = await create_oidc_authorization_request(return_to=return_to)
     state = parse_qs(urlsplit(result["authorization_url"]).query)["state"][0]
     assert _transaction_for_state(state)["returnTo"] == "/"
 
@@ -317,3 +326,37 @@ async def test_callback_rejects_nonce_mismatch_and_still_consumes_state(
         await complete_oidc_authorization_code(code="authorization-code", state=state)
     with pytest.raises(ValueError, match="invalid or expired"):
         await complete_oidc_authorization_code(code="authorization-code", state=state)
+
+
+@pytest.mark.asyncio
+async def test_unknown_kid_refreshes_jwks_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    secret = b"rotated-secret-that-is-longer-than-thirty-two-bytes"
+    now = int(time.time())
+    token = jwt.encode(
+        {
+            "sub": "external-subject",
+            "iss": "https://idp.example.test",
+            "aud": "platform-api",
+            "iat": now,
+            "exp": now + 300,
+        },
+        secret,
+        algorithm="HS256",
+        headers={"kid": "rotated-key"},
+    )
+    calls: list[bool] = []
+
+    async def fake_get_jwks(config=None, *, force_refresh=False):
+        calls.append(force_refresh)
+        if force_refresh:
+            rotated = _secret_jwk(secret)
+            rotated["kid"] = "rotated-key"
+            return {"keys": [rotated]}
+        stale = _secret_jwk(b"old-secret-that-is-longer-than-thirty-two-bytes")
+        stale["kid"] = "old-key"
+        return {"keys": [stale]}
+
+    monkeypatch.setattr("auth.oidc.get_jwks", fake_get_jwks)
+    claims = await decode_oidc_token(token)
+    assert claims["sub"] == "external-subject"
+    assert calls == [False, True]
