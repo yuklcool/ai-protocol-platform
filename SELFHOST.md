@@ -264,7 +264,22 @@ metadata -> delete
 
 Failures retain durable recovery state for reconciliation.
 
-`OBJECT_STORAGE_BACKEND=gcs` remains an optional cloud adapter. S3-compatible storage is tracked separately and is not required by the default stack.
+`OBJECT_STORAGE_BACKEND=gcs` remains an optional cloud adapter. S3-compatible storage is also available as an opt-in adapter and is not required by the default stack.
+
+Optional S3-compatible configuration:
+
+```env
+OBJECT_STORAGE_BACKEND=s3
+OBJECT_STORAGE_S3_BUCKET=your-bucket
+OBJECT_STORAGE_S3_ENDPOINT=https://s3.example.com
+OBJECT_STORAGE_S3_REGION=us-east-1
+OBJECT_STORAGE_S3_ACCESS_KEY=
+OBJECT_STORAGE_S3_SECRET_KEY=
+OBJECT_STORAGE_S3_SESSION_TOKEN=
+OBJECT_STORAGE_S3_ADDRESSING_STYLE=auto
+```
+
+The adapter keeps every object under `tenants/<tenant_id>/`, supports bounded-memory upload/download, list/exists/delete and time-limited presigned GET/PUT URLs. AWS IAM/workload credentials can be used by leaving the explicit key fields empty. Custom S3 endpoints such as Cloudflare R2, MinIO/AIStor, Ceph RGW and Garage can set `OBJECT_STORAGE_S3_ENDPOINT`; many self-hosted endpoints use `OBJECT_STORAGE_S3_ADDRESSING_STYLE=path`. Enabling this adapter does **not** add an S3/MinIO service to the default Compose stack.
 
 ## Model providers
 
@@ -398,7 +413,7 @@ For image-based deployment, application rollback is normally performed by restor
 
 - OIDC/Keycloak is not implemented as a default auth adapter and `AUTH_BACKEND=oidc` remains fail-closed.
 - local-jwt currently uses access-token-only browser sessions rather than a refresh-token flow.
-- S3-compatible ObjectStorage remains an optional adapter, not a default service.
+- S3-compatible ObjectStorage is available as an optional adapter and remains outside the default Compose service set.
 - real external Provider Tool Calling acceptance still requires endpoint credentials supplied by the deployment owner.
 - internet-facing installations remain responsible for TLS, secret management, backups and normal operational hardening.
 

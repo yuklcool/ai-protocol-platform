@@ -34,6 +34,8 @@ dependencies = [
     "ag-ui-adk>=0.6.0,<1.0.0",
     # HTTP client
     "httpx>=0.28.0",
+    # S3-compatible object storage (AWS S3 / MinIO / LocalStack)
+    "boto3>=1.35.0,<2.0.0",
     # Observability — OpenTelemetry first (ADK native)
     "opentelemetry-instrumentation-google-genai>=0.1.0,<1.0.0",
     # Cloud Trace span export (issue #39). Was present transitively and used by
