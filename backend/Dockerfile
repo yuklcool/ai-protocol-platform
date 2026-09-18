@@ -1,7 +1,9 @@
 FROM python:3.12-slim
 
 # Install uv
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 ADD https://astral.sh/uv/0.5.24/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh

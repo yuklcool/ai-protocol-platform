@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 RUN apk add --no-cache python3 make g++ libc6-compat
 
@@ -110,7 +110,7 @@ RUN if [ "$SKIP_QUALITY_CHECKS" != "true" ]; then \
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -118,7 +118,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY docker-entrypoint.sh /usr/local/bin/frontend-entrypoint
-RUN chmod +x /usr/local/bin/frontend-entrypoint
+RUN chmod +x /usr/local/bin/frontend-entrypoint \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
