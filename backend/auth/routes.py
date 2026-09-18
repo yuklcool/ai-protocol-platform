@@ -67,10 +67,14 @@ def local_login(payload: LocalLoginRequest) -> LocalTokenResponse:
 async def oidc_start(return_to: str = "/") -> dict:
     if auth_backend() != "oidc":
         raise HTTPException(status_code=404, detail="OIDC login is not enabled")
+    import httpx
+
     from auth.oidc import create_oidc_authorization_request
 
     try:
         return await create_oidc_authorization_request(return_to=return_to)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="OIDC provider discovery failed") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="OIDC browser login is not configured") from exc
 
