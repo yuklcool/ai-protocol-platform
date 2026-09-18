@@ -115,6 +115,11 @@ def _record_to_user(record: dict[str, Any]) -> User:
     )
 
 
+def user_from_local_record(record: dict[str, Any]) -> User:
+    """Build the shared User contract from an authoritative auth_users record."""
+    return _record_to_user(record)
+
+
 def get_local_user_by_email(email: str) -> dict[str, Any] | None:
     normalised = _normalise_email(email)
     if not normalised:
@@ -314,6 +319,7 @@ __all__ = [
     "get_local_user_by_email",
     "hash_password",
     "issue_access_token",
+    "user_from_local_record",
     "user_from_token",
     "validate_local_jwt_config",
     "verify_password",
