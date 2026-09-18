@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { isLocalJwtAuthMode } from "@/lib/localJwtAuth";
+import { isOidcAuthMode } from "@/lib/oidcAuth";
 import { cn } from "@/lib/utils";
 
 /** Authentication control for Firebase and built-in self-host JWT modes. */
@@ -11,15 +12,26 @@ export function SignInButton() {
   const { t } = useI18n();
   const { user, loading, signIn, signInWithRedirect, signInWithPassword, signOut } = useAuth();
   const localJwt = isLocalJwtAuthMode();
+  const oidc = isOidcAuthMode();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showLocalLogin, setShowLocalLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleFirebaseSignIn = async () => {
+  const handleInteractiveSignIn = async () => {
     setBusy(true);
     setError(null);
+    if (oidc) {
+      try {
+        await signInWithRedirect();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setBusy(false);
+      }
+      return;
+    }
+
     try {
       await signIn();
     } catch (popupErr) {
@@ -198,7 +210,7 @@ export function SignInButton() {
     <div className="flex flex-col items-center gap-2">
       <button
         type="button"
-        onClick={handleFirebaseSignIn}
+        onClick={handleInteractiveSignIn}
         disabled={busy}
         data-testid="sign-in-button"
         className={cn(
@@ -206,7 +218,7 @@ export function SignInButton() {
           "font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50",
         )}
       >
-        {busy ? t("auth.signingIn") : t("auth.signInWithGoogle")}
+        {busy ? t("auth.signingIn") : oidc ? t("auth.signIn") : t("auth.signInWithGoogle")}
       </button>
       {error && (
         <span className="text-xs text-red-600" data-testid="sign-in-error" role="alert">

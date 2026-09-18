@@ -22,6 +22,15 @@ class LocalTokenResponse(BaseModel):
     user: dict
 
 
+class OidcCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+
+class OidcCallbackResponse(LocalTokenResponse):
+    return_to: str = "/"
+
+
 def _user_payload(user: User) -> dict:
     """Provider-neutral identity payload returned to authenticated clients."""
     return {
@@ -51,6 +60,52 @@ def local_login(payload: LocalLoginRequest) -> LocalTokenResponse:
         access_token=token,
         expires_in=expires_in,
         user=_user_payload(user),
+    )
+
+
+@router.get("/oidc/start")
+async def oidc_start(return_to: str = "/") -> dict:
+    if auth_backend() != "oidc":
+        raise HTTPException(status_code=404, detail="OIDC login is not enabled")
+    import httpx
+
+    from auth.oidc import create_oidc_authorization_request
+
+    try:
+        return await create_oidc_authorization_request(return_to=return_to)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="OIDC provider discovery failed") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="OIDC browser login is not configured") from exc
+
+
+@router.post("/oidc/callback", response_model=OidcCallbackResponse)
+async def oidc_callback(payload: OidcCallbackRequest) -> OidcCallbackResponse:
+    if auth_backend() != "oidc":
+        raise HTTPException(status_code=404, detail="OIDC login is not enabled")
+
+    import httpx
+    import jwt
+
+    from auth.oidc import complete_oidc_authorization_code
+
+    try:
+        result = await complete_oidc_authorization_code(code=payload.code, state=payload.state)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="OIDC authorization state is invalid or expired") from exc
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="OIDC identity token validation failed") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="OIDC provider token exchange failed") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="OIDC browser login is not configured") from exc
+
+    user = result["user"]
+    return OidcCallbackResponse(
+        access_token=str(result["access_token"]),
+        expires_in=int(result["expires_in"]),
+        user=_user_payload(user),
+        return_to=str(result["return_to"]),
     )
 
 

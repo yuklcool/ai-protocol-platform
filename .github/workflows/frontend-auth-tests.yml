@@ -5,22 +5,28 @@ on:
     branches: [main]
     paths:
       - frontend/src/lib/localJwtAuth.ts
+      - frontend/src/lib/oidcAuth.ts
+      - frontend/src/app/auth/oidc/callback/page.tsx
       - frontend/src/lib/firebase.ts
       - frontend/src/contexts/AuthContext.tsx
       - frontend/src/components/SignInButton.tsx
       - frontend/src/__tests__/local-jwt-auth.test.ts
+      - frontend/src/__tests__/oidc-auth.test.ts
       - .github/workflows/frontend-auth-tests.yml
   pull_request:
     paths:
       - frontend/src/lib/localJwtAuth.ts
+      - frontend/src/lib/oidcAuth.ts
+      - frontend/src/app/auth/oidc/callback/page.tsx
       - frontend/src/lib/firebase.ts
       - frontend/src/contexts/AuthContext.tsx
       - frontend/src/components/SignInButton.tsx
       - frontend/src/__tests__/local-jwt-auth.test.ts
+      - frontend/src/__tests__/oidc-auth.test.ts
       - .github/workflows/frontend-auth-tests.yml
 
 jobs:
-  local-jwt-session:
+  browser-auth-session:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -41,5 +47,5 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Run local JWT browser session tests
-        run: npm run test:run -- src/__tests__/local-jwt-auth.test.ts
+      - name: Run local JWT and OIDC browser session tests
+        run: npm run test:run -- src/__tests__/local-jwt-auth.test.ts src/__tests__/oidc-auth.test.ts

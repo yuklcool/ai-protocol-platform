@@ -21,6 +21,11 @@ import {
   subscribeToLocalJwtToken,
 } from "@/lib/localJwtAuth";
 import { isLocalMode, LOCAL_MODE_STUB_TOKEN } from "@/lib/localMode";
+import {
+  getOidcToken,
+  isOidcAuthMode,
+  subscribeToOidcToken,
+} from "@/lib/oidcAuth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -39,10 +44,9 @@ function isConfigured(): boolean {
 }
 
 export function getFirebaseApp(): FirebaseApp | null {
-  // LOCAL_MODE: no Firebase init at all — either the deterministic development
-  // stub or LocalJwtAuthProvider supplies identity. Returning null keeps
-  // existing `if (!app)` branches working without further changes.
-  if (isLocalMode()) return null;
+  // Non-Firebase identity modes must never initialize the Firebase SDK merely
+  // because unrelated public Firebase variables happen to be present.
+  if (isOidcAuthMode() || isLocalJwtAuthMode() || isLocalMode()) return null;
   if (!isConfigured()) return null;
   if (appInstance) return appInstance;
   appInstance = getApps()[0] ?? initializeApp(firebaseConfig);
@@ -89,6 +93,7 @@ export async function getIdTokenFor(
 
   const groupToken = () => readStoredGroupSession()?.token ?? null;
   const individualToken = async () => {
+    if (isOidcAuthMode()) return getOidcToken();
     if (isLocalJwtAuthMode()) return getLocalJwtToken();
     if (isLocalMode()) return LOCAL_MODE_STUB_TOKEN;
     const auth = getFirebaseAuth();
@@ -110,6 +115,7 @@ export async function getIdToken(forceRefresh = false): Promise<string | null> {
   // Self-host local JWT must be checked before LOCAL_MODE because the current
   // Compose uses LOCAL_MODE=1 to switch off GCP assumptions while still using
   // a real PostgreSQL-backed identity provider.
+  if (isOidcAuthMode()) return getOidcToken();
   if (isLocalJwtAuthMode()) return getLocalJwtToken();
   // Development stub.
   if (isLocalMode()) return LOCAL_MODE_STUB_TOKEN;
@@ -132,6 +138,9 @@ export function subscribeToIdToken(
     const session = readStoredGroupSession();
     callback(session?.token ?? null);
     return () => {};
+  }
+  if (isOidcAuthMode()) {
+    return subscribeToOidcToken(callback);
   }
   if (isLocalJwtAuthMode()) {
     return subscribeToLocalJwtToken(callback);

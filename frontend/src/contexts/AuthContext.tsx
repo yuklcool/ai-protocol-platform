@@ -34,6 +34,15 @@ import {
   LOCAL_MODE_STUB_TOKEN,
   LOCAL_MODE_WORKSHOP_USER,
 } from "@/lib/localMode";
+import {
+  clearOidcSession,
+  isOidcAuthMode,
+  OIDC_AUTH_CHANGED_EVENT,
+  readOidcSession,
+  startOidcSignIn,
+  validateOidcSession,
+  type OidcUser,
+} from "@/lib/oidcAuth";
 
 interface AuthContextValue {
   user: User | null;
@@ -69,6 +78,15 @@ function buildLocalJwtUser(user: LocalJwtUser): User {
   } as unknown as User;
 }
 
+function buildOidcUser(user: OidcUser): User {
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.email,
+    photoURL: null,
+  } as unknown as User;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Anonymous group-ID mode is an explicit deployment mode and keeps priority.
   if (isAnonymousGroupAuthMode()) {
@@ -79,9 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  // Built-in self-host identity must be checked BEFORE LOCAL_MODE. The current
-  // self-host Compose still uses LOCAL_MODE=1 to disable GCP assumptions while
-  // AUTH_BACKEND=local-jwt provides the real identity boundary.
+  // Real self-host identity providers must be checked BEFORE LOCAL_MODE. The
+  // current self-host Compose can disable GCP assumptions independently from
+  // the active authentication boundary.
+  if (isOidcAuthMode()) {
+    return <OidcAuthProvider>{children}</OidcAuthProvider>;
+  }
+
   if (isLocalJwtAuthMode()) {
     return <LocalJwtAuthProvider>{children}</LocalJwtAuthProvider>;
   }
@@ -105,6 +127,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return <FirebaseAuthProvider>{children}</FirebaseAuthProvider>;
+}
+
+function OidcAuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrate = async () => {
+      const stored = readOidcSession();
+      if (!stored) {
+        if (!cancelled) {
+          setUser(null);
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const validated = await validateOidcSession(stored);
+        if (!cancelled) setUser(validated ? buildOidcUser(validated.user) : null);
+      } catch {
+        clearOidcSession();
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void hydrate();
+
+    const onAuthChanged = () => {
+      const next = readOidcSession();
+      setUser(next ? buildOidcUser(next.user) : null);
+    };
+    window.addEventListener(OIDC_AUTH_CHANGED_EVENT, onAuthChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(OIDC_AUTH_CHANGED_EVENT, onAuthChanged);
+    };
+  }, []);
+
+  const oidcSignOut = async () => {
+    clearOidcSession();
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        getIdToken: async () => readOidcSession()?.token ?? null,
+        signIn: startOidcSignIn,
+        signInWithRedirect: startOidcSignIn,
+        signOut: oidcSignOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 function LocalJwtAuthProvider({ children }: { children: ReactNode }) {

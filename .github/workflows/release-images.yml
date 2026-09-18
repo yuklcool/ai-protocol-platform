@@ -167,7 +167,7 @@ jobs:
           build-args: |
             SKIP_QUALITY_CHECKS=true
             NEXT_PUBLIC_LOCAL_MODE=0
-            NEXT_PUBLIC_AUTH_MODE=local-jwt
+            NEXT_PUBLIC_AUTH_MODE=__aip_auth_mode_runtime__
             NEXT_PUBLIC_MCP_SANDBOX_URL=https://mcp-sandbox.runtime.invalid
             NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
           sbom: ${{ github.event_name != 'pull_request' }}
@@ -175,14 +175,18 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-      - name: Verify frontend release image accepts runtime sandbox origin
+      - name: Verify frontend release image accepts runtime public configuration
         if: github.event_name == 'pull_request' && matrix.name == 'frontend'
         run: |
           IMAGE="${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/${{ matrix.image }}:sha-${GITHUB_SHA}"
           docker run --rm \
             -e MCP_SANDBOX_PUBLIC_URL=https://mcp.release-ci.example \
+            -e AUTH_BACKEND=oidc-runtime-ci-marker \
             "$IMAGE" \
-            sh -c 'grep -RIl "https://mcp.release-ci.example" /app/.next >/dev/null && ! grep -RIl "https://mcp-sandbox.runtime.invalid" /app/.next >/dev/null'
+            sh -c 'grep -RIl "https://mcp.release-ci.example" /app/.next >/dev/null \
+              && ! grep -RIl "https://mcp-sandbox.runtime.invalid" /app/.next >/dev/null \
+              && grep -RIl "oidc-runtime-ci-marker" /app/.next >/dev/null \
+              && ! grep -RIl "__aip_auth_mode_runtime__" /app/.next >/dev/null'
 
       - name: Scan published image for HIGH/CRITICAL vulnerabilities
         if: github.event_name != 'pull_request'
