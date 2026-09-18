@@ -370,7 +370,7 @@ ghcr.io/yuklcool/ai-protocol-platform-frontend
 ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox
 ```
 
-Release tags produce `linux/amd64` and `linux/arm64` manifests plus semver and exact `sha-*` tags. Stable `vX.Y.Z` releases also move `latest`; pre-release tags such as `vX.Y.Z-rc.1` do not. BuildKit SBOM/provenance attestations are enabled, and published images are scanned for fixable HIGH/CRITICAL vulnerabilities before the GitHub Release is created.
+Stable `vX.Y.Z` release tags produce `linux/amd64` and `linux/arm64` manifests plus semver, `latest`, and exact `sha-*` tags. The current production release workflow intentionally rejects prerelease-style tags. BuildKit SBOM/provenance attestations are enabled, and published images are scanned for fixable HIGH/CRITICAL vulnerabilities before the GitHub Release is created.
 
 Before GitHub Release creation, CI also performs an anonymous no-clone cold start in a fresh directory using only the tagged release Compose/env files and public GHCR images. It verifies backend/frontend/sandbox health and a real local-jwt administrator login. The published env asset is generated with `APP_VERSION` already pinned to the exact release tag.
 
