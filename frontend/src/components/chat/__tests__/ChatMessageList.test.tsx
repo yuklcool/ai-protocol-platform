@@ -203,6 +203,34 @@ describe("ChatMessageList", () => {
     expect(screen.getByText("Stream error!")).toBeInTheDocument();
   });
 
+  it("attaches a tool call with a stale parentMessageId to the latest assistant bubble", () => {
+    const messages = [
+      msg("u1", "user", "first question"),
+      msg("a1", "assistant", "first answer"),
+      msg("u2", "user", "second question"),
+      msg("a2", "assistant", "second answer"),
+    ];
+
+    render(
+      <ChatMessageList
+        messages={messages}
+        {...baseProps}
+        toolCalls={[
+          {
+            id: "tc-stale-parent",
+            name: "show-map",
+            status: "success",
+            parentMessageId: "transient-tool-phase-message",
+          },
+        ]}
+      />,
+    );
+
+    // The stale parent id is not present in stableMessages. The tool chip must
+    // still be visible exactly once, attached to the latest assistant turn.
+    expect(screen.getAllByText("show-map")).toHaveLength(1);
+  });
+
   it("Bug G (chat-history-deep-fixes-3): an unparented tool call must NOT broadcast to every assistant bubble", () => {
     // Reproduces the user's report: "when we do a tool call, all chat
     // windows appear with the tool/results — not just the last one, that

@@ -376,14 +376,29 @@ export function ChatMessageList({
     () => [...stableMessages].reverse().find((m) => m.role === "assistant")?.id,
     [stableMessages],
   );
+  const assistantMessageIds = useMemo(
+    () => new Set(stableMessages.filter((m) => m.role === "assistant").map((m) => m.id)),
+    [stableMessages],
+  );
   const toolCallsByParent = useMemo(
     () =>
       toolCalls.reduce<Record<string, ToolCallState[]>>((acc, tc) => {
-        const key = tc.parentMessageId ?? lastAssistantId ?? "__unparented__";
+        // Some AG-UI/ADK tool streams emit a parentMessageId that belongs to
+        // the transient tool-phase message rather than the final assistant text
+        // message retained in stableMessages. Treat such stale parent ids the
+        // same as an unparented call and attach them to the latest assistant
+        // bubble. This preserves one-bubble ownership without making a real
+        // tool call disappear from the transcript.
+        const parentExists =
+          typeof tc.parentMessageId === "string" &&
+          assistantMessageIds.has(tc.parentMessageId);
+        const key =
+          (parentExists ? tc.parentMessageId : lastAssistantId) ??
+          "__unparented__";
         acc[key] = [...(acc[key] ?? []), tc];
         return acc;
       }, {}),
-    [toolCalls, lastAssistantId],
+    [toolCalls, lastAssistantId, assistantMessageIds],
   );
 
   // Show the most recent running tool name in the TypingIndicator
