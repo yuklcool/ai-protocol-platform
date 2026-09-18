@@ -51,8 +51,20 @@ URL = "/api/skills/skill-1/sessions/sess-1/surface-action-run"
 
 
 def _make_client(uid: str = "viewer", tags: frozenset[str] = frozenset()) -> TestClient:
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
-    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
+    tenant_id = "tenant-a"
+    user = User(
+        uid=uid,
+        email=f"{uid}@example.com",
+        domain="example.com",
+        tenant_id=tenant_id,
+    )
+    ctx = AccessContext(
+        uid=uid,
+        email=user.email,
+        domain=user.domain,
+        tenant_id=tenant_id,
+        group_tags=tags,
+    )
 
     test_app = FastAPI()
     test_app.include_router(router)
@@ -81,6 +93,7 @@ def _make_index(
     now = datetime.now(UTC)
     return ChatSessionIndex(
         sessionId=session_id,
+        tenantId="tenant-a",
         documentIds=[],
         skillId=skill_id,
         ownerUid=owner_uid,
