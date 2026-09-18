@@ -53,7 +53,10 @@ jobs:
         run: node --check frontend/e2e/provider-agent-mcp-live.spec.js
 
   real-provider-agent-mcp:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+    # Reusable workflows inherit the caller's github context; a call from the
+    # release orchestrator therefore still reports event_name=push.
+    # PRs intentionally run syntax-only checks and never receive the real secret.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
