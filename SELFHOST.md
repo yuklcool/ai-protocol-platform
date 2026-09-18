@@ -82,7 +82,8 @@ Then:
 
 ```bash
 cp .env.selfhost.example .env
-# set APP_VERSION=vX.Y.Z and required secrets/provider values
+# Release assets already pin APP_VERSION to the exact vX.Y.Z tag.
+# Configure required secrets/provider values.
 
 docker compose -f docker-compose.release.yml pull
 docker compose -f docker-compose.release.yml up -d
@@ -369,7 +370,9 @@ ghcr.io/yuklcool/ai-protocol-platform-frontend
 ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox
 ```
 
-Release tags produce `linux/amd64` and `linux/arm64` manifests plus semver, `latest` and exact `sha-*` tags. BuildKit SBOM/provenance attestations are enabled, and published images are scanned for fixable HIGH/CRITICAL vulnerabilities before the GitHub Release is created.
+Release tags produce `linux/amd64` and `linux/arm64` manifests plus semver and exact `sha-*` tags. Stable `vX.Y.Z` releases also move `latest`; pre-release tags such as `vX.Y.Z-rc.1` do not. BuildKit SBOM/provenance attestations are enabled, and published images are scanned for fixable HIGH/CRITICAL vulnerabilities before the GitHub Release is created.
+
+Before GitHub Release creation, CI also performs an anonymous no-clone cold start in a fresh directory using only the tagged release Compose/env files and public GHCR images. It verifies backend/frontend/sandbox health and a real local-jwt administrator login. The published env asset is generated with `APP_VERSION` already pinned to the exact release tag.
 
 The release frontend image is relocatable: it is compiled with a dedicated sandbox-origin placeholder and replaces that placeholder at container startup from `MCP_SANDBOX_PUBLIC_URL`.
 
