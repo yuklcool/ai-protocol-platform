@@ -1,9 +1,9 @@
 {
   "enabled": true,
-  "version": "v1.0.0",
+  "version": "v1.0.1",
   "provider_base_url": "https://sub2api.yukl.qzz.io/v1",
   "model_api_name": "gpt-5.6-luna",
   "supports_reasoning": false,
-  "attempt": 8,
-  "retry_attempt": 7
+  "attempt": 1,
+  "retry_attempt": 0
 }
