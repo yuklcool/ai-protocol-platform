@@ -54,6 +54,31 @@ def local_login(payload: LocalLoginRequest) -> LocalTokenResponse:
     )
 
 
+@router.get("/provider")
+async def provider_status() -> dict:
+    """Return non-secret capabilities for the configured identity provider."""
+    backend = auth_backend()
+    if backend == "oidc":
+        from auth.oidc import oidc_provider_status
+
+        return await oidc_provider_status()
+    if backend == "local-jwt":
+        return {
+            "backend": backend,
+            "configured": True,
+            "capabilities": {
+                "passwordLogin": True,
+                "bearerVerification": True,
+                "authorizationCodePkce": False,
+            },
+        }
+    return {
+        "backend": backend,
+        "configured": True,
+        "capabilities": {"bearerVerification": backend == "firebase"},
+    }
+
+
 @router.get("/whoami")
 def whoami(user: User = Depends(get_current_user)) -> dict:  # noqa: B008
     return _user_payload(user)

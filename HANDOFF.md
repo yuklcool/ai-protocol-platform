@@ -2,7 +2,7 @@
 
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
-> 状态更新时间：**2026-09-16**  
+> 状态更新时间：**2026-09-18**  
 > 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实 MCP 后端/协议以及 Chromium separate-origin MCP Apps 浏览器渲染验收，只剩真实模型驱动 Agent MCP Tool Call。**
 
 ---
@@ -33,7 +33,9 @@
 
 真实 Provider 验收入口：PR #35 已合并（`8445d6900b8422a203618de2fa8df9322b179561`），增加手动工作流 `Real Provider Agent MCP acceptance`；运行方式见 [docs/real-provider-acceptance.md](docs/real-provider-acceptance.md)。验收资源使用独立随机 ID，避免覆盖已有 MCP 配置。本地语法检查及 Playwright 用例收集通过；提交 `52f189a` 的 PR 语法 CI 与 MCP live self-host acceptance（含 Chromium）均通过，运行记录：[语法 CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523277)、[MCP live CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523241)。真实模型任务按 PR 触发规则跳过，尚未执行；需要配置 Actions secret `REAL_PROVIDER_API_KEY` 并提供 Base URL / model name。PR CI 通过不能替代真实模型验收，也不能据此关闭 #2/#10/#11。该脚本通过 API 创建 Skill，Skill Studio 模型选择 UI、Tenant LLM quota/policy 与目标数据迁移仍需独立验收。
 
-接下来不要重新实现这些基础能力。当前最高优先级是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
+接下来不要重新实现这些基础能力。当前最高优先级仍是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
+
+2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段分支 `feat/oidc-provider-baseline` 实现 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与单元测试。Authorization Code + PKCE、nonce、frontend callback/sign-out 和 Keycloak 示例仍属于后续阶段，#17 不应在第一阶段合并后关闭。
 
 ---
 

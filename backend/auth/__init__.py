@@ -119,7 +119,9 @@ async def _resolve_user(request: Request) -> User:
         return await get_current_user_local_jwt(request)
 
     if backend == "oidc":
-        raise HTTPException(status_code=503, detail="OIDC identity provider is not configured")
+        from auth.oidc import get_current_user_oidc
+
+        return await get_current_user_oidc(request)
 
     auth_header = request.headers.get("Authorization", "")
     token = ""
