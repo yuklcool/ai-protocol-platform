@@ -1,0 +1,61 @@
+name: OIDC Keycloak compatibility
+
+on:
+  pull_request:
+    paths:
+      - backend/auth/**
+      - backend/scripts/verify_keycloak_oidc.py
+      - docker-compose.keycloak.yml
+      - examples/oidc/keycloak/**
+      - docs/selfhost-oidc.md
+      - .github/workflows/oidc-keycloak-compatibility.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/auth/**
+      - backend/scripts/verify_keycloak_oidc.py
+      - docker-compose.keycloak.yml
+      - examples/oidc/keycloak/**
+      - docs/selfhost-oidc.md
+      - .github/workflows/oidc-keycloak-compatibility.yml
+
+jobs:
+  keycloak-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start real Keycloak on the platform network
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.keycloak.yml \
+            up -d --no-deps keycloak
+
+      - name: Wait for Keycloak realm discovery
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS               http://localhost:8080/realms/ai-protocol-platform/.well-known/openid-configuration               >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.keycloak.yml logs keycloak
+          exit 1
+
+      - name: Build backend image
+        run: docker compose build backend
+
+      - name: Verify real discovery JWKS signed token and local authorization mapping
+        run: |
+          docker compose             -f docker-compose.yml             -f docker-compose.keycloak.yml             run --rm --no-deps             -e DATA_BACKEND=memory             -e SESSION_BACKEND=memory             -e MEMORY_BACKEND=memory             -e OIDC_ISSUER=http://keycloak:8080/realms/ai-protocol-platform             -e OIDC_CLIENT_ID=ai-protocol-platform             -e OIDC_AUDIENCE=ai-protocol-platform             -e OIDC_ALLOWED_ALGORITHMS=RS256             -v "$PWD/backend/scripts:/app/scripts:ro"             backend uv run python scripts/verify_keycloak_oidc.py
+
+      - name: Show Keycloak logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.keycloak.yml \
+            logs keycloak

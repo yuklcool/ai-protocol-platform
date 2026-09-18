@@ -159,3 +159,15 @@ The generic browser flow is provider-neutral. Issue #17 still remains open until
 the repository also contains provider-specific examples and real compatibility
 acceptance, including a Keycloak example and optional Entra ID / Okta setup
 notes.
+
+
+## Provider-specific examples
+
+See [OIDC provider examples](oidc-providers.md) for:
+
+- the optional real Keycloak Compose/realm example
+- Microsoft Entra ID configuration
+- Okta configuration
+- the real Keycloak compatibility CI gate
+
+Keycloak remains opt-in and is not part of the default Self-host Compose.
