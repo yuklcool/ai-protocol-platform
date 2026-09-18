@@ -99,6 +99,10 @@ def oidc_config() -> OidcConfig:
 
 
 def oidc_browser_config() -> OidcBrowserConfig:
+    config = oidc_config()
+    if config.audience != config.client_id:
+        raise RuntimeError("OIDC browser flow requires OIDC_AUDIENCE to match OIDC_CLIENT_ID")
+
     redirect_uri = _required("OIDC_REDIRECT_URI")
     parsed_redirect = urlsplit(redirect_uri)
     if parsed_redirect.scheme not in {"http", "https"} or not parsed_redirect.netloc or parsed_redirect.fragment:
@@ -229,7 +233,10 @@ async def _fetch_json(url: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         response = await client.get(url, headers={"Accept": "application/json"})
         response.raise_for_status()
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RuntimeError(f"OIDC endpoint returned invalid JSON: {url}") from exc
     if not isinstance(payload, dict):
         raise RuntimeError(f"OIDC endpoint returned a non-object JSON payload: {url}")
     return payload
@@ -461,7 +468,10 @@ async def _exchange_authorization_code(
             headers={"Accept": "application/json"},
         )
         response.raise_for_status()
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RuntimeError("OIDC token endpoint returned invalid JSON") from exc
     if not isinstance(payload, dict):
         raise RuntimeError("OIDC token endpoint returned a non-object JSON payload")
     if not str(payload.get("id_token") or "").strip():
