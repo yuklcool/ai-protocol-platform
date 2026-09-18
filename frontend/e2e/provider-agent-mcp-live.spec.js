@@ -331,6 +331,13 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
             subSkills: [],
             toolConfigs: {
               a2ui: {
+                // The acceptance target here is the action-triggered Agent/LLM
+                // round-trip itself, not direct model-authored A2UI. Keep the
+                // A2UI toolset disabled so the model cannot opportunistically
+                // call send_a2ui_json_to_client and turn this gate into a Tool
+                // Permission test. The two trust grants below still enable the
+                // production surface-action-run endpoint.
+                enabled: false,
                 allow_surface_context_writes: true,
                 allow_action_triggered_runs: true,
               },
