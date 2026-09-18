@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Literal
@@ -102,22 +103,46 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
             probe_payloads.append(fallback_payload)
 
     started = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = None
-            for index, candidate_payload in enumerate(probe_payloads):
-                response = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers=headers,
-                    json=candidate_payload,
-                )
-                if response.status_code not in {400, 422} or index == len(probe_payloads) - 1:
+    response = None
+    last_request_error: httpx.RequestError | None = None
+    transient_statuses = {429, 500, 502, 503, 504}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for index, candidate_payload in enumerate(probe_payloads):
+            # Real OpenAI-compatible gateways can transiently reset or throttle a
+            # request while still being healthy. Retry only transport errors and
+            # explicitly transient HTTP statuses. Authentication/schema/capability
+            # failures are never converted into success by this retry loop.
+            for attempt in range(3):
+                try:
+                    response = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers=headers,
+                        json=candidate_payload,
+                    )
+                    last_request_error = None
+                except httpx.RequestError as exc:
+                    last_request_error = exc
+                    response = None
+                    if attempt < 2:
+                        await asyncio.sleep(attempt + 1)
+                        continue
                     break
-    except httpx.RequestError:
-        return ModelProbeResponse(ok=False, category="network", message="Could not reach the provider")
 
-    if response is None:  # Defensive: probe_payloads is always non-empty.
-        return ModelProbeResponse(ok=False, category="network", message="Provider request was not attempted")
+                if response.status_code in transient_statuses and attempt < 2:
+                    await asyncio.sleep(attempt + 1)
+                    continue
+                break
+
+            if response is None:
+                # Exhausted transport retries for this request shape. Retrying a
+                # different tool_choice spelling cannot repair a network failure.
+                break
+            if response.status_code not in {400, 422} or index == len(probe_payloads) - 1:
+                break
+
+    if response is None:
+        message = "Could not reach the provider" if last_request_error else "Provider request was not attempted"
+        return ModelProbeResponse(ok=False, category="network", message=message)
 
     latency_ms = round((time.monotonic() - started) * 1000)
     if response.status_code in {401, 403}:
