@@ -35,7 +35,7 @@
 
 接下来不要重新实现这些基础能力。当前最高优先级仍是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
 
-2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段 PR #50 已合并到 main（merge SHA `d9666c0b8dd787986b6e5e033a94314bbc6cdac4`），完成 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。第三阶段 `feat/oidc-keycloak-examples` 增加 opt-in Keycloak 26.7.4 realm/Compose、真实 Keycloak discovery/JWKS/signed-ID-token compatibility gate，以及 Entra ID / Okta 配置示例。#17 在该真实兼容 gate 通过并合并后可按代码/示例验收范围收口；生产企业 IdP 仍需部署方提供真实租户配置。
+2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段 PR #50 已合并到 main（merge SHA `d9666c0b8dd787986b6e5e033a94314bbc6cdac4`），完成 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。第三阶段 PR #51 已合并到 main（merge SHA `11850326aaa31d2a92f03f876942bc5a92d16c48`），增加 opt-in Keycloak 26.7.4 realm/Compose、真实 Keycloak discovery/JWKS/signed-ID-token compatibility gate，以及 Entra ID / Okta 配置示例。真实 Keycloak gate 已通过；#17 已于 2026-09-18 按 completed 关闭。生产企业 IdP 仍需部署方提供真实租户/client 配置和 subject mapping，但平台代码侧不再存在 OIDC 缺口。
 
 ---
 
@@ -441,6 +441,10 @@ Chromium / Playwright
 - #6 ObjectStorage / Artifact ✅
 - #7 Built-in JWT ✅
 - #8 GCP optionalization ✅
+- #12 中文国际化 / Branding ✅
+- #14 Upstream sync strategy ✅
+- #16 S3-compatible ObjectStorage ✅
+- #17 OIDC IdentityProvider + Keycloak compatibility ✅
 
 保持 OPEN、等待最终真实验收：
 
@@ -450,6 +454,7 @@ Chromium / Playwright
 - #9 target migration + quota/Tool Calling final acceptance
 - #10 real Provider E2E
 - #11 real Agent MCP Tool Call
+- #13 real release tag / GHCR / no-clone cold-start acceptance
 
 ---
 
@@ -464,6 +469,8 @@ Chromium / Playwright
 - MCP admin
 - **MCP live self-host acceptance（包含 Chromium separate-origin MCP Apps browser acceptance）**
 - Model provider
+- Frontend auth tests
+- OIDC Keycloak compatibility（真实 Keycloak discovery/JWKS/signed ID token）
 
 CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI、ObjectStorage、Tenant、MCP、Provider routing 等路径。
 
@@ -536,13 +543,13 @@ MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏
 
 ### 第四优先：发布收口
 
-完成真实验收后推进：
+#12 / #14 / #16 / #17 已完成并关闭。当前发布方向只剩 #13：
 
-- #12 中文化 / Branding
-- #13 GHCR / versioned release
-- #14 upstream sync
-- #16 S3 adapter
-- #17 OIDC extension
+- 创建真实 `v*.*.*` release tag
+- 验证 GHCR public pull / semver / latest / sha tags
+- 验证 multi-arch / SBOM / provenance / Trivy
+- 验证 GitHub Release assets
+- 在全新目录完成 no-clone cold-start
 
 ---
 
