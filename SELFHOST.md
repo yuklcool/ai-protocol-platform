@@ -125,7 +125,7 @@ The self-host identity selector is:
 AUTH_BACKEND=local-jwt   # production-style self-host default
 AUTH_BACKEND=stub        # LOCAL_MODE development only
 AUTH_BACKEND=firebase    # existing cloud adapter
-AUTH_BACKEND=oidc        # optional future adapter; currently fail-closed
+AUTH_BACKEND=oidc        # optional enterprise OIDC adapter
 ```
 
 ### First administrator
@@ -293,7 +293,7 @@ OPENAI_API_KEY=<provider-key>
 OPENAI_API_BASE=https://your-provider.example/v1
 ```
 
-Dynamic Provider/Model CRUD, completion/tool probes, default/tier mappings and Tenant model policies are available through the current platform control plane. See [docs/selfhost-openai-compatible.md](./docs/selfhost-openai-compatible.md).
+Dynamic Provider/Model CRUD, completion/tool probes, default/tier mappings and Tenant model policies are available through the current platform control plane. Source-build Self-host enables Skill Studio by default (`ENABLE_SKILL_STUDIO=true`), and release frontend images are built with Skill Studio enabled so administrators can select effective dynamic models from the product UI. See [docs/selfhost-openai-compatible.md](./docs/selfhost-openai-compatible.md).
 
 The remaining acceptance boundary is intentionally strict: #10/#11 are not considered finished until a real non-OpenAI OpenAI-compatible endpoint drives an Agent conversation and actual Tool Calling. Mock/fixed ToolCalls do not replace that final provider E2E.
 
@@ -411,7 +411,7 @@ For image-based deployment, application rollback is normally performed by restor
 
 ## Current optional extensions / limitations
 
-- OIDC/Keycloak is not implemented as a default auth adapter and `AUTH_BACKEND=oidc` remains fail-closed.
+- OIDC/Keycloak is implemented as an optional enterprise adapter; production IdPs still require deployment-specific issuer/client configuration and explicit subject mapping.
 - local-jwt currently uses access-token-only browser sessions rather than a refresh-token flow.
 - S3-compatible ObjectStorage is available as an optional adapter and remains outside the default Compose service set.
 - real external Provider Tool Calling acceptance still requires endpoint credentials supplied by the deployment owner.
