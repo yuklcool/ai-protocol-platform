@@ -71,6 +71,6 @@
   },
   "overrides": {
     "nanoid": "3.3.18",
-    "postcss": "$postcss"
+    "postcss": "8.5.18"
   }
 }
