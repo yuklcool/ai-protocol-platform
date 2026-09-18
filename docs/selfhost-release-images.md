@@ -41,17 +41,19 @@ Then:
 cp .env.selfhost.example .env
 ```
 
+Release assets are generated with `APP_VERSION` already pinned to the exact Git tag that produced them. You can still override it deliberately, but a normal deployment does not need to edit the image version by hand.
+
 No repository checkout is required.
 
 ## 2. Pin the release version
 
-For production, pin the exact semver release tag:
+For production, use the exact semver release tag shipped in the release asset:
 
 ```env
 APP_VERSION=v1.2.3
 ```
 
-`latest` is convenient for evaluation, but should not be used as the production rollback boundary.
+The downloaded release `.env.selfhost.example` is pre-pinned to that exact tag. `latest` is convenient for evaluation, but should not be used as the production rollback boundary. The production release workflow currently accepts stable `vX.Y.Z` tags only.
 
 Every published image also receives an exact source tag:
 
@@ -215,7 +217,8 @@ The release workflow:
 - generates BuildKit SBOM and provenance attestations;
 - scans each published image with Trivy for HIGH/CRITICAL vulnerabilities with fixes available;
 - verifies all three exact release-tag images can be pulled with an isolated, unauthenticated Docker configuration;
-- only after that anonymous-pull gate succeeds, creates GitHub Release notes and attaches the release Compose/env files.
+- performs a true no-clone cold start in a fresh temporary directory by downloading only the tagged Compose/env files, pinning the exact tag, starting PostgreSQL/backend/frontend/MCP sandbox from public GHCR, checking all health endpoints, and proving the bootstrapped local-jwt administrator can log in;
+- only after the anonymous-pull and no-clone cold-start gates succeed, creates GitHub Release notes and attaches the release Compose plus an env template already pinned to the exact release tag.
 
 Before cutting the first production release, verify the three GHCR packages are configured as **Public**. If package visibility is not public, the tag workflow intentionally fails at the anonymous-pull gate and does not create a misleading GitHub Release.
 
