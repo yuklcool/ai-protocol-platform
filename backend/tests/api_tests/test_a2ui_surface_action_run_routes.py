@@ -391,6 +391,7 @@ class TestSkillAndOptInGates:
     def test_returns_403_when_skill_deleted(self, mock_get_index, mock_skill_module):
         mock_get_index.return_value = _make_index()
         mock_skill_module.get_skill.return_value = None
+        mock_skill_module.resolve_skill_ref.return_value = None
         client = _make_client("viewer")
         resp = client.post(URL, json=_HAPPY_BODY)
         assert resp.status_code == 403
