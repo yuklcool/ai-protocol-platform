@@ -123,3 +123,52 @@ def test_user_model_remains_shared_contract() -> None:
         password="correct horse battery staple",
     )
     assert isinstance(user, User)
+
+
+def test_oidc_mapping_keeps_local_tenant_and_roles_authoritative(monkeypatch: pytest.MonkeyPatch) -> None:
+    from auth.oidc import clear_oidc_cache, resolve_oidc_user
+
+    monkeypatch.setenv("OIDC_ISSUER", "https://id.example.com/realms/platform")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "ai-protocol-platform")
+    monkeypatch.setenv("OIDC_REDIRECT_URI", "http://localhost:3456/auth/oidc/callback")
+    monkeypatch.setenv("OIDC_SCOPES", "openid profile email")
+    clear_oidc_cache()
+
+    local = create_local_user(
+        email="sso-admin@example.com",
+        password="correct horse battery staple",
+        tenant_id="tenant-authoritative",
+        group_tags={"tenant-admin:tenant-authoritative"},
+    )
+    user = resolve_oidc_user(
+        {
+            "sub": "external-subject-1",
+            "email": "sso-admin@example.com",
+            "email_verified": True,
+            "tenant_id": "attacker-tenant",
+            "groupTags": ["aitana-admin"],
+        }
+    )
+
+    assert user.uid == local.uid
+    assert user.tenant_id == "tenant-authoritative"
+    assert user.group_tags == frozenset({"tenant-admin:tenant-authoritative"})
+    assert "aitana-admin" not in user.group_tags
+    assert user.auth_mode == "oidc"
+    clear_oidc_cache()
+
+
+def test_oidc_external_identity_user_has_no_password_login() -> None:
+    from auth.local_jwt import create_external_identity_user, get_local_user_by_email
+
+    user = create_external_identity_user(
+        email="external@example.com",
+        tenant_id="tenant-sso",
+        group_tags={"aitana-admin"},
+    )
+    record = get_local_user_by_email("external@example.com")
+
+    assert record is not None
+    assert "passwordHash" not in record
+    assert user.tenant_id == "tenant-sso"
+    assert authenticate_credentials("external@example.com", "correct horse battery staple") is None
