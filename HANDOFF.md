@@ -35,7 +35,7 @@
 
 接下来不要重新实现这些基础能力。当前最高优先级仍是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
 
-2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段分支 `feat/oidc-provider-baseline` 实现 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与单元测试。Authorization Code + PKCE、nonce、frontend callback/sign-out 和 Keycloak 示例仍属于后续阶段，#17 不应在第一阶段合并后关闭。
+2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段分支 `feat/oidc-pkce-browser-flow` 正在实现 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。#17 仍保持 OPEN，后续还需要 Keycloak 示例、可选 Entra ID / Okta 文档与真实 OIDC compatibility acceptance。
 
 ---
 
