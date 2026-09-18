@@ -159,6 +159,63 @@ def test_tool_call_probe_retries_portable_tool_choice_forms(monkeypatch) -> None
     assert calls[2].kwargs["json"]["tool_choice"] == "auto"
 
 
+def test_tool_call_probe_retries_when_gateway_ignores_exact_tool_choice(monkeypatch) -> None:
+    monkeypatch.setenv("PROBE_KEY", "secret")
+
+    ignored_exact = MagicMock()
+    ignored_exact.status_code = 200
+    ignored_exact.json.return_value = {
+        "choices": [{"message": {"content": "I can help with that."}}]
+    }
+
+    accepted_required = MagicMock()
+    accepted_required.status_code = 200
+    accepted_required.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "platform_probe",
+                                "arguments": '{"value":"ok"}',
+                            },
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    client = AsyncMock()
+    client.post.side_effect = [ignored_exact, accepted_required]
+    cm = AsyncMock()
+    cm.__aenter__.return_value = client
+    cm.__aexit__.return_value = None
+
+    with (
+        patch("admin.model_probe_routes.get_document", side_effect=_docs),
+        patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm),
+    ):
+        response = _client(_ADMIN).post(
+            "/api/admin/model-providers/models/deepseek-v3/test",
+            json={"mode": "tool_call", "prompt": "Call platform_probe now."},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["tool_called"] is True
+    assert client.post.await_count == 2
+
+    calls = client.post.call_args_list
+    assert calls[0].kwargs["json"]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "platform_probe"},
+    }
+    assert calls[1].kwargs["json"]["tool_choice"] == "required"
+
+
 def test_tool_call_probe_reports_capability_failure(monkeypatch) -> None:
     monkeypatch.setenv("PROBE_KEY", "secret")
     cm, _ = _async_client_response({"choices": [{"message": {"content": "I cannot call tools"}}]})
