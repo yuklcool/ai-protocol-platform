@@ -1,0 +1,44 @@
+name: Validate ag-ui-adk 0.6.5
+
+on:
+  push:
+    branches: [fix/upgrade-ag-ui-adk-065]
+    paths:
+      - backend/pyproject.toml
+      - backend/uv.lock
+      - .github/workflows/validate-ag-ui-adk-065.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: "!contains(github.event.head_commit.message, 'ci: remove temporary ag-ui-adk validation')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/upgrade-ag-ui-adk-065
+      - uses: astral-sh/setup-uv@v6
+      - name: Install frozen backend environment
+        working-directory: backend
+        run: uv sync --frozen
+      - name: Run AG-UI and action-run regressions
+        working-directory: backend
+        run: |
+          uv run pytest -q \
+            tests/unit/test_agui.py \
+            tests/unit/test_agui_terminal_dedup.py \
+            tests/unit/test_agui_turn_finality.py \
+            tests/api_tests/test_a2ui_surface_action_run_routes.py \
+            tests/unit/test_compaction_reaches_chat_runner.py
+      - name: Remove temporary validation workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/validate-ag-ui-adk-065.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/validate-ag-ui-adk-065.yml
+          git commit -m "ci: remove temporary ag-ui-adk validation"
+          git push origin HEAD:fix/upgrade-ag-ui-adk-065
