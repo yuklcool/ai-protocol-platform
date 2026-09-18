@@ -156,7 +156,9 @@ def oidc_settings() -> OidcSettings:
         clock_skew_seconds=_env_int("OIDC_CLOCK_SKEW_SECONDS", 60, minimum=0, maximum=600),
     )
     _validate_url(settings.issuer, "OIDC_ISSUER", settings.allow_insecure_http)
-    _validate_url(settings.redirect_uri, "OIDC_REDIRECT_URI", True, allow_custom_scheme=False)
+    redirect_host = (urlparse(settings.redirect_uri).hostname or "").lower()
+    redirect_allows_http = settings.allow_insecure_http or redirect_host in {"localhost", "127.0.0.1", "::1"}
+    _validate_url(settings.redirect_uri, "OIDC_REDIRECT_URI", redirect_allows_http)
     return settings
 
 
@@ -165,7 +167,6 @@ def _validate_url(
     label: str,
     allow_insecure_http: bool,
     *,
-    allow_custom_scheme: bool = False,
 ) -> None:
     parsed = urlparse(value)
     if not parsed.scheme or not parsed.netloc:
@@ -173,8 +174,6 @@ def _validate_url(
     if parsed.scheme == "https":
         return
     if parsed.scheme == "http" and allow_insecure_http:
-        return
-    if allow_custom_scheme:
         return
     raise OidcConfigurationError(f"{label} must use https (set OIDC_ALLOW_INSECURE_HTTP=1 only for trusted dev IdPs)")
 
