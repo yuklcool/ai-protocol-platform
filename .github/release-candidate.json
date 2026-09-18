@@ -5,5 +5,5 @@
   "model_api_name": "auto",
   "supports_reasoning": false,
   "attempt": 4,
-  "retry_attempt": 2
+  "retry_attempt": 3
 }
