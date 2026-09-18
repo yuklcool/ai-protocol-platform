@@ -55,6 +55,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
+            echo "Expected SemVer such as v1.2.3 or v1.2.3-rc.1" >&2
+            exit 1
+          fi
+
       - name: Validate source and release Compose models
         run: |
           docker compose config --quiet
@@ -152,7 +163,7 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
 
       - name: Build or publish image
         uses: docker/build-push-action@v6
@@ -219,14 +230,103 @@ jobs:
               "ghcr.io/${GITHUB_REPOSITORY_OWNER}/${image}:${GITHUB_REF_NAME}"
           done
 
+  no-clone-cold-start:
+    name: Verify no-clone release cold start
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [images, public-pull]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download only tagged deployment assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          echo "RELEASE_WORKDIR=${workdir}" >> "${GITHUB_ENV}"
+          raw_base="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}"
+          curl -fsSL "${raw_base}/docker-compose.release.yml" -o "${workdir}/docker-compose.release.yml"
+          curl -fsSL "${raw_base}/.env.selfhost.example" -o "${workdir}/.env"
+
+      - name: Pin exact release and configure isolated self-host
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RELEASE_WORKDIR}"
+          sed -i "s/^APP_VERSION=.*/APP_VERSION=${GITHUB_REF_NAME}/" .env
+          sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=release-cold-start-db-password/" .env
+          sed -i "s#^DATABASE_URL=.*#DATABASE_URL=postgresql://aip:release-cold-start-db-password@postgres:5432/aip#" .env
+          sed -i "s/^JWT_SIGNING_KEY=.*/JWT_SIGNING_KEY=release-cold-start-signing-key-at-least-32-bytes/" .env
+          sed -i "s/^SELFHOST_ADMIN_EMAIL=.*/SELFHOST_ADMIN_EMAIL=admin@example.com/" .env
+          sed -i "s/^SELFHOST_ADMIN_PASSWORD=.*/SELFHOST_ADMIN_PASSWORD=release-cold-start-admin-password/" .env
+          sed -i "s/^PLATFORM_DEFAULT_MODEL=.*/PLATFORM_DEFAULT_MODEL=gpt-5-6-terra/" .env
+          sed -i "s/^OPENAI_API_KEY=.*/OPENAI_API_KEY=release-cold-start-placeholder/" .env
+          sed -i "s#^OPENAI_API_BASE=.*#OPENAI_API_BASE=http://model-gateway.invalid/v1#" .env
+          sed -i "s/^SKIP_QUALITY_CHECKS=.*/SKIP_QUALITY_CHECKS=true/" .env
+          docker compose -f docker-compose.release.yml config --quiet
+
+      - name: Pull and start exact release without GitHub credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${RELEASE_WORKDIR}"
+          anonymous_config="$(mktemp -d)"
+          echo "ANONYMOUS_DOCKER_CONFIG=${anonymous_config}" >> "${GITHUB_ENV}"
+          DOCKER_CONFIG="${anonymous_config}" docker compose -f docker-compose.release.yml pull
+          DOCKER_CONFIG="${anonymous_config}" docker compose -f docker-compose.release.yml up -d
+
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3456/api/health >/dev/null \
+              && curl -fsS http://127.0.0.1:3457/sandbox.html >/dev/null; then
+              break
+            fi
+            if [[ "${i}" == "90" ]]; then
+              DOCKER_CONFIG="${anonymous_config}" docker compose -f docker-compose.release.yml logs
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl -fsS \
+            -H 'content-type: application/json' \
+            -d '{"email":"admin@example.com","password":"release-cold-start-admin-password"}' \
+            http://127.0.0.1:1956/api/auth/login \
+            | grep -q '"access_token"'
+
+      - name: Show release logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          cd "${RELEASE_WORKDIR}"
+          DOCKER_CONFIG="${ANONYMOUS_DOCKER_CONFIG}" docker compose -f docker-compose.release.yml logs
+
+      - name: Stop isolated release stack
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${RELEASE_WORKDIR:-}" && -d "${RELEASE_WORKDIR}" ]]; then
+            cd "${RELEASE_WORKDIR}"
+            DOCKER_CONFIG="${ANONYMOUS_DOCKER_CONFIG:-${DOCKER_CONFIG:-}}" docker compose -f docker-compose.release.yml down -v --remove-orphans || true
+          fi
+
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [images, public-pull]
+    needs: [images, public-pull, no-clone-cold-start]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Stage pinned deployment assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp docker-compose.release.yml release-assets/docker-compose.release.yml
+          sed "s/^APP_VERSION=.*/APP_VERSION=${GITHUB_REF_NAME}/" \
+            .env.selfhost.example > release-assets/.env.selfhost.example
+          grep -Fx "APP_VERSION=${GITHUB_REF_NAME}" release-assets/.env.selfhost.example
 
       - name: Publish generated release notes and deployment assets
         env:
@@ -236,5 +336,5 @@ jobs:
             --verify-tag \
             --generate-notes \
             --title "AI Protocol Platform ${GITHUB_REF_NAME}" \
-            docker-compose.release.yml \
-            .env.selfhost.example
+            release-assets/docker-compose.release.yml \
+            release-assets/.env.selfhost.example
