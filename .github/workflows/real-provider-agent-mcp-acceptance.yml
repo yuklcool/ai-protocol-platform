@@ -1,6 +1,11 @@
 name: Real Provider Agent MCP acceptance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - frontend/e2e/provider-agent-mcp-live.spec.js
+      - .github/workflows/real-provider-agent-mcp-acceptance.yml
   pull_request:
     paths:
       - docs/real-provider-acceptance.md
@@ -69,14 +74,29 @@ jobs:
       SELFHOST_ADMIN_PASSWORD: ci-real-provider-admin-password
       PLATFORM_DEFAULT_MODEL: lite
       OPENAI_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}
-      REAL_PROVIDER_BASE_URL: ${{ inputs.provider_base_url }}
-      REAL_PROVIDER_MODEL: ${{ inputs.model_api_name }}
-      REAL_PROVIDER_SUPPORTS_REASONING: ${{ inputs.supports_reasoning }}
+      REAL_PROVIDER_BASE_URL: ${{ inputs.provider_base_url || '' }}
+      REAL_PROVIDER_MODEL: ${{ inputs.model_api_name || '' }}
+      REAL_PROVIDER_SUPPORTS_REASONING: ${{ inputs.supports_reasoning || false }}
       SKIP_QUALITY_CHECKS: "true"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve real provider acceptance config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${REAL_PROVIDER_BASE_URL:-}" ] || [ -z "${REAL_PROVIDER_MODEL:-}" ]; then
+            candidate=".github/release-candidate.json"
+            [ -f "$candidate" ] || { echo "release candidate config is required for push-triggered acceptance" >&2; exit 1; }
+            base_url="$(python -c 'import json; print(json.load(open(".github/release-candidate.json"))["provider_base_url"])')"
+            model_name="$(python -c 'import json; print(json.load(open(".github/release-candidate.json"))["model_api_name"])')"
+            supports_reasoning="$(python -c 'import json; print(str(bool(json.load(open(".github/release-candidate.json")).get("supports_reasoning", False))).lower())')"
+            echo "REAL_PROVIDER_BASE_URL=$base_url" >> "$GITHUB_ENV"
+            echo "REAL_PROVIDER_MODEL=$model_name" >> "$GITHUB_ENV"
+            echo "REAL_PROVIDER_SUPPORTS_REASONING=$supports_reasoning" >> "$GITHUB_ENV"
+          fi
 
       - name: Require the real provider secret
         shell: bash
