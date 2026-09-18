@@ -1,0 +1,19 @@
+vulnerabilities:
+  - id: CVE-2026-48818
+    purls:
+      - "pkg:pypi/starlette@0.52.1"
+    expired_at: 2026-12-31
+    statement: >-
+      google-adk 1.31.1 constrains starlette<1.0.0. This CVE is specific to
+      Starlette StaticFiles on Windows/UNC paths; the published backend image is
+      Debian Linux and this repository does not mount Starlette StaticFiles.
+      Revisit with the planned ADK compatibility upgrade or before expiry.
+  - id: CVE-2026-54283
+    purls:
+      - "pkg:pypi/starlette@0.52.1"
+    expired_at: 2026-12-31
+    statement: >-
+      google-adk 1.31.1 constrains starlette<1.0.0. The vulnerable path requires
+      request.form() parsing application/x-www-form-urlencoded input; repository
+      search finds no request.form(), FastAPI Form(), or urlencoded-form parsing
+      path. Revisit with the planned ADK compatibility upgrade or before expiry.
