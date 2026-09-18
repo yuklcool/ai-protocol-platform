@@ -264,7 +264,22 @@ metadata -> delete
 
 Failures retain durable recovery state for reconciliation.
 
-`OBJECT_STORAGE_BACKEND=gcs` remains an optional cloud adapter. S3-compatible storage is also available as an opt-in adapter and is not required by the default stack.\n\nOptional S3-compatible configuration:\n\n```env\nOBJECT_STORAGE_BACKEND=s3\nOBJECT_STORAGE_S3_BUCKET=your-bucket\nOBJECT_STORAGE_S3_ENDPOINT=https://s3.example.com\nOBJECT_STORAGE_S3_REGION=us-east-1\nOBJECT_STORAGE_S3_ACCESS_KEY=\nOBJECT_STORAGE_S3_SECRET_KEY=\nOBJECT_STORAGE_S3_SESSION_TOKEN=\nOBJECT_STORAGE_S3_ADDRESSING_STYLE=auto\n```\n\nThe adapter keeps every object under `tenants/<tenant_id>/`, supports bounded-memory upload/download, list/exists/delete and time-limited presigned GET/PUT URLs. AWS IAM/workload credentials can be used by leaving the explicit key fields empty. Custom S3 endpoints such as Cloudflare R2, MinIO/AIStor, Ceph RGW and Garage can set `OBJECT_STORAGE_S3_ENDPOINT`; many self-hosted endpoints use `OBJECT_STORAGE_S3_ADDRESSING_STYLE=path`. Enabling this adapter does **not** add an S3/MinIO service to the default Compose stack.
+`OBJECT_STORAGE_BACKEND=gcs` remains an optional cloud adapter. S3-compatible storage is also available as an opt-in adapter and is not required by the default stack.
+
+Optional S3-compatible configuration:
+
+```env
+OBJECT_STORAGE_BACKEND=s3
+OBJECT_STORAGE_S3_BUCKET=your-bucket
+OBJECT_STORAGE_S3_ENDPOINT=https://s3.example.com
+OBJECT_STORAGE_S3_REGION=us-east-1
+OBJECT_STORAGE_S3_ACCESS_KEY=
+OBJECT_STORAGE_S3_SECRET_KEY=
+OBJECT_STORAGE_S3_SESSION_TOKEN=
+OBJECT_STORAGE_S3_ADDRESSING_STYLE=auto
+```
+
+The adapter keeps every object under `tenants/<tenant_id>/`, supports bounded-memory upload/download, list/exists/delete and time-limited presigned GET/PUT URLs. AWS IAM/workload credentials can be used by leaving the explicit key fields empty. Custom S3 endpoints such as Cloudflare R2, MinIO/AIStor, Ceph RGW and Garage can set `OBJECT_STORAGE_S3_ENDPOINT`; many self-hosted endpoints use `OBJECT_STORAGE_S3_ADDRESSING_STYLE=path`. Enabling this adapter does **not** add an S3/MinIO service to the default Compose stack.
 
 ## Model providers
 
