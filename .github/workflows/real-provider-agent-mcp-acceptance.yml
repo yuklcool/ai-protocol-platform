@@ -4,11 +4,15 @@ on:
   push:
     branches: [main]
     paths:
+      - backend/pyproject.toml
+      - backend/uv.lock
       - frontend/e2e/provider-agent-mcp-live.spec.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   pull_request:
     paths:
       - docs/real-provider-acceptance.md
+      - backend/pyproject.toml
+      - backend/uv.lock
       - frontend/e2e/provider-agent-mcp-live.spec.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   workflow_call:
