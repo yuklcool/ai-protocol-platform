@@ -200,8 +200,7 @@ jobs:
               && grep -RIl "oidc-runtime-ci-marker" /app/.next >/dev/null \
               && ! grep -RIl "__aip_auth_mode_runtime__" /app/.next >/dev/null'
 
-      - name: Scan published image for HIGH/CRITICAL vulnerabilities
-        if: github.event_name != 'pull_request'
+      - name: Scan image for HIGH/CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:sha-${{ github.sha }}
