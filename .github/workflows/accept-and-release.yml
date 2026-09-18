@@ -1,0 +1,111 @@
+name: Accept real provider and release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/release-candidate.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  candidate:
+    name: Validate release candidate
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.candidate.outputs.enabled }}
+      version: ${{ steps.candidate.outputs.version }}
+      provider_base_url: ${{ steps.candidate.outputs.provider_base_url }}
+      model_api_name: ${{ steps.candidate.outputs.model_api_name }}
+      supports_reasoning: ${{ steps.candidate.outputs.supports_reasoning }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read and validate candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=".github/release-candidate.json"
+          enabled="$(jq -r '.enabled' "$file")"
+          version="$(jq -r '.version' "$file")"
+          provider_base_url="$(jq -r '.provider_base_url' "$file")"
+          model_api_name="$(jq -r '.model_api_name' "$file")"
+          supports_reasoning="$(jq -r '.supports_reasoning // false' "$file")"
+
+          [[ "$enabled" == "true" ]] || { echo "Release candidate is disabled." >&2; exit 1; }
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "version must be stable SemVer vX.Y.Z" >&2
+            exit 1
+          }
+          case "$provider_base_url" in
+            http://*|https://*) ;;
+            *) echo "provider_base_url must be an absolute http(s) URL" >&2; exit 1 ;;
+          esac
+          [[ -n "$model_api_name" && "$model_api_name" != "null" ]] || {
+            echo "model_api_name is required" >&2
+            exit 1
+          }
+
+          if git ls-remote --tags origin "refs/tags/$version" | grep -q .; then
+            echo "Release tag already exists: $version" >&2
+            exit 1
+          fi
+
+          {
+            echo "enabled=$enabled"
+            echo "version=$version"
+            echo "provider_base_url=$provider_base_url"
+            echo "model_api_name=$model_api_name"
+            echo "supports_reasoning=$supports_reasoning"
+          } >> "$GITHUB_OUTPUT"
+
+  real-provider-acceptance:
+    name: Real Provider → Agent → MCP acceptance
+    needs: candidate
+    uses: ./.github/workflows/real-provider-agent-mcp-acceptance.yml
+    with:
+      provider_base_url: ${{ needs.candidate.outputs.provider_base_url }}
+      model_api_name: ${{ needs.candidate.outputs.model_api_name }}
+      supports_reasoning: ${{ needs.candidate.outputs.supports_reasoning == 'true' }}
+    secrets:
+      REAL_PROVIDER_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}
+
+  tag-and-dispatch-release:
+    name: Tag accepted commit and start release
+    needs: [candidate, real-provider-acceptance]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout accepted main commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create exact release tag
+        env:
+          VERSION: ${{ needs.candidate.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
+            echo "Release tag already exists: $VERSION" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "AI Protocol Platform $VERSION"
+          git push origin "$VERSION"
+
+      - name: Dispatch release workflow on the accepted tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.candidate.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST             "repos/${GITHUB_REPOSITORY}/actions/workflows/release-images.yml/dispatches"             -f "ref=$VERSION"
+          echo "Release workflow dispatched for $VERSION"
