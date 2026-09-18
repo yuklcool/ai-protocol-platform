@@ -100,6 +100,10 @@ def oidc_config() -> OidcConfig:
 
 def oidc_browser_config() -> OidcBrowserConfig:
     redirect_uri = _required("OIDC_REDIRECT_URI")
+    parsed_redirect = urlsplit(redirect_uri)
+    if parsed_redirect.scheme not in {"http", "https"} or not parsed_redirect.netloc or parsed_redirect.fragment:
+        raise RuntimeError("OIDC_REDIRECT_URI must be an absolute http(s) URL without a fragment")
+
     raw_scopes = os.environ.get("OIDC_SCOPES", "openid profile email").replace(",", " ")
     scopes = tuple(dict.fromkeys(part.strip() for part in raw_scopes.split() if part.strip()))
     if "openid" not in scopes:
@@ -107,7 +111,7 @@ def oidc_browser_config() -> OidcBrowserConfig:
 
     client_secret = os.environ.get("OIDC_CLIENT_SECRET", "").strip()
     default_method = "client_secret_basic" if client_secret else "none"
-    method = os.environ.get("OIDC_CLIENT_AUTH_METHOD", default_method).strip().lower()
+    method = os.environ.get("OIDC_CLIENT_AUTH_METHOD", "").strip().lower() or default_method
     if method not in {"none", "client_secret_basic", "client_secret_post"}:
         raise RuntimeError(
             "OIDC_CLIENT_AUTH_METHOD must be none, client_secret_basic, or client_secret_post"
@@ -147,7 +151,7 @@ def _transaction_doc_id(state: str) -> str:
 
 def _safe_return_to(value: str | None) -> str:
     candidate = (value or "/").strip()
-    if not candidate.startswith("/") or candidate.startswith("//"):
+    if not candidate.startswith("/") or candidate.startswith("//") or "\\" in candidate:
         return "/"
     parsed = urlsplit(candidate)
     if parsed.scheme or parsed.netloc:
@@ -264,7 +268,11 @@ async def get_discovery(config: OidcConfig | None = None) -> dict[str, Any]:
     return await _cached_json(_discovery_cache, config.discovery_url, load)
 
 
-async def get_jwks(config: OidcConfig | None = None) -> dict[str, Any]:
+async def get_jwks(
+    config: OidcConfig | None = None,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
     config = config or oidc_config()
     discovery = await get_discovery(config)
     jwks_uri = str(discovery["jwks_uri"]).strip()
@@ -275,6 +283,8 @@ async def get_jwks(config: OidcConfig | None = None) -> dict[str, Any]:
             raise RuntimeError("OIDC JWKS response is missing keys")
         return payload
 
+    if force_refresh:
+        _jwks_cache.pop(jwks_uri, None)
     return await _cached_json(_jwks_cache, jwks_uri, load)
 
 
@@ -308,7 +318,13 @@ async def decode_oidc_token(token: str, *, expected_nonce: str | None = None) ->
         raise jwt.InvalidTokenError("OIDC token kid is invalid")
 
     jwks = await get_jwks(config)
-    key = _select_jwk(jwks, kid=kid, alg=alg)
+    try:
+        key = _select_jwk(jwks, kid=kid, alg=alg)
+    except jwt.InvalidTokenError:
+        # A new kid commonly means the IdP rotated its signing key. Refresh the
+        # cached JWKS once before failing the request.
+        jwks = await get_jwks(config, force_refresh=True)
+        key = _select_jwk(jwks, kid=kid, alg=alg)
     claims = jwt.decode(
         token,
         key=key,
