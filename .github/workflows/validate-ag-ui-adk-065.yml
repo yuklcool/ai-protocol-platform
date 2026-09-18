@@ -6,6 +6,7 @@ on:
     paths:
       - backend/pyproject.toml
       - backend/uv.lock
+      - backend/tests/api_tests/test_a2ui_surface_action_run_routes.py
       - .github/workflows/validate-ag-ui-adk-065.yml
 
 permissions:
