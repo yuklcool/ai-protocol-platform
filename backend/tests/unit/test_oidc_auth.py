@@ -215,10 +215,11 @@ async def test_pkce_exchange_returns_only_verified_id_token_and_local_user(
             del exc_type, exc, tb
             return False
 
-        async def post(self, url: str, *, data: dict, headers: dict):
+        async def post(self, url: str, *, data: dict, headers: dict, auth=None):
             assert url == "https://id.example.com/token"
             assert data["code_verifier"] == "v" * 43
             assert headers["Accept"] == "application/json"
+            assert auth is None
             return FakeResponse()
 
     monkeypatch.setattr("auth.oidc.get_oidc_discovery", discovery)
