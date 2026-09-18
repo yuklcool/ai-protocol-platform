@@ -44,10 +44,9 @@ function isConfigured(): boolean {
 }
 
 export function getFirebaseApp(): FirebaseApp | null {
-  // LOCAL_MODE: no Firebase init at all — either the deterministic development
-  // stub or LocalJwtAuthProvider supplies identity. Returning null keeps
-  // existing `if (!app)` branches working without further changes.
-  if (isLocalMode()) return null;
+  // Non-Firebase identity modes must never initialize the Firebase SDK merely
+  // because unrelated public Firebase variables happen to be present.
+  if (isOidcAuthMode() || isLocalJwtAuthMode() || isLocalMode()) return null;
   if (!isConfigured()) return null;
   if (appInstance) return appInstance;
   appInstance = getApps()[0] ?? initializeApp(firebaseConfig);
