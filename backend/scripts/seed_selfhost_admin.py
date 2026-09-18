@@ -14,6 +14,7 @@ from auth.admin_roles import PLATFORM_ADMIN_TAG
 from auth.identity import auth_backend
 from auth.local_jwt import (
     USER_COLLECTION,
+    create_external_identity_user,
     create_local_user,
     get_local_user_by_email,
     validate_local_jwt_config,
@@ -26,15 +27,39 @@ def _has_any_local_user() -> bool:
 
 
 def main() -> int:
-    if auth_backend() != "local-jwt":
-        print("self-host admin bootstrap: skipped (AUTH_BACKEND is not local-jwt)")
+    backend = auth_backend()
+    if backend not in {"local-jwt", "oidc"}:
+        print("self-host admin bootstrap: skipped (AUTH_BACKEND does not use auth_users)")
+        return 0
+
+    email = os.environ.get("SELFHOST_ADMIN_EMAIL", "").strip()
+
+    if backend == "oidc":
+        # Validate deployment configuration before uvicorn starts. Discovery is
+        # intentionally deferred to the runtime status/login path so a temporary
+        # IdP outage does not make an otherwise configured container unbootable.
+        from auth.oidc import oidc_settings
+
+        oidc_settings()
+        if not email:
+            if _has_any_local_user():
+                print("self-host admin bootstrap: existing identity account found; bootstrap email not required")
+                return 0
+            raise SystemExit("AUTH_BACKEND=oidc requires SELFHOST_ADMIN_EMAIL on first startup")
+        if get_local_user_by_email(email) is not None:
+            print("self-host admin bootstrap: account already exists; leaving identity metadata unchanged")
+            return 0
+        user = create_external_identity_user(
+            email=email,
+            group_tags={PLATFORM_ADMIN_TAG},
+        )
+        print(f"self-host admin bootstrap: created OIDC admin uid={user.uid} domain={user.domain}")
         return 0
 
     # Validate signing/expiry settings before uvicorn starts. A deployment that
     # cannot mint or verify tokens must fail at boot, not on the first login.
     validate_local_jwt_config()
 
-    email = os.environ.get("SELFHOST_ADMIN_EMAIL", "").strip()
     password = os.environ.get("SELFHOST_ADMIN_PASSWORD", "")
     if not email and not password:
         if _has_any_local_user():
