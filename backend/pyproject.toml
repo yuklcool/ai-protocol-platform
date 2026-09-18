@@ -31,7 +31,7 @@ dependencies = [
     # MCP
     "mcp>=1.28.1,<2.0.0",
     # AG-UI protocol bridge (ADK -> AG-UI events over SSE)
-    "ag-ui-adk>=0.6.0,<1.0.0",
+    "ag-ui-adk==0.6.5",
     # HTTP client
     "httpx>=0.28.0",
     # S3-compatible object storage (AWS S3 / MinIO / LocalStack)
