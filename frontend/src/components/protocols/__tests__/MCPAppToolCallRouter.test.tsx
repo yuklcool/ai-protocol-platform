@@ -89,6 +89,9 @@ describe("MCPAppToolCallRouter", () => {
     await waitFor(() => {
       expect(screen.getByTestId("app-renderer")).toBeInTheDocument();
     });
+    const routedTool = screen.getByTestId("mcp-app-tool");
+    expect(routedTool).toHaveAttribute("data-tool-name", "show-map");
+    expect(routedTool).toHaveAttribute("data-tool-call-id", "tc-show-map");
     expect(appRendererMock).toHaveBeenCalled();
     const lastCall = appRendererMock.mock.calls.at(-1)?.[0] ?? {};
     expect(lastCall.toolName).toBe("show-map");
