@@ -99,6 +99,66 @@ def test_tool_call_probe_requires_requested_function(monkeypatch) -> None:
     assert response.json()["tool_called"] is True
 
 
+def test_tool_call_probe_retries_portable_tool_choice_forms(monkeypatch) -> None:
+    monkeypatch.setenv("PROBE_KEY", "secret")
+
+    rejected_exact = MagicMock()
+    rejected_exact.status_code = 400
+    rejected_exact.json.return_value = {"error": {"type": "invalid_request_error"}}
+
+    rejected_required = MagicMock()
+    rejected_required.status_code = 422
+    rejected_required.json.return_value = {"error": {"type": "invalid_request_error"}}
+
+    accepted_auto = MagicMock()
+    accepted_auto.status_code = 200
+    accepted_auto.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "platform_probe",
+                                "arguments": '{"value":"ok"}',
+                            },
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    client = AsyncMock()
+    client.post.side_effect = [rejected_exact, rejected_required, accepted_auto]
+    cm = AsyncMock()
+    cm.__aenter__.return_value = client
+    cm.__aexit__.return_value = None
+
+    with (
+        patch("admin.model_probe_routes.get_document", side_effect=_docs),
+        patch("admin.model_probe_routes.httpx.AsyncClient", return_value=cm),
+    ):
+        response = _client(_ADMIN).post(
+            "/api/admin/model-providers/models/deepseek-v3/test",
+            json={"mode": "tool_call", "prompt": "Call platform_probe now."},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["tool_called"] is True
+    assert client.post.await_count == 3
+
+    calls = client.post.call_args_list
+    assert calls[0].kwargs["json"]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "platform_probe"},
+    }
+    assert calls[1].kwargs["json"]["tool_choice"] == "required"
+    assert calls[2].kwargs["json"]["tool_choice"] == "auto"
+
+
 def test_tool_call_probe_reports_capability_failure(monkeypatch) -> None:
     monkeypatch.setenv("PROBE_KEY", "secret")
     cm, _ = _async_client_response({"choices": [{"message": {"content": "I cannot call tools"}}]})
