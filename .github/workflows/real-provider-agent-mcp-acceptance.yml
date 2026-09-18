@@ -6,6 +6,24 @@ on:
       - docs/real-provider-acceptance.md
       - frontend/e2e/provider-agent-mcp-live.spec.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
+  workflow_call:
+    inputs:
+      provider_base_url:
+        description: "OpenAI-compatible base URL, e.g. https://api.example.com/v1"
+        required: true
+        type: string
+      model_api_name:
+        description: "Upstream model name exposed by /models and /chat/completions"
+        required: true
+        type: string
+      supports_reasoning:
+        description: "Use max_completion_tokens instead of max_tokens in the probe"
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      REAL_PROVIDER_API_KEY:
+        required: true
   workflow_dispatch:
     inputs:
       provider_base_url:
@@ -35,7 +53,10 @@ jobs:
         run: node --check frontend/e2e/provider-agent-mcp-live.spec.js
 
   real-provider-agent-mcp:
-    if: github.event_name == 'workflow_dispatch'
+    # Reusable workflows inherit the caller's github context; a call from the
+    # release orchestrator therefore still reports event_name=push.
+    # PRs intentionally run syntax-only checks and never receive the real secret.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
