@@ -1,5 +1,7 @@
 # Real Provider → Agent → MCP acceptance
 
+A separate no-external-model CI gate (`model-provider-studio-live`) continuously proves that a database-backed dynamic model appears in the real Skill Studio UI, can be selected, saved, and survives reload. It deliberately does not call the configured model endpoint.
+
 This is the remaining real-model boundary for issues #2, #10 and #11. It uses
 an actual external OpenAI-compatible model and a real MCP server through the
 normal browser chat flow. Before chat, the same browser session opens Skill Studio, verifies the dynamic database-backed model is present in the model selector, selects it, saves the Skill, and re-reads the persisted Skill metadata. It does not use a fixed model response or ToolCall.
