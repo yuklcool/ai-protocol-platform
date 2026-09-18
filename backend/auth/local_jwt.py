@@ -170,6 +170,52 @@ def create_local_user(
     return _record_to_user(record)
 
 
+def create_external_identity_user(
+    *,
+    email: str,
+    group_tags: set[str] | frozenset[str] | list[str] | tuple[str, ...] = (),
+    uid: str | None = None,
+    tenant_id: str | None = None,
+    disabled: bool = False,
+    overwrite: bool = False,
+) -> User:
+    """Provision one authoritative user for an external identity provider.
+
+    No password hash is created, so this record can never authenticate through
+    the local-jwt password endpoint.  Tenant and role metadata still lives in
+    the same server-authoritative auth_users collection used by local-jwt.
+    """
+    normalised = _normalise_email(email)
+    if not normalised or "@" not in normalised:
+        raise ValueError("a valid email address is required")
+    domain = _domain_for_email(normalised)
+    explicit_tenant_id = _normalise_tenant_id(tenant_id or domain)
+    if not explicit_tenant_id:
+        raise ValueError("tenant_id must be non-empty")
+
+    doc_id = _user_doc_id(normalised)
+    existing = persistence.get_document(USER_COLLECTION, doc_id)
+    if existing is not None and not overwrite:
+        raise ValueError("local user already exists")
+    now = int(time.time())
+    record = {
+        "uid": uid or (str(existing.get("uid")) if existing else str(uuid.uuid4())),
+        "email": normalised,
+        "domain": domain,
+        "tenantId": explicit_tenant_id,
+        "groupTags": sorted({str(tag).strip() for tag in group_tags if str(tag).strip()}),
+        "disabled": bool(disabled),
+        "createdAt": existing.get("createdAt", now) if existing else now,
+        "updatedAt": now,
+    }
+    # Preserve a pre-existing password only when an explicit overwrite is used
+    # for metadata maintenance. Fresh external-identity records stay passwordless.
+    if existing and existing.get("passwordHash"):
+        record["passwordHash"] = existing["passwordHash"]
+    persistence.set_document(USER_COLLECTION, doc_id, record)
+    return _record_to_user(record)
+
+
 def authenticate_credentials(email: str, password: str) -> User | None:
     record = get_local_user_by_email(email)
     if record is None or bool(record.get("disabled")):
@@ -314,6 +360,7 @@ __all__ = [
     "USER_COLLECTION",
     "LocalJwtIdentityProvider",
     "authenticate_credentials",
+    "create_external_identity_user",
     "create_local_user",
     "get_current_user_local_jwt",
     "get_local_user_by_email",
