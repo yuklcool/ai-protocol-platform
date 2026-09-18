@@ -2,8 +2,8 @@
 
 > 仓库：`yuklcool/ai-protocol-platform`  
 > 上游：`sunholo-data/ai-protocol-platform`  
-> 状态更新时间：**2026-09-16**  
-> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实 MCP 后端/协议以及 Chromium separate-origin MCP Apps 浏览器渲染验收，只剩真实模型驱动 Agent MCP Tool Call。**
+> 状态更新时间：**2026-09-18**  
+> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收、企业认证扩展与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10/#2 仍等待真实第三方 Provider E2E；#11 只剩真实模型驱动 Agent MCP Tool Call。#12 i18n/branding、#14 upstream sync、#16 S3-compatible ObjectStorage 已完成；#17 通用 OIDC 正在通过 PR #48 分阶段实现。**
 
 ---
 
@@ -439,6 +439,9 @@ Chromium / Playwright
 - #6 ObjectStorage / Artifact ✅
 - #7 Built-in JWT ✅
 - #8 GCP optionalization ✅
+- #12 i18n / branding ✅
+- #14 upstream sync ✅
+- #16 S3-compatible ObjectStorage ✅
 
 保持 OPEN、等待最终真实验收：
 
@@ -448,6 +451,8 @@ Chromium / Playwright
 - #9 target migration + quota/Tool Calling final acceptance
 - #10 real Provider E2E
 - #11 real Agent MCP Tool Call
+- #13 real GHCR release tag + anonymous pull + no-clone cold-start
+- #17 optional OIDC enterprise identity extension（PR #48：backend slice 进行中）
 
 ---
 
@@ -524,7 +529,20 @@ verify
 rollback drill
 ```
 
-### 第三优先：其他真实浏览器/产品体验验收
+### 第三优先：#17 OIDC 企业认证扩展
+
+没有真实 Provider secret 时，优先继续不依赖外部 LLM 的 OIDC adapter 工作。PR #48 第一阶段聚焦：
+
+- discovery / JWKS cache + rotation
+- issuer / audience / expiry / nonce 校验
+- Authorization Code + PKCE code exchange
+- server-authoritative OIDC subject → local `auth_users` mapping
+- Auth capability/status API
+- Compose/env 可选配置
+
+后续阶段仍需：frontend PKCE transaction、callback/session hydration、sign-out、Keycloak/Entra/Okta 示例和真实 IdP 验收。OIDC 必须继续保持 optional，默认 `AUTH_BACKEND=local-jwt` 不变。
+
+### 第四优先：其他真实浏览器/产品体验验收
 
 MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏览器方向重点可放在：
 
@@ -532,15 +550,13 @@ MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏
 - Skill Studio model selection（配合真实 Provider）
 - Chat / AG-UI 完整体验
 
-### 第四优先：发布收口
+### 第五优先：发布收口
 
-完成真实验收后推进：
+已完成：#12 中文化/Branding、#14 upstream sync、#16 S3 adapter。
 
-- #12 中文化 / Branding
+仍需真实发布验收：
+
 - #13 GHCR / versioned release
-- #14 upstream sync
-- #16 S3 adapter
-- #17 OIDC extension
 
 ---
 
