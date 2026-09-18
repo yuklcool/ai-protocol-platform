@@ -403,58 +403,58 @@ function RoutedToolCall({
         html={resource.html}
         sandbox={sandboxConfig}
         onMessage={async (params) => {
-        const text = notificationToChatMessage(params);
-        if (text && onChatMessage) onChatMessage(text);
-        return {};
-      }}
-      onFallbackRequest={async (request) => {
-        // MCP Apps spec channel #2 (sprint 1.25): the iframe pushes
-        // structured content into the agent's NEXT-turn context via
-        // ui/update-model-context. AppRenderer doesn't have a
-        // dedicated prop for it — it surfaces via onFallbackRequest
-        // (the catch-all for JSON-RPC methods AppRenderer doesn't
-        // route specifically). We dispatch on method name.
-        //
-        // POST to /api/proxy/api/sessions/{sessionId}/iframe-context;
-        // backend writes to ADK session state under
-        // `mcp_app_context.{server_id}.{tool_name}` after passing the
-        // 7 access gates. Empty {} ack is the spec-compliant return
-        // shape — failures are logged but never propagated to the
-        // iframe (graceful degradation: agent stays blind to iframe
-        // state, but the iframe keeps working).
-        if (request.method !== "ui/update-model-context") {
+          const text = notificationToChatMessage(params);
+          if (text && onChatMessage) onChatMessage(text);
           return {};
-        }
-        if (!sessionId) {
-          // Pre-first-turn render or /dev/* surface — silently no-op.
+        }}
+        onFallbackRequest={async (request) => {
+          // MCP Apps spec channel #2 (sprint 1.25): the iframe pushes
+          // structured content into the agent's NEXT-turn context via
+          // ui/update-model-context. AppRenderer doesn't have a
+          // dedicated prop for it — it surfaces via onFallbackRequest
+          // (the catch-all for JSON-RPC methods AppRenderer doesn't
+          // route specifically). We dispatch on method name.
+          //
+          // POST to /api/proxy/api/sessions/{sessionId}/iframe-context;
+          // backend writes to ADK session state under
+          // `mcp_app_context.{server_id}.{tool_name}` after passing the
+          // 7 access gates. Empty {} ack is the spec-compliant return
+          // shape — failures are logged but never propagated to the
+          // iframe (graceful degradation: agent stays blind to iframe
+          // state, but the iframe keeps working).
+          if (request.method !== "ui/update-model-context") {
+            return {};
+          }
+          if (!sessionId) {
+            // Pre-first-turn render or /dev/* surface — silently no-op.
+            return {};
+          }
+          try {
+            const p = (request.params ?? {}) as {
+              structuredContent?: Record<string, unknown>;
+              content?: unknown[];
+            };
+            await fetchWithAuth(
+              `/api/proxy/api/sessions/${encodeURIComponent(sessionId)}/iframe-context`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  serverId,
+                  toolName: unprefixedName,
+                  structuredContent: p.structuredContent ?? null,
+                  content: p.content ?? null,
+                }),
+              },
+            );
+          } catch (err) {
+            console.warn(
+              "MCPAppToolCallRouter: update-model-context POST failed",
+              err,
+            );
+          }
           return {};
-        }
-        try {
-          const p = (request.params ?? {}) as {
-            structuredContent?: Record<string, unknown>;
-            content?: unknown[];
-          };
-          await fetchWithAuth(
-            `/api/proxy/api/sessions/${encodeURIComponent(sessionId)}/iframe-context`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                serverId,
-                toolName: unprefixedName,
-                structuredContent: p.structuredContent ?? null,
-                content: p.content ?? null,
-              }),
-            },
-          );
-        } catch (err) {
-          console.warn(
-            "MCPAppToolCallRouter: update-model-context POST failed",
-            err,
-          );
-        }
-        return {};
-      }}
+        }}
         onError={(err: Error) => {
           console.warn("MCPAppToolCallRouter: AppRenderer error", err);
         }}
