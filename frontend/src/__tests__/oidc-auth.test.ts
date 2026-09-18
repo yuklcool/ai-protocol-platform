@@ -68,7 +68,11 @@ describe("OIDC browser session", () => {
     );
   });
 
-  it("never follows an external return URL from the callback response", async () => {
+  it.each([
+    "https://evil.example/steal",
+    "//evil.example/steal",
+    "/\\evil.example/steal",
+  ])("never follows an unsafe return URL from the callback response: %s", async (returnTo) => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -77,7 +81,7 @@ describe("OIDC browser session", () => {
             access_token: "verified-id-token",
             token_type: "bearer",
             expires_in: 300,
-            return_to: "https://evil.example/steal",
+            return_to: returnTo,
             user: USER,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
