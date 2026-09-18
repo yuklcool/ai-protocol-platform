@@ -193,7 +193,16 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
             model: "smart",
             thinking: "off",
             enableConfirmation: false,
-            toolConfigs: { mcp: { servers: [SERVER_ID] } },
+            toolConfigs: {
+              mcp: {
+                servers: [SERVER_ID],
+                // The real map MCP App pushes ui/update-model-context after
+                // rendering. Opt this ephemeral skill into that distinct trust
+                // grant so the release gate covers the full app→host→session
+                // context path instead of logging an expected 403.
+                allow_context_writes: [SERVER_ID],
+              },
+            },
           },
         }),
       });
@@ -265,16 +274,25 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       );
       await composer.press("Enter");
 
-      const toolName = page.getByText(/show-map/i).first();
-      await expect(toolName).toBeVisible({ timeout: 90_000 });
-      await expect(page.getByLabel("Success").first()).toBeVisible({ timeout: 90_000 });
+      // Assert the semantic MCP App binding rather than visible ToolCallChip
+      // text. MCP tools may be emitted with a long server-id prefix and the
+      // compact chip intentionally truncates names, while this marker is created
+      // only after tools/list resolved the exact show-map UI binding and the
+      // ui:// resource was fetched.
+      const routedShowMap = page
+        .locator('[data-testid="mcp-app-tool"][data-tool-name="show-map"]')
+        .first();
+      await expect(routedShowMap).toBeVisible({ timeout: 90_000 });
+      await expect(routedShowMap).toHaveAttribute("data-tool-status", "success", {
+        timeout: 90_000,
+      });
 
       // This iframe is produced only after the real tool definition's MCP Apps
       // binding is resolved and the real ui:// resource is fetched.
       await expect
         .poll(
-          async () => page.locator("iframe").count(),
-          { timeout: 60_000, message: "real MCP tool result should mount an MCP App iframe" },
+          async () => routedShowMap.locator("iframe").count(),
+          { timeout: 60_000, message: "real show-map tool result should mount its MCP App iframe" },
         )
         .toBeGreaterThan(0);
 
@@ -293,6 +311,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
           "MODEL_REQUEST_INVALID",
           "MCPAppToolCallRouter: listTools failed",
           "MCPAppToolCallRouter: readResource failed",
+          "MCPAppToolCallRouter: update-model-context POST failed",
           "Timed out waiting for sandbox proxy iframe to be ready",
         ].some((needle) => line.includes(needle)),
       );
