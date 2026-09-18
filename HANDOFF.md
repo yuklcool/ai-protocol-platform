@@ -35,6 +35,8 @@
 
 接下来不要重新实现这些基础能力。当前最高优先级仍是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
 
+2026-09-18 continuation: Self-host 的 source Compose 现在默认以 `ENABLE_SKILL_STUDIO=true` 编译 frontend，release frontend image 也固定启用 Skill Studio。真实 Provider Playwright 验收已扩展为：先通过 API 注册 Provider/动态模型，再在真实 Skill Studio 浏览器页面确认该动态模型可见、从 managed tier 切换到该模型并保存，随后重新读取 Skill metadata 确认持久化，最后才进入 Chat 驱动真实 Agent -> MCP Tool Calling。这样 #10 的“Skill Studio model selection”不再是验收空白；最终关闭 #2/#10/#11 仍必须实际运行带真实 endpoint/secret 的 workflow。
+
 2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段 PR #50 已合并到 main（merge SHA `d9666c0b8dd787986b6e5e033a94314bbc6cdac4`），完成 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。第三阶段 PR #51 已合并到 main（merge SHA `11850326aaa31d2a92f03f876942bc5a92d16c48`），增加 opt-in Keycloak 26.7.4 realm/Compose、真实 Keycloak discovery/JWKS/signed-ID-token compatibility gate，以及 Entra ID / Okta 配置示例。真实 Keycloak gate 已通过；#17 已于 2026-09-18 按 completed 关闭。生产企业 IdP 仍需部署方提供真实租户/client 配置和 subject mapping，但平台代码侧不再存在 OIDC 缺口。
 
 ---
