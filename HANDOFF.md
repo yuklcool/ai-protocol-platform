@@ -31,15 +31,15 @@
 - Tenant Model `allowedModels / defaultModel`
 - Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
 
-真实 Provider 验收入口：PR #35 已合并（`8445d6900b8422a203618de2fa8df9322b179561`），增加手动工作流 `Real Provider Agent MCP acceptance`；运行方式见 [docs/real-provider-acceptance.md](docs/real-provider-acceptance.md)。验收资源使用独立随机 ID，避免覆盖已有 MCP 配置。本地语法检查及 Playwright 用例收集通过；提交 `52f189a` 的 PR 语法 CI 与 MCP live self-host acceptance（含 Chromium）均通过，运行记录：[语法 CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523277)、[MCP live CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523241)。真实模型任务按 PR 触发规则跳过，尚未执行；需要配置 Actions secret `REAL_PROVIDER_API_KEY` 并提供 Base URL / model name。PR CI 通过不能替代真实模型验收，也不能据此关闭 #2/#10/#11。该脚本通过 API 创建 Skill，Skill Studio 模型选择 UI、Tenant LLM quota/policy 与目标数据迁移仍需独立验收。
+真实 Provider 验收入口：PR #35 已合并（`8445d6900b8422a203618de2fa8df9322b179561`），增加手动工作流 `Real Provider Agent MCP acceptance`；运行方式见 [docs/real-provider-acceptance.md](docs/real-provider-acceptance.md)。验收资源使用独立随机 ID，避免覆盖已有 MCP 配置。本地语法检查及 Playwright 用例收集通过；提交 `52f189a` 的 PR 语法 CI 与 MCP live self-host acceptance（含 Chromium）均通过，运行记录：[语法 CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523277)、[MCP live CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523241)。真实模型任务按 PR 触发规则跳过，尚未执行；需要配置 Actions secret `REAL_PROVIDER_API_KEY` 并提供 Base URL / model name。PR CI 通过不能替代真实模型验收。#2 已于 2026-09-18 按 Provider 路由代码侧完成关闭；#10/#11 仍需真实第三方 Provider 与 Agent Tool Calling 最终验收。该脚本通过 API 创建 Skill，Tenant LLM quota/policy 与目标数据迁移仍需独立验收。
 
 接下来不要重新实现这些基础能力。当前最高优先级仍是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
 
-2026-09-18 continuation: 新增独立 `model-provider-studio-live` CI：使用真实 Compose/PostgreSQL/local-jwt/frontend/Chromium，但不访问外部模型。Gate 在数据库创建临时 OpenAI-compatible Provider + Dynamic Model，验证 authenticated `/api/models` effective registry，然后在真实 Skill Studio 中确认模型出现、从 `smart` 切换并保存，API 回读和页面 reload 均保持该 model id，最后清理临时资源。Model Provider gate 也开始对 Skill Studio 相关源码变更触发。该 Gate 证明管理面/产品 UI 链路，但**不能替代**带真实 endpoint/secret 的 Agent/Tool Calling 最终验收。
+2026-09-18 continuation: PR #54 已合并（`aa65322a1a47dca9e1e8b2910ce3feed43fdb6a1`），新增独立 `model-provider-studio-live` CI：使用真实 Compose/PostgreSQL/local-jwt/frontend/Chromium，但不访问外部模型。Gate 在数据库创建临时 OpenAI-compatible Provider + Dynamic Model，验证 authenticated `/api/models` effective registry，然后在真实 Skill Studio 中确认模型出现、从 `smart` 切换并保存，API 回读和页面 reload 均保持该 model id，最后清理临时资源。Model Provider gate 也开始对 Skill Studio 相关源码变更触发。该 Gate 证明管理面/产品 UI 链路，但**不能替代**带真实 endpoint/secret 的 Agent/Tool Calling 最终验收。
 
-2026-09-18 continuation: Self-host 的 source Compose 现在默认以 `ENABLE_SKILL_STUDIO=true` 编译 frontend，release frontend image 也固定启用 Skill Studio。真实 Provider Playwright 验收已扩展为：先通过 API 注册 Provider/动态模型，再在真实 Skill Studio 浏览器页面确认该动态模型可见、从 managed tier 切换到该模型并保存，随后重新读取 Skill metadata 确认持久化，最后才进入 Chat 驱动真实 Agent -> MCP Tool Calling。这样 #10 的“Skill Studio model selection”不再是验收空白；最终关闭 #2/#10/#11 仍必须实际运行带真实 endpoint/secret 的 workflow。
+2026-09-18 continuation: Self-host 的 source Compose 现在默认以 `ENABLE_SKILL_STUDIO=true` 编译 frontend，release frontend image 也固定启用 Skill Studio。真实 Provider Playwright 验收已扩展为：先通过 API 注册 Provider/动态模型，再在真实 Skill Studio 浏览器页面确认该动态模型可见、从 managed tier 切换到该模型并保存，随后重新读取 Skill metadata 确认持久化，最后才进入 Chat 驱动真实 Agent -> MCP Tool Calling。这样 #10 的“Skill Studio model selection”不再是验收空白；#2 已按 Provider 路由代码侧完成关闭，最终关闭 #10/#11 仍必须实际运行带真实 endpoint/secret 的 workflow。
 
-2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #2/#10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段 PR #50 已合并到 main（merge SHA `d9666c0b8dd787986b6e5e033a94314bbc6cdac4`），完成 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。第三阶段 PR #51 已合并到 main（merge SHA `11850326aaa31d2a92f03f876942bc5a92d16c48`），增加 opt-in Keycloak 26.7.4 realm/Compose、真实 Keycloak discovery/JWKS/signed-ID-token compatibility gate，以及 Entra ID / Okta 配置示例。真实 Keycloak gate 已通过；#17 已于 2026-09-18 按 completed 关闭。生产企业 IdP 仍需部署方提供真实租户/client 配置和 subject mapping，但平台代码侧不再存在 OIDC 缺口。
+2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段 PR #50 已合并到 main（merge SHA `d9666c0b8dd787986b6e5e033a94314bbc6cdac4`），完成 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。第三阶段 PR #51 已合并到 main（merge SHA `11850326aaa31d2a92f03f876942bc5a92d16c48`），增加 opt-in Keycloak 26.7.4 realm/Compose、真实 Keycloak discovery/JWKS/signed-ID-token compatibility gate，以及 Entra ID / Okta 配置示例。真实 Keycloak gate 已通过；#17 已于 2026-09-18 按 completed 关闭。生产企业 IdP 仍需部署方提供真实租户/client 配置和 subject mapping，但平台代码侧不再存在 OIDC 缺口。
 
 ---
 
@@ -139,6 +139,9 @@ PR #33 — Real Self-host MCP protocol acceptance
 
 PR #34 — Real MCP Apps Chromium browser/sandbox acceptance
 aaab15e913d392ac4b84a041be43a4fc2e175105
+
+PR #54 — Live Skill Studio dynamic model gate
+aa65322a1a47dca9e1e8b2910ce3feed43fdb6a1
 ```
 
 ---
@@ -449,11 +452,11 @@ Chromium / Playwright
 - #14 Upstream sync strategy ✅
 - #16 S3-compatible ObjectStorage ✅
 - #17 OIDC IdentityProvider + Keycloak compatibility ✅
+- #2 OpenAI-compatible Provider routing ✅
 
 保持 OPEN、等待最终真实验收：
 
 - #1 Self-host 全链路
-- #2 OpenAI-compatible
 - #3 Docker Compose
 - #9 target migration + quota/Tool Calling final acceptance
 - #10 real Provider E2E
@@ -473,6 +476,7 @@ Chromium / Playwright
 - MCP admin
 - **MCP live self-host acceptance（包含 Chromium separate-origin MCP Apps browser acceptance）**
 - Model provider
+- **Model provider Skill Studio live（Compose/PostgreSQL/local-jwt/Chromium 动态模型选择与持久化）**
 - Frontend auth tests
 - OIDC Keycloak compatibility（真实 Keycloak discovery/JWKS/signed ID token）
 
@@ -486,7 +490,7 @@ CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secre
 
 ## 10. 下一步执行顺序
 
-### 第一优先：#10 / #2 真实 Provider E2E
+### 第一优先：#10 / #11 真实 Provider E2E
 
 有真实 endpoint + secret 时直接做：
 
@@ -517,7 +521,6 @@ Agent final response
 - #10 real Provider E2E
 - #11 real Agent MCP Tool Call
 - #9 Tenant quota / Tool Permission / Model Policy 的 LLM-dependent final acceptance
-- #2 OpenAI-compatible 全链路验收
 
 ### 第二优先：#9 目标部署 legacy migration
 
