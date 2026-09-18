@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from auth.local_jwt import create_local_user
+from auth.local_jwt import authenticate_credentials, create_local_user, get_local_user_by_email
 from auth.oidc import (
     OidcConfigurationError,
     clear_oidc_cache,
@@ -30,6 +30,9 @@ def isolated_oidc(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OIDC_REQUIRE_EMAIL_VERIFIED", "true")
     monkeypatch.delenv("OIDC_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("OIDC_ALLOW_INSECURE_HTTP", raising=False)
+    monkeypatch.delenv("SELFHOST_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("SELFHOST_ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("AUTH_BACKEND", raising=False)
     clear_oidc_cache()
     yield
     clear_oidc_cache()
@@ -50,6 +53,42 @@ def _claims(*, subject: str = "subject-1", email: str = "admin@example.com") -> 
         "tenant_id": "attacker-tenant",
         "groupTags": ["aitana-admin"],
     }
+
+
+
+
+def test_external_identity_record_cannot_use_password_login() -> None:
+    from auth.local_jwt import create_external_identity_user
+
+    user = create_external_identity_user(
+        email="sso-admin@example.com",
+        tenant_id="tenant-sso",
+        group_tags={"aitana-admin"},
+    )
+    record = get_local_user_by_email("sso-admin@example.com")
+    assert record is not None
+    assert "passwordHash" not in record
+    assert user.tenant_id == "tenant-sso"
+    assert authenticate_credentials("sso-admin@example.com", "any password at all") is None
+
+
+def test_oidc_selfhost_bootstrap_creates_first_passwordless_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.seed_selfhost_admin import main
+
+    monkeypatch.setenv("AUTH_BACKEND", "oidc")
+    monkeypatch.setenv("SELFHOST_ADMIN_EMAIL", "first-admin@example.com")
+
+    assert main() == 0
+    record = get_local_user_by_email("first-admin@example.com")
+    assert record is not None
+    assert "passwordHash" not in record
+    assert "aitana-admin" in set(record.get("groupTags") or [])
+    assert authenticate_credentials("first-admin@example.com", "irrelevant password") is None
+
+    # Idempotent restart must not replace the stable local uid or identity data.
+    first_uid = record["uid"]
+    assert main() == 0
+    assert get_local_user_by_email("first-admin@example.com")["uid"] == first_uid
 
 
 def test_oidc_settings_rejects_unsafe_algorithms(monkeypatch: pytest.MonkeyPatch) -> None:
