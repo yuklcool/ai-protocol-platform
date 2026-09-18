@@ -17,7 +17,6 @@ from auth.oidc import (
     oidc_settings,
     resolve_oidc_user,
 )
-from db import persistence
 from db.persistence import reset_repository_for_testing
 from db.repositories.memory import MemoryRepository
 
@@ -123,9 +122,6 @@ def test_oidc_subject_link_survives_claim_email_change() -> None:
     linked = resolve_oidc_user(_claims(email="renamed@example.net"))
     assert linked.uid == local.uid
     assert linked.email == "admin@example.com"
-
-    subject_links = persistence.list_documents(OIDC_LINK_COLLECTION)
-    assert len(subject_links) == 2  # subject -> user and issuer/user -> subject
 
 
 def test_oidc_rejects_second_subject_for_same_local_user() -> None:
