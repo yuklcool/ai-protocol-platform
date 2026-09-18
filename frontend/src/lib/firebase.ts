@@ -21,6 +21,11 @@ import {
   subscribeToLocalJwtToken,
 } from "@/lib/localJwtAuth";
 import { isLocalMode, LOCAL_MODE_STUB_TOKEN } from "@/lib/localMode";
+import {
+  getOidcToken,
+  isOidcAuthMode,
+  subscribeToOidcToken,
+} from "@/lib/oidcAuth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -89,6 +94,7 @@ export async function getIdTokenFor(
 
   const groupToken = () => readStoredGroupSession()?.token ?? null;
   const individualToken = async () => {
+    if (isOidcAuthMode()) return getOidcToken();
     if (isLocalJwtAuthMode()) return getLocalJwtToken();
     if (isLocalMode()) return LOCAL_MODE_STUB_TOKEN;
     const auth = getFirebaseAuth();
@@ -110,6 +116,7 @@ export async function getIdToken(forceRefresh = false): Promise<string | null> {
   // Self-host local JWT must be checked before LOCAL_MODE because the current
   // Compose uses LOCAL_MODE=1 to switch off GCP assumptions while still using
   // a real PostgreSQL-backed identity provider.
+  if (isOidcAuthMode()) return getOidcToken();
   if (isLocalJwtAuthMode()) return getLocalJwtToken();
   // Development stub.
   if (isLocalMode()) return LOCAL_MODE_STUB_TOKEN;
@@ -132,6 +139,9 @@ export function subscribeToIdToken(
     const session = readStoredGroupSession();
     callback(session?.token ?? null);
     return () => {};
+  }
+  if (isOidcAuthMode()) {
+    return subscribeToOidcToken(callback);
   }
   if (isLocalJwtAuthMode()) {
     return subscribeToLocalJwtToken(callback);
