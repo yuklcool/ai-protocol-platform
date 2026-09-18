@@ -83,6 +83,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let modelCreated = false;
     let providerCreated = false;
     let sessionCreated = false;
+    let originalToolPermission = undefined;
+    let toolPermissionTouched = false;
     let context = null;
 
     try {
@@ -147,6 +149,35 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const discovery = await postJson(token, `/api/admin/mcp-servers/${SERVER_ID}/discover`);
       expect(discovery.ok, JSON.stringify(discovery)).toBe(true);
       expect(discovery.tools?.some((tool) => tool.name === "show-map")).toBe(true);
+
+      // Tool Permission is intentionally fail-closed. The real map workflow may
+      // use geocode before show-map, so explicitly grant only those two tools to
+      // the ephemeral acceptance actor. Preserve and restore any pre-existing
+      // user-specific permission instead of bypassing the authorization plane.
+      const permissionPath = `/api/admin/tool-permissions/${encodeURIComponent(ADMIN_EMAIL)}`;
+      const permissionResponse = await fetch(`${BACKEND_URL}${permissionPath}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (permissionResponse.status === 200) {
+        originalToolPermission = await permissionResponse.json();
+      } else if (permissionResponse.status !== 404) {
+        throw new Error(
+          `GET ${permissionPath} -> ${permissionResponse.status}: ${await permissionResponse.text()}`,
+        );
+      }
+
+      const originalTools = Array.isArray(originalToolPermission?.tools)
+        ? originalToolPermission.tools
+        : [];
+      const originalDenied = Array.isArray(originalToolPermission?.denied)
+        ? originalToolPermission.denied
+        : [];
+      await putJson(token, permissionPath, {
+        type: "user",
+        tools: [...new Set([...originalTools, "geocode", "show-map"])],
+        denied: originalDenied.filter((name) => name !== "geocode" && name !== "show-map"),
+      });
+      toolPermissionTouched = true;
 
       const skill = await authedApi(token, "/api/skills", {
         method: "POST",
@@ -268,6 +299,18 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       expect(fatalDiagnostics, diagnostics.join("\n")).toEqual([]);
     } finally {
       if (context) await context.close();
+      if (toolPermissionTouched) {
+        const permissionPath = `/api/admin/tool-permissions/${encodeURIComponent(ADMIN_EMAIL)}`;
+        if (originalToolPermission) {
+          await putJson(token, permissionPath, {
+            type: originalToolPermission.type,
+            tools: originalToolPermission.tools || [],
+            denied: originalToolPermission.denied || [],
+          }).catch(() => {});
+        } else {
+          await authedApi(token, permissionPath, { method: "DELETE" }).catch(() => {});
+        }
+      }
       if (sessionCreated) {
         await authedApi(token, `/api/sessions/${SESSION_ID}`, { method: "DELETE" }).catch(() => {});
       }
