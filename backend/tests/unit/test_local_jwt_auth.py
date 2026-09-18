@@ -158,17 +158,22 @@ def test_oidc_mapping_keeps_local_tenant_and_roles_authoritative(monkeypatch: py
     clear_oidc_cache()
 
 
-def test_oidc_external_identity_user_has_no_password_login() -> None:
-    from auth.local_jwt import create_external_identity_user, get_local_user_by_email
+def test_oidc_bootstrap_creates_passwordless_platform_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    from auth.local_jwt import get_local_user_by_email
+    from scripts.seed_selfhost_admin import main
 
-    user = create_external_identity_user(
-        email="external@example.com",
-        tenant_id="tenant-sso",
-        group_tags={"aitana-admin"},
-    )
+    monkeypatch.setenv("AUTH_BACKEND", "oidc")
+    monkeypatch.setenv("OIDC_ISSUER", "https://id.example.com/realms/platform")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "ai-protocol-platform")
+    monkeypatch.setenv("OIDC_REDIRECT_URI", "http://localhost:3456/auth/oidc/callback")
+    monkeypatch.setenv("OIDC_SCOPES", "openid profile email")
+    monkeypatch.setenv("SELFHOST_ADMIN_EMAIL", "external@example.com")
+    monkeypatch.delenv("SELFHOST_ADMIN_PASSWORD", raising=False)
+
+    assert main() == 0
     record = get_local_user_by_email("external@example.com")
 
     assert record is not None
     assert "passwordHash" not in record
-    assert user.tenant_id == "tenant-sso"
+    assert "aitana-admin" in set(record.get("groupTags") or [])
     assert authenticate_credentials("external@example.com", "correct horse battery staple") is None
