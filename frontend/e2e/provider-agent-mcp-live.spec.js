@@ -221,8 +221,14 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await page.goto(`${FRONTEND_URL}/chat/${skillId}?session=${SESSION_ID}`, {
         waitUntil: "domcontentloaded",
       });
-      const composer = page.locator('textarea[placeholder="Message…"]');
+      // The placeholder is intentionally stateful: while skill/backend
+      // readiness settles it shows "Connecting…", then switches to "Message…".
+      // Select the semantic control rather than coupling the acceptance gate to
+      // a transient/localized placeholder, and require it to become interactive
+      // before sending the real model turn.
+      const composer = page.locator("textarea").first();
       await expect(composer).toBeVisible({ timeout: 30_000 });
+      await expect(composer).toBeEnabled({ timeout: 60_000 });
       await composer.fill(
         "Use the map tool to display Munich, Germany. You must call show-map before answering. After the tool succeeds, give me a short confirmation.",
       );
