@@ -167,6 +167,7 @@ jobs:
           build-args: |
             SKIP_QUALITY_CHECKS=true
             NEXT_PUBLIC_LOCAL_MODE=0
+            NEXT_PUBLIC_ENABLE_SKILL_STUDIO=true
             NEXT_PUBLIC_AUTH_MODE=__aip_auth_mode_runtime__
             NEXT_PUBLIC_MCP_SANDBOX_URL=https://mcp-sandbox.runtime.invalid
             NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform

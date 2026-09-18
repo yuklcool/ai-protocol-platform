@@ -157,7 +157,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
           displayName: "Real Provider MCP Acceptance",
           accessControl: { type: "private" },
           skillMetadata: {
-            model: MODEL_ID,
+            model: "smart",
             thinking: "off",
             enableConfirmation: false,
             toolConfigs: { mcp: { servers: [SERVER_ID] } },
@@ -182,6 +182,26 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const diagnostics = [];
       page.on("console", (msg) => diagnostics.push(`[console:${msg.type()}] ${msg.text()}`));
       page.on("pageerror", (err) => diagnostics.push(`[pageerror] ${err.message}`));
+
+      // Prove the product authoring path can discover and persist the dynamic
+      // database-backed model before exercising it in chat. The Skill starts on
+      // a managed tier so this is a real UI selection transition, not merely a
+      // read-only assertion of an API-created model id.
+      await page.goto(`${FRONTEND_URL}/skills/studio/${skillId}`, { waitUntil: "domcontentloaded" });
+      const modelSelect = page.locator(`select:has(option[value="${MODEL_ID}"])`).first();
+      await expect(modelSelect).toBeVisible({ timeout: 30_000 });
+      await expect(modelSelect).toHaveValue("smart");
+      await expect(modelSelect.locator(`option[value="${MODEL_ID}"]`)).toHaveCount(1);
+      await modelSelect.selectOption(MODEL_ID);
+      await expect(modelSelect).toHaveValue(MODEL_ID);
+
+      const saveButton = page.getByRole("button", { name: /^(Save|保存)$/ }).first();
+      await expect(saveButton).toBeEnabled();
+      await saveButton.click();
+      await expect(page.getByText(/^(Saved\.|已保存。)$/)).toBeVisible({ timeout: 30_000 });
+
+      const persistedSkill = await authedApi(token, `/api/skills/${skillId}`);
+      expect(persistedSkill.skillMetadata?.model).toBe(MODEL_ID);
 
       await page.goto(`${FRONTEND_URL}/chat/${skillId}`, { waitUntil: "domcontentloaded" });
       const composer = page.locator('textarea[placeholder="Message…"]');

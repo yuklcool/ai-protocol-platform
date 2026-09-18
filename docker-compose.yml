@@ -131,6 +131,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_LOCAL_MODE: "0"
+        NEXT_PUBLIC_ENABLE_SKILL_STUDIO: "${ENABLE_SKILL_STUDIO:-true}"
         NEXT_PUBLIC_AUTH_MODE: "${AUTH_BACKEND:-local-jwt}"
         NEXT_PUBLIC_BACKEND_URL: "http://localhost:1956"
         NEXT_PUBLIC_MCP_SANDBOX_URL: "${MCP_SANDBOX_PUBLIC_URL:-http://localhost:3457}"
