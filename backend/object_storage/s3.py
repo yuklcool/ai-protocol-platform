@@ -16,7 +16,7 @@ from object_storage.base import ObjectInfo
 from object_storage.local import _validate_key, _validate_tenant_id
 
 _MIN_MULTIPART_CHUNK = 5 * 1024 * 1024
-_NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound", "NoSuchBucket"}
+_NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound"}
 _MAX_PRESIGN_SECONDS = 7 * 24 * 60 * 60
 
 
