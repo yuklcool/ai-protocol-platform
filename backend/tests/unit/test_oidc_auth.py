@@ -32,7 +32,7 @@ def isolated_oidc(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("AUTH_BACKEND", "oidc")
     monkeypatch.setenv("OIDC_ISSUER", "https://idp.example.test")
     monkeypatch.setenv("OIDC_CLIENT_ID", "platform-web")
-    monkeypatch.setenv("OIDC_AUDIENCE", "platform-api")
+    monkeypatch.setenv("OIDC_AUDIENCE", "platform-web")
     monkeypatch.setenv("OIDC_ALLOWED_ALGORITHMS", "HS256")
     monkeypatch.setenv("OIDC_REDIRECT_URI", "https://app.example.test/auth/oidc/callback")
     monkeypatch.setenv("OIDC_SCOPES", "openid profile email")
@@ -59,7 +59,7 @@ def _token(
     payload = {
         "sub": subject,
         "iss": "https://idp.example.test",
-        "aud": "platform-api",
+        "aud": "platform-web",
         "iat": now,
         "exp": now + 300,
         "email": "attacker-controlled@example.net",
@@ -336,7 +336,7 @@ async def test_unknown_kid_refreshes_jwks_once(monkeypatch: pytest.MonkeyPatch) 
         {
             "sub": "external-subject",
             "iss": "https://idp.example.test",
-            "aud": "platform-api",
+            "aud": "platform-web",
             "iat": now,
             "exp": now + 300,
         },
