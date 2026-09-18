@@ -147,6 +147,9 @@ aa65322a1a47dca9e1e8b2910ce3feed43fdb6a1
 
 PR #55 — True no-clone release cold-start gate
 7142371830cb7357b87d00b3c3de8ad698757086
+
+PR #56 — Live persisted A2UI surface browser acceptance
+de974410e13b82523c455b68b3bfb086ac196016
 ```
 
 ---
@@ -482,6 +485,7 @@ Chromium / Playwright
 - **MCP live self-host acceptance（包含 Chromium separate-origin MCP Apps browser acceptance）**
 - Model provider
 - **Model provider Skill Studio live（Compose/PostgreSQL/local-jwt/Chromium 动态模型选择与持久化）**
+- **A2UI live self-host acceptance（真实 Chat route + persisted surface + browser action state + PostgreSQL hard-reload recovery）**
 - Frontend auth tests
 - OIDC Keycloak compatibility（真实 Keycloak discovery/JWKS/signed ID token）
 - Self-host release images（source/release Compose、release image build、runtime frontend config）
@@ -491,7 +495,9 @@ CI 已覆盖大量 Memory/PostgreSQL、no-GCP、local-jwt、Session/Memory/A2UI�
 
 PR #33 已证明真实 `ext-apps` MCP Server 可以经平台 Admin/Registry/Skill Binding/Proxy 完成 MCP 协议与 HTML resource transport；PR #34 已进一步证明 Chromium 中真实 separate-origin sandbox/iframe 能加载该 MCP Apps HTML。
 
-CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secret 时，不得把固定 ToolCall 或 mock model 当成 #10/#11 最终验收。
+PR #56 进一步证明非 LLM 的 A2UI persisted surface/render/action-state/reload 链路真实可用；它刻意不调用 `surface-action-run`，因为该端点会启动真实 Agent/LLM turn。
+
+CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secret 时，不得把固定 ToolCall、seeded A2UI state 或 mock model 当成 #10/#11 及最终 Agent round-trip 验收。
 
 ---
 
@@ -549,11 +555,11 @@ rollback drill
 
 ### 第三优先：其他真实浏览器/产品体验验收
 
-MCP Apps browser rendering 已完成，不要再作为 #11 阻塞项。剩余浏览器方向重点可放在：
+MCP Apps browser rendering 已完成；A2UI persisted surface 渲染、Button action 写回 session state、PostgreSQL reload recovery 也已由 PR #56 完成。剩余浏览器方向重点只放在：
 
-- A2UI surface/action
-- Skill Studio model selection（配合真实 Provider）
-- Chat / AG-UI 完整体验
+- `surface-action-run` → 真实 Agent/LLM round-trip
+- Skill Studio model selection + 实际模型调用
+- Chat / AG-UI 完整真实 Provider 体验
 
 ### 第四优先：发布收口
 
