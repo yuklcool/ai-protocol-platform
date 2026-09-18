@@ -29,7 +29,7 @@ dependencies = [
     # AILANG Parse — deterministic document parsing
     "ailang-parse[gcs]>=0.7.1",
     # MCP
-    "mcp>=1.7.1",
+    "mcp>=1.28.1,<2.0.0",
     # AG-UI protocol bridge (ADK -> AG-UI events over SSE)
     "ag-ui-adk>=0.6.0,<1.0.0",
     # HTTP client
@@ -44,7 +44,7 @@ dependencies = [
     # Utilities
     "rich>=14.0.0",
     "markdown>=3.8",
-    "json-repair>=0.46.2",
+    "json-repair>=0.60.1",
     "tiktoken>=0.11.0",
     "email-validator>=2.0.0",
     "psutil>=7.0.0",
@@ -88,6 +88,27 @@ lint = [
     "ruff>=0.4.6,<1.0.0",
     "ty>=0.0.1a0",
     "codespell>=2.2.0,<3.0.0",
+]
+
+[tool.uv]
+# Security floors for transitive runtime dependencies. These keep routine lock
+# refreshes from reintroducing versions with published HIGH/CRITICAL fixes.
+# Starlette is intentionally not forced above 1.x here because google-adk
+# 1.31.1 currently requires starlette<1; the two remaining Starlette findings
+# are handled by scoped, expiring Trivy exceptions with reachability rationale.
+constraint-dependencies = [
+    "aiohttp>=3.14.3",
+    "cryptography>=50.0.0",
+    "httplib2>=0.32.0",
+    "joserfc>=1.6.8",
+    "litellm>=1.84.0",
+    "mako>=1.3.12",
+    "msgpack>=1.2.1",
+    "pyasn1>=0.6.4",
+    "pyjwt>=2.13.0",
+    "python-multipart>=0.0.30",
+    "sqlparse>=0.6.0",
+    "urllib3>=2.7.0",
 ]
 
 [tool.ruff]
