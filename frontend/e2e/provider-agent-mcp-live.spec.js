@@ -21,6 +21,8 @@ const SESSION_ID = `real-e2e-chat-${RUN_ID}`;
 const UPSTREAM_URL = "http://mcp-example-map:8080/mcp";
 const SESSION_KEY = "aitana:local_jwt_session";
 const FINAL_MARKER = "AGENT-MCP-E2E-PASS";
+const ACTION_RUN_MARKER = "A2UI-ACTION-RUN-E2E-PASS";
+const ACTION_SESSION_ID = `real-e2e-action-${RUN_ID}`;
 
 async function api(path, init = {}) {
   const response = await fetch(`${BACKEND_URL}${path}`, init);
@@ -79,6 +81,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     expect(login.user?.groupTags || []).toContain("aitana-admin");
 
     let skillId = null;
+    let actionSkillId = null;
+    let actionSessionCreated = false;
     let serverCreated = false;
     let modelCreated = false;
     let providerCreated = false;
@@ -305,6 +309,94 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await expect(assistantFinal.last()).toBeVisible({ timeout: 90_000 });
       await expect(assistantFinal.last()).toContainText(/Munich/i);
 
+      // Close the final self-host/A2UI acceptance gap with the real Provider:
+      // a persisted surface action must immediately drive a real Agent/LLM turn
+      // through the production surface-action-run endpoint, without a typed chat
+      // message. This proves the action-triggered path is not only unit-tested.
+      const actionSkill = await authedApi(token, "/api/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: `real-provider-action-${RUN_ID}`,
+          displayName: "Real Provider A2UI Action Acceptance",
+          description: "CI-only real Provider surface-action-run acceptance skill",
+          instructions:
+            `When an interactive UI action triggers this turn, reply with the exact marker ${ACTION_RUN_MARKER} and briefly acknowledge the action name. Do not call tools.`,
+          accessControl: { type: "private" },
+          skillMetadata: {
+            model: MODEL_ID,
+            thinking: "off",
+            enableConfirmation: false,
+            tools: [],
+            subSkills: [],
+            toolConfigs: {
+              a2ui: {
+                allow_surface_context_writes: true,
+                allow_action_triggered_runs: true,
+              },
+            },
+          },
+        }),
+      });
+      actionSkillId = actionSkill.skillId;
+      expect(actionSkillId).toBeTruthy();
+
+      const actionBootstrap = await postJson(token, `/api/sessions/${ACTION_SESSION_ID}/bootstrap`, {
+        skill_id: actionSkillId,
+        document_ids: [],
+      });
+      actionSessionCreated = true;
+      expect(actionBootstrap.session_id).toBe(ACTION_SESSION_ID);
+
+      const actionRunResponse = await fetch(
+        `${BACKEND_URL}/api/skills/${actionSkillId}/sessions/${ACTION_SESSION_ID}/surface-action-run`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            surfaceId: "workspace",
+            action: {
+              name: "accept_real_provider_action",
+              sourceComponentId: "accept-button",
+              context: {
+                marker: "ACTION-TRIGGER-CONTEXT",
+                source: "real-provider-release-gate",
+              },
+            },
+            forwardedProps: {
+              a2ui_surface_state: {
+                workspace: {
+                  status: "ready",
+                },
+              },
+            },
+          }),
+        },
+      );
+      const actionRunBody = await actionRunResponse.text();
+      expect(
+        actionRunResponse.status,
+        `surface-action-run failed: ${actionRunResponse.status} ${actionRunBody}`,
+      ).toBe(200);
+      expect(actionRunResponse.headers.get("content-type") || "").toContain("text/event-stream");
+      expect(actionRunBody).toContain("RUN_STARTED");
+      expect(actionRunBody).toContain(ACTION_RUN_MARKER);
+      expect(actionRunBody).toContain("RUN_FINISHED");
+      expect(actionRunBody).not.toContain("RUN_ERROR");
+
+      const actionState = await authedApi(token, `/api/sessions/${ACTION_SESSION_ID}/state`);
+      expect(actionState["a2ui_surface_context.workspace.lastAction"]).toMatchObject({
+        name: "accept_real_provider_action",
+        sourceComponentId: "accept-button",
+        context: {
+          marker: "ACTION-TRIGGER-CONTEXT",
+          source: "real-provider-release-gate",
+        },
+      });
+
       const fatalDiagnostics = diagnostics.filter((line) =>
         [
           "MODEL_AUTH_FAILED",
@@ -329,6 +421,12 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         } else {
           await authedApi(token, permissionPath, { method: "DELETE" }).catch(() => {});
         }
+      }
+      if (actionSessionCreated) {
+        await authedApi(token, `/api/sessions/${ACTION_SESSION_ID}`, { method: "DELETE" }).catch(() => {});
+      }
+      if (actionSkillId) {
+        await authedApi(token, `/api/skills/${actionSkillId}`, { method: "DELETE" }).catch(() => {});
       }
       if (sessionCreated) {
         await authedApi(token, `/api/sessions/${SESSION_ID}`, { method: "DELETE" }).catch(() => {});
