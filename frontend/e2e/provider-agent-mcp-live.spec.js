@@ -198,7 +198,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const saveButton = page.getByRole("button", { name: /^(Save|保存)$/ }).first();
       await expect(saveButton).toBeEnabled();
       await saveButton.click();
-      await expect(page.getByText(/^(Saved\\.|已保存。)$/)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/^(Saved\.|已保存。)$/)).toBeVisible({ timeout: 30_000 });
 
       const persistedSkill = await authedApi(token, `/api/skills/${skillId}`);
       expect(persistedSkill.skillMetadata?.model).toBe(MODEL_ID);
