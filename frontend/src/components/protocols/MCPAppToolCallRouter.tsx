@@ -393,6 +393,7 @@ function RoutedToolCall({
       data-testid="mcp-app-tool"
       data-tool-name={unprefixedName}
       data-tool-call-id={toolCall.id}
+      data-tool-status={toolCall.status}
     >
       <AppRenderer
         client={client}
