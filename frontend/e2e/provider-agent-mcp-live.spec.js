@@ -17,6 +17,7 @@ const PROVIDER_ID = `real-e2e-${RUN_ID}`;
 const MODEL_ID = `real-e2e-model-${RUN_ID}`;
 // Never overwrite/delete a pre-existing MCP configuration during acceptance.
 const SERVER_ID = `real-e2e-map-${RUN_ID}`;
+const SESSION_ID = `real-e2e-chat-${RUN_ID}`;
 const UPSTREAM_URL = "http://mcp-example-map:8080/mcp";
 const SESSION_KEY = "aitana:local_jwt_session";
 const FINAL_MARKER = "AGENT-MCP-E2E-PASS";
@@ -81,6 +82,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let serverCreated = false;
     let modelCreated = false;
     let providerCreated = false;
+    let sessionCreated = false;
     let context = null;
 
     try {
@@ -203,7 +205,22 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const persistedSkill = await authedApi(token, `/api/skills/${skillId}`);
       expect(persistedSkill.skillMetadata?.model).toBe(MODEL_ID);
 
-      await page.goto(`${FRONTEND_URL}/chat/${skillId}`, { waitUntil: "domcontentloaded" });
+      // Create the real tenant-scoped session explicitly before browser chat.
+      // Fresh-chat UI also bootstraps a session, but doing that asynchronously
+      // while the E2E is switching from Studio to Chat introduced a race where
+      // the page was still in its bootstrap state when the composer assertion
+      // ran. This uses the same production bootstrap endpoint and then exercises
+      // the real resumed Chat route deterministically.
+      const bootstrap = await postJson(token, `/api/sessions/${SESSION_ID}/bootstrap`, {
+        skill_id: skillId,
+        document_ids: [],
+      });
+      sessionCreated = true;
+      expect(bootstrap.session_id).toBe(SESSION_ID);
+
+      await page.goto(`${FRONTEND_URL}/chat/${skillId}?session=${SESSION_ID}`, {
+        waitUntil: "domcontentloaded",
+      });
       const composer = page.locator('textarea[placeholder="Message…"]');
       await expect(composer).toBeVisible({ timeout: 30_000 });
       await composer.fill(
@@ -245,6 +262,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       expect(fatalDiagnostics, diagnostics.join("\n")).toEqual([]);
     } finally {
       if (context) await context.close();
+      if (sessionCreated) {
+        await authedApi(token, `/api/sessions/${SESSION_ID}`, { method: "DELETE" }).catch(() => {});
+      }
       if (skillId) {
         await authedApi(token, `/api/skills/${skillId}`, { method: "DELETE" }).catch(() => {});
       }
