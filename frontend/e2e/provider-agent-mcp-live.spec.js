@@ -63,6 +63,22 @@ function postJson(token, path, body) {
   });
 }
 
+function parseSseDataEvents(body) {
+  return String(body || "")
+    .split(/\n\n+/)
+    .map((chunk) => chunk.trim())
+    .filter((chunk) => chunk.startsWith("data:"))
+    .map((chunk) => {
+      const raw = chunk.slice("data:".length).trim();
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
   test.setTimeout(180_000);
 
@@ -389,10 +405,17 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         `surface-action-run failed: ${actionRunResponse.status} ${actionRunBody}`,
       ).toBe(200);
       expect(actionRunResponse.headers.get("content-type") || "").toContain("text/event-stream");
-      expect(actionRunBody).toContain("RUN_STARTED");
-      expect(actionRunBody).toContain(ACTION_RUN_MARKER);
-      expect(actionRunBody).toContain("RUN_FINISHED");
-      expect(actionRunBody).not.toContain("RUN_ERROR");
+      const actionRunEvents = parseSseDataEvents(actionRunBody);
+      const actionRunTypes = actionRunEvents.map((event) => event.type);
+      const actionRunText = actionRunEvents
+        .filter((event) => event.type === "TEXT_MESSAGE_CONTENT")
+        .map((event) => String(event.delta || ""))
+        .join("");
+
+      expect(actionRunTypes).toContain("RUN_STARTED");
+      expect(actionRunText).toContain(ACTION_RUN_MARKER);
+      expect(actionRunTypes).toContain("RUN_FINISHED");
+      expect(actionRunTypes).not.toContain("RUN_ERROR");
 
       const actionState = await authedApi(token, `/api/sessions/${ACTION_SESSION_ID}/state`);
       expect(actionState["a2ui_surface_context.workspace.lastAction"]).toMatchObject({
