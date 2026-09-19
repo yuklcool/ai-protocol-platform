@@ -29,6 +29,7 @@ import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -254,6 +255,120 @@ class TestHappyPath:
             assert "RUN_STARTED" in types
             assert "RUN_FINISHED" in types
             assert mock_stream.called
+
+    def test_recovers_persisted_final_text_before_run_finished_when_agui_omits_it(self):
+        patches = _patches(
+            [
+                {"type": "RUN_STARTED", "thread_id": "sess-1", "run_id": "r1"},
+                {"type": "RUN_FINISHED", "thread_id": "sess-1", "run_id": "r1"},
+            ]
+        )
+        with (
+            patches[0] as mock_get_index,
+            patches[1] as mock_shared_skill,
+            patches[2] as mock_route_skill,
+            patches[3] as mock_get_svc,
+            patches[4] as mock_resolve,
+            patches[5] as mock_build,
+            patches[6] as _mock_stream,
+        ):
+            mock_get_index.return_value = _make_index()
+            skill = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+            mock_shared_skill.get_skill.return_value = skill
+            mock_route_skill.get_skill.return_value = skill
+
+            final_event = SimpleNamespace(
+                timestamp=10**12,
+                author="action_agent",
+                content=SimpleNamespace(
+                    parts=[SimpleNamespace(text="ACTION-FINAL-TEXT")]
+                ),
+            )
+            session = MagicMock()
+            session.state = {}
+            session.events = [final_event]
+            svc = MagicMock()
+            svc.get_session = AsyncMock(return_value=session)
+            svc.append_event = AsyncMock()
+            mock_get_svc.return_value = svc
+
+            agent = MagicMock()
+            agent.name = "action_agent"
+            mock_resolve.return_value = agent
+            mock_build.return_value = MagicMock()
+
+            resp = _make_client("viewer").post(URL, json=_HAPPY_BODY)
+
+        assert resp.status_code == 200, resp.text
+        events = _parse_sse(resp.text)
+        types = [event.get("type") for event in events]
+        assert types == [
+            "RUN_STARTED",
+            "TEXT_MESSAGE_START",
+            "TEXT_MESSAGE_CONTENT",
+            "TEXT_MESSAGE_END",
+            "RUN_FINISHED",
+        ]
+        assert next(
+            event["delta"]
+            for event in events
+            if event.get("type") == "TEXT_MESSAGE_CONTENT"
+        ) == "ACTION-FINAL-TEXT"
+
+    def test_does_not_recover_or_duplicate_when_agui_already_emits_text(self):
+        patches = _patches(
+            [
+                {"type": "RUN_STARTED", "thread_id": "sess-1", "run_id": "r1"},
+                {
+                    "type": "TEXT_MESSAGE_START",
+                    "messageId": "m1",
+                    "role": "assistant",
+                },
+                {
+                    "type": "TEXT_MESSAGE_CONTENT",
+                    "messageId": "m1",
+                    "delta": "NORMAL-TEXT",
+                },
+                {"type": "TEXT_MESSAGE_END", "messageId": "m1"},
+                {"type": "RUN_FINISHED", "thread_id": "sess-1", "run_id": "r1"},
+            ]
+        )
+        with (
+            patches[0] as mock_get_index,
+            patches[1] as mock_shared_skill,
+            patches[2] as mock_route_skill,
+            patches[3] as mock_get_svc,
+            patches[4] as mock_resolve,
+            patches[5] as mock_build,
+            patches[6] as _mock_stream,
+        ):
+            mock_get_index.return_value = _make_index()
+            skill = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+            mock_shared_skill.get_skill.return_value = skill
+            mock_route_skill.get_skill.return_value = skill
+            svc = _mock_session_service()
+            mock_get_svc.return_value = svc
+            agent = MagicMock()
+            agent.name = "action_agent"
+            mock_resolve.return_value = agent
+            mock_build.return_value = MagicMock()
+
+            resp = _make_client("viewer").post(URL, json=_HAPPY_BODY)
+
+        assert resp.status_code == 200, resp.text
+        events = _parse_sse(resp.text)
+        content_events = [
+            event for event in events if event.get("type") == "TEXT_MESSAGE_CONTENT"
+        ]
+        assert content_events == [
+            {
+                "type": "TEXT_MESSAGE_CONTENT",
+                "messageId": "m1",
+                "delta": "NORMAL-TEXT",
+            }
+        ]
+        # One get_session for the normal state write only; no recovery lookup.
+        assert svc.get_session.await_count == 1
 
     def test_persists_action_write_under_namespaced_key(self):
         patches = _patches()
