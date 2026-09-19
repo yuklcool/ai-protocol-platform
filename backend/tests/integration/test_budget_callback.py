@@ -293,6 +293,39 @@ async def test_record_reconciles_with_actual_cost():
     assert probe.remaining_usd > 99.0  # nearly the whole cap is still available
 
 
+@pytest.mark.asyncio
+async def test_record_applies_cost_multiplier_to_actual_cost():
+    recorded: list[float] = []
+
+    class SpyEnforcer:
+        async def consult(self, request):
+            return BudgetDecision(
+                action="allow",
+                remaining_usd=None,
+                period_end=None,
+                message=None,
+                retry_after_seconds=None,
+            )
+
+        async def record(self, request, actual_cost_usd):
+            recorded.append(actual_cost_usd)
+
+    before, after = make_budget_callbacks(
+        SpyEnforcer(),
+        user=_make_user(),
+        skill_id="expensive-skill",
+        budget_config=BudgetConfig(identity_key="group_id", cost_multiplier=3.0),
+    )
+    ctx = _make_ctx(invocation_id="inv-record-multiplier")
+    req = _make_request(model="gpt-5.6-luna", max_output_tokens=64)
+    await before(ctx, req)
+    await after(ctx, _make_response(prompt_tokens=100, candidates_tokens=100))
+
+    assert len(recorded) == 1
+    # Raw gpt-5.6-luna cost: (100*0.20 + 100*1.20)/1e6 = 0.00014.
+    assert recorded[0] == pytest.approx(0.00042)
+
+
 # ─── No-enforcer-registered + identity edge cases ────────────────────────────
 
 
