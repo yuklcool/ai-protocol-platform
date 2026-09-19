@@ -48,6 +48,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from typing import Any
 
 from ag_ui.core import RunAgentInput, UserMessage
@@ -264,6 +265,52 @@ async def _write_action_to_state(
     )
 
 
+async def _recover_latest_agent_text(
+    session_id: str,
+    user_id: str,
+    *,
+    agent_name: str | None,
+    after_ts: float,
+) -> str | None:
+    """Recover final assistant text persisted by ADK but omitted by AG-UI.
+
+    ag-ui-adk 0.6.x can occasionally persist the final ADK text event while
+    failing to translate it into TEXT_MESSAGE_* events for the SSE consumer.
+    This fallback is scoped to surface-action-run and only considers events
+    written after the current run started, so it cannot replay stale history.
+    """
+    session = await get_session_service().get_session(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    events = getattr(session, "events", None) if session is not None else None
+    if not isinstance(events, (list, tuple)):
+        return None
+
+    for event in reversed(events):
+        timestamp = float(getattr(event, "timestamp", 0) or 0)
+        if timestamp < after_ts:
+            continue
+        author = getattr(event, "author", None)
+        if author == "user":
+            continue
+        if agent_name and author and author != agent_name:
+            continue
+        content = getattr(event, "content", None)
+        parts = getattr(content, "parts", None) if content is not None else None
+        if not parts:
+            continue
+        text = "".join(
+            str(getattr(part, "text", "") or "")
+            for part in parts
+            if getattr(part, "text", None)
+        ).strip()
+        if text:
+            return text
+    return None
+
+
 def _build_run_input(session_id: str, body: SurfaceActionRunRequest) -> RunAgentInput:
     """Synthesize a ``RunAgentInput`` with a single synthetic user turn, the
     action trigger seeded into ``state`` (where ``wrap_with_a2ui_surface_context``
@@ -407,6 +454,11 @@ async def post_surface_action_run(
         run_model_used = ""
 
     async def _sse():
+        # Keep the timestamp immediately before the model run so a compatibility
+        # recovery can never replay text from an older turn in this session.
+        run_started_at = time.time()
+        agent_name = getattr(agent, "name", None)
+
         # Bind a per-request LatencyTracker to THIS generator's async context.
         # The out-of-model A2UI result emitter (make_a2ui_result_emitter) and
         # the drain loop inside stream_agui_events both deliver/read the
@@ -421,8 +473,53 @@ async def post_surface_action_run(
         # stream_agui_events like STAGE_PROGRESS) so the Activity header updates.
         if run_model_used:
             tracker.set_model(run_model_used, "single")
+        saw_text_content = False
         try:
             async for event in stream_agui_events(agui_agent, run_input):
+                event_type = event.get("type") if isinstance(event, dict) else None
+                if event_type == "TEXT_MESSAGE_CONTENT":
+                    saw_text_content = True
+
+                # Compatibility guard for ag-ui-adk 0.6.x: the middleware can
+                # persist the final ADK text event while omitting its
+                # TEXT_MESSAGE_* translation. Before RUN_FINISHED leaves the
+                # wire, recover only this run's latest persisted assistant text.
+                # If upstream already emitted text, this branch is a no-op.
+                if event_type == "RUN_FINISHED" and not saw_text_content:
+                    recovered = await _recover_latest_agent_text(
+                        session_id,
+                        user.uid,
+                        agent_name=agent_name if isinstance(agent_name, str) else None,
+                        after_ts=run_started_at,
+                    )
+                    if recovered:
+                        message_id = f"surface-action-{uuid.uuid4()}"
+                        for recovered_event in (
+                            {
+                                "type": "TEXT_MESSAGE_START",
+                                "messageId": message_id,
+                                "role": "assistant",
+                            },
+                            {
+                                "type": "TEXT_MESSAGE_CONTENT",
+                                "messageId": message_id,
+                                "delta": recovered,
+                            },
+                            {
+                                "type": "TEXT_MESSAGE_END",
+                                "messageId": message_id,
+                            },
+                        ):
+                            yield f"data: {json.dumps(recovered_event)}\n\n"
+                        saw_text_content = True
+                        log.warning(
+                            "surface_action_run: recovered persisted final text omitted by AG-UI "
+                            "uid=%s session=%s skill=%s",
+                            user.uid,
+                            session_id,
+                            skill_id,
+                        )
+
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as exc:
             # Translate any uncaught exception from the streaming pipeline
