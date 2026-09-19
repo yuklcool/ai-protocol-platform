@@ -20,9 +20,9 @@
 
 #1/#2/#3/#4/#5/#6/#7/#8/#10/#11/#12/#13/#14/#16/#17 已关闭。业务 Issue 只剩 #9；#15 是总 Roadmap。
 
-本轮继续 PR #72（尚未合并）：Repository/PostgreSQL 租户预算执行器、启动注册、source/release Compose 配置；修复拒绝请求占用预算、多次模型调用共用账本 ID、流式 partial 提前结束对账，补 PostgreSQL 重建/A-B 隔离测试。预算回调回归原被 GCP 目录规则跳过，现已启用实际运行。本地 39 项预算测试通过；新增 PostgreSQL 用例须由 CI 验证。
+PR #72 已合并（`573e196a8fe48cc2f85181aa2adc7c20a0cbf3d3`）：Repository/PostgreSQL 租户预算执行器、启动注册、source/release Compose 配置；修复拒绝请求占用预算、多次模型调用共用账本 ID、流式 partial 提前结束对账，补 PostgreSQL 重建/A-B 隔离测试。预算回调回归原被 GCP 目录规则跳过，现已启用实际运行。本地 39 项预算测试通过；[Core Runtime CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35417917755) 的 156 项回归与新增真实 PostgreSQL 账本用例均通过。
 
-PR #72 原发布 gate 因 AnyIO 4.13.0 的 CVE-2026-63374 失败；本轮更新到修复版本 4.14.2 并保持 Trivy gate，需新提交 CI 确认。
+PR #72 原发布 gate 因 AnyIO 4.13.0 的 CVE-2026-63374 失败；本轮更新到修复版本 4.14.2 并保持 Trivy gate，[发布镜像 CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35417917786) 已通过，后端 Trivy 阻断解除。提交 `74f78fe` 的 12 个有效 PR workflows 全绿，upstream-sync 工作流按触发条件跳过；其中 Real Provider 工作流仅运行 PR 静态检查，不代表本轮新执行了真实模型验收。
 
 ---
 
@@ -137,7 +137,7 @@ de974410e13b82523c455b68b3bfb086ac196016
 
 ## 5. #9 Tenant / Isolation 状态
 
-#9 的资源隔离与迁移工具已完成。持久化预算执行器正在 PR #72 收口，真实目标部署迁移和 LLM-dependent acceptance 尚未完成。
+#9 的资源隔离与迁移工具已完成。持久化预算执行器已通过 PR #72 合并，真实目标部署迁移和 LLM-dependent acceptance 尚未完成。
 
 ### 已完成的运行时边界
 
@@ -279,7 +279,7 @@ Admin CRUD、scope、secret redaction、Health/Discovery、Skill Binding、Proxy
 ## 8. Issue 总状态
 
 - 已完成并关闭：#1–#8、#10–#14、#16、#17。
-- #9 OPEN：持久化预算 PR #72 收口、真实 Tenant A/B LLM quota/Tool Permission/Model Policy 验收、目标 legacy 数据迁移。
+- #9 OPEN：真实 Tenant A/B LLM quota/Tool Permission/Model Policy 验收、目标 legacy 数据迁移。
 - #15 OPEN：持续同步的总 Roadmap。
 
 ---
@@ -314,7 +314,7 @@ CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secre
 
 ## 10. 下一步执行顺序
 
-1. 完成 PR #72 的预算回归、真实 PostgreSQL 账本恢复与发布镜像 Trivy 验证，检查无阻断后合并。
+1. PR #72 已合并且相关 CI 全绿，预算实现与漏洞修复不再作为待合并项。
 2. 使用已授权的真实 Provider 配置，验证 Tenant A/B 实际调用的预算桶、Tool Permission 与 Model Policy。不能用单租户 Provider gate 或纯账本单测代替。
 3. 目标生产 legacy 数据可用后，按 `docs/tenant-ownership-migration.md` 执行 dry-run → review ambiguous ownership → apply → verify → rollback drill。不要重新实现迁移工具，也不要猜历史 ownership。
 4. 合并后的新代码不等于已进入 v1.0.1；需要发布时创建新版本，不能移动已有 tag 或冻结部署分支。
