@@ -20,6 +20,7 @@ without round-tripping through session state.
 from __future__ import annotations
 
 import logging
+from uuid import uuid4
 from typing import Any
 
 from adk.budget_config import BudgetConfig
@@ -97,6 +98,7 @@ def make_budget_callbacks(
             model_id=_extract_model_id(llm_request),
             projected_cost_usd=projected,
             invocation_id=callback_context.invocation_id,
+            call_id=uuid4().hex,
         )
         decision = await enforcer.consult(consultation)
         pending[callback_context.invocation_id] = consultation
@@ -110,6 +112,8 @@ def make_budget_callbacks(
         return None
 
     async def _after(callback_context: Any, llm_response: Any) -> None:
+        if getattr(llm_response, "partial", False) is True:
+            return
         consultation = pending.pop(callback_context.invocation_id, None)
         if consultation is None:
             return

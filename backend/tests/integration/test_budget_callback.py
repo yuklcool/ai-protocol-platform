@@ -388,3 +388,27 @@ async def test_identity_falls_back_to_uid_when_group_id_missing():
     await before(_make_ctx(), _make_request())
     assert len(captured) == 1
     assert captured[0].identity_value == "alice@org"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_model_calls_get_distinct_budget_call_ids():
+    from unittest.mock import AsyncMock
+    enforcer = MagicMock()
+    enforcer.consult = AsyncMock(return_value=BudgetDecision("allow", 1.0, None, None, None))
+    enforcer.record = AsyncMock()
+    before, after = make_budget_callbacks(
+        enforcer, user=_make_user(), skill_id="loop", budget_config=BudgetConfig(identity_key="group_id"),
+    )
+    ctx = _make_ctx("one-agent-turn")
+    await before(ctx, _make_request())
+    partial = _make_response()
+    partial.partial = True
+    await after(ctx, partial)
+    enforcer.record.assert_not_awaited()
+    await after(ctx, _make_response())
+    await before(ctx, _make_request())
+    await after(ctx, _make_response())
+    calls = [c.args[0] for c in enforcer.consult.await_args_list]
+    assert calls[0].invocation_id == calls[1].invocation_id
+    assert calls[0].call_id != calls[1].call_id
+    assert enforcer.record.await_count == 2

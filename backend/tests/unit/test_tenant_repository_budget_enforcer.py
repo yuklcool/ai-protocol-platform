@@ -55,7 +55,7 @@ async def test_tenant_b_bucket_is_independent_when_tenant_a_reaches_cap() -> Non
     rows_b = repo.query_documents(LEDGER_COLLECTION, filters=[("tenantId", "==", "tenant-b")])
     assert len(rows_a) == 2
     assert len(rows_b) == 1
-    assert sum(float(row["chargedCostUsd"]) for row in rows_a) == pytest.approx(1.10)
+    assert sum(float(row["chargedCostUsd"]) for row in rows_a) == pytest.approx(0.60)
     assert sum(float(row["chargedCostUsd"]) for row in rows_b) == pytest.approx(0.60)
 
 
@@ -120,3 +120,30 @@ async def test_missing_tenant_fails_closed_when_repository_enforcer_is_selected(
     assert decision.action == "block"
     assert decision.remaining_usd == 0.0
     assert "unavailable" in (decision.message or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_blocked_attempt_does_not_consume_remaining_budget():
+    repo = MemoryRepository()
+    _tenant(repo, "tenant-a", cap=1.0)
+    enforcer = TenantRepositoryBudgetEnforcer(repo)
+    rejected = _request("tenant-a", "too-large", 2.0)
+    assert (await enforcer.consult(rejected)).action == "block"
+    await enforcer.record(rejected, 2.0)
+    assert (await enforcer.consult(_request("tenant-a", "small", 0.1))).action == "allow"
+
+
+@pytest.mark.asyncio
+async def test_calls_in_one_turn_have_separate_holds_and_reconcile_independently():
+    from dataclasses import replace
+    repo = MemoryRepository()
+    _tenant(repo, "tenant-a", cap=1.0)
+    enforcer = TenantRepositoryBudgetEnforcer(repo)
+    first = replace(_request("tenant-a", "same-turn", 0.6), call_id="call-1")
+    second = replace(first, call_id="call-2")
+    assert (await enforcer.consult(first)).action == "allow"
+    await enforcer.record(first, 0.5)
+    assert (await enforcer.consult(second)).action == "block"
+    rows = repo.query_documents(LEDGER_COLLECTION)
+    assert len(rows) == 2
+    assert sum(r["chargedCostUsd"] for r in rows) == pytest.approx(0.5)

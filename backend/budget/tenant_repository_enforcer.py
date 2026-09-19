@@ -106,7 +106,7 @@ class TenantRepositoryBudgetEnforcer:
 
     @staticmethod
     def _ledger_id(request: BudgetConsultation, period_key: str) -> str:
-        raw = f"{request.identity_value}\0{period_key}\0{request.invocation_id}".encode()
+        raw = f"{request.identity_value}\0{period_key}\0{request.call_id or request.invocation_id}".encode()
         return hashlib.sha256(raw).hexdigest()
 
     async def consult(self, request: BudgetConsultation) -> BudgetDecision:
@@ -145,7 +145,7 @@ class TenantRepositoryBudgetEnforcer:
         existing = self.repository.get_document(LEDGER_COLLECTION, ledger_id)
         if existing is not None:
             return BudgetDecision(
-                action=str(existing.get("decision") or "allow"),
+                action=str(existing.get("decision") or "block"),
                 remaining_usd=existing.get("remainingUsd"),
                 period_end=str(existing.get("periodEnd") or period_end),
                 message=existing.get("message"),
@@ -162,6 +162,7 @@ class TenantRepositoryBudgetEnforcer:
                 "periodKey": period_key,
                 "period": period,
                 "invocationId": request.invocation_id,
+                "callId": request.call_id or request.invocation_id,
                 "skillId": request.skill_id,
                 "modelId": request.model_id,
                 "projectedCostUsd": request.projected_cost_usd,
@@ -220,6 +221,8 @@ class TenantRepositoryBudgetEnforcer:
             ledger_id,
             {
                 "decision": decision.action,
+                "chargedCostUsd": 0.0 if decision.action == "block" else request.projected_cost_usd,
+                "status": "blocked" if decision.action == "block" else "held",
                 "remainingUsd": decision.remaining_usd,
                 "periodEnd": decision.period_end,
                 "message": decision.message,
@@ -230,13 +233,6 @@ class TenantRepositoryBudgetEnforcer:
         return decision
 
     async def record(self, request: BudgetConsultation, actual_cost_usd: float) -> None:
-        policy = self._tenant_policy(request.identity_value)
-        if policy is None:
-            return
-        cap, _soft_threshold, period = policy
-        if cap <= 0.0:
-            return
-
         # Find the original hold by stable invocation identity rather than
         # recomputing the current period. A call crossing midnight/month-end
         # must reconcile the period in which it was admitted.
@@ -244,11 +240,11 @@ class TenantRepositoryBudgetEnforcer:
             LEDGER_COLLECTION,
             filters=[
                 ("tenantId", "==", request.identity_value),
-                ("invocationId", "==", request.invocation_id),
+                ("callId", "==", request.call_id or request.invocation_id),
             ],
             limit=1,
         )
-        if not matches:
+        if not matches or matches[0].get("decision") == "block":
             return
         ledger_id = str(matches[0].get("__id") or "")
         if not ledger_id:

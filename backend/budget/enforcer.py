@@ -28,8 +28,8 @@ class BudgetConsultation:
     ``User`` field to read.
 
     ``invocation_id`` is the ADK invocation id (one per agent turn).
-    The reference impl uses it to dedupe replay-storms within a short
-    window — a retried turn shouldn't double-charge the budget.
+    ``call_id`` identifies a single model call within that turn. Legacy
+    callers without a call_id retain invocation-based deduplication.
     """
 
     identity_value: str
@@ -37,6 +37,8 @@ class BudgetConsultation:
     model_id: str
     projected_cost_usd: float
     invocation_id: str
+    # Distinguish multiple model calls within one ADK turn.
+    call_id: str | None = None
 
 
 @dataclass(frozen=True)

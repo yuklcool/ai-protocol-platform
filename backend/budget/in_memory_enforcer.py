@@ -88,7 +88,7 @@ class InMemoryBudgetEnforcer:
             now = self.time_provider()
             self._prune_dedup(now)
 
-            cache_key = (request.invocation_id, request.identity_value)
+            cache_key = (request.call_id or request.invocation_id, request.identity_value)
             cached = self._dedup_cache.get(cache_key)
             if cached is not None:
                 cached_decision, _ = cached
@@ -119,7 +119,7 @@ class InMemoryBudgetEnforcer:
         ``block`` (no charge held), do nothing.
         """
         async with self._lock:
-            cache_key = (request.invocation_id, request.identity_value)
+            cache_key = (request.call_id or request.invocation_id, request.identity_value)
             held = self._charged_per_inv.pop(cache_key, None)
             if held is None:
                 # Either blocked (never charged) or unknown invocation.

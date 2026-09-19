@@ -1,47 +1,28 @@
 # ai-protocol-platform 二次开发交接文档
 
-> 仓库：`yuklcool/ai-protocol-platform`  
-> 上游：`sunholo-data/ai-protocol-platform`  
-> 状态更新时间：**2026-09-18**  
-> 当前主线：**基础设施和主要管理面代码已经完成，项目进入真实环境验收与发布收口阶段。#9 已完成 production migration tooling 和真实非 LLM Tenant A/B 自托管隔离验收；#10 剩真实第三方 Provider E2E；#11 已完成真实 MCP 后端/协议以及 Chromium separate-origin MCP Apps 浏览器渲染验收，只剩真实模型驱动 Agent MCP Tool Call。**
+> 仓库：`yuklcool/ai-protocol-platform`
+> 上游：`sunholo-data/ai-protocol-platform`
+> 状态更新时间：**2026-09-19**
+> 当前主线：**真实 Provider / MCP / A2UI action-run 与 v1.0.1 发布已验收；#1/#3/#10/#11/#13 已关闭。当前集中处理 #9 的持久化租户预算、真实租户 LLM 隔离和目标部署迁移。**
 
 ---
 
 ## 1. 当前结论
 
-当前 `main` 已具备：
+基础 Self-host 已完成：PostgreSQL 平台数据 / Session / Memory / A2UI、local JWT、无 GCP 启动、本地文件存储、租户资源隔离、Model/MCP 管理、中文品牌、可选 S3/OIDC、版本化 GHCR 发布。
 
-- PostgreSQL Repository / Persistence
-- PostgreSQL ADK Session + durable Memory
-- PostgreSQL A2UI state reconstruction
-- Local ObjectStorage + Artifact Volume
-- Built-in local JWT
-- 无 GCP 凭证/资源依赖的正式 Self-host 主路径
-- 显式 stable `tenant_id` 与 fail-closed tenant boundary
-- Tenant-aware Session / Document / Folder / Artifact / MCP / Audit / Budget
-- Stable Tenant Tool Permission
-- legacy ownership 可审计迁移 + rollback journal
-- 真实 Compose/PostgreSQL/local-jwt Tenant A/B isolation gate
-- MCP Server Admin API/UI + Health / Discovery + Skill Binding
-- 真实 Self-host MCP Admin → Skill Binding → Proxy → MCP Apps HTML transport gate
-- 真实 Chromium MCP Apps separate-origin sandbox/iframe rendering gate
-- Dynamic Model / Provider registry
-- 多 OpenAI-compatible Provider 独立 `baseUrl / apiKeyRef`
-- Platform Default + `default/smart/fast` tier mapping
-- Tenant Model `allowedModels / defaultModel`
-- Model Provider / Tenant / MCP / Core Runtime / Self-host 专项 CI
+已确认的真实验收：
 
-真实 Provider 验收入口：PR #35 已合并（`8445d6900b8422a203618de2fa8df9322b179561`），增加手动工作流 `Real Provider Agent MCP acceptance`；运行方式见 [docs/real-provider-acceptance.md](docs/real-provider-acceptance.md)。验收资源使用独立随机 ID，避免覆盖已有 MCP 配置。本地语法检查及 Playwright 用例收集通过；提交 `52f189a` 的 PR 语法 CI 与 MCP live self-host acceptance（含 Chromium）均通过，运行记录：[语法 CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523277)、[MCP live CI](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35071523241)。真实模型任务按 PR 触发规则跳过，尚未执行；需要配置 Actions secret `REAL_PROVIDER_API_KEY` 并提供 Base URL / model name。PR CI 通过不能替代真实模型验收。#2 已于 2026-09-18 按 Provider 路由代码侧完成关闭；#10/#11 仍需真实第三方 Provider 与 Agent Tool Calling 最终验收。该脚本通过 API 创建 Skill，Tenant LLM quota/policy 与目标数据迁移仍需独立验收。
+- `https://sub2api.yukl.qzz.io/v1` + `gpt-5.6-luna`，凭证使用已配置的 Actions secret `REAL_PROVIDER_API_KEY`，不重复要求用户提供。
+- Provider / Dynamic Model / Skill Studio / Chat / Agent MCP `geocode`、`show-map` / MCP Apps / A2UI `surface-action-run`：[2026-09-19 全绿运行](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35414266423)。
+- [MCP live 验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35414266384)。
+- [v1.0.1 发布验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/35355685248)：multi-arch、Trivy、匿名 GHCR pull、no-clone cold-start、Release assets。
 
-接下来不要重新实现这些基础能力。当前最高优先级仍是使用真实第三方 Provider 完成模型、Agent、Tool Calling 全链路验收；其次是目标部署 legacy tenant migration。
+#1/#2/#3/#4/#5/#6/#7/#8/#10/#11/#12/#13/#14/#16/#17 已关闭。业务 Issue 只剩 #9；#15 是总 Roadmap。
 
-2026-09-18 continuation: PR #54 已合并（`aa65322a1a47dca9e1e8b2910ce3feed43fdb6a1`），新增独立 `model-provider-studio-live` CI：使用真实 Compose/PostgreSQL/local-jwt/frontend/Chromium，但不访问外部模型。Gate 在数据库创建临时 OpenAI-compatible Provider + Dynamic Model，验证 authenticated `/api/models` effective registry，然后在真实 Skill Studio 中确认模型出现、从 `smart` 切换并保存，API 回读和页面 reload 均保持该 model id，最后清理临时资源。Model Provider gate 也开始对 Skill Studio 相关源码变更触发。该 Gate 证明管理面/产品 UI 链路，但**不能替代**带真实 endpoint/secret 的 Agent/Tool Calling 最终验收。
+本轮继续 PR #72（尚未合并）：Repository/PostgreSQL 租户预算执行器、启动注册、source/release Compose 配置；修复拒绝请求占用预算、多次模型调用共用账本 ID、流式 partial 提前结束对账，补 PostgreSQL 重建/A-B 隔离测试。预算回调回归原被 GCP 目录规则跳过，现已启用实际运行。本地 39 项预算测试通过；新增 PostgreSQL 用例须由 CI 验证。
 
-2026-09-18 continuation: Self-host 的 source Compose 现在默认以 `ENABLE_SKILL_STUDIO=true` 编译 frontend，release frontend image 也固定启用 Skill Studio。真实 Provider Playwright 验收已扩展为：先通过 API 注册 Provider/动态模型，再在真实 Skill Studio 浏览器页面确认该动态模型可见、从 managed tier 切换到该模型并保存，随后重新读取 Skill metadata 确认持久化，最后才进入 Chat 驱动真实 Agent -> MCP Tool Calling。这样 #10 的“Skill Studio model selection”不再是验收空白；#2 已按 Provider 路由代码侧完成关闭，最终关闭 #10/#11 仍必须实际运行带真实 endpoint/secret 的 workflow。
-
-2026-09-18 continuation: PR #55 已合并（`7142371830cb7357b87d00b3c3de8ad698757086`），#13 release pipeline 新增严格稳定 `vX.Y.Z` tag 校验、anonymous GHCR pull 后的 true no-clone cold-start gate，以及 exact-tag pinned release env asset。Cold-start job 不 checkout 仓库，只在全新临时目录下载 tagged `docker-compose.release.yml` + env，通过无凭据 Docker config 拉取公开 GHCR 镜像，启动 PostgreSQL/backend/frontend/MCP sandbox，并验证 health 与 local-jwt 管理员登录。PR CI 的 Self-host baseline / Self-host release images 已全绿；tag-only anonymous pull / multi-arch / SBOM/provenance / Trivy / cold-start 仍需首次真实 tag 执行后才能关闭 #13。
-
-2026-09-18 continuation: #16 S3-compatible ObjectStorage 已通过 PR #47 合并到 main。由于当前会话没有可用于 #10/#11 最终验收的真实第三方模型 endpoint/secret，本轮开始推进不依赖外部模型密钥的 #17 OIDC optional extension。第一阶段 PR #49 已合并到 main（merge SHA `5298f17bf73d4b1511f2f009b61cd5127489491c`），完成 OIDC discovery/JWKS bearer verification、issuer/audience/expiry/algorithm 校验、显式 issuer+sub -> local auth_users 映射、server-authoritative tenant/role 重载、provider capability/status API、subject-link CLI 与认证 CI。第二阶段 PR #50 已合并到 main（merge SHA `d9666c0b8dd787986b6e5e033a94314bbc6cdac4`），完成 Authorization Code + PKCE、server-side state/nonce/verifier、one-time state consumption、nonce verification、frontend callback/session/sign-out、运行时 release-image auth mode 与浏览器 OIDC 测试。第三阶段 PR #51 已合并到 main（merge SHA `11850326aaa31d2a92f03f876942bc5a92d16c48`），增加 opt-in Keycloak 26.7.4 realm/Compose、真实 Keycloak discovery/JWKS/signed-ID-token compatibility gate，以及 Entra ID / Okta 配置示例。真实 Keycloak gate 已通过；#17 已于 2026-09-18 按 completed 关闭。生产企业 IdP 仍需部署方提供真实租户/client 配置和 subject mapping，但平台代码侧不再存在 OIDC 缺口。
+PR #72 原发布 gate 因 AnyIO 4.13.0 的 CVE-2026-63374 失败；本轮更新到修复版本 4.14.2 并保持 Trivy gate，需新提交 CI 确认。
 
 ---
 
@@ -156,7 +137,7 @@ de974410e13b82523c455b68b3bfb086ac196016
 
 ## 5. #9 Tenant / Isolation 状态
 
-#9 的代码侧已经收口，Issue 保持 OPEN 只因为真实目标部署迁移和 LLM-dependent acceptance 尚未完成。
+#9 的资源隔离与迁移工具已完成。持久化预算执行器正在 PR #72 收口，真实目标部署迁移和 LLM-dependent acceptance 尚未完成。
 
 ### 已完成的运行时边界
 
@@ -281,195 +262,25 @@ Docker Compose
 
 ---
 
-## 6. #10 Model Provider 状态
+## 6. #10 Model Provider 已完成
 
-代码侧已完成：
+Provider/Model CRUD、secret reference、探测、effective registry、独立 Provider 路由、默认模型/tier、Tenant model policy、Skill Studio 选择保存及真实 Agent Tool Calling 均已完成。Issue 已关闭。
 
-- Provider CRUD
-- Dynamic Model CRUD
-- `${ENV_VAR}` Secret Reference
-- Provider connectivity
-- completion probe
-- Tool Calling probe
-- database overlay + YAML baseline
-- Agent runtime Provider routing
-- 多 Provider 独立 Base URL / Secret
-- Platform default model
-- `default/smart/fast` managed tier
-- Tenant `allowedModels/defaultModel`
-- authenticated `/api/models` filter
-- primary/fallback runtime policy enforcement
-
-#10 不应再开发第二套 Provider 系统。
-
-### #10 当前唯一关键缺口
-
-使用一个真实的非 OpenAI、OpenAI-compatible endpoint 完成：
-
-```text
-Provider Test
-   ↓
-Dynamic Model
-   ↓
-Completion Probe
-   ↓
-Tool Calling Probe
-   ↓
-Skill Studio model selection
-   ↓
-Agent conversation
-   ↓
-Actual Tool Calling
-```
-
-没有真实 endpoint / secret 时，不得用 mock 关闭 #10。
+运行入口与配置见 [真实 Provider 验收说明](docs/real-provider-acceptance.md)。不要重复实现 Provider 系统或把已经完成的真实验收列为缺口。
 
 ---
 
-## 7. #11 MCP Server 管理状态
+## 7. #11 MCP Server 管理已完成
 
-除真实模型驱动 Tool Calling 外，MCP 管理、协议和浏览器渲染链路已经完成。
-
-已有：
-
-- MCP Server CRUD
-- Platform / Tenant scope
-- HTTP / SSE / Streamable HTTP
-- local/Docker network URL
-- Secret Reference / redaction
-- Health / real `initialize`
-- Discovery: `tools/list` / `resources/list` / `prompts/list`
-- MCP Apps resource URI summary
-- Admin UI
-- Skill Binding
-- disabled fail-closed
-- Self-host MCP example
-- `docs/selfhost-mcp-server.md`
-
-### PR #33：真实 Self-host MCP Protocol Acceptance
-
-真实验收路径已经通过：
-
-```text
-local-jwt login
-  ↓
-/api/skills 创建 private Skill
-  ↓
-/api/admin/mcp-servers 注册真实 Docker-network MCP Server
-  ↓
-Admin Health -> real initialize
-  ↓
-Admin Discovery -> map tool + ui:// resource
-  ↓
-未绑定 Skill：/mcp/{server_id} -> 403
-  ↓
-普通 Skill API 绑定 MCP server
-  ↓
-Python MCP SDK 经平台 /mcp Proxy
-  ↓
-initialize
-  ↓
-tools/list
-  ↓
-resources/list / resources/read
-  ↓
-真实 ui:// 非空 text/html MCP Apps 资源
-  ↓
-Disable Server
-  ↓
-Admin Health 仍可诊断；Runtime Proxy -> 404
-```
-
-首轮 live gate 发现测试夹具 Skill name 不符合真实 lowercase kebab-case 约束，修正夹具后完整链路全绿；没有降低业务校验。
-
-### PR #34：真实 Chromium MCP Apps Browser Acceptance
-
-PR #34 没有新造一套 Host，而是复用现有产品链路：
-
-```text
-MessageBubble
-  ↓
-MCPAppToolCallRouter
-  ↓
-@mcp-ui/client AppRenderer
-  ↓
-Browser MCP Client
-  ↓
-Authenticated platform /mcp Proxy
-  ↓
-真实 ext-apps map MCP Server
-  ↓
-listTools + resources/read
-  ↓
-ui://cesium-map/mcp-app.html
-  ↓
-Host :3456
-  ↓
-Separate-origin sandbox :3457
-  ↓
-Inner MCP App iframe
-```
-
-CI 使用真实 Compose：
-
-```text
-PostgreSQL
-Backend / local-jwt
-Frontend :3456
-MCP sandbox :3457
-upstream ext-apps map MCP Server
-Chromium / Playwright
-```
-
-已确认：
-
-- real local-jwt browser session
-- MCP Admin register / Health / Discovery
-- Skill Binding
-- 浏览器 MCP Client 经平台 authenticated Proxy 连接真实 MCP server
-- `show-map` tool definition 可发现
-- 真实 `ui://` HTML resource 可读取
-- Host origin = `http://localhost:3456`
-- Sandbox origin = `http://localhost:3457`
-- Sandbox 创建 inner iframe
-- 真实 MCP App HTML 写入 inner iframe 并可被 Chromium 观察到
-- 无 sandbox ready timeout / origin rejection / listTools / readResource fatal error
-
-该 Gate 只把“LLM 产生 ToolCall”这一环固定为确定性 ToolCall fixture；MCP Client、Proxy、MCP server、resource transport、sandbox 与浏览器渲染全部是真实链路。因此它不能代替真实 Provider Tool Calling，但已经足以关闭“浏览器 MCP Apps iframe/sandbox 是否真实工作”的疑问。
-
-### #11 真正剩余
-
-只剩：
-
-1. **真实 Provider 驱动 Agent MCP Tool Call**：模型必须真正选择并执行绑定 MCP Tool，不能用 mock model / 固定 ToolCall fixture 替代。
-
-不要再重复实现或验收 Admin register / Health / Discovery / Binding / Proxy / Apps resource transport / browser sandbox rendering；PR #33 + #34 已覆盖。
+Admin CRUD、scope、secret redaction、Health/Discovery、Skill Binding、Proxy、Apps HTML transport、独立 origin 浏览器渲染以及真实模型驱动 Tool Calling 均已验证，Issue 已关闭。PR #33/#34 提供协议及浏览器基线；2026-09-19 的真实 Provider gate 已覆盖完整 Agent 链路。
 
 ---
 
 ## 8. Issue 总状态
 
-已关闭/完成基础能力：
-
-- #4 PostgreSQL Persistence ✅
-- #5 Session / Memory / A2UI reconstruction ✅
-- #6 ObjectStorage / Artifact ✅
-- #7 Built-in JWT ✅
-- #8 GCP optionalization ✅
-- #12 中文国际化 / Branding ✅
-- #14 Upstream sync strategy ✅
-- #16 S3-compatible ObjectStorage ✅
-- #17 OIDC IdentityProvider + Keycloak compatibility ✅
-- #2 OpenAI-compatible Provider routing ✅
-
-保持 OPEN、等待最终真实验收：
-
-- #1 Self-host 全链路
-- #3 Docker Compose
-- #9 target migration + quota/Tool Calling final acceptance
-- #10 real Provider E2E
-- #11 real Agent MCP Tool Call
-- #13 首次真实稳定 release tag / GHCR / multi-arch / SBOM/Trivy / tag-only no-clone cold-start acceptance
+- 已完成并关闭：#1–#8、#10–#14、#16、#17。
+- #9 OPEN：持久化预算 PR #72 收口、真实 Tenant A/B LLM quota/Tool Permission/Model Policy 验收、目标 legacy 数据迁移。
+- #15 OPEN：持续同步的总 Roadmap。
 
 ---
 
@@ -503,73 +314,12 @@ CI 仍不得冒充真实外部 Provider。没有真实第三方 endpoint / secre
 
 ## 10. 下一步执行顺序
 
-### 第一优先：#10 / #11 真实 Provider E2E
+1. 完成 PR #72 的预算回归、真实 PostgreSQL 账本恢复与发布镜像 Trivy 验证，检查无阻断后合并。
+2. 使用已授权的真实 Provider 配置，验证 Tenant A/B 实际调用的预算桶、Tool Permission 与 Model Policy。不能用单租户 Provider gate 或纯账本单测代替。
+3. 目标生产 legacy 数据可用后，按 `docs/tenant-ownership-migration.md` 执行 dry-run → review ambiguous ownership → apply → verify → rollback drill。不要重新实现迁移工具，也不要猜历史 ownership。
+4. 合并后的新代码不等于已进入 v1.0.1；需要发布时创建新版本，不能移动已有 tag 或冻结部署分支。
 
-有真实 endpoint + secret 时直接做：
-
-```text
-Provider
-  ↓
-Dynamic Model
-  ↓
-Completion Probe
-  ↓
-Tool Calling Probe
-  ↓
-Skill Studio model selection
-  ↓
-Agent Conversation
-  ↓
-模型真实选择 MCP Tool
-  ↓
-真实 MCP Server
-  ↓
-Tool result
-  ↓
-Agent final response
-```
-
-这一轮可以同时收口：
-
-- #10 real Provider E2E
-- #11 real Agent MCP Tool Call
-- #9 Tenant quota / Tool Permission / Model Policy 的 LLM-dependent final acceptance
-
-### 第二优先：#9 目标部署 legacy migration
-
-需要真实现存 legacy 数据，代码已经准备好；不要重新写 migration tooling。
-
-执行顺序：
-
-```text
-dry-run
-  ↓
-人工 review mapping / ambiguous ownership
-  ↓
-apply
-  ↓
-verify
-  ↓
-rollback drill
-```
-
-### 第三优先：其他真实浏览器/产品体验验收
-
-MCP Apps browser rendering 已完成；A2UI persisted surface 渲染、Button action 写回 session state、PostgreSQL reload recovery 也已由 PR #56 完成。剩余浏览器方向重点只放在：
-
-- `surface-action-run` → 真实 Agent/LLM round-trip
-- Skill Studio model selection + 实际模型调用
-- Chat / AG-UI 完整真实 Provider 体验
-
-### 第四优先：发布收口
-
-#12 / #14 / #16 / #17 已完成并关闭。当前发布方向只剩 #13：
-
-- 创建首个真实稳定 `vX.Y.Z` release tag
-- 验证 GHCR package public visibility / anonymous pull / semver / latest / sha tags
-- 验证 multi-arch / SBOM / provenance / Trivy
-- 验证 GitHub Release assets 中 env 已固定 exact tag
-- 由 PR #55 的 tag-only gate 在全新目录自动完成 no-clone cold-start + local-jwt 登录
+预算执行器为显式 opt-in：`BUDGET_ENFORCER=tenant-repository`。Tenant quota 设置 `llmBudgetUsd` / `llmBudgetPeriod` / `llmBudgetSoftThreshold`；Skill 同时配置 budget identity `tenant_id` 与 missing identity `block`。缺少 Skill budget 配置或 exempt Skill 仍按现有协议跳过，不能宣称这是所有 Skill 强制执行的平台额度。未知模型的定价、预估费用与真实账单偏差也须在 LLM 验收时确认。
 
 ---
 
