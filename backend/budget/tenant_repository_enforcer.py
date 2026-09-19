@@ -237,10 +237,21 @@ class TenantRepositoryBudgetEnforcer:
         if cap <= 0.0:
             return
 
-        period_key = self._period_key(time.time(), period)
-        ledger_id = self._ledger_id(request, period_key)
-        existing = self.repository.get_document(LEDGER_COLLECTION, ledger_id)
-        if existing is None:
+        # Find the original hold by stable invocation identity rather than
+        # recomputing the current period. A call crossing midnight/month-end
+        # must reconcile the period in which it was admitted.
+        matches = self.repository.query_documents(
+            LEDGER_COLLECTION,
+            filters=[
+                ("tenantId", "==", request.identity_value),
+                ("invocationId", "==", request.invocation_id),
+            ],
+            limit=1,
+        )
+        if not matches:
+            return
+        ledger_id = str(matches[0].get("__id") or "")
+        if not ledger_id:
             return
 
         self.repository.update_document(
