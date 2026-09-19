@@ -22,6 +22,9 @@ import pytest
 def _require_live_gcp(request):
     # PostgreSQL self-host tests need DATABASE_URL, not live cloud credentials.
     # Each module checks its own database prerequisites.
+    if request.node.path.name == "test_budget_callback.py":
+        # Pure callback tests use fake model responses and no external service.
+        return
     if request.node.path.name.startswith("test_postgres_"):
         return
     if os.environ.get("RUN_LIVE_GCP") == "1":

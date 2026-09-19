@@ -8,6 +8,7 @@ on:
       - backend/adk/**
       - backend/channels/**
       - backend/buckets/**
+      - backend/budget/**
       - backend/rag/**
       - backend/skills/**
       - backend/protocols/**
@@ -16,6 +17,11 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_tools_registry.py
       - backend/tests/unit/test_rag_corpus.py
+      - backend/tests/unit/test_budget_bootstrap.py
+      - backend/tests/unit/test_tenant_repository_budget_enforcer.py
+      - backend/tests/integration/test_budget_callback.py
+      - backend/tests/integration/test_postgres_tenant_budget.py
+      - backend/tests/integration/conftest.py
       - backend/tests/api_tests/test_tools_route.py
       - backend/tests/api_tests/test_admin_tenants.py
       - backend/tests/api_tests/test_admin_prewarm.py
@@ -28,6 +34,7 @@ on:
       - backend/adk/**
       - backend/channels/**
       - backend/buckets/**
+      - backend/budget/**
       - backend/rag/**
       - backend/skills/**
       - backend/protocols/**
@@ -36,6 +43,11 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/unit/test_tools_registry.py
       - backend/tests/unit/test_rag_corpus.py
+      - backend/tests/unit/test_budget_bootstrap.py
+      - backend/tests/unit/test_tenant_repository_budget_enforcer.py
+      - backend/tests/integration/test_budget_callback.py
+      - backend/tests/integration/test_postgres_tenant_budget.py
+      - backend/tests/integration/conftest.py
       - backend/tests/api_tests/test_tools_route.py
       - backend/tests/api_tests/test_admin_tenants.py
       - backend/tests/api_tests/test_admin_prewarm.py
@@ -108,11 +120,24 @@ jobs:
               tests/persistence_tests \
               tests/unit/test_tools_registry.py \
               tests/unit/test_rag_corpus.py \
+              tests/unit/test_budget_enforcer.py \
+              tests/unit/test_budget_bootstrap.py \
+              tests/unit/test_tenant_repository_budget_enforcer.py \
+              tests/integration/test_budget_callback.py \
               tests/api_tests/test_tools_route.py \
               tests/api_tests/test_admin_tenants.py \
               tests/api_tests/test_admin_prewarm.py \
               tests/api_tests/test_buckets.py \
               tests/api_tests/test_folders.py
+
+      - name: Verify tenant budget ledger against PostgreSQL
+        run: |
+          docker compose up -d --wait postgres
+          docker compose run --rm --no-deps \
+            -e DATA_BACKEND=postgres \
+            -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run pytest -q tests/integration/test_postgres_tenant_budget.py
 
       - name: Verify migrated runtime domains against PostgreSQL
         run: |

@@ -58,6 +58,13 @@ if not is_local_mode():
 _log = logging.getLogger(__name__)
 _log.info("logging configured at %s", _log_level)
 
+# Self-host budget enforcement is explicit opt-in. The historical default
+# remains disabled; forks may still register their own BudgetEnforcer.
+from budget.bootstrap import configure_budget_enforcer_from_env  # noqa: E402
+
+_budget_enforcer_mode = configure_budget_enforcer_from_env()
+_log.info("budget enforcer: %s", _budget_enforcer_mode)
+
 # Startup guard (v6.19.0, AIPLA #42): refuse to boot on a provably-wrong GCP
 # project rather than logging a warning and carrying on. The old guard compared
 # against a hardcoded brand prefix and was warn-only — it fired on every

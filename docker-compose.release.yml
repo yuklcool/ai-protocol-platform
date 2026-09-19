@@ -40,6 +40,7 @@ services:
       LOCAL_MODE: "0"
       DATA_BACKEND: "${DATA_BACKEND:-postgres}"
       SESSION_BACKEND: "${SESSION_BACKEND:-postgres}"
+      BUDGET_ENFORCER: "${BUDGET_ENFORCER:-off}"
       MEMORY_BACKEND: "${MEMORY_BACKEND:-postgres}"
       DATABASE_URL: "${DATABASE_URL:-postgresql://aip:aip-local-change-me@postgres:5432/aip}"
       POSTGRES_POOL_MIN_SIZE: "${POSTGRES_POOL_MIN_SIZE:-1}"

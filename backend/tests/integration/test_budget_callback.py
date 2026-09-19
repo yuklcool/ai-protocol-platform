@@ -293,6 +293,39 @@ async def test_record_reconciles_with_actual_cost():
     assert probe.remaining_usd > 99.0  # nearly the whole cap is still available
 
 
+@pytest.mark.asyncio
+async def test_record_applies_cost_multiplier_to_actual_cost():
+    recorded: list[float] = []
+
+    class SpyEnforcer:
+        async def consult(self, request):
+            return BudgetDecision(
+                action="allow",
+                remaining_usd=None,
+                period_end=None,
+                message=None,
+                retry_after_seconds=None,
+            )
+
+        async def record(self, request, actual_cost_usd):
+            recorded.append(actual_cost_usd)
+
+    before, after = make_budget_callbacks(
+        SpyEnforcer(),
+        user=_make_user(),
+        skill_id="expensive-skill",
+        budget_config=BudgetConfig(identity_key="group_id", cost_multiplier=3.0),
+    )
+    ctx = _make_ctx(invocation_id="inv-record-multiplier")
+    req = _make_request(model="gpt-5.6-luna", max_output_tokens=64)
+    await before(ctx, req)
+    await after(ctx, _make_response(prompt_tokens=100, candidates_tokens=100))
+
+    assert len(recorded) == 1
+    # Raw gpt-5.6-luna cost: (100*0.20 + 100*1.20)/1e6 = 0.00014.
+    assert recorded[0] == pytest.approx(0.00042)
+
+
 # ─── No-enforcer-registered + identity edge cases ────────────────────────────
 
 
@@ -355,3 +388,27 @@ async def test_identity_falls_back_to_uid_when_group_id_missing():
     await before(_make_ctx(), _make_request())
     assert len(captured) == 1
     assert captured[0].identity_value == "alice@org"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_model_calls_get_distinct_budget_call_ids():
+    from unittest.mock import AsyncMock
+    enforcer = MagicMock()
+    enforcer.consult = AsyncMock(return_value=BudgetDecision("allow", 1.0, None, None, None))
+    enforcer.record = AsyncMock()
+    before, after = make_budget_callbacks(
+        enforcer, user=_make_user(), skill_id="loop", budget_config=BudgetConfig(identity_key="group_id"),
+    )
+    ctx = _make_ctx("one-agent-turn")
+    await before(ctx, _make_request())
+    partial = _make_response()
+    partial.partial = True
+    await after(ctx, partial)
+    enforcer.record.assert_not_awaited()
+    await after(ctx, _make_response())
+    await before(ctx, _make_request())
+    await after(ctx, _make_response())
+    calls = [c.args[0] for c in enforcer.consult.await_args_list]
+    assert calls[0].invocation_id == calls[1].invocation_id
+    assert calls[0].call_id != calls[1].call_id
+    assert enforcer.record.await_count == 2
