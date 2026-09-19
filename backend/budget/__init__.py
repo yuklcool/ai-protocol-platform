@@ -19,6 +19,7 @@ from budget.enforcer import (
     register_budget_enforcer,
 )
 from budget.in_memory_enforcer import InMemoryBudgetEnforcer
+from budget.tenant_repository_enforcer import TenantRepositoryBudgetEnforcer
 
 __all__ = [
     "BudgetConsultation",
@@ -26,6 +27,7 @@ __all__ = [
     "BudgetEnforcer",
     "BudgetExceededError",
     "InMemoryBudgetEnforcer",
+    "TenantRepositoryBudgetEnforcer",
     "clear_registered_enforcer",
     "get_registered_enforcer",
     "register_budget_enforcer",
