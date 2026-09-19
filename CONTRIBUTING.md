@@ -13,11 +13,11 @@ forks.
 - **First time here?** Start with [WORKSHOP.md](WORKSHOP.md) — clone,
   `LOCAL_MODE=1`, `make dev`, chat in under 30 minutes.
 - **Architecture:** [docs/design/v6.1.0/SEQUENCE.md](docs/design/v6.1.0/SEQUENCE.md)
-- **Protocol talk:** [docs/talks/ai-ui-protocol-stack.md](docs/talks/ai-ui-protocol-stack.md)
+- **Protocol talk:** [docs/talks/ai-ui-protocol-stack.md](docs/talks/ai-ui-protocol-stack.md)\n- **Development planning:** [docs/development-planning.md](docs/development-planning.md)
 
 ## Reporting bugs
 
-Open an issue on [GitHub Issues](https://github.com/sunholo-data/ai-protocol-platform/issues).
+Open an issue on [GitHub Issues](https://github.com/yuklcool/ai-protocol-platform/issues). Use the Bug template for reproducible defects.
 Helpful template:
 
 - **What you ran:** `make dev`, `LOCAL_MODE=1`, OS, Node + Python versions
