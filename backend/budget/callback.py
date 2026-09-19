@@ -116,7 +116,13 @@ def make_budget_callbacks(
         actual_cost = _extract_actual_cost(llm_response, consultation.model_id)
         if actual_cost is None:
             return
-        await enforcer.record(consultation, actual_cost_usd=actual_cost)
+        # Reconcile on the same accounting basis used for the projected hold.
+        # Without the multiplier here, a 3x skill would reserve 3x before the
+        # call and then refund back to raw 1x actual spend afterwards.
+        await enforcer.record(
+            consultation,
+            actual_cost_usd=actual_cost * budget_config.cost_multiplier,
+        )
 
     return _before, _after
 
