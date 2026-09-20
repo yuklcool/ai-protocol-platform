@@ -4,6 +4,23 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 export type TranslationParams = Record<string, string | number>;
 
 const en = {
+  "agents.breadcrumb": "Agents",
+  "agents.title": "Agent workspace",
+  "agents.heading": "Your agents",
+  "agents.description": "Create, configure and test the AI agents available to your team.",
+  "agents.count": "{count} agents",
+  "agents.create": "Create agent",
+  "agents.noDescription": "No description yet",
+  "agents.tools": "tools",
+  "agents.category.default": "assistant",
+  "agents.status.active": "Active",
+  "agents.emptyTitle": "Create your first agent",
+  "agents.emptyDescription": "An agent combines a model, instructions and capabilities into one usable workspace.",
+  "agents.nav.overview": "Overview",
+  "agents.nav.agents": "Agents",
+  "agents.nav.resources": "Resources",
+  "agents.nav.mcp": "MCP Servers",
+  "agents.nav.settings": "Administration",
   "language.label": "Language",
   "language.zhCN": "简体中文",
   "language.en": "English",
@@ -115,6 +132,23 @@ const en = {
 export type TranslationKey = keyof typeof en;
 
 const zhCN = {
+  "agents.breadcrumb": "智能体",
+  "agents.title": "智能体工作台",
+  "agents.heading": "我的智能体",
+  "agents.description": "创建、配置和测试团队可使用的 AI 智能体。",
+  "agents.count": "共 {count} 个智能体",
+  "agents.create": "创建智能体",
+  "agents.noDescription": "暂未填写描述",
+  "agents.tools": "个工具",
+  "agents.category.default": "助手",
+  "agents.status.active": "运行中",
+  "agents.emptyTitle": "创建第一个智能体",
+  "agents.emptyDescription": "智能体将模型、指令和能力组合成一个可以直接使用的工作空间。",
+  "agents.nav.overview": "概览",
+  "agents.nav.agents": "智能体",
+  "agents.nav.resources": "资源",
+  "agents.nav.mcp": "MCP 服务",
+  "agents.nav.settings": "管理中心",
   "language.label": "语言",
   "language.zhCN": "简体中文",
   "language.en": "English",
@@ -252,3 +286,4 @@ export function translate(
     return value === undefined ? match : String(value);
   });
 }
+

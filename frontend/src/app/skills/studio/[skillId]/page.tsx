@@ -18,6 +18,7 @@ import {
   threadStorageKey,
 } from "@/components/studio/AuthoringCopilot";
 import { StudioBuilderForm } from "@/components/studio/StudioBuilderForm";
+import { AgentStudioShell } from "@/components/agent/AgentStudioShell";
 import {
   applyProposal,
   type Proposal,
@@ -26,6 +27,7 @@ import {
 import type { Skill } from "@/types/skill";
 import { randomGlyphAvatar } from "@/lib/defaultAvatars";
 import { translateSkillStudio } from "@/lib/i18n/skillStudio";
+import { skillHref } from "@/components/navigation/skillHref";
 
 const STUDIO_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SKILL_STUDIO === "true";
 
@@ -213,75 +215,37 @@ function StudioInner({ skillId }: { skillId: string }) {
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h1 className="text-lg font-semibold">{isNew ? t("studio.newSkill") : t("studio.editSkill")}</h1>
-          <p className="text-xs text-muted-foreground">
-            {draft.displayName || draft.name || t("studio.untitled")}
-          </p>
+    <AgentStudioShell
+      draft={draft}
+      isNew={isNew}
+      isDirty={isDirty}
+      isSaving={saveState.status === "saving" || forking}
+      onSave={() => void handleSave()}
+      onCancel={handleCancel}
+      onOpenChat={() => router.push(skillHref({ skillId: draft.skillId ?? skillId, slug: null, ownerId: draft.ownerId ?? "" }))}
+    >
+      {isPlatformOwned && (
+        <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+          {t("studio.platformSkillPrefix")} {" "}
+          <span className="font-medium text-foreground">{t("studio.platformSkill")}</span>. {" "}
+          {t("studio.platformSkillSuffix")}
         </div>
-        <div className="flex items-center gap-3">
-          {saveState.status === "ok" && <span className="text-xs text-green-700">{saveState.message}</span>}
-          {saveState.status === "error" && (
-            <span className="max-w-md truncate text-xs text-destructive">{saveState.message}</span>
-          )}
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={saveState.status === "saving" || forking}
-            className="rounded-md border px-4 py-2 text-sm disabled:opacity-50"
-          >
-            {t("studio.cancel")}
-          </button>
-          {showForkButton && (
-            <button
-              type="button"
-              onClick={() => void handleFork()}
-              disabled={forking}
-              className={
-                isPlatformOwned
-                  ? "rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-                  : "rounded-md border px-4 py-2 text-sm disabled:opacity-50"
-              }
-              title={t("studio.forkTitle")}
-            >
-              {forking ? t("studio.forking") : t("studio.fork")}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saveState.status === "saving" || !isDirty || forking}
-            className={
-              isPlatformOwned
-                ? "rounded-md border px-4 py-2 text-sm disabled:opacity-50"
-                : "rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-            }
-          >
-            {saveState.status === "saving" ? t("studio.saving") : t("studio.save")}
-          </button>
+      )}
+      {saveState.status === "ok" && <div className="mb-4 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700">{saveState.message}</div>}
+      {saveState.status === "error" && <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{saveState.message}</div>}
+      {showForkButton && (
+        <div className="mb-4 flex items-center justify-between rounded-md border bg-card px-3 py-2 text-xs">
+          <span className="text-muted-foreground">{t("studio.platformSkillSuffix")}</span>
+          <button type="button" onClick={() => void handleFork()} disabled={forking} className="rounded-md border px-2.5 py-1.5 font-medium hover:bg-muted disabled:opacity-50">{forking ? t("studio.forking") : t("studio.fork")}</button>
         </div>
-      </header>
-
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
-        <div className="min-h-0 overflow-auto border-r">
-          {isPlatformOwned && (
-            <div className="m-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-              {t("studio.platformSkillPrefix")} {" "}
-              <span className="font-medium text-foreground">{t("studio.platformSkill")}</span>. {" "}
-              {t("studio.platformSkillSuffix")}
-            </div>
-          )}
-          <StudioBuilderForm draft={draft} setDraft={setDraft} isNew={isNew} />
-        </div>
-        <div className="min-h-0 overflow-hidden">
-          <AGUIProvider skillId={AUTHORING_SKILL_ID} sessionId={seededThreadId}>
-            <AuthoringCopilot skillId={skillId} onApplyProposal={onApplyProposal} />
-          </AGUIProvider>
-        </div>
+      )}
+      <StudioBuilderForm draft={draft} setDraft={setDraft} isNew={isNew} />
+      <div className="mt-6 hidden border-t pt-6 xl:block">
+        <AGUIProvider skillId={AUTHORING_SKILL_ID} sessionId={seededThreadId}>
+          <AuthoringCopilot skillId={skillId} onApplyProposal={onApplyProposal} />
+        </AGUIProvider>
       </div>
-    </div>
+    </AgentStudioShell>
   );
 }
 
@@ -345,3 +309,4 @@ async function safeErrorDetail(res: Response): Promise<string | null> {
   }
   return null;
 }
+
