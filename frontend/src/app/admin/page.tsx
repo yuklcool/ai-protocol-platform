@@ -85,6 +85,13 @@ const AREAS: Area[] = [
         note: "admin.area.skills.studioNote",
       },
       {
+        // Keep old bookmarks and the explicit Skill authoring workflow
+        // reachable while the main product path is Root Agent-first.
+        href: "/skills/studio/new",
+        label: "admin.area.skills.studioLegacy",
+        note: "admin.area.skills.studioNote",
+      },
+      {
         href: "/admin/mcp-servers",
         label: "admin.area.skills.mcp",
         note: "admin.area.skills.mcpNote",
