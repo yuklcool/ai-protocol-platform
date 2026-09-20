@@ -227,7 +227,7 @@ export const MessageBubble = React.memo(function MessageBubble({
         )}
         <div className="flex max-w-[80%] flex-col gap-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-xs font-medium text-orange-600">{botLabel || skillId}</span>
+            <span className="text-xs font-medium text-primary">{botLabel || skillId}</span>
             <span className="text-xs text-muted-foreground">{time}</span>
             {showReadAloud && (
               <ReadAloudButton
@@ -239,7 +239,7 @@ export const MessageBubble = React.memo(function MessageBubble({
               />
             )}
           </div>
-          <div className="space-y-2 rounded-[2px_8px_8px_8px] border-l-[3px] border-orange-400 bg-[hsl(0,0%,98%)] px-3 py-2 text-sm">
+          <div className="space-y-2 rounded-[2px_8px_8px_8px] border-l-[3px] border-primary bg-muted/40 px-3 py-2 text-sm">
             {message.content && (
               <ChatMarkdown content={message.content} navigateToBlock={navigateToBlock} />
             )}

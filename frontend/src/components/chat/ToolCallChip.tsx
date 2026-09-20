@@ -37,7 +37,7 @@ export function ToolCallChip({ toolCall }: ToolCallChipProps) {
 function Spinner({ label }: { label: string }) {
   return (
     <svg
-      className="h-3 w-3 animate-spin text-orange-500"
+      className="h-3 w-3 animate-spin text-primary"
       viewBox="0 0 24 24"
       fill="none"
       aria-label={label}

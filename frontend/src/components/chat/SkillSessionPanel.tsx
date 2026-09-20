@@ -161,7 +161,7 @@ export function SkillSessionPanel({
                   }}
                   aria-label={translateChat(locale, "sessions.deleteAria", { title })}
                   title={translateChat(locale, "sessions.delete")}
-                  className="shrink-0 rounded p-1 text-gray-400 opacity-0 hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                 >
                   <svg
                     className="h-3.5 w-3.5"

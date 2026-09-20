@@ -22,7 +22,7 @@ export function RootAgentBar({
   const router = useRouter();
   const { locale } = useI18n();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
-  return <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-background px-3" aria-label="Root Agent navigation">
+  return <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/70 px-4" aria-label="Root Agent navigation">
     <Link href="/" className="flex shrink-0 items-center" aria-label="Home">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={BRANDING.logo.chatAvatar} alt={BRANDING.appName} className="h-8 w-8 rounded-full" /></Link>
     <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary"><Bot className="h-4 w-4" aria-hidden /></span><div className="min-w-0"><p className="truncate text-sm font-medium">{t("rootAgent.title")}</p><p className="truncate text-[11px] text-muted-foreground">{t("rootAgent.bar.capabilities")}</p></div></div>
     <Link href="/skills" className="hidden rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex">{t("rootAgent.bar.skills")}</Link>

@@ -40,7 +40,7 @@ export function DelegationMarker({ targetDisplay, mode }: DelegationMarkerProps)
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
-          className="text-orange-500/70"
+          className="text-primary/70"
         >
           <path d="M5 12h14" />
           <path d="m13 5 7 7-7 7" />

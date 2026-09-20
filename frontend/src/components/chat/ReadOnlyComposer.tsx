@@ -15,8 +15,8 @@ interface ReadOnlyComposerProps {
 export default function ReadOnlyComposer({ onContinue }: ReadOnlyComposerProps) {
   const { locale } = useI18n();
   return (
-    <div className="border-t border-gray-200 bg-gray-50 p-4 flex items-center gap-3">
-      <p className="flex-1 text-sm text-gray-500">
+    <div className="flex items-center gap-3 border-t border-border bg-card p-4">
+      <p className="flex-1 text-sm text-muted-foreground">
         {translateChat(locale, "readOnly.description")}
       </p>
       <button

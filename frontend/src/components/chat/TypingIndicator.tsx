@@ -23,31 +23,31 @@ export function TypingIndicator({ stageLabel, activeToolName }: TypingIndicatorP
   return (
     <div className="flex items-start gap-3 py-1">
       <BrandAvatar />
-      <div className="flex items-center gap-2 rounded-[2px_8px_8px_8px] border border-border bg-[hsl(0,0%,98%)] px-3 py-2.5">
+      <div className="flex items-center gap-2 rounded-[2px_8px_8px_8px] border border-border bg-muted/40 px-3 py-2.5">
         {labelText ? (
           <>
             <span className="text-xs text-muted-foreground">{labelText}</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
           </>
         ) : toolText ? (
           <>
             <span className="text-xs text-muted-foreground">
               {translateChat(locale, "typing.using", { tool: toolText })}
             </span>
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
           </>
         ) : (
           <>
             <span
-              className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-bounce"
+              className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce"
               style={{ animationDelay: "0ms" }}
             />
             <span
-              className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-bounce"
+              className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce"
               style={{ animationDelay: "150ms" }}
             />
             <span
-              className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-bounce"
+              className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce"
               style={{ animationDelay: "300ms" }}
             />
           </>

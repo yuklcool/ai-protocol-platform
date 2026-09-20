@@ -63,7 +63,7 @@ export function ChatMarkdown({ content, navigateToBlock }: ChatMarkdownProps) {
           ? h
           : "#";
       return (
-        <a href={safe} target="_blank" rel="noopener noreferrer" className="text-teal-600 underline">
+        <a href={safe} target="_blank" rel="noopener noreferrer" className="text-primary underline">
           {children}
         </a>
       );

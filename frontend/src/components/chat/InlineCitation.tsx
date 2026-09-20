@@ -38,7 +38,7 @@ export function InlineCitation({ href, children, navigateToBlock }: InlineCitati
   if (!match) {
     const safeHref = href.startsWith(GCS_PREFIX) ? href : "#";
     return (
-      <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-teal-600 underline">
+      <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-primary underline">
         {children}
       </a>
     );
@@ -55,7 +55,7 @@ export function InlineCitation({ href, children, navigateToBlock }: InlineCitati
     <button
       type="button"
       onClick={handleClick}
-      className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100 transition-colors"
+      className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/15 transition-colors"
     >
       <svg
         className="h-3 w-3 shrink-0"

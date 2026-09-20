@@ -75,9 +75,9 @@ export function LatencyHUD() {
     return (
       <div
         data-testid="latency-hud"
-        className="fixed bottom-4 right-4 z-50 max-w-xs rounded-md border border-orange-300 bg-white p-2 text-xs font-mono shadow-md"
+        className="fixed bottom-4 right-4 z-50 max-w-xs rounded-md border border-primary/30 bg-card p-2 text-xs font-mono"
       >
-        <p className="font-semibold text-orange-700">TTFT HUD</p>
+        <p className="font-semibold text-primary">TTFT HUD</p>
         <p className="text-muted-foreground">
           Send a message to see perceived &amp; real TTFT.
         </p>
@@ -92,9 +92,9 @@ export function LatencyHUD() {
   return (
     <div
       data-testid="latency-hud"
-      className="fixed bottom-4 right-4 z-50 max-w-md space-y-1 rounded-md border border-orange-300 bg-white p-2 text-xs font-mono shadow-md"
+      className="fixed bottom-4 right-4 z-50 max-w-md space-y-1 rounded-md border border-primary/30 bg-card p-2 text-xs font-mono"
     >
-      <p className="font-semibold text-orange-700">TTFT HUD — last {recent.length}</p>
+      <p className="font-semibold text-primary">TTFT HUD — last {recent.length}</p>
 
       <div className="grid grid-cols-[auto_1fr] gap-x-2 border-b pb-1">
         <span className="text-muted-foreground">model</span>

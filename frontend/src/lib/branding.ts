@@ -82,7 +82,7 @@ export const BRANDING: Branding = {
       "https://github.com/yuklcool/ai-protocol-platform",
   },
   theme: {
-    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "199 89% 48%",
+    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "234 57% 59%",
     primaryForegroundHsl:
       process.env.NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL || "210 40% 98%",
   },
