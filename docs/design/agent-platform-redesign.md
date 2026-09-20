@@ -379,15 +379,50 @@ Resources
 
 ## 15. UI 视觉原则
 
-风格：现代、克制、专业、科技感。
+### 15.1 风格基准
 
-- 深色 / 浅色双主题
-- 少用高饱和大面积渐变
-- 紫蓝只用于关键 CTA / Agent 状态
-- 大留白、明确层级
-- 统一卡片圆角和间距
-- 健康状态统一 Green / Amber / Red / Gray
-- 科技感来自实时状态、协议链路和交互反馈，不靠大量发光边框
+前端统一采用 **Linear-inspired Enterprise Agent Console** 风格。
+
+参考来源：
+
+- [VoltAgent/awesome-design-md — Linear DESIGN.md](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)
+- 项目根目录 [DESIGN.md](../../DESIGN.md) 为本项目最终视觉约束
+
+采用 Linear 的核心原因：
+
+- 适合工程师和企业用户的高信息密度后台
+- 近黑画布 + 多级中性色 Surface 非常适合 Agent Studio 三栏布局
+- 1px Hairline + 极少阴影适合 MCP / 权限 /资源管理
+- 单一蓝紫 Accent 能保持科技感但避免“霓虹仪表盘”
+- 紧凑控件和清晰层级适合 Model / Tool / MCP / Trace 等技术对象
+
+这不是品牌复刻。禁止复制 Linear Logo、专有字体和品牌资产，只采用其产品 UI 的设计原则并进行平台化适配。
+
+### 15.2 核心视觉约束
+
+- Dark-first，同时提供同语义 Light Theme
+- Canvas / Surface-1 / Surface-2 / Surface-3 四级层次
+- 主 Accent 使用克制的 Lavender Blue
+- Cards / Inputs / Buttons 使用 6–12px 圆角
+- 默认 1px Hairline Border，不依赖大阴影
+- 默认 UI 字号 14px；页面标题约 24px
+- Inter / Geist + 中文系统字体
+- Agent 使用卡片；Resources 默认使用 List / Table
+- 状态必须使用“颜色 + 文本/图标”
+- 科技感来自实时状态、协议链路、Trace 和 Agent Preview，而不是发光边框
+
+明确禁止：
+
+- Glassmorphism
+- 大面积渐变
+- Neon Glow
+- 多个高饱和 Accent
+- 全页面超大卡片
+- 大量 Pill Button
+- Emoji 作为正式导航图标
+- 每个页面各自一套视觉规则
+
+具体颜色、Typography、Spacing、Radius、Agent Studio、MCP、Permissions、Chat、Responsive 规范全部以根目录 `DESIGN.md` 为准。
 
 ## 16. 实施顺序
 
@@ -420,4 +455,6 @@ Resources
 
 > Agent 是用户看到的产品；Skill、Tool、MCP、Knowledge 是 Agent 使用的资源；Administration 负责治理；Developer 负责实验。
 
-该原则应作为 #74 后续所有 Feature 拆分和 UI 实现的共同约束。
+> UI 风格统一遵循 Linear-inspired Enterprise Agent Console：紧凑、精确、克制、暗色优先、单 Accent、高信息密度。
+
+上述两条原则应作为 #74 后续所有 Feature 拆分和 UI 实现的共同约束。
