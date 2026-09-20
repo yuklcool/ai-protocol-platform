@@ -340,6 +340,13 @@ from fastapi.responses import StreamingResponse  # noqa: E402
 from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
 
 from adk.stream_invariants import redact_privileged_results, session_is_lower_trust  # noqa: E402
+from adk.agui import ROOT_AGENT_APP_NAME  # noqa: E402
+from agents.root_runtime import (  # noqa: E402
+    ROOT_AGENT_ID,
+    RootCapabilityDenied,
+    compose_root_skill,
+    resolve_root_capability,
+)
 from admin.access_routes import router as admin_access_router  # noqa: E402
 from admin.analytics_routes import router as admin_analytics_router  # noqa: E402
 from admin.audit_routes import router as admin_audit_router  # noqa: E402
@@ -356,6 +363,7 @@ from admin.tenants import router as admin_tenants_router  # noqa: E402
 from admin.tool_permissions_routes import router as admin_tool_permissions_router  # noqa: E402
 from admin.users_routes import router as admin_users_router  # noqa: E402
 from auth import User, get_current_user  # noqa: E402
+from config.platform_config import get_platform_config  # noqa: E402
 from auth.group_routes import router as group_auth_router  # noqa: E402
 from auth.routes import router as auth_router  # noqa: E402
 from buckets.routes import router as buckets_router  # noqa: E402
@@ -673,8 +681,11 @@ async def stream_skill(
     # downstream callbacks (loader, injector, tool hooks) can call
     # ``get_current_tracker().mark(...)`` without explicit plumbing. The
     # finally below resets the binding and emits the structured log.
+    runtime_skill = getattr(request.state, "root_runtime_skill", None)
+    session_agent_id = getattr(request.state, "session_agent_id", skill_id)
+    app_name = getattr(request.state, "agent_app_name", "aitana_platform")
     tracker = LatencyTracker(
-        skill_id=skill_id,
+        skill_id=getattr(request.state, "tracker_skill_id", skill_id),
         session_id=body.effective_session_id or "",
         user_id=user.uid,
     )
@@ -732,6 +743,9 @@ async def stream_skill(
         document_ids=extracted_doc_ids,
         resumed_session=extracted_resumed,
         a2ui_surface_state=extracted_surface_state,
+        runtime_skill=runtime_skill,
+        session_agent_id=session_agent_id,
+        app_name=app_name,
     )
     try:
         # Surface SkillNotFoundError *before* returning the StreamingResponse so
@@ -812,6 +826,45 @@ async def stream_skill(
             reset_current_tracker(_tracker_token)
 
     return StreamingResponse(_sse(), media_type="text/event-stream")
+
+
+@app.post("/api/agent/stream")
+async def stream_root_agent(
+    body: _StreamSkillRequest,
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008
+) -> StreamingResponse:
+    """SSE endpoint for the single user-facing Root Agent.
+
+    The client may send a capability hint, but it cannot grant itself access:
+    the resolver intersects the Root Agent ceiling with tenant narrowing and
+    the authenticated user's resource ACL before one capability is composed.
+    """
+    root_config = get_platform_config().agent
+    forwarded = body.forwardedProps or {}
+    requested_ref = forwarded.get("capability_hint") or forwarded.get("capabilityHint")
+    try:
+        capability = resolve_root_capability(
+            root_config,
+            user,
+            request.state.access,
+            str(requested_ref) if requested_ref else None,
+        )
+    except RootCapabilityDenied as exc:
+        _log.warning(
+            "root-agent capability denied uid=%s tenant=%s requested=%s reason=%s",
+            user.uid,
+            request.state.access.tenant_id,
+            requested_ref or "(default)",
+            exc,
+        )
+        raise HTTPException(status_code=404, detail="Root Agent capability is not available") from exc
+
+    request.state.root_runtime_skill = compose_root_skill(capability, root_config)
+    request.state.session_agent_id = ROOT_AGENT_ID
+    request.state.agent_app_name = ROOT_AGENT_APP_NAME
+    request.state.tracker_skill_id = ROOT_AGENT_ID
+    return await stream_skill(capability.skill_id, body, request, user)
 
 
 @app.get("/api/debug/slow-stream")

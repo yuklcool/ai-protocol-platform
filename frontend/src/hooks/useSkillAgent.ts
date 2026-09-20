@@ -327,6 +327,9 @@ export function useSkillAgent(options?: {
   const midStreamTimeoutMs = options?._midStreamTimeoutMs ?? 90_000;
   const lastActivityRef = useRef(0);
   const agent = useAGUIAgent();
+  const runtime = (agent as typeof agent & { __aitanaRuntime?: { agentId: string; capabilityHint?: string } }).__aitanaRuntime ?? {
+    agentId: "legacy-skill",
+  };
   // Sprint 2.10: read every active A2UI surface's snapshot at sendMessage
   // time and ride it back on `forwardedProps.a2ui_surface_state`. Optional
   // because useSkillAgent is also used in surface-registry-less contexts
@@ -887,6 +890,10 @@ export function useSkillAgent(options?: {
       setIsLoading(true);
       try {
         const forwardedProps: Record<string, unknown> = {};
+        if (runtime.agentId === "root-agent") {
+          forwardedProps.agent_id = runtime.agentId;
+          if (runtime.capabilityHint) forwardedProps.capability_hint = runtime.capabilityHint;
+        }
         if (opts?.documentIds && opts.documentIds.length > 0) {
           forwardedProps.document_ids = opts.documentIds;
         }
@@ -928,7 +935,7 @@ export function useSkillAgent(options?: {
         setRunStarted(false);
       }
     },
-    [agent, clearError, surfaceRegistry],
+    [agent, clearError, runtime.agentId, runtime.capabilityHint, surfaceRegistry],
   );
 
   const stop = useCallback(() => {

@@ -113,6 +113,7 @@ def create_session_index(
     owner_uid: str,
     access_control: AccessControl,
     tenant_id: str | None = None,
+    agent_id: str = "aitana_platform",
     document_ids: list[str] | None = None,
     first_message_at: datetime | None = None,
     owner_domain: str = "",
@@ -130,6 +131,7 @@ def create_session_index(
         sessionId=session_id,
         tenantId=stable_tenant_id,
         documentIds=list(document_ids) if document_ids else [],
+        agentId=agent_id,
         skillId=skill_id,
         ownerUid=owner_uid,
         ownerDomain=(owner_domain or "").strip().lower(),
@@ -198,6 +200,13 @@ def get_session_index_for_tenant(session_id: str, tenant_id: str) -> ChatSession
     if idx is None or not session_in_tenant(idx, tenant_id):
         return None
     return idx
+
+
+def app_name_for_session(idx: ChatSessionIndex) -> str:
+    """Return the ADK app namespace for a metadata row."""
+    from adk.agui import APP_NAME, ROOT_AGENT_APP_NAME
+
+    return ROOT_AGENT_APP_NAME if idx.agent_id == ROOT_AGENT_APP_NAME else APP_NAME
 
 
 SessionFilter = Literal["mine", "team", "all"]
@@ -360,6 +369,7 @@ _from_firestore = _from_document
 __all__ = [
     "SessionFilter",
     "add_session_documents",
+    "app_name_for_session",
     "clear_provisional",
     "create_session_index",
     "get_session_index",

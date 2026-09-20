@@ -87,6 +87,9 @@ async def process_skill_request(
     document_ids: list[str] | None = None,
     resumed_session: bool = False,
     a2ui_surface_state: dict[str, Any] | None = None,
+    runtime_skill: SkillConfig | None = None,
+    session_agent_id: str = "aitana_platform",
+    app_name: str = "aitana_platform",
 ) -> AsyncGenerator[dict, None]:
     """Yield AG-UI events for one turn of ``skill_id``.
 
@@ -95,7 +98,7 @@ async def process_skill_request(
     ``threadId`` therefore hit the same tenant/ownership boundary before any
     index mutation or ADK SessionService call.
     """
-    skill = get_skill(skill_id)
+    skill = runtime_skill or get_skill(skill_id)
     if skill is None:
         skill = resolve_skill_ref(skill_id, getattr(user, "uid", None))
     if skill is None:
@@ -156,7 +159,14 @@ async def process_skill_request(
             }
             return
 
-    _ensure_session_index(thread_id, skill_id, user.uid, document_ids, getattr(user, "email", "") or "")
+    _ensure_session_index(
+        thread_id,
+        skill_id,
+        user.uid,
+        document_ids,
+        getattr(user, "email", "") or "",
+        agent_id=session_agent_id,
+    )
 
     agent_or_router, _agent_cache_hit = _agent_cache.get_or_build(
         skill,
@@ -184,7 +194,12 @@ async def process_skill_request(
         model_used = getattr(raw_model, "model", "") or str(raw_model)
     get_current_tracker().set_model(model_used, routing_choice)
 
-    agui_agent = build_agui_adk_agent(agent, user_id=user.uid, session_service=_session_service)
+    agui_agent = build_agui_adk_agent(
+        agent,
+        user_id=user.uid,
+        session_service=_session_service,
+        app_name=app_name,
+    )
 
     initial_state: dict[str, Any] = {}
     if document_ids:
@@ -271,6 +286,7 @@ def _ensure_session_index(
     owner_uid: str,
     document_ids: list[str] | None,
     owner_email: str = "",
+    agent_id: str = "aitana_platform",
 ) -> None:
     """Synchronously create/update the chat-session index for this turn.
 
@@ -306,6 +322,7 @@ def _ensure_session_index(
                 owner_domain=owner_domain_of(owner_email),
                 access_control=access_control,
                 document_ids=docs,
+                agent_id=agent_id,
             )
             logger.info("chat_sessions/%s index created synchronously (owner=%s)", thread_id, owner_uid)
         except Exception as exc:
@@ -320,6 +337,14 @@ def _ensure_session_index(
             )
         except Exception as exc:
             logger.warning("session-index provisional clear failed for %s: %s", thread_id, exc)
+
+    if existing.agent_id != agent_id:
+        try:
+            from db.chat_sessions import update_session_fields
+
+            update_session_fields(thread_id, {"agentId": agent_id})
+        except Exception as exc:
+            logger.warning("session-index agent identity update failed for %s: %s", thread_id, exc)
 
     if existing.skill_id != skill_id:
         try:

@@ -100,6 +100,22 @@ describe("AGUIProvider", () => {
     });
   });
 
+  it("routes the user-facing chat through the single Root Agent stream", async () => {
+    httpAgentCtor.mockClear();
+    render(
+      <AuthProvider>
+        <AGUIProvider agentId="root-agent" capabilityHint="capability-a" skillId="capability-a">
+          <div />
+        </AGUIProvider>
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      const cfg = httpAgentCtor.mock.calls.at(-1)?.[0];
+      expect(cfg?.url).toBe("/api/proxy/api/agent/stream");
+    });
+  });
+
   it("useAGUIAgent throws outside the provider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => renderHook(() => useAGUIAgent())).toThrow(

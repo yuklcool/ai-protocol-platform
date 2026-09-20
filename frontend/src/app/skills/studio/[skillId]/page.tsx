@@ -241,7 +241,7 @@ function StudioInner({ skillId }: { skillId: string }) {
       )}
       <StudioBuilderForm draft={draft} setDraft={setDraft} isNew={isNew} />
       <div className="mt-6 hidden border-t pt-6 xl:block">
-        <AGUIProvider skillId={AUTHORING_SKILL_ID} sessionId={seededThreadId}>
+        <AGUIProvider agentId={AUTHORING_SKILL_ID} skillId={AUTHORING_SKILL_ID} sessionId={seededThreadId}>
           <AuthoringCopilot skillId={skillId} onApplyProposal={onApplyProposal} />
         </AGUIProvider>
       </div>

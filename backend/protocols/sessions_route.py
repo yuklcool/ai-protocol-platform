@@ -25,13 +25,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from opentelemetry import trace
 from pydantic import BaseModel
 
-from adk.agui import APP_NAME
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from adk.notability import tool_tier
 from adk.session import get_session_service
 from auth import User, get_current_user
 from db.chat_sessions import (
     SessionFilter,
+    app_name_for_session,
     get_session_index,
     list_sessions_for_document,
     list_sessions_for_skill,
@@ -183,6 +183,7 @@ class ChatSessionSummary(BaseModel):
     session_id: str
     document_ids: list[str]
     skill_id: str
+    agent_id: str = "aitana_platform"
     owner_uid: str
     access_control: dict[str, Any]
     title: str | None
@@ -234,6 +235,7 @@ def _to_summary(
         session_id=idx.session_id,
         document_ids=list(idx.document_ids),
         skill_id=idx.skill_id,
+        agent_id=idx.agent_id,
         owner_uid=idx.owner_uid,
         access_control=idx.access_control.model_dump(exclude_none=True),
         title=idx.title,
@@ -681,7 +683,7 @@ async def get_session_messages(
 
     session_service = get_messages_session_service()
     session = await session_service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name_for_session(idx),
         user_id=idx.owner_uid,
         session_id=session_id,
     )
@@ -735,7 +737,7 @@ async def get_session_activity(
 
     session_service = get_messages_session_service()
     session = await session_service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name_for_session(idx),
         user_id=idx.owner_uid,
         session_id=session_id,
     )
@@ -780,7 +782,7 @@ async def get_session_state(
     session_service = get_session_service()
     # app_name must be APP_NAME, not skill_id — same fix as iframe_context_routes.py
     session = await session_service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name_for_session(idx),
         user_id=idx.owner_uid,
         session_id=session_id,
     )
