@@ -3,7 +3,11 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  // Vitest 1.x resolves its own Vite 5 copy while the current plugin-react
+  // peer resolves Vite 7. The runtime plugin is compatible, but their
+  // duplicated Vite types are not structurally assignable during `next build`.
+  // Keep the config runtime unchanged and make that boundary explicit.
+  plugins: [react() as never],
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

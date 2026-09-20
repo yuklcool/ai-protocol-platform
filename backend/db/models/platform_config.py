@@ -22,6 +22,8 @@ import time
 
 from pydantic import BaseModel, Field
 
+from db.models.root_agent import RootAgentConfig
+
 # Singleton document id in the ``platform_config`` collection. There is exactly
 # one platform-config doc; the id is fixed so reads/writes always target it.
 PLATFORM_CONFIG_DOC_ID = "singleton"
@@ -103,6 +105,10 @@ class PlatformConfig(BaseModel):
 
     preamble: str = Field(default="", max_length=PREAMBLE_MAX_LEN)
     enabled: bool = True
+    # v1.1: the single user-facing Agent. This is additive to the historical
+    # platform preamble and remains compatible with old documents that do not
+    # have an ``agent`` block yet.
+    agent: RootAgentConfig = Field(default_factory=RootAgentConfig)
     # Absent on every doc written before v6.23.0, hence a default factory rather
     # than a required field — an old doc must keep loading.
     compaction: CompactionSettings = Field(default_factory=CompactionSettings)

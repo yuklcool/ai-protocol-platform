@@ -2,8 +2,13 @@
 
 > 状态：Proposal  
 > Target：v1.1 — Platform Productization  
-> Parent Epic：#74  
+> Parent Epic：#74
 > 日期：2026-09-20
+
+> **架构纠偏（2026-09-20）：** 本文早期版本的多 Agent / Agent List / Agent
+> Switcher 方案已废止。平台本身就是一个 Agent；Skill 是该 Agent 的能力，
+> 不是默认独立对外暴露的 Agent。后续实现以 Issue #74 的
+> **Single Root Agent + Skills / Tools / MCP / Knowledge** 为准。
 
 ![Agent Platform Redesign](./agent-platform-redesign.svg)
 
@@ -30,32 +35,37 @@ Developer 能力单独收口，用于 Playground、A2UI、MCP Apps、协议调�
 
 ## 2. 产品模型
 
-底层第一阶段继续复用现有：
+平台只有一个用户面对的 Root Agent：
 
 ```text
-SkillConfig
-   ↓
-Agent Factory
-   ↓
-Google ADK Agent
+AI Protocol Platform
+        │
+        ▼
+   Single Root Agent
+        ├── Model / Prompt / Session
+        ├── Skills
+        ├── Native Tools
+        ├── MCP Servers
+        ├── Knowledge
+        ├── A2UI / Interaction
+        └── Specialist Agents（高级、可选）
 ```
 
-产品层新增“暴露方式”语义，将同一 SkillConfig 明确区分为：
+Skill 只描述专业能力：instructions、requiredTools、requiredMcpTools、
+references、examples 和 accessControl。普通 Skill 不再拥有独立 Chat、Session、
+Model、Persona、Voice 或 A2UI 页面；确实需要独立模型、Prompt 和推理策略的能力
+才建模为 Specialist Agent。
 
-- `user-facing`：真正出现在 Agents / Chat 的 Agent
-- `internal`：可复用 Skill / Tool-like capability
-- `system`：平台内部 Agent，例如 authoring assistant
-- `development`：Demo / Workshop / Experimental
-
-主聊天切换器只展示 `user-facing`，不再把 Web Researcher、Maps、Workspace Demo 等内部能力当作 Agent。
+现有 `SkillConfig → create_agent(skill_config)` 作为兼容路径保留，新的
+`AgentConfig` 先以兼容层持久化，逐步迁移 runtime composition。
 
 ## 3. 一级信息架构
 
 ```text
 Overview
 
-Agents
-  My Agents
+Agent
+  Overview / Model / Prompt / Skills / Tools / MCP / Knowledge / Interaction / Permissions / Advanced
 
 Resources
   Skills
@@ -85,31 +95,27 @@ Settings
 
 ## 4. 核心用户路径
 
-### 4.1 创建 Agent
+### 4.1 配置 Root Agent
 
 ```text
-Create Agent
+Root Agent Settings
   ↓
-Basic
-  ↓
-Model
+Overview / Model / Prompt
   ↓
 Capabilities
   ├ Skills
   ├ Tools
   └ MCP
   ↓
-Create
-  ↓
-Agent Studio
+Knowledge / Interaction / Permissions / Advanced
 ```
 
 创建流程只保留最低必要配置，复杂参数进入 Studio 后再补充。
 
-### 4.2 配置 Agent
+### 4.2 配置 Root Agent
 
 ```text
-Agent Studio
+Single Agent Settings
 
 Overview
 Model
@@ -126,17 +132,17 @@ Advanced
 
 右侧固定 Test / Preview，形成“配置即测试”的闭环。
 
-### 4.3 使用 Agent
+### 4.3 使用 Root Agent
 
 Chat 页面只负责：
-- 切换 user-facing Agent
+- 使用 Root Agent（不展示 SkillSwitcher）
 - 新建 / 恢复会话
 - 对话
 - A2UI / MCP Apps 交互
 
 不再承担 Agent 配置和平台管理职责。
 
-## 5. Agent Studio
+## 5. Single Agent Settings
 
 采用三栏布局：
 
@@ -196,7 +202,7 @@ Capabilities
 
 ## 6. MCP 交互重构
 
-### Agent Studio → MCP
+### Single Agent Settings → MCP
 
 负责“当前 Agent 使用哪些 MCP”：
 
@@ -236,7 +242,8 @@ MCP Admin 不再以“选 Skill 再绑定”为主操作。
 - Welcome
 - Starter Prompts
 
-底层继续映射现有 `skillMetadata.toolConfigs.a2ui`。
+底层继续映射现有 `skillMetadata.toolConfigs.a2ui`，迁移完成后归入 Root Agent 的
+`interaction` 配置块。
 
 ## 8. Knowledge
 
@@ -255,7 +262,7 @@ MCP Admin 不再以“选 Skill 再绑定”为主操作。
 权限页面必须展示最终生效结果，而不只是配置源：
 
 ```text
-Agent capability ceiling
+Root Agent capability ceiling
 ∩ Tenant policy
 ∩ Group policy
 ∩ User permission
@@ -272,7 +279,7 @@ Agent capability ceiling
 
 ## 10. Chat
 
-主聊天页只展示 user-facing Agents。
+主聊天页只展示 Root Agent 身份，不展示 SkillSwitcher 或多 Agent 列表。
 
 内部 Skill / Tool / Demo 分流到：
 - Resources
@@ -288,7 +295,7 @@ Chat 页面建议：
 
 首页只回答三个问题：
 
-1. 我有哪些 Agent？
+1. 我的 Root Agent 当前有哪些能力？
 2. 平台当前是否正常？
 3. 最近发生了什么？
 
@@ -339,18 +346,7 @@ Resources
 ```text
 /
 
-/agents
-/agents/new
-/agents/{id}
-/agents/{id}/model
-/agents/{id}/prompt
-/agents/{id}/skills
-/agents/{id}/tools
-/agents/{id}/mcp
-/agents/{id}/knowledge
-/agents/{id}/interaction
-/agents/{id}/permissions
-/agents/{id}/advanced
+/agent
 
 /chat/{agentId}
 
@@ -426,14 +422,14 @@ Resources
 
 ## 16. 实施顺序
 
-### Phase 1 — 产品语义收口
-- exposure / user-facing 语义
-- Agent Switcher 只展示 user-facing
-- Agents 列表
-- Demo / internal Skill 分流
+### Phase 1 — Root Agent 语义收口
+- 单一 Root Agent / AgentConfig 兼容层
+- Chat 移除 SkillSwitcher
+- Model / Prompt / Session 收口到 Root Agent
+- Demo / internal Skill 分流到 Resources / Developer
 
-### Phase 2 — Agent Studio 核心闭环
-- Studio Shell
+### Phase 2 — Single Agent Settings 核心闭环
+- Settings Shell
 - Basic / Model / Prompt
 - Skills / Tools
 - MCP Binding
@@ -453,7 +449,7 @@ Resources
 
 ## 17. 设计原则总结
 
-> Agent 是用户看到的产品；Skill、Tool、MCP、Knowledge 是 Agent 使用的资源；Administration 负责治理；Developer 负责实验。
+> Root Agent 是用户看到的产品；Skill、Tool、MCP、Knowledge 是 Root Agent 使用的资源；Administration 负责治理；Developer 负责实验。
 
 > UI 风格统一遵循 Linear-inspired Enterprise Agent Console：紧凑、精确、克制、暗色优先、单 Accent、高信息密度。
 

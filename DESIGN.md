@@ -26,11 +26,11 @@ Do **not** copy Linear branding, logos, or proprietary typography. Use the desig
 
 ## 2. Product information architecture
 
-The visual hierarchy must reinforce four product areas:
+The visual hierarchy must reinforce the corrected product model:
 
 ```text
-Agents
-  user-facing AI products
+Agent
+  one user-facing Root Agent
 
 Resources
   Skills / Tools / MCP / Models / Knowledge / Secrets
@@ -222,7 +222,8 @@ Sections:
 ```text
 Overview
 
-Agents
+Agent
+  Root Agent Settings
 
 Resources
   Skills
@@ -262,14 +263,14 @@ Height: 48–56px.
 
 Contains only current context and relevant actions. Avoid duplicating sidebar navigation.
 
-## 9. Agent list
+## 9. Root Agent overview
 
-Agent cards are operational cards, not marketing cards.
+The Root Agent overview is an operational surface, not a marketplace.
 
 Each card should show:
 
 ```text
-Avatar + Agent name
+Avatar + Root Agent name
 short description
 
 Model
@@ -289,17 +290,17 @@ Rules:
 - 12px radius
 - no gradient background
 - status color is semantic
-- only user-facing Agents appear here
+- only the single Root Agent appears in the main product path
 
 Internal/system/development Skills belong in Resources or Developer.
 
-## 10. Agent Studio
+## 10. Single Agent Settings
 
 Desktop layout:
 
 ```text
 ┌───────────────┬───────────────────────────────┬────────────────────┐
-│ Studio nav    │ Editor                        │ Test / Preview     │
+│ Settings nav  │ Editor                        │ Test / Preview     │
 │ 200–220px     │ min 560px / flexible          │ 360–420px         │
 └───────────────┴───────────────────────────────┴────────────────────┘
 ```
@@ -569,7 +570,7 @@ Avoid:
 ## 23. Responsive behavior
 
 ### >= 1280px
-Full sidebar, multi-column Agents, three-column Studio.
+Full sidebar, Root Agent settings, three-column configuration workspace.
 
 ### 1024–1279px
 Sidebar compact; Agent Studio preview becomes collapsible.
@@ -601,7 +602,7 @@ Chat remains optimized for conversation.
 - use 1px borders
 - keep operations dense and legible
 - expose state clearly
-- make Agent Studio task-oriented
+- make Root Agent Settings task-oriented
 - use Resources tables for infrastructure
 - reserve cards for Agents and previews
 
@@ -623,6 +624,6 @@ Chat remains optimized for conversation.
 
 When generating or modifying frontend UI:
 
-> Use the AI Protocol Platform DESIGN.md. Follow the Linear-inspired Enterprise Agent Console language: compact dark-first product UI, four-level neutral surface hierarchy, 1px hairline borders, 8–12px radii, restrained lavender-blue primary, Inter/Geist typography, no gradients/glassmorphism, dense but calm admin layouts, and clear semantic status. Preserve the product hierarchy Agents → Resources → Administration → Developer. User-facing Agents are cards; infrastructure resources are lists/tables; Agent Studio is a three-column configuration + preview workspace.
+> Use the AI Protocol Platform DESIGN.md. Follow the Linear-inspired Enterprise Agent Console language: compact dark-first product UI, four-level neutral surface hierarchy, 1px hairline borders, 8–12px radii, restrained lavender-blue primary, Inter/Geist typography, no gradients/glassmorphism, dense but calm admin layouts, and clear semantic status. Preserve the product hierarchy Agent → Resources → Administration → Developer. Root Agent settings is a three-column configuration + preview workspace; infrastructure resources are lists/tables.
 
 This file is the visual source of truth for all v1.1 frontend redesign work.
