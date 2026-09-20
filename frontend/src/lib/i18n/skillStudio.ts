@@ -1,6 +1,13 @@
 import type { Locale, TranslationParams } from "@/lib/i18n";
 
 const en = {
+  "mcpPicker.title": "MCP servers",
+  "mcpPicker.description": "Choose which tenant-visible MCP servers this agent may use. Changes apply when you save the agent.",
+  "mcpPicker.loading": "Loading available MCP servers…",
+  "mcpPicker.unavailable": "MCP registry unavailable ({error})",
+  "mcpPicker.empty": "No MCP servers are available in the current scope.",
+  "mcpPicker.selected": "{count} selected",
+  "mcpPicker.disabled": "Disabled",
   "studio.agentStudio": "Agent Studio",
   "studio.configure": "Configure agent",
   "studio.resources": "Resources",
@@ -192,6 +199,13 @@ const en = {
 export type SkillStudioTranslationKey = keyof typeof en;
 
 const zhCN = {
+  "mcpPicker.title": "MCP 服务",
+  "mcpPicker.description": "选择当前租户可见、允许此智能体使用的 MCP 服务，保存智能体后生效。",
+  "mcpPicker.loading": "正在加载可用 MCP 服务…",
+  "mcpPicker.unavailable": "MCP 注册中心不可用（{error}）",
+  "mcpPicker.empty": "当前权限范围内没有可用的 MCP 服务。",
+  "mcpPicker.selected": "已选择 {count} 个",
+  "mcpPicker.disabled": "已禁用",
   "studio.agentStudio": "Agent Studio",
   "studio.configure": "配置智能体",
   "studio.resources": "资源",

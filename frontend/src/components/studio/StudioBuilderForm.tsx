@@ -7,6 +7,7 @@ import {
   type StructuredInstructions,
 } from "@/components/studio/structuredInstructions";
 import { A2UIConfigEditor } from "@/components/studio/A2UIConfigEditor";
+import { McpBindingPicker } from "@/components/studio/McpBindingPicker";
 import { DelegationEditor } from "@/components/studio/DelegationEditor";
 import { AccessControlEditor } from "@/components/studio/AccessControlEditor";
 import type { StudioDraft } from "@/components/studio/applyProposal";
@@ -109,6 +110,7 @@ export function StudioBuilderForm({
       <div id="studio-capabilities" className="scroll-mt-4 space-y-4 rounded-lg border bg-card/30 p-4">
         <h2 className="text-sm font-semibold">{t("studio.nav.capabilities")}</h2>
         <ToolsPicker selected={tools} onChange={(next) => setMeta({ tools: next })} />
+        <McpBindingPicker draft={draft} setDraft={setDraft} />
         <A2UIConfigEditor draft={draft} setDraft={setDraft} />
         <DelegationEditor value={draft.skillMetadata?.delegation} currentSkillId={draft.skillId} onChange={(next) => setMeta({ delegation: next })} />
       </div>
