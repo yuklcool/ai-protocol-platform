@@ -6,6 +6,7 @@ import {
   parseInstructions,
   type StructuredInstructions,
 } from "@/components/studio/structuredInstructions";
+import { A2UIConfigEditor } from "@/components/studio/A2UIConfigEditor";
 import { DelegationEditor } from "@/components/studio/DelegationEditor";
 import { AccessControlEditor } from "@/components/studio/AccessControlEditor";
 import type { StudioDraft } from "@/components/studio/applyProposal";
@@ -110,6 +111,7 @@ export function StudioBuilderForm({
         onChange={(next) => setMeta({ category: next || null })}
       />
       <ToolsPicker selected={tools} onChange={(next) => setMeta({ tools: next })} />
+      <A2UIConfigEditor draft={draft} setDraft={setDraft} />
       <DelegationEditor
         value={draft.skillMetadata?.delegation}
         currentSkillId={draft.skillId}
