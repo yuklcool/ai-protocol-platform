@@ -19,6 +19,7 @@ import pytest
 from auth.access_context import AccessContext, build_access_context, can_access
 from auth.firebase_auth import User
 from db.models.access import AccessControl
+from db.models import SkillConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -216,3 +217,26 @@ def test_access_context_is_frozen() -> None:
     ctx = _ctx(uid="x")
     with pytest.raises(Exception):  # noqa: B017 — FrozenInstanceError is a dataclass detail
         ctx.uid = "mutated"  # type: ignore[misc]
+
+
+def test_skill_tenant_is_hard_boundary_even_for_same_uid() -> None:
+    skill = SkillConfig(
+        name="tenant-skill",
+        description="tenant scoped",
+        ownerId="same-uid",
+        tenantId="tenant-a",
+        accessControl={"type": "public"},
+    )
+    assert AccessContext(uid="same-uid", tenant_id="tenant-a").can_access_skill(skill)
+    assert not AccessContext(uid="same-uid", tenant_id="tenant-b").can_access_skill(skill)
+
+
+def test_platform_skill_without_tenant_is_global() -> None:
+    skill = SkillConfig(
+        name="platform-skill",
+        description="platform scoped",
+        ownerId="aitana-platform",
+        accessControl={"type": "public"},
+    )
+    assert AccessContext(uid="u-a", tenant_id="tenant-a").can_access_skill(skill)
+    assert AccessContext(uid="u-b", tenant_id="tenant-b").can_access_skill(skill)

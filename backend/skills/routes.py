@@ -108,6 +108,9 @@ class SkillResponse(BaseModel):
     access_control: dict = Field(alias="accessControl")
     owner_id: str = Field(alias="ownerId")
     owner_email: str = Field(alias="ownerEmail")
+    # Presentation classification only; authorization remains accessControl
+    # plus the tenant visibility evaluator.
+    kind: str = "skill"
     protocols: dict
     initial_message: str = Field(alias="initialMessage")
     tags: list[str]
@@ -130,6 +133,16 @@ class SkillResponse(BaseModel):
     @classmethod
     def from_config(cls, config: SkillConfig) -> SkillResponse:
         data = config.model_dump(by_alias=True)
+        tags = {str(tag).strip().lower() for tag in config.tags}
+        category = (config.skill_metadata.category or "").strip().lower()
+        if "system" in tags:
+            data["kind"] = "system"
+        elif tags & {"experimental", "dev-tool", "a2ui-demo", "demo", "workshop", "admin"}:
+            data["kind"] = "development"
+        elif category == "specialist" or config.skill_metadata.job or config.skill_metadata.delegation.enabled:
+            data["kind"] = "specialist"
+        else:
+            data["kind"] = "skill"
         return cls.model_validate(data)
 
 
@@ -211,6 +224,7 @@ def create_skill(req: CreateSkillRequest, user: User = Depends(get_current_user)
         description=req.description,
         instructions=req.instructions,
         owner_id=user.uid,
+        tenant_id=user.tenant_id or user.domain,
         owner_email=user.email,
         displayName=req.display_name or req.name,
         avatar=req.avatar,
@@ -400,6 +414,7 @@ def fork_skill(
         description=source.description,
         instructions=source.instructions,
         owner_id=user.uid,
+        tenant_id=user.tenant_id or user.domain,
         owner_email=user.email,
         displayName=f"{source.display_name} (Fork)" if source.display_name else "",
         avatar=source.avatar,

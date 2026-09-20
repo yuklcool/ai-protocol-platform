@@ -4,7 +4,10 @@ Tenant isolation is a hard boundary that runs *before* ordinary sharing ACLs.
 Any resource exposing a ``tenant_id`` attribute is tenant-aware: its tenant id
 must be non-empty and match the authenticated context. Public/domain/tagged
 sharing never crosses that boundary. Resources that have not yet migrated to a
-first-class tenant field keep the historical five-type ACL behaviour.
+first-class tenant field keep the historical five-type ACL behaviour. A
+SkillConfig with a missing tenant id is legacy-only: it remains available to
+platform-owned skills and non-tenant background callers, but authenticated
+tenant requests fail closed until migration assigns ownership.
 """
 
 from __future__ import annotations
@@ -50,7 +53,13 @@ class AccessContext:
             return True
         resource_tenant = str(getattr(resource, "tenant_id", "") or "").strip()
         viewer_tenant = (self.tenant_id or "").strip()
-        return bool(resource_tenant and viewer_tenant and resource_tenant == viewer_tenant)
+        if not resource_tenant:
+            # Canonical platform skills are intentionally tenant-global. A
+            # legacy user skill without tenantId is usable only by legacy
+            # background/test callers with no tenant context; an authenticated
+            # tenant request must not infer ownership from UID or domain.
+            return getattr(resource, "owner_id", "") == "aitana-platform" or not viewer_tenant
+        return bool(viewer_tenant and resource_tenant == viewer_tenant)
 
     def is_owner(self, resource: _HasAccess) -> bool:
         return self._tenant_allows(resource) and bool(resource.owner_id) and resource.owner_id == self.uid

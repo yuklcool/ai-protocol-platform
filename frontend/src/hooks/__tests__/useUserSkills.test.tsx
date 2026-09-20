@@ -72,11 +72,9 @@ function platformSkill(overrides: Partial<Skill> = {}): Skill {
   };
 }
 
-// Mock implementation that routes by URL — own vs platform vs unknown.
-function makeRouter(own: Skill[], platform: Skill[]) {
+function makeRouter(skills: Skill[]) {
   return (input: string) => {
-    if (input.includes("ownerId=uid-1")) return makeResponse(own);
-    if (input.includes("ownerId=aitana-platform")) return makeResponse(platform);
+    if (input === "/api/proxy/api/skills") return makeResponse(skills);
     return makeResponse([], false);
   };
 }
@@ -89,24 +87,20 @@ describe("useUserSkills", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("fetches own + platform skills in parallel and merges them", async () => {
+  it("fetches the backend-computed effective skill set", async () => {
     const own = [ownSkill({ skillId: "own-1" })];
     const platform = [
       platformSkill({ skillId: "plat-1", name: "general-assistant" }),
       platformSkill({ skillId: "plat-2", name: "code-assistant" }),
     ];
-    mockFetch.mockImplementation(makeRouter(own, platform));
+    mockFetch.mockImplementation(makeRouter([...own, ...platform]));
 
     const { result } = renderHook(() => useUserSkills("uid-1"));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
-      "/api/proxy/api/skills?ownerId=uid-1",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/proxy/api/skills?ownerId=aitana-platform",
+      "/api/proxy/api/skills",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     // Own skills come first, platform skills last.
@@ -119,30 +113,24 @@ describe("useUserSkills", () => {
 
   it("merges platform skills even when the user has none of their own", async () => {
     const platform = [platformSkill({ skillId: "plat-1" })];
-    mockFetch.mockImplementation(makeRouter([], platform));
+    mockFetch.mockImplementation(makeRouter(platform));
 
     const { result } = renderHook(() => useUserSkills("uid-1"));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.skills.map((s) => s.skillId)).toEqual(["plat-1"]);
   });
 
-  it("dedupes platform skills that overlap with the user's own list (by skillId)", async () => {
-    // Edge case: same skillId in both responses (e.g. backend leaks a config
-    // into both queries). Own copy wins, no duplicate row.
-    const shared = ownSkill({ skillId: "shared", name: "shared-skill" });
-    mockFetch.mockImplementation(makeRouter([shared], [{ ...shared, name: "platform-shared" }]));
+  it("preserves shared domain/tagged skills returned by the backend", async () => {
+    const shared = ownSkill({ skillId: "shared", name: "shared-skill", ownerId: "other-user" });
+    mockFetch.mockImplementation(makeRouter([shared]));
 
     const { result } = renderHook(() => useUserSkills("uid-1"));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.skills).toHaveLength(1);
-    expect(result.current.skills[0].name).toBe("shared-skill");
+    expect(result.current.skills.map((s) => s.skillId)).toEqual(["shared"]);
   });
 
   it("sets error and clears skills when either fetch fails", async () => {
-    mockFetch.mockImplementation((input: string) => {
-      if (input.includes("ownerId=uid-1")) return makeResponse({}, false);
-      return makeResponse([platformSkill()]);
-    });
+    mockFetch.mockImplementation(() => makeResponse({}, false));
 
     const { result } = renderHook(() => useUserSkills("uid-1"));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -155,14 +143,13 @@ describe("useUserSkills", () => {
     const { rerender, unmount } = renderHook(({ uid }) => useUserSkills(uid), {
       initialProps: { uid: "uid-1" as string | null },
     });
-    // 2 fetches per uid (own + platform).
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     const firstSignal = (mockFetch.mock.calls[0][1] as { signal: AbortSignal }).signal;
     expect(firstSignal.aborted).toBe(false);
 
     rerender({ uid: "uid-2" });
     expect(firstSignal.aborted).toBe(true);
-    expect(mockFetch).toHaveBeenCalledTimes(4);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
 
     unmount();
   });

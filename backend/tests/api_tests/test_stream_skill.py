@@ -69,6 +69,7 @@ def _make_skill(
         instructions="Be helpful.",
         skillId=skill_id,
         ownerId=owner_id,
+        tenantId="test-tenant",
         skillMetadata=SkillMetadata(model="gemini-2.5-flash"),
         accessControl={"type": access_type},
     )

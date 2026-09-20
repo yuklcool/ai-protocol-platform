@@ -76,6 +76,7 @@ from adk.session import get_session_service
 from auth import User, get_current_user
 from db.chat_sessions import app_name_for_session, get_session_index
 from db.models.chat_session import ChatSessionIndex
+from protocols._a2ui_surface_shared import _enforce_root_interaction
 from skills import skill_config
 
 log = logging.getLogger(__name__)
@@ -220,7 +221,17 @@ async def post_iframe_context(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Gates 5 + 6: server is activated + opted into context-writes
-    _enforce_skill_allowlists(idx.skill_id, body.server_id, user)
+    root_skill = _enforce_root_interaction(idx, user, request, "allow_surface_context_writes")
+    if root_skill is None:
+        _enforce_skill_allowlists(idx.skill_id, body.server_id, user)
+    else:
+        # The composed Root Agent already intersected the configured MCP
+        # server ceiling with the capability's required server list. The
+        # callback still must name one of those effective servers and cannot
+        # invent a server id merely because the Root interaction flag is on.
+        mcp_config = (root_skill.skill_metadata.tool_configs or {}).get("mcp") or {}
+        if body.server_id not in (mcp_config.get("servers") or []):
+            raise HTTPException(status_code=403, detail="MCP server is not bound to the Root Agent")
 
     # Gate 7: size cap
     size_bytes = _enforce_size_cap(body.structured_content)

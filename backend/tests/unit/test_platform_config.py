@@ -9,9 +9,9 @@ import config.platform_config as pc
 
 @pytest.fixture(autouse=True)
 def _reset_cache():
-    pc.invalidate_cache()
+    pc.invalidate_cache(clear_last_known_good=True)
     yield
-    pc.invalidate_cache()
+    pc.invalidate_cache(clear_last_known_good=True)
 
 
 def test_returns_code_default_when_no_doc(monkeypatch):
@@ -29,13 +29,25 @@ def test_reads_stored_override(monkeypatch):
     assert config.enabled is False
 
 
-def test_fails_open_to_default_on_read_error(monkeypatch):
+def test_fails_closed_when_no_policy_is_available(monkeypatch):
     def _boom(*a, **k):
         raise RuntimeError("persistence down")
 
     monkeypatch.setattr(pc, "get_document", _boom)
-    config = pc.get_platform_config()
-    assert config.preamble == pc.DEFAULT_PREAMBLE
+    with pytest.raises(pc.PlatformConfigUnavailable):
+        pc.get_platform_config()
+
+
+def test_read_error_uses_last_known_good_policy(monkeypatch):
+    monkeypatch.setattr(pc, "get_document", lambda *a, **k: {"preamble": "KNOWN", "enabled": True})
+    assert pc.get_platform_config().preamble == "KNOWN"
+
+    def _boom(*a, **k):
+        raise RuntimeError("persistence down")
+
+    monkeypatch.setattr(pc, "get_document", _boom)
+    pc.invalidate_cache()
+    assert pc.get_platform_config().preamble == "KNOWN"
 
 
 def test_cache_avoids_second_read(monkeypatch):
@@ -105,12 +117,11 @@ def test_stored_compaction_block_round_trips_camel_case(monkeypatch):
     assert settings.second_pass_idle_seconds == 600
 
 
-def test_an_invalid_stored_compaction_value_falls_back_to_default_config(monkeypatch):
+def test_an_invalid_stored_compaction_value_fails_closed_without_lkg(monkeypatch):
     monkeypatch.setattr(
         pc,
         "get_document",
         lambda *a, **k: {"preamble": "P", "enabled": True, "compaction": {"tokenThreshold": 0}},
     )
-    config = pc.get_platform_config()
-    assert config.preamble == pc.DEFAULT_PREAMBLE
-    assert config.compaction.token_threshold is None
+    with pytest.raises(pc.PlatformConfigUnavailable):
+        pc.get_platform_config()

@@ -68,6 +68,13 @@ def test_miss_on_group_tag_change():
     assert hit is False and a1 is not a2
 
 
+def test_miss_when_root_policy_scope_changes():
+    skill, access = _skill(), _access()
+    a1, _ = agent_cache.get_or_build(skill, access, object, cache_scope="root:old")
+    a2, hit = agent_cache.get_or_build(skill, access, object, cache_scope="root:new")
+    assert hit is False and a1 is not a2
+
+
 def test_ttl_expiry_rebuilds(monkeypatch):
     skill, access = _skill(), _access()
     monkeypatch.setattr(agent_cache, "_CACHE_TTL", 0.0)  # everything is immediately stale

@@ -6,6 +6,7 @@ plus custom routes for channels, direct API, and protocols.
 """
 
 import logging
+import hashlib
 import os
 import sys as _sys_for_local_mode
 
@@ -345,6 +346,7 @@ from agents.root_runtime import (  # noqa: E402
     ROOT_AGENT_ID,
     RootCapabilityDenied,
     compose_root_skill,
+    effective_root_config,
     resolve_root_capability,
 )
 from admin.access_routes import router as admin_access_router  # noqa: E402
@@ -363,7 +365,7 @@ from admin.tenants import router as admin_tenants_router  # noqa: E402
 from admin.tool_permissions_routes import router as admin_tool_permissions_router  # noqa: E402
 from admin.users_routes import router as admin_users_router  # noqa: E402
 from auth import User, get_current_user  # noqa: E402
-from config.platform_config import get_platform_config  # noqa: E402
+from config.platform_config import PlatformConfigUnavailable, get_platform_config  # noqa: E402
 from auth.group_routes import router as group_auth_router  # noqa: E402
 from auth.routes import router as auth_router  # noqa: E402
 from buckets.routes import router as buckets_router  # noqa: E402
@@ -684,6 +686,7 @@ async def stream_skill(
     runtime_skill = getattr(request.state, "root_runtime_skill", None)
     session_agent_id = getattr(request.state, "session_agent_id", skill_id)
     app_name = getattr(request.state, "agent_app_name", "aitana_platform")
+    agent_cache_scope = getattr(request.state, "agent_cache_scope", None)
     tracker = LatencyTracker(
         skill_id=getattr(request.state, "tracker_skill_id", skill_id),
         session_id=body.effective_session_id or "",
@@ -746,6 +749,7 @@ async def stream_skill(
         runtime_skill=runtime_skill,
         session_agent_id=session_agent_id,
         app_name=app_name,
+        agent_cache_scope=agent_cache_scope,
     )
     try:
         # Surface SkillNotFoundError *before* returning the StreamingResponse so
@@ -840,7 +844,16 @@ async def stream_root_agent(
     the resolver intersects the Root Agent ceiling with tenant narrowing and
     the authenticated user's resource ACL before one capability is composed.
     """
-    root_config = get_platform_config().agent
+    try:
+        root_config = effective_root_config(
+            get_platform_config().agent,
+            request.state.access.tenant_id,
+        )
+    except PlatformConfigUnavailable as exc:
+        _log.error("root-agent policy unavailable; refusing request: %s", exc)
+        raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
+    policy_json = root_config.model_dump_json(by_alias=True, exclude_none=False, round_trip=True)
+    request.state.agent_cache_scope = "root:" + hashlib.sha256(policy_json.encode("utf-8")).hexdigest()
     forwarded = body.forwardedProps or {}
     requested_ref = forwarded.get("capability_hint") or forwarded.get("capabilityHint")
     try:

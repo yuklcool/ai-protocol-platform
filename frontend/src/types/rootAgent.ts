@@ -20,6 +20,7 @@ export interface RootAgentConfig {
   interaction: RootAgentInteraction;
   permissions: Record<string, unknown>;
   specialistAgents: string[];
+  tenantOverrides: Record<string, unknown>;
 }
 
 export const DEFAULT_ROOT_AGENT_CONFIG: RootAgentConfig = {
@@ -40,8 +41,9 @@ export const DEFAULT_ROOT_AGENT_CONFIG: RootAgentConfig = {
     welcomeMessage: "",
     voiceEnabled: false,
   },
-  permissions: {},
+  permissions: { failClosed: false },
   specialistAgents: [],
+  tenantOverrides: {},
 };
 
 export function normalizeRootAgentConfig(value: unknown): RootAgentConfig {
@@ -62,5 +64,6 @@ export function normalizeRootAgentConfig(value: unknown): RootAgentConfig {
       ...DEFAULT_ROOT_AGENT_CONFIG.interaction,
       ...interaction,
     },
+    tenantOverrides: raw.tenantOverrides && typeof raw.tenantOverrides === "object" ? raw.tenantOverrides : {},
   };
 }

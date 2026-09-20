@@ -43,6 +43,10 @@ class ChatSessionIndex(BaseModel):
     # ADK app/session namespace. Legacy rows stay on APP_NAME; Root Agent
     # rows use `root-agent` so their runtime identity is isolated.
     agent_id: str = Field(default="aitana_platform", alias="agentId")
+    # Persist the namespace independently from the mutable capability/agent
+    # label. A session may change capabilities during its lifetime; changing
+    # this value would make the transcript appear to disappear from ADK.
+    app_name: str = Field(default="aitana_platform", alias="appName")
     skill_id: str = Field(alias="skillId")
     skill_history: list[str] = Field(default_factory=list, alias="skillHistory")
     owner_uid: str = Field(alias="ownerUid")

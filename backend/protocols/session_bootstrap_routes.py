@@ -63,6 +63,7 @@ async def bootstrap_session(
             access_control=AccessControl(type="private"),
             document_ids=body.document_ids,
             agent_id=body.agent_id,
+            app_name=ROOT_AGENT_APP_NAME if body.agent_id == "root-agent" else APP_NAME,
             provisional=True,
         )
     except (ValueError, PermissionError) as exc:

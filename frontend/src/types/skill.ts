@@ -104,6 +104,8 @@ export interface Skill {
   avatar: string;
   ownerEmail: string;
   ownerId: string;
+  /** Backend presentation classification; never an authorization grant. */
+  kind?: "skill" | "specialist" | "system" | "development";
   accessControl: AccessControl;
   protocols: Protocols;
   initialMessage: string;

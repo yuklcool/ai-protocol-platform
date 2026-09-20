@@ -27,6 +27,29 @@ class RootAgentInteraction(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class RootAgentTenantOverride(BaseModel):
+    """Tenant-scoped Root Agent policy overlay.
+
+    The platform singleton remains the global ceiling/default, while this
+    optional map lets a tenant bind its own private Skills and model policy
+    without placing tenant-owned resource ids in a global allow-list.
+    ``None`` means "inherit the platform value"; an empty list intentionally
+    means "allow none".
+    """
+
+    model: str | None = None
+    instructions: str | None = None
+    skills: list[str] | None = None
+    tools: list[str] | None = None
+    mcp_servers: list[str] | None = Field(default=None, alias="mcpServers")
+    knowledge: list[str] | None = None
+    interaction: RootAgentInteraction | None = None
+    permissions: dict[str, Any] | None = None
+    specialist_agents: list[str] | None = Field(default=None, alias="specialistAgents")
+
+    model_config = {"populate_by_name": True}
+
+
 class RootAgentConfig(BaseModel):
     """The one platform Agent and its capability bindings.
 
@@ -50,8 +73,13 @@ class RootAgentConfig(BaseModel):
     interaction: RootAgentInteraction = Field(default_factory=RootAgentInteraction)
     permissions: dict[str, Any] = Field(default_factory=dict)
     specialist_agents: list[str] = Field(default_factory=list, alias="specialistAgents", max_length=100)
+    tenant_overrides: dict[str, RootAgentTenantOverride] = Field(
+        default_factory=dict,
+        alias="tenantOverrides",
+        max_length=100,
+    )
 
     model_config = {"populate_by_name": True}
 
 
-__all__ = ["RootAgentConfig", "RootAgentInteraction"]
+__all__ = ["RootAgentConfig", "RootAgentInteraction", "RootAgentTenantOverride"]

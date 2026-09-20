@@ -69,12 +69,12 @@ const OTHER_CATEGORY_LABEL = "Other skills";
 
 /** True when a skill's tags intersect the admin/test tag set. */
 export function isTestSkill(skill: Pick<Skill, "tags">): boolean {
-  return (skill.tags ?? []).some((t) => TEST_TAGS.has(t));
+  return (skill as Skill & { kind?: string }).kind === "development" || (skill.tags ?? []).some((t) => TEST_TAGS.has(t));
 }
 
 /** True for platform-embedded system agents — hidden from the picker. */
 export function isSystemSkill(skill: Pick<Skill, "tags">): boolean {
-  return (skill.tags ?? []).includes(SYSTEM_TAG);
+  return (skill as Skill & { kind?: string }).kind === "system" || (skill.tags ?? []).includes(SYSTEM_TAG);
 }
 
 function skillName(skill: Skill): string {
