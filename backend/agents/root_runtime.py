@@ -14,7 +14,7 @@ from typing import Any
 from auth.access_context import AccessContext
 from auth.firebase_auth import User
 from db.clients import resolve_default_skill, resolve_enabled_skills
-from db.models import SkillConfig
+from db.models import DelegationConfig, FallbackConfig, SkillConfig
 from db.models.root_agent import RootAgentConfig
 from skills.skill_config import resolve_skill_ref
 
@@ -23,6 +23,36 @@ ROOT_AGENT_ID = "root-agent"
 
 class RootCapabilityDenied(Exception):
     """Raised when the Root Agent cannot use the requested capability."""
+
+
+def effective_root_config(config: RootAgentConfig, tenant_id: str | None) -> RootAgentConfig:
+    """Apply the tenant policy overlay without widening the global policy.
+
+    A tenant override is an explicit replacement for list-valued bindings, so
+    tenant-private Skills do not need to be stored in the platform-wide
+    ``skills`` list. Fields omitted by the override inherit the global value.
+    """
+    tenant = (tenant_id or "").strip()
+    override = config.tenant_overrides.get(tenant) if tenant else None
+    if override is None:
+        return config
+
+    updates: dict[str, Any] = {}
+    for field in (
+        "model",
+        "instructions",
+        "skills",
+        "tools",
+        "mcp_servers",
+        "knowledge",
+        "interaction",
+        "permissions",
+        "specialist_agents",
+    ):
+        value = getattr(override, field)
+        if value is not None:
+            updates[field] = value
+    return config.model_copy(deep=True, update=updates)
 
 
 def _permission_values(permissions: dict[str, Any], *names: str) -> set[str]:
@@ -69,10 +99,21 @@ def resolve_root_capability(
     never expanded into a list of all skills.
     """
     configured = [str(ref) for ref in config.skills if str(ref).strip()]
+    fail_closed = (config.permissions or {}).get("failClosed") is True
     requested = (requested_ref or "").strip()
     if requested:
+        # A fail-closed Root Agent cannot be widened by a client-supplied
+        # capability hint when the admin has not configured an allow-list.
+        # Keep the legacy compatibility bridge only when it is explicitly
+        # opted into by leaving failClosed false.
+        if fail_closed and not configured:
+            raise RootCapabilityDenied("Root Agent capability ceiling is empty")
         if configured and requested not in configured:
-            raise RootCapabilityDenied("requested capability is outside the Root Agent ceiling")
+            requested_skill = resolve_skill_ref(requested, getattr(user, "uid", None))
+            if requested_skill is None or (
+                requested_skill.skill_id not in configured and (requested_skill.slug or "") not in configured
+            ):
+                raise RootCapabilityDenied("requested capability is outside the Root Agent ceiling")
         skill = _configured_ref(config, requested, user, access)
         if skill is None:
             raise RootCapabilityDenied("requested capability is unavailable")
@@ -80,6 +121,8 @@ def resolve_root_capability(
 
     candidates = configured
     if not candidates:
+        if fail_closed:
+            raise RootCapabilityDenied("no Root Agent capability is configured")
         default_ref = resolve_default_skill(user)
         candidates = [default_ref] if default_ref else []
 
@@ -99,9 +142,26 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
     metadata = skill.skill_metadata.model_copy(deep=True)
     tool_configs = dict(metadata.tool_configs or {})
 
+    # Skill-level model strategy and delegation are not Root Agent policy.
+    # Clear them before composing so a capability cannot smuggle in a second
+    # model, fallback egress path, or specialist graph. Specialists must be
+    # explicitly bound at the Root Agent level.
+    metadata.thinking_model = None
+    metadata.fallback = FallbackConfig()
+    metadata.sub_skills = []
+    metadata.delegation = DelegationConfig(
+        enabled=bool(config.specialist_agents),
+        allow=list(config.specialist_agents),
+        maxDepth=1,
+    )
+
     if strict:
         allowed_tools = set(config.tools)
-        metadata.tools = [tool for tool in metadata.tools if tool in allowed_tools]
+        # Root-level bindings are the authoritative capability set. This is
+        # intentionally not an intersection with the Skill's old list: a
+        # Root Agent tool may be bound once at the Agent level even when a
+        # legacy Skill never declared it.
+        metadata.tools = list(dict.fromkeys(config.tools))
 
         # The legacy factory adds artifact/memory defaults outside metadata.tools.
         # Make the Root Agent ceiling apply to those defaults too.
@@ -111,13 +171,26 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
         tool_configs["defaults"] = defaults
 
         mcp = dict(tool_configs.get("mcp") or {})
-        mcp["servers"] = [server for server in mcp.get("servers", []) if server in set(config.mcp_servers)]
+        # MCP servers are Root Agent bindings, not Skill-owned connections.
+        # The registry and tenant visibility checks still apply when the ADK
+        # toolset is resolved.
+        mcp["servers"] = list(dict.fromkeys(config.mcp_servers))
         tool_configs["mcp"] = mcp
 
-    if config.interaction.a2ui_enabled is False:
-        a2ui = dict(tool_configs.get("a2ui") or {})
-        a2ui["enabled"] = False
-        tool_configs["a2ui"] = a2ui
+    interaction = config.interaction
+    a2ui = dict(tool_configs.get("a2ui") or {})
+    a2ui.update(
+        {
+            "enabled": interaction.a2ui_enabled,
+            "default_surface": interaction.default_surface,
+            "default_update_mode": interaction.default_update_mode,
+            "allow_surface_context_writes": interaction.allow_surface_context_writes,
+            "allow_action_triggered_runs": interaction.allow_action_triggered_runs,
+        }
+    )
+    tool_configs["a2ui"] = a2ui
+    if config.knowledge:
+        tool_configs["knowledge"] = {"sources": list(config.knowledge)}
 
     metadata.tool_configs = tool_configs
     metadata.model = config.model or metadata.model
@@ -129,6 +202,7 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
         deep=True,
         update={
             "instructions": instructions,
+            "initial_message": config.interaction.welcome_message or skill.initial_message,
             "skill_metadata": metadata,
         },
     )
@@ -138,5 +212,6 @@ __all__ = [
     "ROOT_AGENT_ID",
     "RootCapabilityDenied",
     "compose_root_skill",
+    "effective_root_config",
     "resolve_root_capability",
 ]

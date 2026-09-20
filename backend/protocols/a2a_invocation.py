@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from google.adk.runners import Runner
@@ -63,6 +63,21 @@ logger = logging.getLogger(__name__)
 # for auth-denied. A2A v0.2 doesn't reserve a dedicated auth code, so we mirror
 # JSON-RPC 2.0 implementation-defined server-error semantics.
 _AUTH_ERROR_CODE = -32000
+
+
+class _A2APrincipal:
+    """Minimal Starlette principal consumed by the A2A context builder."""
+
+    is_authenticated = True
+
+    def __init__(self, display_name: str) -> None:
+        self.display_name = display_name
+
+
+def _a2a_owner_scope(context: Any) -> str:
+    """Partition A2A tasks by stable tenant and authenticated UID."""
+    name = str(getattr(getattr(context, "user", None), "user_name", "") or "").strip()
+    return name or "a2a:unauthenticated"
 
 
 def _jsonrpc_error_response(status: int, message: str, request_id: object = None) -> JSONResponse:
@@ -134,9 +149,13 @@ class A2AAuthMiddleware(BaseHTTPMiddleware):
             return _jsonrpc_error_response(500, "internal auth error")
 
         # Make the resolved user available downstream (e.g. for audit
-        # logging) — the A2A executor itself doesn't consult it today,
-        # but stashing it on request.state matches what /api/skill does.
+        # logging). The A2A SDK's DefaultServerCallContextBuilder reads its
+        # principal from request.scope['user'], not request.state, so populate
+        # both. The principal name is deliberately tenant+UID scoped; relying
+        # on UID alone reopens the same-UID cross-tenant task collision.
         request.state.user = user
+        tenant = (getattr(user, "tenant_id", "") or getattr(user, "domain", "") or "unknown").strip()
+        request.scope["user"] = _A2APrincipal(f"a2a:{tenant}:{user.uid}")
         return await call_next(request)
 
 
@@ -290,7 +309,11 @@ def build_a2a_app(
     executor = A2aAgentExecutor(runner=runner, config=executor_config, force_new_version=True)
     request_handler = DefaultRequestHandler(
         agent_executor=executor,
-        task_store=InMemoryTaskStore(),
+        # The SDK's default owner resolver is user_name-only. Supply an
+        # explicit resolver together with the tenant-scoped principal set by
+        # A2AAuthMiddleware so the same task id cannot be read or updated by a
+        # different authenticated user or tenant.
+        task_store=InMemoryTaskStore(owner_resolver=_a2a_owner_scope),
         push_config_store=InMemoryPushNotificationConfigStore(),
     )
     a2a_starlette = A2AStarletteApplication(

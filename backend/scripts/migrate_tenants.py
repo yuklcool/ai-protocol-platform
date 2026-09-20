@@ -46,6 +46,7 @@ from auth.permissions import TENANT_PREFIX, tenant_permission_key
 from db.persistence import get_repository
 from db.repository import Repository
 from db.tenants import TenantConfig, normalize_domain, normalize_tenant_id
+from skills.platform import PLATFORM_OWNER_UID
 from scripts.tenant_migration_journal import MigrationJournal, rollback_migration
 
 CLIENT_COLLECTION = "clients"
@@ -54,6 +55,7 @@ DOMAIN_COLLECTION = "tenant_domains"
 AUTH_USER_COLLECTION = "auth_users"
 TOOL_PERMISSION_COLLECTION = "tool_permissions"
 AUDIT_COLLECTION = "admin_audit"
+SKILL_COLLECTION = "skills"
 
 
 @dataclass
@@ -135,6 +137,12 @@ class PlannedAuditUpdate:
 
 
 @dataclass
+class PlannedSkillUpdate:
+    doc_id: str
+    tenant_id: str
+
+
+@dataclass
 class MigrationResult:
     configs: list[TenantConfig]
     users_updated: int = 0
@@ -142,6 +150,7 @@ class MigrationResult:
     tenant_permissions_updated: int = 0
     user_permissions_updated: int = 0
     audits_updated: int = 0
+    skills_updated: int = 0
     run_id: str | None = None
 
     # Preserve the historical ``configs, users_updated = migrate(...)`` API for
@@ -158,6 +167,7 @@ class MigrationResult:
             "tenantPermissionsUpdated": self.tenant_permissions_updated,
             "userPermissionsUpdated": self.user_permissions_updated,
             "auditsUpdated": self.audits_updated,
+            "skillsUpdated": self.skills_updated,
         }
 
 
@@ -493,6 +503,49 @@ def _plan_audit_updates(
     return planned
 
 
+def _plan_skill_updates(
+    repository: Repository,
+    domain_mapping: dict[str, str],
+) -> list[PlannedSkillUpdate]:
+    """Backfill tenant ownership for legacy user-owned skills.
+
+    A skill's ``ownerId`` is accepted only when it matches an explicit local
+    auth-user record whose tenant is already trusted from ``tenantId`` or the
+    migration's explicit domain mapping. Owner email/domain metadata is not
+    enough evidence on its own. If the same uid appears in multiple tenants,
+    the uid is treated as ambiguous and remains fail-closed.
+    """
+    owner_tenants: dict[str, str] = {}
+    ambiguous_owners: set[str] = set()
+    for row in repository.query_documents(AUTH_USER_COLLECTION, limit=None):
+        owner_id = str(row.get("uid") or "").strip()
+        if not owner_id:
+            continue
+        explicit_tenant = normalize_tenant_id(str(row.get("tenantId") or ""))
+        domain = normalize_domain(str(row.get("domain") or ""))
+        tenant_id = explicit_tenant or domain_mapping.get(domain, "")
+        if not tenant_id:
+            continue
+        previous = owner_tenants.get(owner_id)
+        if previous and previous != tenant_id:
+            ambiguous_owners.add(owner_id)
+        elif owner_id not in ambiguous_owners:
+            owner_tenants[owner_id] = tenant_id
+
+    planned: list[PlannedSkillUpdate] = []
+    for row in repository.query_documents(SKILL_COLLECTION, limit=None):
+        doc_id = str(row.get("__id") or row.get("skillId") or "").strip()
+        if not doc_id or str(row.get("tenantId") or "").strip():
+            continue
+        owner_id = str(row.get("ownerId") or "").strip()
+        if not owner_id or owner_id == PLATFORM_OWNER_UID or owner_id in ambiguous_owners:
+            continue
+        tenant_id = owner_tenants.get(owner_id)
+        if tenant_id:
+            planned.append(PlannedSkillUpdate(doc_id=doc_id, tenant_id=tenant_id))
+    return planned
+
+
 def migrate(
     repository: Repository,
     mapping: dict[str, str],
@@ -523,6 +576,7 @@ def migrate(
         user_tenants=user_tenants,
         known_tenants=known_tenants,
     )
+    skill_updates = _plan_skill_updates(repository, domain_mapping)
 
     result = MigrationResult(configs=configs)
     if not apply:
@@ -564,6 +618,10 @@ def migrate(
         for audit in audit_updates:
             if journal.update_fields(AUDIT_COLLECTION, audit.doc_id, {"tenantId": audit.tenant_id}):
                 result.audits_updated += 1
+
+        for skill in skill_updates:
+            if journal.update_fields(SKILL_COLLECTION, skill.doc_id, {"tenantId": skill.tenant_id}):
+                result.skills_updated += 1
 
         journal.finish(result.summary())
     except Exception as exc:

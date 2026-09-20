@@ -13,3 +13,9 @@ def test_root_agent_uses_camel_case_wire_fields() -> None:
     payload = config.model_dump(by_alias=True)
     assert payload["displayName"] == "Lighting Assistant"
     assert payload["mcpServers"] == ["lighting-mcp"]
+
+
+def test_root_agent_supports_tenant_scoped_private_bindings() -> None:
+    config = RootAgentConfig(tenantOverrides={"tenant-a": {"model": "lite", "skills": ["private-a"]}})
+    payload = config.model_dump(by_alias=True)
+    assert payload["tenantOverrides"]["tenant-a"]["skills"] == ["private-a"]

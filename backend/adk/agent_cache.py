@@ -50,13 +50,18 @@ def clear() -> None:
     _cache.clear()
 
 
-def _key(skill: SkillConfig, access: AccessContext) -> tuple:
+def _key(skill: SkillConfig, access: AccessContext, cache_scope: str | None = None) -> tuple:
     # AccessContext is a frozen dataclass (group_tags is a frozenset), so it is
     # hashable and safe to embed directly.
-    return (skill.skill_id, skill.updated_at, access)
+    return (skill.skill_id, skill.updated_at, access, cache_scope)
 
 
-def get_or_build(skill: SkillConfig, access: AccessContext, builder: Callable[[], Any]) -> tuple[Any, bool]:
+def get_or_build(
+    skill: SkillConfig,
+    access: AccessContext,
+    builder: Callable[[], Any],
+    cache_scope: str | None = None,
+) -> tuple[Any, bool]:
     """Return ``(agent, cache_hit)`` for ``(skill, access)``, building on miss.
 
     ``builder`` is called only on a miss and its result cached. If the key can't
@@ -64,7 +69,7 @@ def get_or_build(skill: SkillConfig, access: AccessContext, builder: Callable[[]
     quirk can never break a turn.
     """
     try:
-        key = _key(skill, access)
+        key = _key(skill, access, cache_scope)
         hash(key)
     except Exception as exc:  # pragma: no cover - AccessContext is hashable
         logger.debug("agent_cache: unhashable key (%s) — building uncached", type(exc).__name__)

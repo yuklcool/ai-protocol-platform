@@ -56,6 +56,16 @@ def _seed_full_legacy_graph(repository: MemoryRepository) -> None:
         },
     )
     repository.set_document(
+        "skills",
+        "legacy-user-skill",
+        {
+            "skillId": "legacy-user-skill",
+            "ownerId": "u1",
+            "ownerEmail": "alice@a.example",
+            "name": "legacy-user-skill",
+        },
+    )
+    repository.set_document(
         "admin_audit",
         "audit-user",
         {
@@ -95,6 +105,7 @@ def test_apply_migrates_only_trusted_ownership_and_journal_contains_no_password_
     assert result.tenant_permissions_created == 1
     assert result.user_permissions_updated == 1
     assert result.audits_updated == 2
+    assert result.skills_updated == 1
 
     tenant = repository.get_document("tenants", "tenant-a")
     assert tenant is not None
@@ -117,6 +128,7 @@ def test_apply_migrates_only_trusted_ownership_and_journal_contains_no_password_
 
     assert repository.get_document("admin_audit", "audit-client")["tenantId"] == "tenant-a"
     assert repository.get_document("admin_audit", "audit-user")["tenantId"] == "tenant-a"
+    assert repository.get_document("skills", "legacy-user-skill")["tenantId"] == "tenant-a"
     # Actor email is never used as target ownership evidence.
     assert repository.get_document("admin_audit", "audit-ambiguous")["tenantId"] == ""
 
@@ -152,6 +164,7 @@ def test_rollback_restores_only_touched_fields_and_removes_created_documents() -
     assert user["passwordHash"] == "scrypt$SECRET-MUST-NOT-BE-JOURNALED"
     assert "tenantId" not in repository.get_document("tool_permissions", "alice@a.example")
     assert repository.get_document("admin_audit", "audit-client")["tenantId"] == ""
+    assert "tenantId" not in repository.get_document("skills", "legacy-user-skill")
     assert repository.get_document(RUN_COLLECTION, result.run_id)["status"] == "rolled_back"
 
 
@@ -228,6 +241,37 @@ def test_existing_explicit_user_tenant_is_not_overwritten_from_email_domain() ->
     assert repository.get_document("tool_permissions", "user@a.example")["tenantId"] == "tenant-special"
     assert result.users_updated == 0
     assert result.user_permissions_updated == 1
+
+
+def test_ambiguous_skill_owner_uid_is_left_fail_closed() -> None:
+    repository = MemoryRepository()
+    repository.set_document("clients", "a.example", {})
+    repository.set_document("clients", "b.example", {})
+    repository.set_document(
+        "auth_users",
+        "user-a",
+        {"uid": "same-uid", "email": "a@a.example", "domain": "a.example"},
+    )
+    repository.set_document(
+        "auth_users",
+        "user-b",
+        {"uid": "same-uid", "email": "b@b.example", "domain": "b.example"},
+    )
+    repository.set_document(
+        "skills",
+        "ambiguous-skill",
+        {"skillId": "ambiguous-skill", "ownerId": "same-uid"},
+    )
+
+    result = migrate(
+        repository,
+        {"a.example": "tenant-a", "b.example": "tenant-b"},
+        apply=True,
+        require_explicit=True,
+    )
+
+    assert result.skills_updated == 0
+    assert "tenantId" not in repository.get_document("skills", "ambiguous-skill")
 
 
 def test_dry_run_creates_no_journal_or_ownership_records() -> None:

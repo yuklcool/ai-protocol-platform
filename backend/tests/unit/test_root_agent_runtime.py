@@ -29,6 +29,7 @@ def _skill(skill_id: str = "cap-a", slug: str = "cap-a") -> SkillConfig:
         skillId=skill_id,
         slug=slug,
         ownerId="owner-1",
+        tenantId="tenant-1",
         accessControl={"type": "public"},
         skillMetadata=SkillMetadata(
             model="lite",

@@ -74,7 +74,9 @@ from protocols._a2ui_surface_shared import (
     _STATE_KEY_NAMESPACE,
     _delegate_with_grant,
     _enforce_size_cap,
+    _enforce_root_interaction,
     _enforce_skill_opt_in,
+    _root_runtime_for_session,
     _require_session,
 )
 from skills import skill_config
@@ -175,7 +177,7 @@ def _enforce_action_triggered_opt_in(skill_id: str, user: User) -> None:
     )
 
 
-def _resolve_agent(skill_id: str, user: User):
+def _resolve_agent(skill_id: str, user: User, request: Request | None = None, idx: Any | None = None):
     """Build the ADK agent for ``skill_id`` and pick a single agent if
     the skill uses the heuristic-router thinking strategy.
 
@@ -187,13 +189,18 @@ def _resolve_agent(skill_id: str, user: User):
     Returns:
         A built ``LlmAgent`` ready for ``build_agui_adk_agent`` to wrap.
     """
-    # Alias-tolerant (CLAUDE.md #9) — same resolution as the gate above.
-    skill = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
+    root_runtime = _root_runtime_for_session(idx, user, request) if request is not None and idx is not None else None
+    if root_runtime is not None:
+        _root_config, skill = root_runtime
+    else:
+        # Alias-tolerant (CLAUDE.md #9) — same resolution as the gate above.
+        skill = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
     if skill is None:
         # Should be unreachable because the shared opt-in gate proves
         # existence; defensive 403 keeps the error shape consistent.
         raise HTTPException(status_code=403, detail="Access denied")
-    agent_or_router = create_agent_with_thinking(skill, user)
+    access = request.state.access if request is not None else None
+    agent_or_router = create_agent_with_thinking(skill, user, access_context=access)
     if isinstance(agent_or_router, _HeuristicRouter):
         return agent_or_router.fast
     return agent_or_router
@@ -426,13 +433,18 @@ async def post_surface_action_run(
     run_skill_id = skill_id
 
     # Gates 4 + 5 + 6: skill exists + has a2ui config + opted into context writes
-    _enforce_skill_opt_in(run_skill_id, user)
+    root_skill = _enforce_root_interaction(idx, user, request, "allow_surface_context_writes")
+    if root_skill is None:
+        _enforce_skill_opt_in(run_skill_id, user)
 
     # Gate 7: action context size cap
     size_bytes = _enforce_size_cap(body.action.context)
 
     # Gate 8: per-skill opt-in for action-triggered runs (new)
-    _enforce_action_triggered_opt_in(run_skill_id, user)
+    if root_skill is None:
+        _enforce_action_triggered_opt_in(run_skill_id, user)
+    else:
+        _enforce_root_interaction(idx, user, request, "allow_action_triggered_runs")
 
     # Persist the action (same write the fire-and-forget endpoint does). Written
     # under the door's session — the target runs on this same thread.
@@ -441,7 +453,7 @@ async def post_surface_action_run(
 
     # Build the (target) agent + AG-UI bridge, then synthesize a run input that
     # carries the trigger via state + forwarded_props.
-    agent = _resolve_agent(run_skill_id, user)
+    agent = _resolve_agent(run_skill_id, user, request, idx)
     agui_agent = build_agui_adk_agent(agent, user_id=user.uid, app_name=session_app_name)
     run_input = _build_run_input(session_id, body)
 

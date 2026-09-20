@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from admin.audit import record_admin_action
 from admin.scope import PlatformScope
-from config.platform_config import get_platform_config, update_platform_config
+from config.platform_config import PlatformConfigUnavailable, get_platform_config, update_platform_config
 from db.models import (
     CONVERSATION_PLACEHOLDER,
     PREAMBLE_MAX_LEN,
@@ -94,7 +94,10 @@ def read_compaction_defaults(scope: PlatformScope) -> CompactionDefaults:
 @router.get("", response_model=PlatformConfig)
 def read_platform_config(scope: PlatformScope) -> PlatformConfig:
     """Return the current platform config. Aitana-admin only."""
-    config = get_platform_config()
+    try:
+        config = get_platform_config()
+    except PlatformConfigUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Platform policy is temporarily unavailable") from exc
     log.info("admin.platform_config: read by uid=%s", scope.user.uid)
     return config
 
@@ -125,9 +128,11 @@ def write_platform_config(body: PlatformConfigUpdate, scope: PlatformScope) -> P
         # merged field-by-field (exclude_none would silently drop a clear).
         updates["compaction"] = body.compaction.model_dump(by_alias=True)
 
-    before = get_platform_config().model_dump(by_alias=True)
     try:
+        before = get_platform_config().model_dump(by_alias=True)
         config = update_platform_config(updates, updated_by=scope.user.uid)
+    except PlatformConfigUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Platform policy is temporarily unavailable") from exc
     except ValueError as exc:  # model validation (e.g. over-cap preamble)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

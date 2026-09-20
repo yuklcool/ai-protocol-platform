@@ -10,15 +10,12 @@ interface UseUserSkillsReturn {
   error: string | null;
 }
 
-// Sentinel ownerId for skills shipped by Aitana Labs (the five defaults
-// available to every tenant). Mirrored from backend/skills/platform.py.
-const PLATFORM_OWNER_UID = "aitana-platform";
-
 /**
- * Returns the skills shown in the SkillsBar: the user's own skills plus the
- * platform-global defaults. Platform skills come last and are deduped against
- * the user's own list so a fork keeps the user's version (different skillId,
- * same display name is fine — both render).
+ * Returns the effective skills visible to the current user. The backend owns
+ * the visibility decision: tenant narrowing, access-control type, shared
+ * domain/tag grants, platform skills and future Skill classifications are all
+ * evaluated in one place. This avoids the old two-owner query which silently
+ * omitted shared domain/tagged capabilities and exposed internal entries.
  */
 export function useUserSkills(uid: string | null): UseUserSkillsReturn {
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -40,28 +37,14 @@ export function useUserSkills(uid: string | null): UseUserSkillsReturn {
     setIsLoading(true);
     setError(null);
 
-    const own = fetchWithAuth(
-      `/api/proxy/api/skills?ownerId=${encodeURIComponent(uid)}`,
+    fetchWithAuth(
+      "/api/proxy/api/skills",
       { signal: controller.signal },
     ).then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json() as Promise<Skill[]>;
-    });
-
-    const platform = fetchWithAuth(
-      `/api/proxy/api/skills?ownerId=${encodeURIComponent(PLATFORM_OWNER_UID)}`,
-      { signal: controller.signal },
-    ).then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json() as Promise<Skill[]>;
-    });
-
-    Promise.all([own, platform])
-      .then(([ownSkills, platformSkills]) => {
-        const seen = new Set(ownSkills.map((s) => s.skillId));
-        const merged = [...ownSkills, ...platformSkills.filter((s) => !seen.has(s.skillId))];
-        setSkills(merged);
-      })
+    })
+      .then((visibleSkills) => setSkills(visibleSkills))
       .catch((err: Error) => {
         if (err.name !== "AbortError") {
           setError("Could not load skills.");

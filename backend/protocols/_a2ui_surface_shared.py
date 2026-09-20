@@ -22,8 +22,18 @@ from typing import Any
 from fastapi import HTTPException
 
 from auth import User
+from agents.root_runtime import (
+    ROOT_AGENT_ID,
+    RootCapabilityDenied,
+    compose_root_skill,
+    effective_root_config,
+    resolve_root_capability,
+)
+from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.chat_sessions import get_session_index
 from db.models.chat_session import ChatSessionIndex
+from db.models import SkillConfig
+from adk.agui import ROOT_AGENT_APP_NAME
 from skills import skill_config
 
 log = logging.getLogger(__name__)
@@ -47,6 +57,49 @@ def _require_session(session_id: str) -> ChatSessionIndex:
     if idx is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return idx
+
+
+def _root_runtime_for_session(
+    idx: ChatSessionIndex,
+    user: User,
+    request: Any,
+) -> tuple[Any, SkillConfig] | None:
+    """Resolve the effective Root Agent policy for a protocol callback.
+
+    Protocol routes used to authorize against the stored SkillConfig directly,
+    which let a browser action or iframe write around the Root Agent's current
+    tenant policy. Legacy Skill sessions retain their old gates; sessions
+    created in the Root Agent namespace must pass the same capability resolver
+    as the chat stream.
+    """
+    if idx.app_name != ROOT_AGENT_APP_NAME and idx.agent_id != ROOT_AGENT_ID:
+        return None
+    access = request.state.access
+    try:
+        config = effective_root_config(get_platform_config().agent, access.tenant_id)
+    except PlatformConfigUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
+    try:
+        capability = resolve_root_capability(config, user, access, idx.skill_id)
+    except RootCapabilityDenied as exc:
+        raise HTTPException(status_code=403, detail="Root Agent capability is not available") from exc
+    return config, compose_root_skill(capability, config)
+
+
+def _enforce_root_interaction(
+    idx: ChatSessionIndex,
+    user: User,
+    request: Any,
+    flag: str,
+) -> SkillConfig | None:
+    """Enforce Root Agent A2UI/MCP callback policy, if this is a Root session."""
+    runtime = _root_runtime_for_session(idx, user, request)
+    if runtime is None:
+        return None
+    config, composed = runtime
+    if not config.interaction.a2ui_enabled or not getattr(config.interaction, flag, False):
+        raise HTTPException(status_code=403, detail="Root Agent interaction is not permitted")
+    return composed
 
 
 def _delegate_with_grant(skill: Any, user: User, flag: str) -> Any | None:
@@ -178,6 +231,8 @@ __all__ = [
     "_MAX_CONTEXT_BYTES",
     "_STATE_KEY_NAMESPACE",
     "_enforce_size_cap",
+    "_enforce_root_interaction",
     "_enforce_skill_opt_in",
+    "_root_runtime_for_session",
     "_require_session",
 ]

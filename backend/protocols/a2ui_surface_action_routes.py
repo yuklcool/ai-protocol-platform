@@ -79,6 +79,7 @@ from auth import User, get_current_user
 from protocols._a2ui_surface_shared import (
     _STATE_KEY_NAMESPACE,
     _enforce_size_cap,
+    _enforce_root_interaction,
     _enforce_skill_opt_in,
     _require_session,
 )
@@ -137,7 +138,8 @@ async def post_surface_action(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Gates 4 + 5 + 6: skill exists + has a2ui config + opted in
-    _enforce_skill_opt_in(idx.skill_id, user)
+    if _enforce_root_interaction(idx, user, request, "allow_surface_context_writes") is None:
+        _enforce_skill_opt_in(idx.skill_id, user)
 
     # Gate 7: size cap
     size_bytes = _enforce_size_cap(body.action.context)

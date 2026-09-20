@@ -90,6 +90,7 @@ async def process_skill_request(
     runtime_skill: SkillConfig | None = None,
     session_agent_id: str = "aitana_platform",
     app_name: str = "aitana_platform",
+    agent_cache_scope: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Yield AG-UI events for one turn of ``skill_id``.
 
@@ -166,12 +167,14 @@ async def process_skill_request(
         document_ids,
         getattr(user, "email", "") or "",
         agent_id=session_agent_id,
+        app_name=app_name,
     )
 
     agent_or_router, _agent_cache_hit = _agent_cache.get_or_build(
         skill,
         access,
         lambda: create_agent_with_thinking(skill, user, access_context=access),
+        cache_scope=agent_cache_scope,
     )
     logger.debug("skill=%s agent_cache_%s", skill_id, "hit" if _agent_cache_hit else "miss")
     if isinstance(agent_or_router, _HeuristicRouter):
@@ -287,6 +290,7 @@ def _ensure_session_index(
     document_ids: list[str] | None,
     owner_email: str = "",
     agent_id: str = "aitana_platform",
+    app_name: str = "aitana_platform",
 ) -> None:
     """Synchronously create/update the chat-session index for this turn.
 
@@ -323,6 +327,7 @@ def _ensure_session_index(
                 access_control=access_control,
                 document_ids=docs,
                 agent_id=agent_id,
+                app_name=app_name,
             )
             logger.info("chat_sessions/%s index created synchronously (owner=%s)", thread_id, owner_uid)
         except Exception as exc:

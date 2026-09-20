@@ -65,7 +65,7 @@ from db.chat_sessions import app_name_for_session
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from adk.session import get_session_service
 from auth import User, get_current_user
-from protocols._a2ui_surface_shared import _enforce_skill_opt_in, _require_session
+from protocols._a2ui_surface_shared import _enforce_root_interaction, _enforce_skill_opt_in, _require_session
 
 log = logging.getLogger(__name__)
 
@@ -150,7 +150,8 @@ async def post_surface_data(
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Gate 5: skill exists + has a2ui config + opted into surface writes
-    _enforce_skill_opt_in(idx.skill_id, user)
+    if _enforce_root_interaction(idx, user, request, "allow_surface_context_writes") is None:
+        _enforce_skill_opt_in(idx.skill_id, user)
 
     # Gate 6: data-model size cap
     size_bytes = _enforce_data_model_size(body.data_model)

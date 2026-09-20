@@ -38,6 +38,11 @@ You are part of Aitana, an AI assistant platform. These guidelines apply across 
 The skill-specific instructions that follow take precedence for that skill's domain."""
 
 _cache: tuple[float, PlatformConfig] | None = None
+_last_good: PlatformConfig | None = None
+
+
+class PlatformConfigUnavailable(RuntimeError):
+    """Raised when the persisted Root Agent policy cannot be read safely."""
 
 
 def _to_storage(config: PlatformConfig) -> dict[str, Any]:
@@ -63,21 +68,29 @@ def _cache_get() -> PlatformConfig | None:
 
 
 def _cache_set(config: PlatformConfig) -> None:
-    global _cache
+    global _cache, _last_good
     _cache = (time.time(), config)
+    _last_good = config
 
 
-def invalidate_cache() -> None:
-    """Drop the cached config so the next read re-fetches from persistence."""
-    global _cache
+def invalidate_cache(*, clear_last_known_good: bool = False) -> None:
+    """Drop the TTL cache; retain last-known-good policy by default.
+
+    Retaining the last valid policy across a transient persistence outage is
+    intentional. Tests and process-level reset hooks may explicitly clear it.
+    """
+    global _cache, _last_good
     _cache = None
+    if clear_last_known_good:
+        _last_good = None
 
 
 def get_platform_config() -> PlatformConfig:
     """Return the platform config (cached).
 
-    Falls back to the code default when no override doc exists. Fail-open on a
-    persistence error: a store blip must not break the hot prompt-assembly path.
+    Falls back to the code default only when persistence explicitly reports that
+    the singleton does not exist. A read error or malformed policy never turns
+    into a permissive default: use the last-known-good policy, or fail closed.
     """
     cached = _cache_get()
     if cached is not None:
@@ -86,8 +99,11 @@ def get_platform_config() -> PlatformConfig:
     try:
         data = get_document(COLLECTION, PLATFORM_CONFIG_DOC_ID)
     except Exception as exc:
-        logger.warning("platform_config: read failed (%s) — using default", type(exc).__name__)
-        return _default_config()
+        if _last_good is not None:
+            logger.warning("platform_config: read failed (%s) — using last known good policy", type(exc).__name__)
+            return _last_good
+        logger.error("platform_config: read failed (%s) — refusing to run without policy", type(exc).__name__)
+        raise PlatformConfigUnavailable("platform config is unavailable") from exc
 
     if data is None:
         config = _default_config()
@@ -95,8 +111,14 @@ def get_platform_config() -> PlatformConfig:
         try:
             config = _from_storage(data)
         except Exception as exc:
-            logger.warning("platform_config: invalid doc (%s) — using default", type(exc).__name__)
-            config = _default_config()
+            if _last_good is not None:
+                logger.warning(
+                    "platform_config: invalid doc (%s) — using last known good policy",
+                    type(exc).__name__,
+                )
+                return _last_good
+            logger.error("platform_config: invalid doc (%s) — refusing to run without policy", type(exc).__name__)
+            raise PlatformConfigUnavailable("platform config is invalid") from exc
 
     _cache_set(config)
     return config
@@ -117,6 +139,7 @@ def update_platform_config(updates: dict[str, Any], *, updated_by: str = "") -> 
 __all__ = [
     "COLLECTION",
     "DEFAULT_PREAMBLE",
+    "PlatformConfigUnavailable",
     "get_platform_config",
     "invalidate_cache",
     "update_platform_config",

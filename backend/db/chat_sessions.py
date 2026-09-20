@@ -114,6 +114,7 @@ def create_session_index(
     access_control: AccessControl,
     tenant_id: str | None = None,
     agent_id: str = "aitana_platform",
+    app_name: str = "aitana_platform",
     document_ids: list[str] | None = None,
     first_message_at: datetime | None = None,
     owner_domain: str = "",
@@ -132,6 +133,7 @@ def create_session_index(
         tenantId=stable_tenant_id,
         documentIds=list(document_ids) if document_ids else [],
         agentId=agent_id,
+        appName=app_name,
         skillId=skill_id,
         ownerUid=owner_uid,
         ownerDomain=(owner_domain or "").strip().lower(),
@@ -204,9 +206,7 @@ def get_session_index_for_tenant(session_id: str, tenant_id: str) -> ChatSession
 
 def app_name_for_session(idx: ChatSessionIndex) -> str:
     """Return the ADK app namespace for a metadata row."""
-    from adk.agui import APP_NAME, ROOT_AGENT_APP_NAME
-
-    return ROOT_AGENT_APP_NAME if idx.agent_id == ROOT_AGENT_APP_NAME else APP_NAME
+    return idx.app_name or "aitana_platform"
 
 
 SessionFilter = Literal["mine", "team", "all"]

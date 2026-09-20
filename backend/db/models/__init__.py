@@ -28,7 +28,7 @@ from db.models.platform_config import (
     CompactionSettings,
     PlatformConfig,
 )
-from db.models.root_agent import RootAgentConfig, RootAgentInteraction
+from db.models.root_agent import RootAgentConfig, RootAgentInteraction, RootAgentTenantOverride
 
 # Agent Skills spec: lowercase kebab-case, no leading/trailing/consecutive hyphens
 _NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
@@ -465,6 +465,10 @@ class SkillConfig(BaseModel):
     avatar: str = ""
     owner_email: str = Field(default="", alias="ownerEmail")
     owner_id: str = Field(default="", alias="ownerId")
+    # Stable tenant boundary. Platform-owned skills intentionally keep this
+    # empty and are globally visible; user/domain-owned skills must carry the
+    # authenticated tenant before a tenant-aware request can use them.
+    tenant_id: str = Field(default="", alias="tenantId")
     access_control: AccessControl = Field(default_factory=AccessControl, alias="accessControl")
     protocols: Protocols = Field(default_factory=Protocols)
     initial_message: str = Field(default="", alias="initialMessage")
