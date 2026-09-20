@@ -1,6 +1,22 @@
 import type { Locale, TranslationParams } from "@/lib/i18n";
 
 const en = {
+  "a2ui.title": "Interactive UI · A2UI",
+  "a2ui.enabled": "Enable interactive UI",
+  "a2ui.surface": "Display area",
+  "a2ui.inline": "Chat bubble (legacy default)",
+  "a2ui.chat": "Chat",
+  "a2ui.workspace": "Workspace",
+  "a2ui.sidebar": "Sidebar",
+  "a2ui.modal": "Dialog",
+  "a2ui.mode": "Update mode",
+  "a2ui.replace": "Replace",
+  "a2ui.patch": "Update existing data",
+  "a2ui.hint": "Data updates require a persistent display area. Switching to chat resets the update mode to Replace.",
+  "a2ui.writes": "Share interface data and actions with the agent",
+  "a2ui.runs": "Allow interface actions to start an agent response",
+  "a2ui.grants": "Starting a response also requires sharing interface data. These permissions remain separate and are saved independently.",
+
   "studio.disabled": "Skill Studio is disabled.",
   "studio.loading": "Loading…",
   "studio.loadingSkill": "Loading skill…",
@@ -149,6 +165,22 @@ const en = {
 export type SkillStudioTranslationKey = keyof typeof en;
 
 const zhCN = {
+  "a2ui.title": "交互界面 · A2UI",
+  "a2ui.enabled": "启用交互界面",
+  "a2ui.surface": "展示区域",
+  "a2ui.inline": "聊天气泡（兼容默认）",
+  "a2ui.chat": "聊天",
+  "a2ui.workspace": "工作区",
+  "a2ui.sidebar": "侧边栏",
+  "a2ui.modal": "弹窗",
+  "a2ui.mode": "更新方式",
+  "a2ui.replace": "整体替换",
+  "a2ui.patch": "更新已有数据",
+  "a2ui.hint": "更新已有数据需要持久展示区域。切换到聊天后，更新方式会自动恢复为整体替换。",
+  "a2ui.writes": "允许将界面数据和操作传给智能体",
+  "a2ui.runs": "允许界面操作触发智能体回复",
+  "a2ui.grants": "触发回复还需要允许传递界面数据。两个权限独立配置和保存。",
+
   "studio.disabled": "Skill Studio 已禁用。",
   "studio.loading": "加载中…",
   "studio.loadingSkill": "正在加载 Skill…",
