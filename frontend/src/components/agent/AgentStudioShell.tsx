@@ -46,7 +46,7 @@ export function AgentStudioShell({
   const hasA2ui = draft.skillMetadata?.toolConfigs?.a2ui !== undefined;
 
   return (
-    <div className="flex h-screen min-h-0 flex-col bg-background text-foreground">
+    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-card px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">

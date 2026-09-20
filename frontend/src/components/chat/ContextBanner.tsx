@@ -25,7 +25,7 @@ export function ContextBanner({ context }: ContextBannerProps) {
   return (
     <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
       <svg
-        className="h-3.5 w-3.5 shrink-0 text-teal-600"
+        className="h-3.5 w-3.5 shrink-0 text-primary"
         viewBox="0 0 16 16"
         fill="none"
         stroke="currentColor"

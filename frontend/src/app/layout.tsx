@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { CSSProperties, ReactNode } from "react";
 import { LocalModeBanner } from "@/components/LocalModeBanner";
+import { ConsoleFrame } from "@/components/navigation/ConsoleFrame";
 import { BRANDING } from "@/lib/branding";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { AppProviders } from "@/providers/AppProviders";
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       >
         <AppProviders>
           <LocalModeBanner />
-          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ConsoleFrame>{children}</ConsoleFrame>
+          </div>
         </AppProviders>
       </body>
     </html>

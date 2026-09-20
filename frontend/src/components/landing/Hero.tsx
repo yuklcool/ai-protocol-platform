@@ -41,7 +41,7 @@ export function Hero({ visual }: HeroProps) {
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <Link
               href={demo.chatHref}
-              className="group inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_0_18px_hsl(var(--primary)/0.25)] transition-all hover:shadow-[0_0_28px_hsl(var(--primary)/0.45)]"
+              className="group inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {primary}
               <ArrowIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

@@ -338,7 +338,7 @@ export function ActivityPanel({
                 data-testid="activity-running-row"
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80"
               >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400 animate-pulse" />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary animate-pulse" />
                 <span className="font-medium">{runStageLabel || translateChat(locale, "activity.running")}</span>
               </li>
             )}
@@ -353,7 +353,7 @@ export function ActivityPanel({
             )}
             {isThinking && (
               <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400 animate-pulse" />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary animate-pulse" />
                 <span>{translateChat(locale, "activity.reasoning")}</span>
               </li>
             )}

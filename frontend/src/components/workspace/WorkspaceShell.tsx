@@ -117,9 +117,9 @@ function WorkspaceDividerHandle({
       aria-valuemax={maxFraction}
       aria-valuenow={currentFraction}
       onPointerDown={onPointerDown}
-      className="group flex h-full cursor-col-resize items-center justify-center bg-gray-100 hover:bg-gray-200"
+      className="group flex h-full cursor-col-resize items-center justify-center bg-muted hover:bg-accent"
     >
-      <div className="h-8 w-0.5 rounded bg-gray-300 group-hover:bg-gray-400" />
+      <div className="h-8 w-0.5 rounded bg-border group-hover:bg-primary" />
     </div>
   );
 }

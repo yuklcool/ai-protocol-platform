@@ -19,11 +19,11 @@ export function ThinkingPanel({ content, isThinking }: ThinkingPanelProps) {
   }, [isThinking]);
 
   return (
-    <div className="mb-2 rounded border border-orange-200 bg-orange-50/50 text-xs">
+    <div className="mb-2 rounded border border-primary/20 bg-primary/5 text-xs">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-orange-700"
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-primary"
       >
         {isThinking && (
           <svg
@@ -64,7 +64,7 @@ export function ThinkingPanel({ content, isThinking }: ThinkingPanelProps) {
         </svg>
       </button>
       {expanded && (
-        <p className="whitespace-pre-wrap px-2 pb-2 text-orange-800/70">{content}</p>
+        <p className="whitespace-pre-wrap px-2 pb-2 text-muted-foreground">{content}</p>
       )}
     </div>
   );

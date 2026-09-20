@@ -129,7 +129,7 @@ export default function FileBrowserDevPage() {
           <h1 className="text-xl font-bold">File Browser — Dev Fixture</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             All components wired with dummy data. No Firestore, no auth required.
-            <span className="ml-2 text-teal-600">localhost:3456/dev/file-browser</span>
+            <span className="ml-2 text-primary">localhost:3456/dev/file-browser</span>
           </p>
         </div>
 

@@ -10,7 +10,7 @@ import { Check, Copy } from "lucide-react";
 export function StatusDot({ status }: { status: string }) {
   const cls =
     status === "running"
-      ? "bg-orange-400 animate-pulse"
+      ? "bg-primary animate-pulse"
       : status === "error"
         ? "bg-red-500"
         : "bg-emerald-500";
@@ -19,7 +19,7 @@ export function StatusDot({ status }: { status: string }) {
 
 export function ArrowIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-orange-500/80">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-primary/80">
       <path d="M5 12h14" />
       <path d="m13 5 7 7-7 7" />
     </svg>

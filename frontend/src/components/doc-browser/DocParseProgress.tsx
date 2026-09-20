@@ -24,7 +24,7 @@ export function DocParseProgress({ parsedCount, failedCount, docCount }: DocPars
           </div>
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-teal-500 transition-all duration-500"
+              className="h-full rounded-full bg-primary transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
