@@ -85,7 +85,7 @@ export function DrawerChatPane({
     void fetchWithAuth(`/api/proxy/api/sessions/${agentSessionId}/bootstrap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ skill_id: skillId }),
+      body: JSON.stringify({ skill_id: skillId, agent_id: "root-agent" }),
     }).catch(() => {
       // best-effort; the chat still works if bootstrap is slow
     });

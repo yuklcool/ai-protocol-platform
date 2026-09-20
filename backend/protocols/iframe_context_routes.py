@@ -72,10 +72,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from google.adk.events import Event, EventActions
 from pydantic import BaseModel, Field
 
-from adk.agui import APP_NAME
 from adk.session import get_session_service
 from auth import User, get_current_user
-from db.chat_sessions import get_session_index
+from db.chat_sessions import app_name_for_session, get_session_index
 from db.models.chat_session import ChatSessionIndex
 from skills import skill_config
 
@@ -261,7 +260,7 @@ async def post_iframe_context(
     # purely the storage key.)
     session_service = get_session_service()
     session = await session_service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name_for_session(idx),
         user_id=user.uid,
         session_id=session_id,
     )

@@ -39,6 +39,8 @@ from fastapi.testclient import TestClient
 from auth import User, build_access_context, get_current_user
 from db.models import SkillConfig, SkillMetadata
 from db.models.chat_session import ChatSessionIndex
+from db.models.platform_config import PlatformConfig
+from db.models.root_agent import RootAgentConfig
 
 # --- Fixtures ---
 
@@ -740,6 +742,30 @@ def test_stream_skill_returns_404_when_skill_not_visible(client):
     with patch("skills.skill_processor.get_skill", return_value=skill):
         resp = client.post("/api/skill/private-id/stream", json={"message": "hi"})
     assert resp.status_code == 404
+
+
+def test_root_agent_stream_resolves_one_capability_and_emits_sse(client):
+    """The user-facing route is Root Agent identity, not a skill route."""
+    skill = _make_skill(skill_id="capability-a", access_type="public")
+    with (
+        patch("fast_api_app.get_platform_config", return_value=PlatformConfig(agent=RootAgentConfig(skills=["capability-a"]))),
+        patch("fast_api_app.resolve_root_capability", return_value=skill),
+        patch("fast_api_app.compose_root_skill", return_value=skill),
+        patch("db.chat_sessions.get_session_index", return_value=None),
+        patch("db.chat_sessions.create_session_index"),
+        patch("ag_ui_adk.ADKAgent.run", side_effect=_fake_event_stream),
+    ):
+        resp = client.post(
+            "/api/agent/stream",
+            json={
+                "message": "hello",
+                "forwardedProps": {"capability_hint": "capability-a"},
+            },
+        )
+
+    assert resp.status_code == 200, resp.text
+    events = [json.loads(line[5:].strip()) for line in resp.text.splitlines() if line.startswith("data:")]
+    assert events[0]["type"] == "RUN_STARTED"
 
 
 def test_stream_skill_requires_authentication(app):

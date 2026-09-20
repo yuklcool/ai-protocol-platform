@@ -28,6 +28,7 @@ from db.models.platform_config import (
     CompactionSettings,
     PlatformConfig,
 )
+from db.models.root_agent import RootAgentConfig, RootAgentInteraction
 
 # Agent Skills spec: lowercase kebab-case, no leading/trailing/consecutive hyphens
 _NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
@@ -616,6 +617,8 @@ __all__ = [
     "Message",
     "ParsedDocument",
     "PlatformConfig",
+    "RootAgentConfig",
+    "RootAgentInteraction",
     "ProtocolConfig",
     "Protocols",
     "SkillConfig",

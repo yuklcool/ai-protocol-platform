@@ -32,13 +32,25 @@ import { subscribeToIdToken } from "@/lib/firebase";
  * we'll wrap it here alongside — not in place of — this context.
  */
 const AGUIAgentContext = createContext<HttpAgent | null>(null);
+export interface AGUIRuntime {
+  agentId: string;
+  capabilityHint?: string;
+}
+const AGUIRuntimeContext = createContext<AGUIRuntime | null>(null);
 
 export function AGUIProvider({
   skillId,
+  agentId = "legacy-skill",
+  capabilityHint,
   sessionId,
   children,
 }: {
   skillId: string;
+  /** `root-agent` targets the unified Root Agent stream. Any other value is
+   * retained for authoring and protocol compatibility surfaces. */
+  agentId?: string;
+  /** Optional internal capability hint; the backend still enforces access. */
+  capabilityHint?: string;
   /** Resume an existing chat by seeding the HttpAgent's threadId. When
    * absent, the agent generates a fresh UUID — that becomes the new
    * session id, which the page should then write to the URL. */
@@ -67,12 +79,22 @@ export function AGUIProvider({
   // effect below. Rebuilding the agent on every silent ~hourly refresh
   // is wasteful AND throws away any in-flight SSE stream state.
   const agent = useMemo(() => {
-    return new HttpAgent({
-      url: `/api/proxy/api/skill/${encodeURIComponent(skillId)}/stream`,
+    const streamUrl = agentId === "root-agent"
+      ? "/api/proxy/api/agent/stream"
+      : `/api/proxy/api/skill/${encodeURIComponent(skillId)}/stream`;
+    const next = new HttpAgent({
+      url: streamUrl,
       headers: {},
       threadId: sessionId,
     });
-  }, [skillId, sessionId]);
+    // Keep runtime metadata on the stable HttpAgent instance so hooks and
+    // isolated consumers can add forwardedProps without another provider.
+    (next as HttpAgent & { __aitanaRuntime?: AGUIRuntime }).__aitanaRuntime = {
+      agentId,
+      capabilityHint,
+    };
+    return next;
+  }, [agentId, capabilityHint, skillId, sessionId]);
 
   // G40 (template-auth-token-refresh.md): subscribe to token rotations
   // and mutate the agent's Authorization header in place. Without this,
@@ -98,9 +120,11 @@ export function AGUIProvider({
   }, [agent]);
 
   return (
-    <AGUIAgentContext.Provider value={agent}>
-      {children}
-    </AGUIAgentContext.Provider>
+    <AGUIRuntimeContext.Provider value={{ agentId, capabilityHint }}>
+      <AGUIAgentContext.Provider value={agent}>
+        {children}
+      </AGUIAgentContext.Provider>
+    </AGUIRuntimeContext.Provider>
   );
 }
 
@@ -110,4 +134,12 @@ export function useAGUIAgent(): HttpAgent {
     throw new Error("useAGUIAgent must be used within an AGUIProvider");
   }
   return agent;
+}
+
+export function useAGUIRuntime(): AGUIRuntime {
+  const runtime = useContext(AGUIRuntimeContext);
+  if (!runtime) {
+    throw new Error("useAGUIRuntime must be used within an AGUIProvider");
+  }
+  return runtime;
 }

@@ -27,7 +27,13 @@ from pydantic import BaseModel, Field
 from admin.audit import record_admin_action
 from admin.scope import PlatformScope
 from config.platform_config import get_platform_config, update_platform_config
-from db.models import CONVERSATION_PLACEHOLDER, PREAMBLE_MAX_LEN, CompactionSettings, PlatformConfig
+from db.models import (
+    CONVERSATION_PLACEHOLDER,
+    PREAMBLE_MAX_LEN,
+    CompactionSettings,
+    PlatformConfig,
+    RootAgentConfig,
+)
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +47,10 @@ class PlatformConfigUpdate(BaseModel):
 
     preamble: str | None = Field(default=None, max_length=PREAMBLE_MAX_LEN)
     enabled: bool | None = None
+    # The one user-facing Agent. The route remains platform-admin gated during
+    # the compatibility phase; runtime composition will consume this block in
+    # the Root Agent migration.
+    agent: RootAgentConfig | None = None
     # Compaction tuning (1b). Sent as a whole block — its own fields are each
     # optional-and-nullable, so an admin CLEARS a lever by sending null (restore
     # the coded default) rather than by omitting it.

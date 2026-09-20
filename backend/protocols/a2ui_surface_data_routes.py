@@ -61,7 +61,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from google.adk.events import Event, EventActions
 from pydantic import BaseModel, Field
 
-from adk.agui import APP_NAME
+from db.chat_sessions import app_name_for_session
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from adk.session import get_session_service
 from auth import User, get_current_user
@@ -160,7 +160,7 @@ async def post_surface_data(
     # stashed under and the messages GET reads from.
     session_service = get_session_service()
     session = await session_service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name_for_session(idx),
         user_id=user.uid,
         session_id=session_id,
     )

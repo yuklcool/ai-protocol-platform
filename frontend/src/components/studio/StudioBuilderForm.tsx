@@ -6,6 +6,8 @@ import {
   parseInstructions,
   type StructuredInstructions,
 } from "@/components/studio/structuredInstructions";
+import { A2UIConfigEditor } from "@/components/studio/A2UIConfigEditor";
+import { McpBindingPicker } from "@/components/studio/McpBindingPicker";
 import { DelegationEditor } from "@/components/studio/DelegationEditor";
 import { AccessControlEditor } from "@/components/studio/AccessControlEditor";
 import type { StudioDraft } from "@/components/studio/applyProposal";
@@ -73,50 +75,53 @@ export function StudioBuilderForm({
 
   return (
     <form className="space-y-6 p-4" onSubmit={(e) => e.preventDefault()}>
-      {isNew && (
-        <Field label={t("builder.name")} hint={t("builder.nameHint")}>
-          <input
-            type="text"
-            value={draft.name ?? ""}
-            onChange={(e) => set({ name: e.target.value })}
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="my-new-skill"
-          />
+      <div id="studio-overview" className="scroll-mt-4 space-y-4 rounded-lg border bg-card/30 p-4">
+        <div>
+          <h2 className="text-sm font-semibold">{t("studio.nav.overview")}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t("studio.compatibilityNotice")}</p>
+        </div>
+        {isNew && (
+          <Field label={t("builder.name")} hint={t("builder.nameHint")}>
+            <input type="text" value={draft.name ?? ""} onChange={(e) => set({ name: e.target.value })}
+              className="w-full rounded-md border px-3 py-2 text-sm" placeholder="my-new-skill" />
+          </Field>
+        )}
+        <Field label={t("builder.displayName")}>
+          <input type="text" value={draft.displayName ?? ""} onChange={(e) => set({ displayName: e.target.value })}
+            className="w-full rounded-md border px-3 py-2 text-sm" />
         </Field>
-      )}
+        <Field label={t("builder.description")}>
+          <input type="text" value={draft.description ?? ""} onChange={(e) => set({ description: e.target.value })}
+            className="w-full rounded-md border px-3 py-2 text-sm" />
+        </Field>
+        <CategoryPicker value={draft.skillMetadata?.category ?? ""} onChange={(next) => setMeta({ category: next || null })} />
+      </div>
 
-      <Field label={t("builder.displayName")}>
-        <input
-          type="text"
-          value={draft.displayName ?? ""}
-          onChange={(e) => set({ displayName: e.target.value })}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-        />
-      </Field>
+      <div id="studio-prompt" className="scroll-mt-4 rounded-lg border bg-card/30 p-4">
+        <h2 className="mb-3 text-sm font-semibold">{t("studio.nav.prompt")}</h2>
+        <InstructionsEditor value={draft.instructions ?? ""} onChange={(v) => set({ instructions: v })} />
+      </div>
 
-      <Field label={t("builder.description")}>
-        <input
-          type="text"
-          value={draft.description ?? ""}
-          onChange={(e) => set({ description: e.target.value })}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-        />
-      </Field>
+      <div id="studio-model" className="scroll-mt-4 rounded-lg border bg-card/30 p-4">
+        <h2 className="mb-3 text-sm font-semibold">{t("studio.nav.model")}</h2>
+        <ModelTierPicker value={model} onChange={(tier) => setMeta({ model: tier })} />
+      </div>
 
-      <InstructionsEditor value={draft.instructions ?? ""} onChange={(v) => set({ instructions: v })} />
-      <ModelTierPicker value={model} onChange={(tier) => setMeta({ model: tier })} />
-      <CategoryPicker
-        value={draft.skillMetadata?.category ?? ""}
-        onChange={(next) => setMeta({ category: next || null })}
-      />
-      <ToolsPicker selected={tools} onChange={(next) => setMeta({ tools: next })} />
-      <DelegationEditor
-        value={draft.skillMetadata?.delegation}
-        currentSkillId={draft.skillId}
-        onChange={(next) => setMeta({ delegation: next })}
-      />
-      <AccessControlEditor value={draft.accessControl} onChange={(next) => set({ accessControl: next })} />
+      <div id="studio-capabilities" className="scroll-mt-4 space-y-4 rounded-lg border bg-card/30 p-4">
+        <h2 className="text-sm font-semibold">{t("studio.nav.capabilities")}</h2>
+        <ToolsPicker selected={tools} onChange={(next) => setMeta({ tools: next })} />
+        <McpBindingPicker draft={draft} setDraft={setDraft} />
+        <A2UIConfigEditor draft={draft} setDraft={setDraft} />
+        <DelegationEditor value={draft.skillMetadata?.delegation} currentSkillId={draft.skillId} onChange={(next) => setMeta({ delegation: next })} />
+      </div>
 
+      <div id="studio-permissions" className="scroll-mt-4 rounded-lg border bg-card/30 p-4">
+        <h2 className="mb-3 text-sm font-semibold">{t("studio.nav.permissions")}</h2>
+        <AccessControlEditor value={draft.accessControl} onChange={(next) => set({ accessControl: next })} />
+      </div>
+
+      <div id="studio-interaction" className="scroll-mt-4 space-y-4 rounded-lg border bg-card/30 p-4">
+        <h2 className="text-sm font-semibold">{t("studio.nav.interaction")}</h2>
       <fieldset className="space-y-4 rounded-md border p-3">
         <legend className="px-1 text-sm font-medium">{t("builder.persona")}</legend>
         <AvatarPicker value={persona.avatar ?? ""} onChange={(v) => setPersona({ avatar: v })} />
@@ -153,7 +158,7 @@ export function StudioBuilderForm({
         />
       </Field>
 
-      <fieldset className="space-y-3 border-t pt-4">
+      <fieldset id="studio-knowledge" className="space-y-3 border-t pt-4">
         <legend className="text-sm font-medium">{t("builder.documentLibrary")}</legend>
         <p className="text-xs text-muted-foreground">{t("builder.documentLibraryDescription")}</p>
         <Field label={t("builder.folderPath")} hint={t("builder.folderPathHint")}>
@@ -183,6 +188,11 @@ export function StudioBuilderForm({
           {t("builder.libraryAutoOpen")}
         </label>
       </fieldset>
+      </div>
+      <div id="studio-advanced" className="scroll-mt-4 rounded-lg border border-dashed bg-card/20 p-4">
+        <h2 className="text-sm font-semibold">{t("studio.nav.advanced")}</h2>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("studio.compatibilityNotice")}</p>
+      </div>
     </form>
   );
 }

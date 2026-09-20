@@ -64,6 +64,7 @@ from adk.agent import (
 from adk.agui import APP_NAME, build_agui_adk_agent, stream_agui_events
 from adk.session import get_session_service
 from auth import User, get_current_user
+from db.chat_sessions import app_name_for_session
 from observability.timing import (
     LatencyTracker,
     reset_current_tracker,
@@ -204,6 +205,7 @@ async def _write_action_to_state(
     skill_id: str,
     body: SurfaceActionRunRequest,
     size_bytes: str,
+    app_name: str = APP_NAME,
 ) -> None:
     """Persist the action under ``a2ui_surface_context.{surfaceId}.lastAction``
     via the same ``EventActions(state_delta=...)`` pattern the original
@@ -211,7 +213,7 @@ async def _write_action_to_state(
     ``(APP_NAME, user_id, session_id)``."""
     session_service = get_session_service()
     session = await session_service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name,
         user_id=user.uid,
         session_id=session_id,
     )
@@ -228,7 +230,7 @@ async def _write_action_to_state(
             skill_id,
         )
         session = await session_service.create_session(
-            app_name=APP_NAME,
+            app_name=app_name,
             user_id=user.uid,
             session_id=session_id,
         )
@@ -271,6 +273,7 @@ async def _recover_latest_agent_text(
     *,
     agent_name: str | None,
     after_ts: float,
+    app_name: str = APP_NAME,
 ) -> str | None:
     """Recover final assistant text persisted by ADK but omitted by AG-UI.
 
@@ -280,7 +283,7 @@ async def _recover_latest_agent_text(
     written after the current run started, so it cannot replay stale history.
     """
     session = await get_session_service().get_session(
-        app_name=APP_NAME,
+        app_name=app_name,
         user_id=user_id,
         session_id=session_id,
     )
@@ -433,12 +436,13 @@ async def post_surface_action_run(
 
     # Persist the action (same write the fire-and-forget endpoint does). Written
     # under the door's session — the target runs on this same thread.
-    await _write_action_to_state(session_id, user, skill_id, body, size_bytes)
+    session_app_name = app_name_for_session(idx)
+    await _write_action_to_state(session_id, user, skill_id, body, size_bytes, session_app_name)
 
     # Build the (target) agent + AG-UI bridge, then synthesize a run input that
     # carries the trigger via state + forwarded_props.
     agent = _resolve_agent(run_skill_id, user)
-    agui_agent = build_agui_adk_agent(agent, user_id=user.uid)
+    agui_agent = build_agui_adk_agent(agent, user_id=user.uid, app_name=session_app_name)
     run_input = _build_run_input(session_id, body)
 
     # Resolve the model string so the Activity header reflects the model that
@@ -491,6 +495,7 @@ async def post_surface_action_run(
                         user.uid,
                         agent_name=agent_name if isinstance(agent_name, str) else None,
                         after_ts=run_started_at,
+                        app_name=session_app_name,
                     )
                     if recovered:
                         message_id = f"surface-action-{uuid.uuid4()}"

@@ -13,7 +13,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from adk.agui import APP_NAME
+from adk.agui import APP_NAME, ROOT_AGENT_APP_NAME
 from adk.session import get_session_service
 from auth import User, get_current_user
 from db.chat_sessions import create_session_index, get_session_index, owner_domain_of, session_in_tenant
@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 class BootstrapRequest(BaseModel):
     skill_id: str
     document_ids: list[str] = Field(default_factory=list)
+    agent_id: str = "aitana_platform"
 
 
 class BootstrapResponse(BaseModel):
@@ -61,6 +62,7 @@ async def bootstrap_session(
             owner_domain=owner_domain_of(user.email),
             access_control=AccessControl(type="private"),
             document_ids=body.document_ids,
+            agent_id=body.agent_id,
             provisional=True,
         )
     except (ValueError, PermissionError) as exc:
@@ -70,7 +72,7 @@ async def bootstrap_session(
     session_service = get_session_service()
     try:
         await session_service.create_session(
-            app_name=APP_NAME,
+            app_name=ROOT_AGENT_APP_NAME if body.agent_id == "root-agent" else APP_NAME,
             user_id=user.uid,
             session_id=session_id,
         )

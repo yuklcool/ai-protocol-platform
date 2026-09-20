@@ -24,6 +24,18 @@ type Area = {
 
 const AREAS: Area[] = [
   {
+    href: "/agent",
+    title: "admin.area.agent.title",
+    question: "admin.area.agent.question",
+    links: [
+      {
+        href: "/agent",
+        label: "admin.area.agent.settings",
+        note: "admin.area.agent.settingsNote",
+      },
+    ],
+  },
+  {
     href: "/admin/tenants",
     title: "admin.area.tenant.title",
     question: "admin.area.tenant.question",
@@ -63,13 +75,20 @@ const AREAS: Area[] = [
     ],
   },
   {
-    href: "/skills/studio/new",
+    href: "/skills",
     title: "admin.area.skills.title",
     question: "admin.area.skills.question",
     links: [
       {
-        href: "/skills/studio/new",
+        href: "/skills",
         label: "admin.area.skills.studio",
+        note: "admin.area.skills.studioNote",
+      },
+      {
+        // Keep old bookmarks and the explicit Skill authoring workflow
+        // reachable while the main product path is Root Agent-first.
+        href: "/skills/studio/new",
+        label: "admin.area.skills.studioLegacy",
         note: "admin.area.skills.studioNote",
       },
       {
