@@ -17,7 +17,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from agents.root_runtime import effective_root_config
 from auth import User, admin_roles, get_current_user
+from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.chat_sessions import list_sessions_for_skill
 from db.clients import resolve_enabled_skills
 from db.models import SkillConfig
@@ -144,6 +146,37 @@ class SkillResponse(BaseModel):
         else:
             data["kind"] = "skill"
         return cls.model_validate(data)
+
+
+class EffectiveAccessGates(BaseModel):
+    skill_access: bool = Field(alias="skillAccess")
+    tenant_visibility: bool = Field(alias="tenantVisibility")
+    root_binding: bool = Field(alias="rootBinding")
+    reason: str
+
+    model_config = {"populate_by_name": True}
+
+
+class EffectiveAccessCapabilities(BaseModel):
+    skill_tools: list[str] = Field(alias="skillTools")
+    root_tools: list[str] = Field(alias="rootTools")
+    effective_tools: list[str] = Field(alias="effectiveTools")
+    skill_mcp_servers: list[str] = Field(alias="skillMcpServers")
+    root_mcp_servers: list[str] = Field(alias="rootMcpServers")
+    effective_mcp_servers: list[str] = Field(alias="effectiveMcpServers")
+    root_knowledge: list[str] = Field(alias="rootKnowledge")
+
+    model_config = {"populate_by_name": True}
+
+
+class EffectiveAccessResponse(BaseModel):
+    skill: dict[str, str]
+    viewer: dict[str, str]
+    gates: EffectiveAccessGates
+    capabilities: EffectiveAccessCapabilities
+    knowledge: dict[str, Any]
+
+    model_config = {"populate_by_name": True}
 
 
 def _fill_welcome_buckets(resp: SkillResponse, user: User) -> SkillResponse:
@@ -309,6 +342,94 @@ def get_skill(
         # Collapse "not found" and "not visible" into one response — don't leak existence.
         raise HTTPException(status_code=404, detail="Skill not found")
     return _fill_welcome_buckets(SkillResponse.from_config(config), user)
+
+
+@router.get("/{skill_id}/effective-access", response_model=EffectiveAccessResponse)
+def get_effective_access(
+    skill_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008
+) -> EffectiveAccessResponse:
+    """Explain the current user's saved Root Agent capability boundary.
+
+    This is intentionally authenticated and skill-scoped, rather than reusing
+    the admin dry-run endpoint. Studio authors should see the same saved
+    decision that their next Root Agent turn will enforce, without gaining a
+    way to inspect another user's access or tenant data.
+    """
+    config = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
+    if config is None or not request.state.access.can_access_skill(config):
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    access = request.state.access
+    enabled = resolve_enabled_skills(user)
+    from skills.visibility import evaluate_visibility
+
+    visibility = evaluate_visibility([config], access, enabled)[0]
+    try:
+        platform = get_platform_config()
+    except PlatformConfigUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
+
+    root = effective_root_config(platform.agent, user.tenant_id or user.domain)
+    refs = {str(ref) for ref in root.skills if str(ref).strip()}
+    fail_closed = (root.permissions or {}).get("failClosed") is True
+    root_bound = bool(
+        (config.skill_id in refs)
+        or (config.slug and config.slug in refs)
+        or (not refs and not fail_closed)
+    )
+    strict = bool(root.skills or root.tools or root.mcp_servers or fail_closed)
+
+    skill_tools = [str(tool) for tool in (config.skill_metadata.tools or [])]
+    skill_mcp = _skill_mcp_servers(config)
+    root_tools = [str(tool) for tool in root.tools]
+    root_mcp = [str(server) for server in root.mcp_servers]
+    effective_tools = root_tools if strict else skill_tools
+    effective_mcp = root_mcp if strict else skill_mcp
+
+    skill_knowledge = _skill_knowledge_sources(config)
+    root_knowledge = [str(source) for source in root.knowledge]
+    effective_knowledge = root_knowledge or skill_knowledge
+    folder = ""
+    if config.welcome and config.welcome.bucket_browser:
+        folder = (config.welcome.bucket_browser.root_path or "").strip()
+
+    return EffectiveAccessResponse(
+        skill={"skillId": config.skill_id, "label": config.display_name or config.name},
+        viewer={"tenantId": access.tenant_id or "", "domain": access.domain or ""},
+        gates=EffectiveAccessGates(
+            skillAccess=visibility.access_allowed,
+            tenantVisibility=visibility.visible,
+            rootBinding=root_bound,
+            reason=visibility.reason,
+        ),
+        capabilities=EffectiveAccessCapabilities(
+            skillTools=skill_tools,
+            rootTools=root_tools,
+            effectiveTools=effective_tools,
+            skillMcpServers=skill_mcp,
+            rootMcpServers=root_mcp,
+            effectiveMcpServers=effective_mcp,
+            rootKnowledge=effective_knowledge,
+        ),
+        knowledge={
+            "folderPath": folder,
+            "tenantScoped": bool(folder and not config.welcome.bucket_browser.bucket) if config.welcome and config.welcome.bucket_browser else False,
+        },
+    )
+
+
+def _skill_mcp_servers(config: SkillConfig) -> list[str]:
+    raw = (config.skill_metadata.tool_configs or {}).get("mcp") or {}
+    servers = raw.get("servers") if isinstance(raw, dict) else []
+    return [str(server) for server in servers] if isinstance(servers, list) else []
+
+
+def _skill_knowledge_sources(config: SkillConfig) -> list[str]:
+    raw = (config.skill_metadata.tool_configs or {}).get("knowledge") or {}
+    sources = raw.get("sources") if isinstance(raw, dict) else []
+    return [str(source) for source in sources] if isinstance(sources, list) else []
 
 
 @router.put("/{skill_id}", response_model=SkillResponse)

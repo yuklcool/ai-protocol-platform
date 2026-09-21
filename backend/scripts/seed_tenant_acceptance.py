@@ -78,7 +78,32 @@ def _model_pair() -> tuple[str, str | None]:
     model_ids = [model.id for model in config.models if model.id]
     if not model_ids:
         raise RuntimeError("tenant acceptance requires at least one effective model")
+    requested_a = os.environ.get("TENANT_E2E_MODEL_A", "").strip()
+    requested_b = os.environ.get("TENANT_E2E_MODEL_B", "").strip()
+    if requested_a:
+        if requested_a not in model_ids:
+            raise RuntimeError(f"TENANT_E2E_MODEL_A {requested_a!r} is not enabled in the effective model registry")
+        if requested_b and requested_b not in model_ids:
+            raise RuntimeError(f"TENANT_E2E_MODEL_B {requested_b!r} is not enabled in the effective model registry")
+        if requested_b == requested_a:
+            raise RuntimeError("TENANT_E2E_MODEL_A and TENANT_E2E_MODEL_B must be different model ids")
+        return requested_a, requested_b or None
     return model_ids[0], model_ids[1] if len(model_ids) > 1 else None
+
+
+def _quota(bucket: str, env_name: str) -> dict[str, Any]:
+    raw = os.environ.get(env_name, "").strip()
+    quota: dict[str, Any] = {"acceptanceBucket": bucket}
+    if not raw:
+        return quota
+    try:
+        amount = float(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{env_name} must be a positive number") from exc
+    if amount <= 0:
+        raise RuntimeError(f"{env_name} must be a positive number")
+    quota.update({"llmBudgetUsd": amount, "llmBudgetPeriod": "daily"})
+    return quota
 
 
 def _password(name: str) -> str:
@@ -118,7 +143,7 @@ def seed(run_id: str) -> dict[str, Any]:
             domains=[ids["domain_a"]],
             modelPolicy=policy_a,
             storageNamespace=ids["tenant_a"],
-            quota={"acceptanceBucket": "A"},
+            quota=_quota("A", "TENANT_E2E_QUOTA_USD_A"),
         )
     )
     directory.put(
@@ -128,7 +153,7 @@ def seed(run_id: str) -> dict[str, Any]:
             domains=[ids["domain_b"]],
             modelPolicy=policy_b,
             storageNamespace=ids["tenant_b"],
-            quota={"acceptanceBucket": "B"},
+            quota=_quota("B", "TENANT_E2E_QUOTA_USD_B"),
         )
     )
 
