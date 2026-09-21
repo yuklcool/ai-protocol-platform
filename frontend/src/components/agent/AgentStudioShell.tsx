@@ -1,10 +1,12 @@
 "use client";
 
-import { Bot, Check, ChevronRight, ExternalLink, MessageSquare, Save, Sparkles } from "lucide-react";
+import { Bot, Check, ChevronRight, ExternalLink, Save, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { translateSkillStudio, type SkillStudioTranslationKey } from "@/lib/i18n/skillStudio";
 import type { StudioDraft } from "@/components/studio/applyProposal";
+import { StudioTestChat } from "@/components/studio/StudioTestChat";
+import { StudioEffectiveAccessPanel } from "@/components/studio/StudioEffectiveAccessPanel";
 
 const sections: Array<{ id: string; key: SkillStudioTranslationKey; detail?: string }> = [
   { id: "studio-overview", key: "studio.nav.overview" },
@@ -17,14 +19,13 @@ const sections: Array<{ id: string; key: SkillStudioTranslationKey; detail?: str
   { id: "studio-advanced", key: "studio.nav.advanced" },
 ];
 
-export function AgentStudioShell({
+export function SkillStudioShell({
   draft,
   isNew,
   isDirty,
   isSaving,
   onSave,
   onCancel,
-  onOpenChat,
   children,
 }: {
   draft: StudioDraft;
@@ -33,7 +34,6 @@ export function AgentStudioShell({
   isSaving: boolean;
   onSave: () => void;
   onCancel: () => void;
-  onOpenChat: () => void;
   children: ReactNode;
 }) {
   const { locale } = useI18n();
@@ -125,13 +125,8 @@ export function AgentStudioShell({
                 <SummaryRow label="A2UI" value={hasA2ui ? t("studio.enabled") : t("studio.notConfigured")} />
               </div>
             </div>
-            <div className="mt-4 rounded-lg border border-dashed bg-background/50 p-4">
-              <div className="flex items-center gap-2 text-xs font-medium"><MessageSquare className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />{t("studio.testChat")}</div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">{t("studio.testChatDescription")}</p>
-              <button type="button" onClick={onOpenChat} className="mt-3 w-full rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted">
-                {t("studio.openChat")}
-              </button>
-            </div>
+            <StudioTestChat skillId={draft.skillId} isDirty={isDirty} />
+            <StudioEffectiveAccessPanel draft={draft} isDirty={isDirty} />
             <div className="mt-4 flex items-start gap-2 rounded-lg bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
               <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden />
               <span>{t("studio.compatibilityNotice")}</span>
@@ -142,6 +137,9 @@ export function AgentStudioShell({
     </div>
   );
 }
+
+/** @deprecated Skills are edited in Skill Studio; keep this export for old imports. */
+export const AgentStudioShell = SkillStudioShell;
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="max-w-[150px] truncate font-mono text-[11px]">{value}</span></div>;

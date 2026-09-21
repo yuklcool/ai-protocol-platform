@@ -18,7 +18,7 @@ import {
   threadStorageKey,
 } from "@/components/studio/AuthoringCopilot";
 import { StudioBuilderForm } from "@/components/studio/StudioBuilderForm";
-import { AgentStudioShell } from "@/components/agent/AgentStudioShell";
+import { SkillStudioShell } from "@/components/agent/AgentStudioShell";
 import {
   applyProposal,
   type Proposal,
@@ -27,7 +27,6 @@ import {
 import type { Skill } from "@/types/skill";
 import { randomGlyphAvatar } from "@/lib/defaultAvatars";
 import { translateSkillStudio } from "@/lib/i18n/skillStudio";
-import { skillHref } from "@/components/navigation/skillHref";
 
 const STUDIO_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SKILL_STUDIO === "true";
 
@@ -215,14 +214,13 @@ function StudioInner({ skillId }: { skillId: string }) {
   }
 
   return (
-    <AgentStudioShell
+    <SkillStudioShell
       draft={draft}
       isNew={isNew}
       isDirty={isDirty}
       isSaving={saveState.status === "saving" || forking}
       onSave={() => void handleSave()}
       onCancel={handleCancel}
-      onOpenChat={() => router.push(skillHref({ skillId: draft.skillId ?? skillId, slug: null, ownerId: draft.ownerId ?? "" }))}
     >
       {isPlatformOwned && (
         <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
@@ -245,7 +243,7 @@ function StudioInner({ skillId }: { skillId: string }) {
           <AuthoringCopilot skillId={skillId} onApplyProposal={onApplyProposal} />
         </AGUIProvider>
       </div>
-    </AgentStudioShell>
+    </SkillStudioShell>
   );
 }
 

@@ -49,3 +49,20 @@ Studio model-selection UI. It also does not test Tenant A/B quota accounting,
 permission bypass, or migration against existing deployment data. Keep those
 acceptance items open until separately verified. An iframe mounting alone does
 not add new rendering evidence beyond the existing MCP Apps browser gate.
+
+## Tenant A/B live acceptance
+
+The provider-independent `scripts/smoke-tenant-isolation.sh` covers identity,
+tenant-scoped Session, document storage, model policy, MCP configuration and
+audit boundaries. It intentionally does not claim a model spend or Tool Call.
+
+For the remaining live-provider boundary, run the tenant acceptance with
+`BUDGET_ENFORCER=tenant-repository`, two real provider model registrations and
+two tenant-scoped MCP bindings. The fixture seeder accepts
+`TENANT_E2E_MODEL_A`, `TENANT_E2E_MODEL_B`, `TENANT_E2E_QUOTA_USD_A` and
+`TENANT_E2E_QUOTA_USD_B`, so the run can select the exact provider-backed model
+ids and non-zero quota policies instead of accidentally using the first YAML
+model. The acceptance must prove both tenants can complete their own Root Agent
+Tool Calling path, cross-tenant capability hints return 404, and a subsequent
+turn receives the typed `BUDGET_EXCEEDED` event. Do not close #9 from a syntax
+check or a provider-only run; attach the live run URL and tenant evidence.
