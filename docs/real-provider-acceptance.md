@@ -66,3 +66,36 @@ model. The acceptance must prove both tenants can complete their own Root Agent
 Tool Calling path, cross-tenant capability hints return 404, and a subsequent
 turn receives the typed `BUDGET_EXCEEDED` event. Do not close #9 from a syntax
 check or a provider-only run; attach the live run URL and tenant evidence.
+
+### Executable tenant runner
+
+Use the manual **Tenant A/B real Provider acceptance** workflow for this
+boundary. It accepts the same OpenAI-compatible base URL and model inputs as
+the existing Provider/MCP workflow, and reads the provider credential only from
+the REAL_PROVIDER_API_KEY Actions secret.
+
+The workflow starts an isolated PostgreSQL Compose stack with
+BUDGET_ENFORCER=tenant-repository and runs
+scripts/smoke-tenant-provider-acceptance.mjs. The selected upstream model must
+support Tool Calling and match a configured platform pricing entry. The runner
+rejects a zero-price model or a Provider response without recorded token usage:
+a projected hold alone is not sufficient evidence of real quota consumption.
+
+It registers two distinct model ids for the real Provider, seeds two tenants
+whose local-JWT users intentionally share a uid, creates one tenant-scoped MCP
+binding and private Skill per tenant, and sends every turn through the Root
+Agent stream. A passing live run proves all of the following:
+
+- Tenant A and Tenant B both complete their own real show-map MCP Tool Call.
+- Each tenant has a positive, recorded budget-ledger charge.
+- Tenant B receives 404 when it requests Tenant A's private capability.
+- After Tenant A's cap is reduced below recorded spend, its next turn emits
+  typed BUDGET_EXCEEDED before any Tool Call.
+- Tenant B can still make another successful Tool Call after Tenant A exhausts
+  its own quota.
+
+The pull-request job only validates runner syntax and never receives the
+credential. Attach the successful manual-run URL, commit, provider/model and
+redacted tenant evidence before closing the live-provider part of #9. The
+separate target-deployment legacy-migration dry-run, review, apply and verify
+remains required.

@@ -1,0 +1,118 @@
+name: Tenant A/B real Provider acceptance
+
+on:
+  pull_request:
+    paths:
+      - scripts/smoke-tenant-provider-acceptance.mjs
+      - backend/scripts/seed_tenant_acceptance.py
+      - docs/real-provider-acceptance.md
+      - .github/workflows/tenant-real-provider-acceptance.yml
+  workflow_call:
+    inputs:
+      provider_base_url:
+        description: OpenAI-compatible base URL
+        required: true
+        type: string
+      model_api_name:
+        description: Provider model with Tool Calling and a configured platform price
+        required: true
+        type: string
+      supports_reasoning:
+        description: Whether the provider model requires OpenAI reasoning parameters
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      REAL_PROVIDER_API_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      provider_base_url:
+        description: OpenAI-compatible base URL, including /v1 when required
+        required: true
+        type: string
+      model_api_name:
+        description: Provider model with Tool Calling and a configured platform price
+        required: true
+        type: string
+      supports_reasoning:
+        description: Whether the provider model requires OpenAI reasoning parameters
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance-script-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Tenant A/B acceptance runner
+        run: node --check scripts/smoke-tenant-provider-acceptance.mjs
+
+  tenant-real-provider:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: tenant-real-provider-ci-signing-key-at-least-32-bytes-long
+      JWT_ISSUER: ai-protocol-platform-tenant-real-provider-ci
+      JWT_AUDIENCE: ai-protocol-platform-tenant-real-provider-ci
+      JWT_EXPIRE_MINUTES: "60"
+      SELFHOST_ADMIN_EMAIL: admin@example.com
+      SELFHOST_ADMIN_PASSWORD: ci-tenant-real-provider-admin-password
+      PLATFORM_DEFAULT_MODEL: lite
+      BUDGET_ENFORCER: tenant-repository
+      OPENAI_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}
+      REAL_PROVIDER_BASE_URL: ${{ inputs.provider_base_url }}
+      REAL_PROVIDER_MODEL: ${{ inputs.model_api_name }}
+      REAL_PROVIDER_SUPPORTS_REASONING: ${{ inputs.supports_reasoning }}
+      TENANT_E2E_INITIAL_QUOTA_USD: "1"
+      TENANT_E2E_MCP_URL: http://mcp-example-map:8080/mcp
+      SKIP_QUALITY_CHECKS: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require real Provider inputs and secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${OPENAI_API_KEY:-}" ] || { echo "REAL_PROVIDER_API_KEY is required." >&2; exit 1; }
+          case "${REAL_PROVIDER_BASE_URL}" in
+            http://*|https://*) ;;
+            *) echo "provider_base_url must be an absolute HTTP(S) URL" >&2; exit 1 ;;
+          esac
+          [ -n "${REAL_PROVIDER_MODEL}" ] || { echo "model_api_name is required." >&2; exit 1; }
+
+      - name: Validate Compose model
+        run: docker compose --profile mcp-example config --quiet
+
+      - name: Build isolated tenant acceptance stack
+        run: docker compose --profile mcp-example build backend mcp-example-map
+
+      - name: Start PostgreSQL backend and map MCP
+        run: |
+          docker compose --profile mcp-example up -d postgres backend mcp-example-map
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:1956/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile mcp-example logs backend postgres mcp-example-map
+          exit 1
+
+      - name: Run billable Tenant A/B Root Agent Provider acceptance
+        run: node scripts/smoke-tenant-provider-acceptance.mjs
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose --profile mcp-example logs backend postgres mcp-example-map
+
+      - name: Remove acceptance stack and volumes
+        if: always()
+        run: docker compose --profile mcp-example down -v --remove-orphans
