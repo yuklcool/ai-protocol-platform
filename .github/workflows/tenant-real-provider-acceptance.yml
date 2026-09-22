@@ -82,10 +82,29 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${OPENAI_API_KEY:-}" ] || { echo "REAL_PROVIDER_API_KEY is required." >&2; exit 1; }
-          case "${REAL_PROVIDER_BASE_URL}" in
-            http://*|https://*) ;;
-            *) echo "provider_base_url must be an absolute HTTP(S) URL" >&2; exit 1 ;;
-          esac
+          node <<'NODE'
+          const value = process.env.REAL_PROVIDER_BASE_URL || "";
+          if (value !== value.trim()) {
+            throw new Error("provider_base_url must not contain leading or trailing whitespace");
+          }
+          if ((value.match(/:\/\//g) || []).length !== 1) {
+            throw new Error("provider_base_url must contain exactly one scheme; do not concatenate URLs");
+          }
+
+          let endpoint;
+          try {
+            endpoint = new URL(value);
+          } catch {
+            throw new Error("provider_base_url must be an absolute HTTP(S) URL");
+          }
+
+          if (!["http:", "https:"].includes(endpoint.protocol) || !endpoint.hostname) {
+            throw new Error("provider_base_url must be an absolute HTTP(S) URL");
+          }
+          if (endpoint.username || endpoint.password || endpoint.pathname.includes("://")) {
+            throw new Error("provider_base_url must be a single credential-free provider endpoint");
+          }
+          NODE
           [ -n "${REAL_PROVIDER_MODEL}" ] || { echo "model_api_name is required." >&2; exit 1; }
 
       - name: Validate Compose model
