@@ -13,7 +13,12 @@
  *   - OPENAI_API_KEY present in the backend container and this process
  *
  * The script creates only run-id-scoped Provider, model, MCP and Skill
- * documents, then removes them together with its seeded tenant fixtures.
+ * documents, then removes them together with its seeded tenant fixtures. It
+ * temporarily pins each fixture tenant's Root Agent model policy to its
+ * ephemeral provider model, and restores the exact prior Root Agent policy in
+ * cleanup. The Root Agent intentionally takes precedence over a Skill model,
+ * so this makes the live model-policy boundary part of the acceptance instead
+ * of bypassing it.
  */
 
 import assert from "node:assert/strict";
@@ -218,6 +223,15 @@ async function deleteBestEffort(token, path) {
   }
 }
 
+async function restoreRootAgentBestEffort(token, originalAgent) {
+  if (!token || !originalAgent) return;
+  try {
+    await jsonApi(token, "/api/admin/platform-config", "PUT", { agent: originalAgent });
+  } catch (error) {
+    console.warn("Root Agent policy cleanup failed: " + error.message);
+  }
+}
+
 async function main() {
   let adminToken = "";
   let tokenA = "";
@@ -230,6 +244,8 @@ async function main() {
   let serverBCreated = false;
   let skillA = "";
   let skillB = "";
+  let originalRootAgent = null;
+  let rootAgentPolicyOverridden = false;
 
   try {
     backendExec([
@@ -344,6 +360,26 @@ async function main() {
     }
     ok("Tenant-scoped MCP bindings and fail-closed Tool Permissions");
 
+    const platformConfig = await jsonApi(adminToken, "/api/admin/platform-config", "GET");
+    assert(platformConfig.body && platformConfig.body.agent, "platform config did not return a Root Agent policy");
+    originalRootAgent = JSON.parse(JSON.stringify(platformConfig.body.agent));
+    const temporaryRootAgent = JSON.parse(JSON.stringify(platformConfig.body.agent));
+    const inheritedOverrides = temporaryRootAgent.tenantOverrides || temporaryRootAgent.tenant_overrides || {};
+    delete temporaryRootAgent.tenant_overrides;
+    temporaryRootAgent.tenantOverrides = {
+      ...inheritedOverrides,
+      [tenantA]: { ...(inheritedOverrides[tenantA] || {}), model: MODEL_A },
+      [tenantB]: { ...(inheritedOverrides[tenantB] || {}), model: MODEL_B },
+    };
+    const updatedPlatformConfig = await jsonApi(adminToken, "/api/admin/platform-config", "PUT", {
+      agent: temporaryRootAgent,
+    });
+    const appliedOverrides = (updatedPlatformConfig.body.agent && updatedPlatformConfig.body.agent.tenantOverrides) || {};
+    assert.equal(appliedOverrides[tenantA] && appliedOverrides[tenantA].model, MODEL_A, "Tenant A Root Agent model override was not applied");
+    assert.equal(appliedOverrides[tenantB] && appliedOverrides[tenantB].model, MODEL_B, "Tenant B Root Agent model override was not applied");
+    rootAgentPolicyOverridden = true;
+    ok("Tenant-specific Root Agent model policies point to the real provider models");
+
     async function createTenantSkill(token, label, model, serverId, marker) {
       const name = kebabCase("tenant-provider-" + label + "-" + RUN_ID);
       assert.match(name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, label + " generated an invalid Skill name");
@@ -427,6 +463,7 @@ async function main() {
     console.log("\nReal Tenant A/B Provider acceptance passed.");
     console.log("Covered: Root Agent capability ACL, tenant Tool Calling, recorded quota usage, typed budget block, and cross-tenant quota independence.");
   } finally {
+    if (rootAgentPolicyOverridden) await restoreRootAgentBestEffort(adminToken, originalRootAgent);
     await deleteBestEffort(tokenA, skillA ? "/api/skills/" + skillA : "");
     await deleteBestEffort(tokenB, skillB ? "/api/skills/" + skillB : "");
     await deleteBestEffort(tokenA, serverACreated ? "/api/admin/mcp-servers/" + SERVER_A : "");
