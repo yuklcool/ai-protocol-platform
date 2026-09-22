@@ -42,6 +42,15 @@ function runId() {
   return (raw + "-" + randomUUID().slice(0, 8)).replace(/-+/g, "-").slice(0, 31);
 }
 
+function kebabCase(value) {
+  const normalized = String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!normalized) throw new Error("value must contain at least one lowercase kebab-case character");
+  return normalized;
+}
+
 const BACKEND_URL = String(process.env.BACKEND_URL || "http://127.0.0.1:1956").replace(/\/+$/, "");
 const ADMIN_EMAIL = String(process.env.SELFHOST_ADMIN_EMAIL || "admin@example.com");
 const ADMIN_PASSWORD = required("SELFHOST_ADMIN_PASSWORD");
@@ -336,8 +345,10 @@ async function main() {
     ok("Tenant-scoped MCP bindings and fail-closed Tool Permissions");
 
     async function createTenantSkill(token, label, model, serverId, marker) {
+      const name = kebabCase("tenant-provider-" + label + "-" + RUN_ID);
+      assert.match(name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, label + " generated an invalid Skill name");
       const created = await jsonApi(token, "/api/skills", "POST", {
-        name: "tenant-provider-" + label.toLowerCase() + "-" + RUN_ID,
+        name,
         displayName: label + " provider acceptance",
         description: "Ephemeral Tenant A/B real provider acceptance",
         instructions:
