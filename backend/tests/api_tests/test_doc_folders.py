@@ -143,7 +143,7 @@ class TestGetDocument:
 _UNICODE_DOC = {
     **_PARSED_DOC,
     "id": "docU",
-    "originalFilename": "Din SAS-booking bekræftet, 1 Jul – 8 Jul.pdf",
+    "originalFilename": "Din SAS-booking bekræftet, 1 Jul – 8 Jul.pdf",  # noqa: RUF001 — real filename fixture
     "sourceFormat": "pdf",
     "contentType": "application/pdf",
     "storagePath": "users/user_a/docs/f/booking.pdf",
@@ -163,7 +163,10 @@ class TestPreviewAndDownload:
         storage = _storage(b"%PDF-1.4 fake")
         with (
             patch("tools.documents.routes._get_document_record", return_value=dict(_UNICODE_DOC)),
-            patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", _UNICODE_DOC["storagePath"], "local")),
+            patch(
+                "tools.documents.routes._storage_binding",
+                return_value=(storage, "example.com", _UNICODE_DOC["storagePath"], "local"),
+            ),
         ):
             resp = app_a.get("/api/documents/docU/preview")
         assert resp.status_code == 200
@@ -177,7 +180,10 @@ class TestPreviewAndDownload:
         storage = _storage(b"download-me")
         with (
             patch("tools.documents.routes._get_document_record", return_value=dict(_PARSED_DOC)),
-            patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", _PARSED_DOC["storagePath"], "local")),
+            patch(
+                "tools.documents.routes._storage_binding",
+                return_value=(storage, "example.com", _PARSED_DOC["storagePath"], "local"),
+            ),
         ):
             resp = app_a.get("/api/documents/doc123/download")
         assert resp.status_code == 200

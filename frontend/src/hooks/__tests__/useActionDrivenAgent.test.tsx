@@ -10,6 +10,8 @@
 
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { from } from "rxjs";
+import { EventType } from "@ag-ui/core";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -114,6 +116,31 @@ beforeEach(() => {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe("useActionDrivenAgent", () => {
+  it("uses the shared Root AG-UI reducer for text and state deltas without adding a user message", async () => {
+    let currentAgent: ReturnType<typeof useAGUIAgent> | undefined;
+    function Harness() { currentAgent = useAGUIAgent(); return null; }
+    const { result } = renderHook(() => useActionDrivenAgent({ skillId: "root-agent", sessionId: "root-session" }), {
+      wrapper: ({ children }) => <AGUIProvider skillId="root-agent" agentId="root-agent" sessionId="root-session"><Harness />{children}</AGUIProvider>,
+    });
+    const agent = currentAgent!;
+    let props: unknown;
+    vi.spyOn(agent, "run").mockImplementation((input) => {
+      props = input.forwardedProps;
+      return from([
+        { type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId },
+        { type: EventType.STATE_SNAPSHOT, snapshot: { count: 0 } },
+        { type: EventType.STATE_DELTA, delta: [{ op: "replace", path: "/count", value: 1 }] },
+        { type: EventType.TEXT_MESSAGE_START, messageId: "action-answer", role: "assistant" },
+        { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "action-answer", delta: "Applied" },
+        { type: EventType.TEXT_MESSAGE_END, messageId: "action-answer" },
+        { type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId },
+      ]);
+    });
+    await result.current.triggerAction("form", { name: "submit", context: { value: "hello" } });
+    expect(props).toMatchObject({ a2ui_action: { surfaceId: "form", action: { name: "submit", context: { value: "hello" } } } });
+    expect(agent.messages).toEqual([{ id: "action-answer", role: "assistant", content: "Applied" }]);
+    expect(agent.state).toEqual({ count: 1 });
+  });
   it("POSTs to the correct URL with {surfaceId, action, forwardedProps.a2ui_surface_state} payload", async () => {
     const snapshot = {
       workspace: { catalogId: "basic", dataModel: { counter: 0 } },
@@ -545,10 +572,10 @@ describe("useActionDrivenAgent", () => {
     const { result } = renderHook(() =>
       useActionDrivenAgent({ skillId: "s", sessionId: "sess-1", activitySink: sink }),
     );
-    await result.current.triggerAction("workspace", { name: "click" });
+    await expect(result.current.triggerAction("workspace", { name: "click" })).rejects.toThrow("before the action completed");
     expect(sink.onRunStart).toHaveBeenCalledOnce();
     expect(sink.onRunSettled).toHaveBeenCalledOnce();
-    expect(sink.onRunSettled).toHaveBeenCalledWith({});
+    expect(sink.onRunSettled).toHaveBeenCalledWith({ error: expect.stringContaining("before the action completed") });
   });
 
   it("no activitySink: hook still works (backward compatible)", async () => {

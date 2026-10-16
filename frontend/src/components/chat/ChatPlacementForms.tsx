@@ -19,6 +19,7 @@ export interface ChatPlacementFormProps {
   isConfirm?: boolean;
   /** Backend-provided, friendly AI-authored title. */
   title?: string;
+  reusable?: boolean;
 }
 
 export function ChatPlacementForm({
@@ -28,6 +29,7 @@ export function ChatPlacementForm({
   skillId,
   isConfirm,
   title,
+  reusable = false,
 }: ChatPlacementFormProps) {
   const { locale } = useI18n();
   const headerLabel = submitted
@@ -70,6 +72,7 @@ export function ChatPlacementForm({
           sessionId={sessionId}
           skillId={skillId}
           triggerOnAction={!submitted}
+          freezeAfterAction={!reusable}
           className={"chat-a2ui-form px-4 py-3" + (isConfirm ? " chat-a2ui-form--confirm" : "")}
         />
       </div>
@@ -84,6 +87,7 @@ export interface ChatSurfaceItem {
   isConfirm: boolean;
   title?: string;
   replayed: boolean;
+  reusable?: boolean;
 }
 
 export function useChatSurfaces(): ChatSurfaceItem[] {
@@ -93,10 +97,11 @@ export function useChatSurfaces(): ChatSurfaceItem[] {
     surfaceId: a.surfaceId,
     createdAt: a.createdAt,
     submitted:
-      Boolean(a.replayed) || (a.kind === ELICITATION_FORM_KIND && a.surfaceId !== lastId),
+      (Boolean(a.replayed) && a.kind !== "a2ui") || (a.kind === ELICITATION_FORM_KIND && a.surfaceId !== lastId),
     isConfirm: a.elicitationKind === "confirm",
     title: a.title,
     replayed: Boolean(a.replayed),
+    reusable: a.kind === "a2ui",
   }));
 }
 
@@ -119,6 +124,7 @@ export function ChatPlacementForms({ sessionId, skillId }: ChatPlacementFormsPro
           skillId={skillId}
           isConfirm={surface.isConfirm}
           title={surface.title}
+          reusable={surface.reusable}
         />
       ))}
     </div>

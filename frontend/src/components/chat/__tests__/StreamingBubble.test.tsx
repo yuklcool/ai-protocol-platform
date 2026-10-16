@@ -31,10 +31,10 @@ describe("StreamingBubble", () => {
     expect(screen.getByRole("img", { name: BRANDING.appName })).toBeInTheDocument();
   });
 
-  it("applies orange left border class", () => {
+  it("applies primary-theme left border class", () => {
     const { container } = render(
       <StreamingBubble message={makeMsg("hi")} skillId="s" />,
     );
-    expect(container.querySelector(".border-orange-400")).toBeInTheDocument();
+    expect(container.querySelector(".border-primary")).toBeInTheDocument();
   });
 });

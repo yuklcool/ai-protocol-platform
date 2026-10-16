@@ -56,6 +56,8 @@ without having to redo the spike.
 
 from __future__ import annotations
 
+import json
+import uuid
 import warnings
 from typing import Any, Literal
 
@@ -271,10 +273,59 @@ class _SurfaceAwareTool(SendA2uiToClientToolset._SendA2uiJsonToClientTool):
         result = await super().run_async(args=args, tool_context=tool_context)
         if not isinstance(result, dict):
             return result
-        if self._default_surface is None:
-            return result
         # Only augment successful results — never leak surface onto an error envelope.
         if self.VALIDATED_A2UI_JSON_KEY not in result:
+            return result
+        # Model-authored UI uses the same live and durable surface path as
+        # tool-authored UI. Keep the protocol's surface ids intact: placement
+        # (chat/workspace) is metadata, not a rewrite of every surface id.
+        state = getattr(tool_context, "state", None)
+        if state is not None:
+            from adk.a2ui_result_render import RenderResult
+            from adk.callbacks import A2UI_SURFACE_STATE_PREFIX, _stash_surface_for_resume
+            from observability.timing import get_current_tracker, has_current_tracker
+
+            groups: dict[str, list[dict]] = {}
+            for message in result[self.VALIDATED_A2UI_JSON_KEY]:
+                for key in ("createSurface", "updateComponents", "updateDataModel", "deleteSurface"):
+                    payload = message.get(key)
+                    if isinstance(payload, dict) and isinstance(payload.get("surfaceId"), str):
+                        groups.setdefault(payload["surfaceId"], []).append(message)
+            for surface_id, messages in groups.items():
+                source_id = f"authored:{uuid.uuid4().hex}"
+                artifact = {
+                    "kind": "a2ui",
+                    "title": "Interactive result",
+                    "placement": "chat" if self._default_surface in (None, "chat") else "workbench",
+                }
+                # A patch alone cannot reconstruct a surface after a restart.
+                # Retain its validated message history back to the last create.
+                prior_messages: list[dict] = []
+                prior_raw = state.get(f"{A2UI_SURFACE_STATE_PREFIX}{surface_id}")
+                if isinstance(prior_raw, str):
+                    prior_messages = json.loads(prior_raw).get("messages", [])
+                snapshots = state.get("a2ui_surface_state") or {}
+                snapshot = snapshots.get(surface_id, {}) if isinstance(snapshots, dict) else {}
+                if isinstance(snapshot, dict) and "dataModel" in snapshot:
+                    prior_messages = [
+                        *prior_messages,
+                        {
+                            "version": "v0.9",
+                            "updateDataModel": {"surfaceId": surface_id, "value": snapshot["dataModel"]},
+                        },
+                    ]
+                if any("createSurface" in m or "deleteSurface" in m for m in messages):
+                    prior_messages = []
+                _stash_surface_for_resume(
+                    tool_context,
+                    RenderResult(surface_id, prior_messages + messages, artifact),
+                    source_id,
+                    self.name,
+                )
+                get_current_tracker().emit_a2ui_surface(surface_id, messages, source_id, artifact)
+            if groups and has_current_tracker():
+                result = {**result, "a2ui_delivered": True}
+        if self._default_surface is None:
             return result
         return {
             **result,

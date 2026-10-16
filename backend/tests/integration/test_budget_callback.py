@@ -393,11 +393,15 @@ async def test_identity_falls_back_to_uid_when_group_id_missing():
 @pytest.mark.asyncio
 async def test_tool_loop_model_calls_get_distinct_budget_call_ids():
     from unittest.mock import AsyncMock
+
     enforcer = MagicMock()
     enforcer.consult = AsyncMock(return_value=BudgetDecision("allow", 1.0, None, None, None))
     enforcer.record = AsyncMock()
     before, after = make_budget_callbacks(
-        enforcer, user=_make_user(), skill_id="loop", budget_config=BudgetConfig(identity_key="group_id"),
+        enforcer,
+        user=_make_user(),
+        skill_id="loop",
+        budget_config=BudgetConfig(identity_key="group_id"),
     )
     ctx = _make_ctx("one-agent-turn")
     await before(ctx, _make_request())

@@ -1,0 +1,39 @@
+name: Protocol operation acceptance
+
+on:
+  push:
+    branches: [main, fix/protocol-operation-completion]
+    paths:
+      - backend/**
+      - frontend/**
+      - docker-compose.yml
+      - .github/workflows/protocol-operation-acceptance.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protocol-operation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-real-provider:
+    uses: ./.github/workflows/real-provider-agent-mcp-acceptance.yml
+    with:
+      # Same explicit gateway/model used by this repository's previous real
+      # acceptance. Repository variables can replace them for another deploy.
+      provider_base_url: ${{ vars.REAL_PROVIDER_BASE_URL || 'https://sub2api.yukl.qzz.io/v1' }}
+      model_api_name: ${{ vars.REAL_PROVIDER_MODEL || 'gpt-5.6-luna' }}
+      supports_reasoning: true
+    secrets:
+      REAL_PROVIDER_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}
+
+  tenant-real-provider:
+    uses: ./.github/workflows/tenant-real-provider-acceptance.yml
+    with:
+      provider_base_url: ${{ vars.REAL_PROVIDER_BASE_URL || 'https://sub2api.yukl.qzz.io/v1' }}
+      model_api_name: ${{ vars.REAL_PROVIDER_MODEL || 'gpt-5.6-luna' }}
+      supports_reasoning: true
+    secrets:
+      REAL_PROVIDER_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}

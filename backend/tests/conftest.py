@@ -37,6 +37,33 @@ from unittest import mock
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _isolate_firebase_directory_and_root_policy():
+    """Unit auth doubles must not fall through to Identity Toolkit lookups.
+
+    Token verification doubles alone do not cover channel UID enrichment,
+    which also reads the Firebase user directory. Live GCP remains explicit.
+    Root policy and directory caches are reset to avoid cross-test grants.
+    """
+    from auth.firebase_auth import clear_user_cache
+    from config.platform_config import invalidate_cache
+
+    clear_user_cache()
+    invalidate_cache(clear_last_known_good=True)
+    if os.environ.get("RUN_LIVE_GCP") == "1":
+        yield
+    else:
+        from firebase_admin import auth as fb_auth
+
+        with (
+            mock.patch.object(fb_auth, "get_user", side_effect=fb_auth.UserNotFoundError("isolated test directory")),
+            mock.patch.object(fb_auth, "get_user_by_email", side_effect=fb_auth.UserNotFoundError("isolated test directory")),
+        ):
+            yield
+    clear_user_cache()
+    invalidate_cache(clear_last_known_good=True)
+
 # MODEL-RELIABILITY M3: the test suite runs under the `unrestricted`
 # residency policy by default, mirroring the Aitana dev deployment (the
 # accepted dev/demo US-egress exception) — provider-routing tests assert

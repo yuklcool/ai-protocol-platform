@@ -95,9 +95,7 @@ def test_tenant_repository_is_fail_closed_and_rejects_cross_tenant_access() -> N
     base.set_document("sessions", "legacy", {"title": "no tenant"})
 
     assert tenant_a.get_document("sessions", "s1")["tenantId"] == "tenant-a"
-    assert tenant_a.query_documents("sessions") == [
-        {"title": "A", "tenantId": "tenant-a", "__id": "s1"}
-    ]
+    assert tenant_a.query_documents("sessions") == [{"title": "A", "tenantId": "tenant-a", "__id": "s1"}]
 
     with pytest.raises(TenantIsolationError):
         tenant_b.get_document("sessions", "s1")

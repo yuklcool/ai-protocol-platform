@@ -33,37 +33,15 @@ describe("useLandingTarget", () => {
     });
   });
 
-  it("falls back to the primary skill (matching default_skill) when no session", async () => {
-    // call order: recent (204) → Promise.all[ clients/me, skills ]
-    mockFetch
-      .mockResolvedValueOnce(res(204, null))
-      .mockResolvedValueOnce(res(200, { default_skill: "ppa-expert" }))
-      .mockResolvedValueOnce(
-        res(200, [
-          { skillId: "w", slug: "web-researcher", ownerId: "aitana-platform" },
-          { skillId: "a", slug: "ppa-expert", ownerId: "aitana-platform" },
-        ]),
-      );
+  it("opens Root Agent even when no Skills are configured", async () => {
+    mockFetch.mockResolvedValueOnce(res(204, null)).mockResolvedValueOnce(res(200, { skillId: "root-agent" }));
     const { result } = renderHook(() => useLandingTarget(true));
-    await waitFor(() => expect(result.current.kind).toBe("fresh"));
-    expect(result.current).toMatchObject({ kind: "fresh", href: "/chat/@aitana-platform/ppa-expert" });
+    await waitFor(() => expect(result.current).toEqual({ kind: "fresh", href: "/chat/root-agent" }));
+    expect(mockFetch).toHaveBeenLastCalledWith("/api/proxy/api/agent");
   });
 
-  it("falls back to the first skill when default_skill is unset", async () => {
-    mockFetch
-      .mockResolvedValueOnce(res(204, null))
-      .mockResolvedValueOnce(res(200, { default_skill: null }))
-      .mockResolvedValueOnce(res(200, [{ skillId: "w", slug: "web-researcher", ownerId: "aitana-platform" }]));
-    const { result } = renderHook(() => useLandingTarget(true));
-    await waitFor(() => expect(result.current.kind).toBe("fresh"));
-    expect(result.current).toMatchObject({ kind: "fresh", href: "/chat/@aitana-platform/web-researcher" });
-  });
-
-  it("returns landing when there are no skills", async () => {
-    mockFetch
-      .mockResolvedValueOnce(res(204, null))
-      .mockResolvedValueOnce(res(200, {}))
-      .mockResolvedValueOnce(res(200, []));
+  it("returns landing when Root Agent metadata is unavailable", async () => {
+    mockFetch.mockResolvedValueOnce(res(204, null)).mockResolvedValueOnce(res(503, {}));
     const { result } = renderHook(() => useLandingTarget(true));
     await waitFor(() => expect(result.current.kind).toBe("landing"));
   });

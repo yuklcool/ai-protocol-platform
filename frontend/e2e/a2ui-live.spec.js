@@ -113,7 +113,7 @@ test.describe("A2UI persisted surface live acceptance", () => {
       const bootstrap = await authedApi(token, `/api/sessions/${SESSION_ID}/bootstrap`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ skill_id: skillId, document_ids: [] }),
+      body: JSON.stringify({ skill_id: skillId, document_ids: [], agent_id: "aitana_platform" }),
       });
       expect(bootstrap.session_id).toBe(SESSION_ID);
 

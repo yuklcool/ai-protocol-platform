@@ -147,9 +147,9 @@ def effective_entry_for(ref: str) -> EffectiveModelEntry | None:
 
 
 __all__ = [
+    "MANAGED_TIER_NAMES",
     "EffectiveModelEntry",
     "EffectiveModelsConfig",
-    "MANAGED_TIER_NAMES",
     "effective_entry_for",
     "load_effective_models_config",
 ]

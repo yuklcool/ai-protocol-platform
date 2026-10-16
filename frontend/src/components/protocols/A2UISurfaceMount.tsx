@@ -73,6 +73,8 @@ export interface A2UISurfaceMountProps {
    * surface stays in its last-rendered state).
    */
   triggerOnAction?: boolean;
+  /** Confirmation cards are one-shot; ordinary Agent UIs remain interactive. */
+  freezeAfterAction?: boolean;
   /**
    * Handler for `chat:send` surface actions — a surface Button can ask the app
    * to post a chat message (e.g. a diff card's "Explain this difference", whose
@@ -91,6 +93,7 @@ export function A2UISurfaceMount({
   sessionId,
   skillId,
   triggerOnAction = false,
+  freezeAfterAction = true,
   onChatMessage,
 }: A2UISurfaceMountProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -112,7 +115,7 @@ export function A2UISurfaceMount({
   // `skillId` may be empty for chat-driven mounts; the action-triggered
   // branch is also gated on `skillId.length > 0` so accidental
   // misconfigurations never POST to a malformed URL.
-  const { triggerAction } = useActionDrivenAgent({
+  const { triggerAction, cancelAction } = useActionDrivenAgent({
     skillId: skillId ?? "",
     sessionId: sessionId ?? "",
   });
@@ -276,16 +279,10 @@ export function A2UISurfaceMount({
             }),
           },
         );
-        if (!res.ok && process.env.NODE_ENV !== "production") {
-          // 403 is the expected response when the skill hasn't opted in;
-          // we log but don't surface to the user.
-          const detail = await res.text().catch(() => "");
-          console.info(
-            `[A2UISurfaceMount] surface-action POST returned ${res.status} for surface "${surfaceId}"`,
-            detail,
-          );
-        }
+        if (!res.ok) throw new Error(`The action could not be saved (HTTP ${res.status}). Try again.`);
+        setActionError(null);
       } catch (err) {
+        setActionError(err instanceof Error ? err.message : "The action could not be saved. Try again.");
         if (process.env.NODE_ENV !== "production") {
           console.warn(
             `[A2UISurfaceMount] surface-action POST failed for surface "${surfaceId}":`,
@@ -299,6 +296,7 @@ export function A2UISurfaceMount({
 
   return (
     <div ref={ref} className={className} data-surface={surfaceId}>
+      {state?.error && <p role="alert" className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">{state.error}</p>}
       {state?.surface && (
         <div className="relative">
           {/* Dim + disable the surface while an action-triggered run is in
@@ -309,7 +307,7 @@ export function A2UISurfaceMount({
           <div
             aria-busy={isRunning}
             className={
-              isRunning || (hasCompleted && triggerOnAction)
+              isRunning || (hasCompleted && triggerOnAction && freezeAfterAction)
                 ? "pointer-events-none opacity-60 transition-opacity"
                 : "transition-opacity"
             }
@@ -348,6 +346,7 @@ export function A2UISurfaceMount({
               </span>
             </div>
           )}
+          {isRunning && <button type="button" onClick={cancelAction} className="mt-2 rounded-md border px-3 py-1 text-xs">Stop</button>}
           {actionError && (
             <div
               role="alert"

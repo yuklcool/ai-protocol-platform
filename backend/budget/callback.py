@@ -20,8 +20,8 @@ without round-tripping through session state.
 from __future__ import annotations
 
 import logging
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
 
 from adk.budget_config import BudgetConfig
 from auth.firebase_auth import User

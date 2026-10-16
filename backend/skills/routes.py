@@ -375,9 +375,7 @@ def get_effective_access(
     refs = {str(ref) for ref in root.skills if str(ref).strip()}
     fail_closed = (root.permissions or {}).get("failClosed") is True
     root_bound = bool(
-        (config.skill_id in refs)
-        or (config.slug and config.slug in refs)
-        or (not refs and not fail_closed)
+        (config.skill_id in refs) or (config.slug and config.slug in refs) or (not refs and not fail_closed)
     )
     strict = bool(root.skills or root.tools or root.mcp_servers or fail_closed)
 
@@ -415,7 +413,9 @@ def get_effective_access(
         ),
         knowledge={
             "folderPath": folder,
-            "tenantScoped": bool(folder and not config.welcome.bucket_browser.bucket) if config.welcome and config.welcome.bucket_browser else False,
+            "tenantScoped": bool(folder and not config.welcome.bucket_browser.bucket)
+            if config.welcome and config.welcome.bucket_browser
+            else False,
         },
     )
 

@@ -23,17 +23,22 @@ indistinguishable). See `docs/design/v6.21.0/channels-agui-convergence.md`.
 
 from __future__ import annotations
 
-import logging
 import hashlib
+import logging
 import os
 from collections.abc import AsyncIterator
 from typing import Any
 
+from adk.agui import ROOT_AGENT_APP_NAME
+from agents.root_runtime import (
+    ROOT_AGENT_ID,
+    RootCapabilityDenied,
+    compose_root_skill,
+    effective_root_config,
+    resolve_root_capability,
+)
 from auth.access_context import build_access_context
 from auth.firebase_auth import User
-from agents.root_runtime import ROOT_AGENT_ID, RootCapabilityDenied, compose_root_skill, effective_root_config, resolve_root_capability
-from adk.agui import ROOT_AGENT_APP_NAME
-from config.platform_config import PlatformConfigUnavailable, get_platform_config
 
 # User-visible text and the error mapping live in `_agui_render` (the
 # presentation layer) and are re-exported here so existing call sites —
@@ -45,6 +50,7 @@ from channels._agui_render import (
     CollectingSink,
     error_reply_text,
 )
+from config.platform_config import PlatformConfigUnavailable, get_platform_config
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +103,12 @@ async def stream_skill_events(
         root_config = effective_root_config(get_platform_config().agent, access.tenant_id)
         capability = resolve_root_capability(root_config, user, access, skill_id)
         runtime_skill = compose_root_skill(capability, root_config)
-        cache_scope = "root:" + hashlib.sha256(
-            root_config.model_dump_json(by_alias=True, exclude_none=False, round_trip=True).encode("utf-8")
-        ).hexdigest()
+        cache_scope = (
+            "root:"
+            + hashlib.sha256(
+                root_config.model_dump_json(by_alias=True, exclude_none=False, round_trip=True).encode("utf-8")
+            ).hexdigest()
+        )
         async for event in process_skill_request(
             skill_id=capability.skill_id,
             user=user,

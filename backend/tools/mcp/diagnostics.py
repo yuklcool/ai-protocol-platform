@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 from mcp import ClientSession
@@ -105,9 +106,7 @@ async def _session(server_id: str, config: dict[str, Any]) -> AsyncIterator[Clie
     if not url:
         raise McpDiagnosticError("configuration", "MCP server config has no URL")
     try:
-        headers = _merge_ui_capability_header(
-            _resolve_header_secrets(server_id, config.get("headers") or {})
-        )
+        headers = _merge_ui_capability_header(_resolve_header_secrets(server_id, config.get("headers") or {}))
     except Exception as exc:
         raise McpDiagnosticError("configuration", str(exc)) from exc
 
@@ -155,17 +154,13 @@ async def discover_mcp_server(
                 except Exception as exc:
                     error = _classify_exception(exc)
                     resources = []
-                    warnings.append(
-                        {"capability": "resources", "category": error.category, "message": error.message}
-                    )
+                    warnings.append({"capability": "resources", "category": error.category, "message": error.message})
                 try:
                     prompts = _items(await session.list_prompts(), "prompts")
                 except Exception as exc:
                     error = _classify_exception(exc)
                     prompts = []
-                    warnings.append(
-                        {"capability": "prompts", "category": error.category, "message": error.message}
-                    )
+                    warnings.append({"capability": "prompts", "category": error.category, "message": error.message})
 
                 resource_uris = _ui_resource_uris(tools, resources)
                 return {

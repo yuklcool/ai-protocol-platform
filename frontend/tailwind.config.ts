@@ -16,7 +16,7 @@ const config = {
     },
     extend: {
       fontFamily: {
-        sans: ['Euclid Circular A', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'system-ui', 'sans-serif'],
         serif: ['Crimson Pro', 'Georgia', 'serif'],
       },
       colors: {

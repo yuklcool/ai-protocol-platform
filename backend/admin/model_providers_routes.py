@@ -171,9 +171,7 @@ def delete_provider(provider_id: str, scope: PlatformScope) -> ProviderView:
     if data is None:
         raise HTTPException(status_code=404, detail="Model provider not found")
     # Refuse to orphan dynamic models.
-    references = [
-        row for row in query_documents(MODELS_COLLECTION) if str(row.get("providerId") or "") == provider_id
-    ]
+    references = [row for row in query_documents(MODELS_COLLECTION) if str(row.get("providerId") or "") == provider_id]
     if references:
         raise HTTPException(status_code=409, detail="Provider is still referenced by dynamic models")
     delete_document(PROVIDERS_COLLECTION, provider_id)

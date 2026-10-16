@@ -54,9 +54,14 @@ class TestUploadStorage:
         monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
         monkeypatch.setenv("OBJECT_STORAGE_LOCAL_ROOT", str(root))
         common = _common_patches()
-        with common[0], common[1], common[2], common[3], common[4], patch(
-            "tools.documents.upload.resolve_documents_bucket"
-        ) as bucket_resolver:
+        with (
+            common[0],
+            common[1],
+            common[2],
+            common[3],
+            common[4],
+            patch("tools.documents.upload.resolve_documents_bucket") as bucket_resolver,
+        ):
             resp = client.post("/api/documents/upload", files=_file())
 
         assert resp.status_code == 200
@@ -80,7 +85,11 @@ class TestUploadStorage:
 
         common = _common_patches()
         with (
-            common[0], common[1], common[2], common[3], common[4],
+            common[0],
+            common[1],
+            common[2],
+            common[3],
+            common[4],
             patch("tools.documents.upload.resolve_documents_bucket", return_value="example-documents"),
             patch("tools.documents.upload.GcsObjectStorage", FakeGcsStorage),
         ):
@@ -143,7 +152,9 @@ class TestUploadStorage:
         assert resp.status_code == 200
         assert calls == [("user1", "example.com")]
 
-    def test_large_payload_reaches_storage_without_upload_route_reading_bytes(self, client: TestClient, tmp_path: Path, monkeypatch):
+    def test_large_payload_reaches_storage_without_upload_route_reading_bytes(
+        self, client: TestClient, tmp_path: Path, monkeypatch
+    ):
         monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
         monkeypatch.setenv("OBJECT_STORAGE_LOCAL_ROOT", str(tmp_path / "objects"))
         payload = b"x" * (3 * 1024 * 1024 + 17)

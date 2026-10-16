@@ -118,11 +118,14 @@ async def test_same_uid_cannot_read_artifact_from_another_tenant(tmp_path: Path,
         filename="secret.txt",
     )
     assert foreign is None
-    assert await service.list_artifact_keys(
-        app_name="aitana_platform",
-        user_id="same-uid",
-        session_id="same-session",
-    ) == []
+    assert (
+        await service.list_artifact_keys(
+            app_name="aitana_platform",
+            user_id="same-uid",
+            session_id="same-session",
+        )
+        == []
+    )
 
 
 @pytest.mark.asyncio

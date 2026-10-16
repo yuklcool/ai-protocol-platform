@@ -43,8 +43,11 @@ import time
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from agents.root_runtime import effective_root_config
 from auth import User, get_current_user
 from auth.access_context import build_access_context
+from auth.permissions import can_use_tool
+from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.persistence import get_document
 from protocols.artefact_review import (
     ArtefactReview,
@@ -98,6 +101,13 @@ def _user_can_use_server(server_id: str, request: Request) -> bool:
     in-process cache absorbs repeated calls.
     """
     access = request.state.access
+    try:
+        root = effective_root_config(get_platform_config().agent, access.tenant_id)
+    except PlatformConfigUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
+    strict = bool(root.skills or root.tools or root.mcp_servers or root.permissions.get("failClosed") is True)
+    if strict:
+        return server_id in root.mcp_servers
     # Iterate the caller's accessible-skill set. We cannot pre-filter by
     # server_id at the Firestore layer (Firestore can't query nested array
     # fields like tool_configs.mcp.servers efficiently without an index we
@@ -169,6 +179,20 @@ async def _forward(*, server_id: str, request: Request, user: User, method: str)
         outbound_headers.update({str(k): str(v) for k, v in server_headers.items()})
 
     body = await request.body() if method in {"POST", "DELETE"} else b""
+    if body:
+        try:
+            rpc = json.loads(body)
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid MCP JSON-RPC request") from exc
+        if not isinstance(rpc, dict):
+            raise HTTPException(status_code=400, detail="MCP requests must be JSON-RPC objects")
+        if rpc.get("method") == "tools/call":
+            params = rpc.get("params")
+            tool_name = params.get("name") if isinstance(params, dict) else None
+            if not isinstance(tool_name, str) or not tool_name:
+                raise HTTPException(status_code=400, detail="MCP tool name is required")
+            if not can_use_tool(user.email, user.domain, tool_name, tenant_id=tenant_id):
+                raise HTTPException(status_code=403, detail="MCP tool is not permitted")
 
     log.info(
         "mcp_proxy: forwarding %s caller_uid=%s server_id=%s url=%s body_bytes=%d",

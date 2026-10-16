@@ -58,9 +58,7 @@ def _cfg(*, mapped: bool = False) -> EffectiveModelsConfig:
         _entry("fast-model", "fast"),
     ]
     tiers = (
-        {"default": "daily-model", "smart": "smart-model", "fast": "fast-model"}
-        if mapped
-        else {"smart": "smart-model"}
+        {"default": "daily-model", "smart": "smart-model", "fast": "fast-model"} if mapped else {"smart": "smart-model"}
     )
     return EffectiveModelsConfig(
         models=entries,

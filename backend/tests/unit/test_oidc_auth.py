@@ -219,9 +219,9 @@ async def test_authorization_request_stores_pkce_transaction_server_side(
     nonce = query["nonce"][0]
     transaction = _transaction_for_state(state)
     verifier = str(transaction["codeVerifier"])
-    expected_challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode("ascii")).digest()
-    ).decode("ascii").rstrip("=")
+    expected_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
+    )
 
     assert transaction["nonce"] == nonce
     assert transaction["returnTo"] == "/skills?tab=mine"

@@ -5,9 +5,9 @@ from object_storage.factory import get_object_storage, object_storage_backend_na
 from object_storage.local import LocalObjectStorage, StoragePathError
 
 __all__ = [
+    "LocalObjectStorage",
     "ObjectInfo",
     "ObjectStorage",
-    "LocalObjectStorage",
     "StoragePathError",
     "get_object_storage",
     "object_storage_backend_name",

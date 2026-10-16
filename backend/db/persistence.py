@@ -28,9 +28,7 @@ def data_backend() -> DataBackend:
     raw = os.environ.get("DATA_BACKEND", "").strip().lower()
     if raw:
         if raw not in {"memory", "firestore", "postgres"}:
-            raise RuntimeError(
-                f"Unsupported DATA_BACKEND={raw!r}; expected memory, firestore, or postgres"
-            )
+            raise RuntimeError(f"Unsupported DATA_BACKEND={raw!r}; expected memory, firestore, or postgres")
         return raw  # type: ignore[return-value]
     return "memory" if is_local_mode() else "firestore"
 

@@ -643,6 +643,8 @@ function WorkbenchPane({
             sessionId={sessionId}
             skillId={skillId}
             onChatMessage={onSurfaceChatMessage}
+            triggerOnAction={a.kind === "a2ui" && compareOptedIn}
+            freezeAfterAction={false}
           />
         </div>
       ),

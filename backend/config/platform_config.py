@@ -16,6 +16,7 @@ used elsewhere in the platform).
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -56,7 +57,11 @@ def _from_storage(data: dict[str, Any]) -> PlatformConfig:
 
 
 def _default_config() -> PlatformConfig:
-    return PlatformConfig(preamble=DEFAULT_PREAMBLE, enabled=True)
+    return PlatformConfig(
+        preamble=DEFAULT_PREAMBLE,
+        enabled=True,
+        agent={"model": os.environ.get("PLATFORM_DEFAULT_MODEL", "smart")},
+    )
 
 
 def _cache_get() -> PlatformConfig | None:

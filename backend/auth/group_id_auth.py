@@ -337,9 +337,7 @@ def join_group(group_id: str, *, client_ip: str) -> JoinResult:
     cap_key = (group_id, _today_iso())
     current = _state.sessions_today.get(cap_key, 0)
     if current >= record.max_concurrent_sessions:
-        raise GroupSessionCapExceeded(
-            f"group {group_id} reached daily session cap ({record.max_concurrent_sessions})"
-        )
+        raise GroupSessionCapExceeded(f"group {group_id} reached daily session cap ({record.max_concurrent_sessions})")
 
     now = AnonymousGroupAuth.time_provider()
     uid = _synthesize_uid(group_id)
@@ -376,13 +374,9 @@ def verify_group_token(token: str) -> dict:
 
     required = {"sub", "group_id", "exp", "iat", "auth_mode"}
     if set(claims.keys()) != required:
-        raise InvalidGroupToken(
-            f"token claims must be {sorted(required)}; got {sorted(claims.keys())}"
-        )
+        raise InvalidGroupToken(f"token claims must be {sorted(required)}; got {sorted(claims.keys())}")
     if claims["auth_mode"] != AUTH_MODE:
-        raise InvalidGroupToken(
-            f"token auth_mode is {claims['auth_mode']!r}, expected {AUTH_MODE!r}"
-        )
+        raise InvalidGroupToken(f"token auth_mode is {claims['auth_mode']!r}, expected {AUTH_MODE!r}")
 
     group_id = claims["group_id"]
     if group_id in _state.revoked_group_ids:

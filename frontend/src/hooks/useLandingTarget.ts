@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { skillHref } from "@/components/navigation/skillHref";
-import type { Skill } from "@/types/skill";
 
 /**
  * Where to send a signed-in user who lands on `/` (v6.5.0 AUTH-LANDING):
@@ -54,17 +53,11 @@ export function useLandingTarget(enabled: boolean): LandingTarget {
           return;
         }
         // 204 (or anything non-200) → fall through to the primary skill.
-        const [meRes, skillsRes] = await Promise.all([
-          fetchWithAuth("/api/proxy/api/clients/me"),
-          fetchWithAuth("/api/proxy/api/skills"),
-        ]);
-        const me = meRes.ok ? await meRes.json() : {};
-        const skills = (skillsRes.ok ? await skillsRes.json() : []) as Skill[];
-        const primary = skills.find((k) => k.slug && k.slug === me.default_skill) ?? skills[0];
+        const agentRes = await fetchWithAuth("/api/proxy/api/agent");
         if (cancelled) return;
         setTarget(
-          primary?.slug && primary?.ownerId
-            ? { kind: "fresh", href: skillHref(primary) }
+          agentRes.ok
+            ? { kind: "fresh", href: "/chat/root-agent" }
             : { kind: "landing" },
         );
       } catch {

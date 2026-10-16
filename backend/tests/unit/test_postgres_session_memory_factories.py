@@ -22,12 +22,13 @@ def test_postgres_session_backend_normalizes_asyncpg_url_and_overrides_legacy_me
         "AITANA_LOCAL_SESSION": "memory",
     }
     sentinel = object()
-    with patch.dict("os.environ", env, clear=True), patch(
-        "google.adk.sessions.DatabaseSessionService", return_value=sentinel
-    ) as factory:
+    with (
+        patch.dict("os.environ", env, clear=True),
+        patch("google.adk.sessions.DatabaseSessionService", return_value=sentinel) as factory,
+    ):
         service = session_mod.get_session_service()
 
-    assert service is sentinel
+    assert service.delegate is sentinel
     factory.assert_called_once_with(db_url="postgresql+asyncpg://user:pass@postgres:5432/aip")
 
 
@@ -47,15 +48,16 @@ def test_postgres_memory_backend_uses_same_database_and_is_singleton():
         "AITANA_LOCAL_SESSION": "memory",
     }
     sentinel = object()
-    with patch.dict("os.environ", env, clear=True), patch(
-        "adk.postgres_memory.PostgresMemoryService", return_value=sentinel
-    ) as factory:
+    with (
+        patch.dict("os.environ", env, clear=True),
+        patch("adk.postgres_memory.PostgresMemoryService", return_value=sentinel) as factory,
+    ):
         first = session_mod.get_memory_service()
         second = session_mod.get_memory_service()
 
     assert first is sentinel
     assert second is sentinel
-    factory.assert_called_once_with("postgresql://user:pass@postgres:5432/aip")
+    factory.assert_called_once_with("postgresql://user:pass@postgres:5432/aip", require_tenant=True)
 
 
 def test_postgres_memory_uri_does_not_expose_database_credentials():

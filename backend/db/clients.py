@@ -214,6 +214,4 @@ def resolve_derived_group_tags(domain: str) -> frozenset[str]:
 
 
 def resolve_channel_bucket() -> str:
-    return os.environ.get("CHANNEL_DOCUMENTS_BUCKET") or os.environ.get(
-        "DOCUMENTS_BUCKET", "aitana-documents-bucket"
-    )
+    return os.environ.get("CHANNEL_DOCUMENTS_BUCKET") or os.environ.get("DOCUMENTS_BUCKET", "aitana-documents-bucket")

@@ -185,9 +185,9 @@ def _build_toolset(server_id: str, config: dict) -> McpToolset | None:
 
 __all__ = [
     "SERVER_ID_ATTR",
-    "TaggedMcpToolset",
     "UI_CAPABILITY_HEADER",
     "UI_CAPABILITY_MIME_TYPE",
+    "TaggedMcpToolset",
     "UnresolvedHeaderSecret",
     "clear_registry_cache",
     "derive_in_process_mcp_base_url",

@@ -17,7 +17,14 @@ import tempfile
 from pathlib import PurePosixPath
 from typing import BinaryIO
 
-from tools.documents.ailang_parse import ParseOutcome, _cache_get, _cache_set, _get_client, _parse_file_sync, is_parseable
+from tools.documents.ailang_parse import (
+    ParseOutcome,
+    _cache_get,
+    _cache_set,
+    _get_client,
+    _parse_file_sync,
+    is_parseable,
+)
 
 log = logging.getLogger(__name__)
 

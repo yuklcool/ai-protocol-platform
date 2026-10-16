@@ -333,7 +333,13 @@ class TestGetSessionMessages:
         # real frontend sees in dev (which then triggers the
         # "Couldn't load previous messages" banner).
         user = User(uid="firebase-uid-abc", email="x@example.com", domain="example.com", tenant_id="test-tenant")
-        ctx = AccessContext(uid="firebase-uid-abc", email=user.email, domain=user.domain, group_tags=frozenset(), tenant_id="test-tenant")
+        ctx = AccessContext(
+            uid="firebase-uid-abc",
+            email=user.email,
+            domain=user.domain,
+            group_tags=frozenset(),
+            tenant_id="test-tenant",
+        )
         test_app = FastAPI()
         test_app.include_router(router)
 

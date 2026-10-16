@@ -117,7 +117,9 @@ def build_document_context(
     if section:
         blocks = _filter_by_section(blocks, section)
     if mode == "blocks":
-        return json.dumps({"docId": doc_id, "filename": original_filename, "blocks": blocks}, ensure_ascii=False), blocks
+        return json.dumps(
+            {"docId": doc_id, "filename": original_filename, "blocks": blocks}, ensure_ascii=False
+        ), blocks
 
     metadata = raw.get("metadata") or {}
     preamble_lines = [f"**Document:** {original_filename}"]
@@ -128,7 +130,8 @@ def build_document_context(
     if metadata.get("pageCount"):
         preamble_lines.append(f"**Pages:** {metadata['pageCount']}")
     body = blocks_to_markdown(blocks) or raw.get("text", "") or "(No text content extracted.)"
-    return f"{'\n'.join(preamble_lines)}\n\n---\n\n{body}", None
+    preamble = "\n".join(preamble_lines)
+    return f"{preamble}\n\n---\n\n{body}", None
 
 
 def _filter_by_section(blocks: list[dict[str, Any]], section: str) -> list[dict[str, Any]]:

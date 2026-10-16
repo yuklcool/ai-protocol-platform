@@ -127,9 +127,7 @@ def resolve_admin_scope(user: User) -> AdminScope | None:
     if is_platform_admin(tags):
         return AdminScope(user=user, domains=None)
     tenant_ids = frozenset(
-        _normalise_scope_key(value)
-        for value in tenant_admin_tenant_ids(tags)
-        if _normalise_scope_key(value)
+        _normalise_scope_key(value) for value in tenant_admin_tenant_ids(tags) if _normalise_scope_key(value)
     )
     if not tenant_ids:
         return None

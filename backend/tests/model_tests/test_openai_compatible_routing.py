@@ -7,19 +7,19 @@ from config.models import ModelEntry
 
 
 def _entry(**overrides):
-    data = dict(
-        id="deepseek-v3",
-        api_name="deepseek-chat",
-        provider="openai",
-        tier="default",
-        residency="global",
-        context_window=128_000,
-        max_output_tokens=8_192,
-        description="test compatible model",
-        supports_tools=True,
-        supports_reasoning=False,
-        supports_responses_api=False,
-    )
+    data = {
+        "id": "deepseek-v3",
+        "api_name": "deepseek-chat",
+        "provider": "openai",
+        "tier": "default",
+        "residency": "global",
+        "context_window": 128000,
+        "max_output_tokens": 8192,
+        "description": "test compatible model",
+        "supports_tools": True,
+        "supports_reasoning": False,
+        "supports_responses_api": False,
+    }
     data.update(overrides)
     return ModelEntry(**data)
 

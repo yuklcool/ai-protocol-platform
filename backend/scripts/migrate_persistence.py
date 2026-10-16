@@ -23,10 +23,10 @@ import argparse
 import os
 from collections.abc import Iterable
 
-from db.repository import Repository
 from db.repositories.firestore import FirestoreRepository
 from db.repositories.memory import MemoryRepository
 from db.repositories.postgres import PostgresRepository
+from db.repository import Repository
 
 
 def _repository(kind: str, database_url: str | None) -> Repository:

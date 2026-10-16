@@ -38,16 +38,17 @@ Examples:
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 from auth.admin_roles import TENANT_ADMIN_PREFIX
 from auth.permissions import TENANT_PREFIX, tenant_permission_key
 from db.persistence import get_repository
 from db.repository import Repository
 from db.tenants import TenantConfig, normalize_domain, normalize_tenant_id
-from skills.platform import PLATFORM_OWNER_UID
 from scripts.tenant_migration_journal import MigrationJournal, rollback_migration
+from skills.platform import PLATFORM_OWNER_UID
 
 CLIENT_COLLECTION = "clients"
 TENANT_COLLECTION = "tenants"
@@ -177,10 +178,7 @@ def _merge_scalar(field_name: str, current: Any, incoming: Any, tenant_id: str):
     if current in (None, ""):
         return incoming
     if current != incoming:
-        raise ValueError(
-            f"tenant {tenant_id!r}: legacy domains disagree on {field_name}: "
-            f"{current!r} != {incoming!r}"
-        )
+        raise ValueError(f"tenant {tenant_id!r}: legacy domains disagree on {field_name}: {current!r} != {incoming!r}")
     return current
 
 
@@ -191,10 +189,7 @@ def _merge_list(field_name: str, current: list[str] | None, incoming: Any, tenan
     if current is None:
         return cleaned
     if current != cleaned:
-        raise ValueError(
-            f"tenant {tenant_id!r}: legacy domains disagree on {field_name}: "
-            f"{current!r} != {cleaned!r}"
-        )
+        raise ValueError(f"tenant {tenant_id!r}: legacy domains disagree on {field_name}: {current!r} != {cleaned!r}")
     return current
 
 
@@ -293,9 +288,7 @@ def _preflight_directory(repository: Repository, configs: list[TenantConfig]) ->
                 continue
             owner = normalize_tenant_id(str(existing_mapping.get("tenantId") or ""))
             if owner != config.tenant_id:
-                raise ValueError(
-                    f"domain {domain!r} is already mapped to tenant {owner!r}, not {config.tenant_id!r}"
-                )
+                raise ValueError(f"domain {domain!r} is already mapped to tenant {owner!r}, not {config.tenant_id!r}")
 
 
 def _canonical_permission(row: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -340,14 +333,10 @@ def _plan_tenant_permissions(
         updates: dict[str, Any] = {}
         if existing is not None:
             if str(existing.get("type") or "") != "tenant" or _canonical_permission(existing) != source:
-                raise ValueError(
-                    f"tenant permission {target_key!r} already exists with different rules"
-                )
+                raise ValueError(f"tenant permission {target_key!r} already exists with different rules")
             explicit_owner = str(existing.get("tenantId") or "").strip()
             if explicit_owner and explicit_owner != config.tenant_id:
-                raise ValueError(
-                    f"tenant permission {target_key!r} claims conflicting tenantId {explicit_owner!r}"
-                )
+                raise ValueError(f"tenant permission {target_key!r} claims conflicting tenantId {explicit_owner!r}")
             if not explicit_owner:
                 updates["tenantId"] = config.tenant_id
         planned.append(

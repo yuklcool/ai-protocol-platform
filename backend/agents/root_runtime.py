@@ -13,12 +13,25 @@ from typing import Any
 
 from auth.access_context import AccessContext
 from auth.firebase_auth import User
-from db.clients import resolve_default_skill, resolve_enabled_skills
-from db.models import DelegationConfig, FallbackConfig, SkillConfig
+from db.clients import resolve_enabled_skills
+from db.models import DelegationConfig, FallbackConfig, SkillConfig, SkillMetadata
 from db.models.root_agent import RootAgentConfig
 from skills.skill_config import resolve_skill_ref
 
 ROOT_AGENT_ID = "root-agent"
+
+
+def root_agent_skill(config: RootAgentConfig) -> SkillConfig:
+    """Storage-independent identity for the one user-facing Agent."""
+    return SkillConfig(
+        name=ROOT_AGENT_ID,
+        skillId=ROOT_AGENT_ID,
+        displayName=config.display_name,
+        description=config.description,
+        ownerId="aitana-platform",
+        accessControl={"type": "public"},
+        skillMetadata=SkillMetadata(model=config.model),
+    )
 
 
 class RootCapabilityDenied(Exception):
@@ -72,7 +85,7 @@ def _configured_ref(config: RootAgentConfig, ref: str, user: User, access: Acces
         return None
 
     enabled = resolve_enabled_skills(user)
-    if enabled is not None and not access.is_skill_admin(skill):
+    if enabled is not None:
         # Tenant narrowing is an additional ceiling, never a grant.  Accept
         # ids as well as slugs because RootAgentConfig stores stable resource
         # references while old tenant records store slugs.
@@ -101,6 +114,8 @@ def resolve_root_capability(
     configured = [str(ref) for ref in config.skills if str(ref).strip()]
     fail_closed = (config.permissions or {}).get("failClosed") is True
     requested = (requested_ref or "").strip()
+    if not requested or requested == ROOT_AGENT_ID:
+        return root_agent_skill(config)
     if requested:
         # A fail-closed Root Agent cannot be widened by a client-supplied
         # capability hint when the admin has not configured an allow-list.
@@ -119,28 +134,20 @@ def resolve_root_capability(
             raise RootCapabilityDenied("requested capability is unavailable")
         return skill
 
-    candidates = configured
-    if not candidates:
-        if fail_closed:
-            raise RootCapabilityDenied("no Root Agent capability is configured")
-        default_ref = resolve_default_skill(user)
-        candidates = [default_ref] if default_ref else []
-
-    for ref in candidates:
-        if ref:
-            skill = _configured_ref(config, ref, user, access)
-            if skill is not None:
-                return skill
-
-    raise RootCapabilityDenied("no accessible Root Agent capability is configured")
-
 
 def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConfig:
     """Compose Root Agent policy over one capability without mutating storage."""
     permissions = config.permissions or {}
-    strict = bool(config.skills or config.tools or config.mcp_servers or permissions.get("failClosed") is True)
+    strict = bool(
+        skill.skill_id == ROOT_AGENT_ID
+        or config.skills
+        or config.tools
+        or config.mcp_servers
+        or permissions.get("failClosed") is True
+    )
     metadata = skill.skill_metadata.model_copy(deep=True)
     tool_configs = dict(metadata.tool_configs or {})
+    tool_configs["root_agent"] = {"enabled": True}
 
     # Skill-level model strategy and delegation are not Root Agent policy.
     # Clear them before composing so a capability cannot smuggle in a second
@@ -204,6 +211,7 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
             "instructions": instructions,
             "initial_message": config.interaction.welcome_message or skill.initial_message,
             "skill_metadata": metadata,
+            "display_name": config.display_name,
         },
     )
 

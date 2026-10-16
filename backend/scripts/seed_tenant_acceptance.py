@@ -123,9 +123,7 @@ def seed(run_id: str) -> dict[str, Any]:
     directory = TenantDirectory(repo)
     for tenant_id in (ids["tenant_a"], ids["tenant_b"]):
         if repo.get_document("tenants", tenant_id) is not None:
-            raise ValueError(
-                f"acceptance fixture {tenant_id!r} already exists; use a new --run-id or run --cleanup"
-            )
+            raise ValueError(f"acceptance fixture {tenant_id!r} already exists; use a new --run-id or run --cleanup")
 
     policy_a: dict[str, Any] = {"allowedModels": [model_a], "defaultModel": model_a}
     policy_b: dict[str, Any]
@@ -270,10 +268,7 @@ def cleanup(run_id: str) -> dict[str, Any]:
     actor_emails = {ids["email_a"], ids["email_b"]}
     tenant_ids = {ids["tenant_a"], ids["tenant_b"]}
     for raw in repo.query_documents("admin_audit", limit=None):
-        if (
-            str(raw.get("actorEmail") or "").casefold() in actor_emails
-            and str(raw.get("tenantId") or "") in tenant_ids
-        ):
+        if str(raw.get("actorEmail") or "").casefold() in actor_emails and str(raw.get("tenantId") or "") in tenant_ids:
             doc_id = str(raw.get("__id") or "")
             if doc_id:
                 repo.delete_document("admin_audit", doc_id)

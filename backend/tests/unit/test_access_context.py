@@ -18,8 +18,8 @@ import pytest
 
 from auth.access_context import AccessContext, build_access_context, can_access
 from auth.firebase_auth import User
-from db.models.access import AccessControl
 from db.models import SkillConfig
+from db.models.access import AccessControl
 
 # ---------------------------------------------------------------------------
 # Fixtures

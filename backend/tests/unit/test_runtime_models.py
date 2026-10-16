@@ -167,9 +167,7 @@ def test_yaml_openai_model_preserves_global_base_url(monkeypatch) -> None:
         patch("config.runtime_models.load_effective_models_config", return_value=_cfg()),
         patch("config.runtime_models.yaml_api_name_for", return_value="gpt-5"),
     ):
-        assert runtime_models.openai_runtime_kwargs("gpt-5") == {
-            "api_base": "https://gateway.example/v1"
-        }
+        assert runtime_models.openai_runtime_kwargs("gpt-5") == {"api_base": "https://gateway.example/v1"}
 
 
 def test_dynamic_provider_missing_secret_is_reported_without_global_openai_key(monkeypatch) -> None:

@@ -52,8 +52,11 @@ def test_record_never_raises_on_write_failure(caplog):
 def test_target_tenant_is_independent_of_actor_and_payload():
     with patch("admin.audit.set_document") as write:
         audit.record_admin_action(
-            actor_uid="platform-admin", actor_tenant_id="operator-tenant",
-            tenant_id="tenant-a", action="edit_tenant", target="shared@example.com",
+            actor_uid="platform-admin",
+            actor_tenant_id="operator-tenant",
+            tenant_id="tenant-a",
+            action="edit_tenant",
+            target="shared@example.com",
             after={"tenantId": "tenant-b"},
         )
     data = write.call_args.args[2]

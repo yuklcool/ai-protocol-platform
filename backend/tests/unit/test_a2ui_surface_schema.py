@@ -18,6 +18,7 @@ fast (<50ms) and hermetic.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -52,6 +53,30 @@ def _stub_tool_context() -> MagicMock:
     ctx.actions = MagicMock()
     ctx.actions.skip_summarization = False
     return ctx
+
+
+@pytest.mark.asyncio
+async def test_authored_surface_emits_agui_and_replays_patches_without_losing_create():
+    from observability.timing import LatencyTracker, reset_current_tracker, set_current_tracker
+
+    ctx = _stub_tool_context()
+    ctx.state = {}
+    tools = await make_a2ui_toolset(default_surface="workspace").get_tools(_readonly_ctx_enabled())
+    tracker = LatencyTracker(skill_id="root-agent", session_id="test", user_id="test")
+    token = set_current_tracker(tracker)
+    try:
+        first = await tools[0].run_async(args={"a2ui_json": _minimal_a2ui_json()}, tool_context=ctx)
+        assert first["a2ui_delivered"] is True
+        patch = [{"version": "v0.9", "updateDataModel": {"surfaceId": "main", "path": "/counter", "value": 2}}]
+        await tools[0].run_async(args={"a2ui_json": json.dumps(patch)}, tool_context=ctx)
+        stored = json.loads(ctx.state["a2ui_surface:main"])
+        assert "createSurface" in stored["messages"][0]
+        assert stored["messages"][-1] == patch[0]
+        assert stored["artifact"]["kind"] == "a2ui"
+        events = tracker.drain_stage_events()
+        assert len([e for e in events if e.name == "A2UI_SURFACE"]) == 2
+    finally:
+        reset_current_tracker(token)
 
 
 # === Backwards compatibility ===

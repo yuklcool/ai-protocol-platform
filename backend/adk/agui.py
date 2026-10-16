@@ -114,11 +114,9 @@ def _deployment_app():
     spec.loader.exec_module(module)
     deployment_app = getattr(module, "app", None)
     if deployment_app is None or not hasattr(deployment_app, "model_copy"):
-        raise RuntimeError(
-            f"Deployment module {app_path} did not expose a Google ADK App as `app`"
-        )
+        raise RuntimeError(f"Deployment module {app_path} did not expose a Google ADK App as `app`")
 
-    setattr(_deployment_app, "_cached", deployment_app)
+    _deployment_app._cached = deployment_app
     return deployment_app
 
 

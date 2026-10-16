@@ -57,7 +57,7 @@ class TenantConfig(BaseModel):
     quota: dict[str, Any] = Field(default_factory=dict)
     disabled: bool = False
 
-    def normalized(self) -> "TenantConfig":
+    def normalized(self) -> TenantConfig:
         tenant_id = normalize_tenant_id(self.tenant_id)
         if not tenant_id:
             raise ValueError("tenant_id must be non-empty")
@@ -122,11 +122,7 @@ class TenantDirectory:
         normalized = config.normalized()
         tenant_id = normalized.tenant_id
         previous = self._repository.get_document(TENANT_COLLECTION, tenant_id)
-        previous_domains = {
-            normalize_domain(v)
-            for v in ((previous or {}).get("domains") or [])
-            if normalize_domain(v)
-        }
+        previous_domains = {normalize_domain(v) for v in ((previous or {}).get("domains") or []) if normalize_domain(v)}
         current_domains = set(normalized.domains)
 
         # Preflight every new mapping before writing the tenant document.  The

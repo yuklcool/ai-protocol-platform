@@ -55,7 +55,9 @@ class FakeClient:
 
     def list_blobs(self, bucket_name: str, prefix: str = ""):
         bucket = self.bucket(bucket_name)
-        return [SimpleNamespace(name=name, size=len(data)) for name, data in bucket.data.items() if name.startswith(prefix)]
+        return [
+            SimpleNamespace(name=name, size=len(data)) for name, data in bucket.data.items() if name.startswith(prefix)
+        ]
 
 
 def test_gcs_fileobj_upload_uses_tenant_prefix() -> None:

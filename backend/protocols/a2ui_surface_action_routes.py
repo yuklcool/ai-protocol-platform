@@ -67,9 +67,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from google.adk.events import Event, EventActions
 from pydantic import BaseModel, Field
 
-from db.chat_sessions import app_name_for_session
 from adk.session import get_session_service
 from auth import User, get_current_user
+from db.chat_sessions import app_name_for_session
 
 # Gate helpers live in the shared module so the bundled write-and-run
 # endpoint (ACTION-TRIGGER M1) honours the same access policy without
@@ -78,8 +78,8 @@ from auth import User, get_current_user
 # continue to work — pure refactor, zero behaviour change.
 from protocols._a2ui_surface_shared import (
     _STATE_KEY_NAMESPACE,
-    _enforce_size_cap,
     _enforce_root_interaction,
+    _enforce_size_cap,
     _enforce_skill_opt_in,
     _require_session,
 )

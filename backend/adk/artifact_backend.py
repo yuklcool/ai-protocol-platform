@@ -32,9 +32,7 @@ def artifact_backend_name() -> str:
     explicit = os.environ.get("ARTIFACT_BACKEND", "").strip().lower()
     if explicit:
         if explicit not in {"memory", "local", "gcs"}:
-            raise RuntimeError(
-                f"Unsupported ARTIFACT_BACKEND={explicit!r}; expected memory, local, or gcs"
-            )
+            raise RuntimeError(f"Unsupported ARTIFACT_BACKEND={explicit!r}; expected memory, local, or gcs")
         return explicit
 
     object_backend = os.environ.get("OBJECT_STORAGE_BACKEND", "").strip().lower()
@@ -55,11 +53,7 @@ def _local_root() -> str:
 
 
 def _gcs_bucket() -> str:
-    bucket = (
-        os.environ.get("ADK_ARTIFACT_BUCKET")
-        or os.environ.get("OBJECT_STORAGE_GCS_BUCKET")
-        or ""
-    ).strip()
+    bucket = (os.environ.get("ADK_ARTIFACT_BUCKET") or os.environ.get("OBJECT_STORAGE_GCS_BUCKET") or "").strip()
     if not bucket:
         raise RuntimeError("ADK_ARTIFACT_BUCKET is required when ARTIFACT_BACKEND=gcs")
     return bucket

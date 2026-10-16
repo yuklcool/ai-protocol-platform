@@ -6,6 +6,10 @@ The design principle is simple: **use as few infrastructure components as possib
 
 For versioned prebuilt GHCR images, see [docs/selfhost-release-images.md](./docs/selfhost-release-images.md).
 
+For Root Agent setup and the complete model-generated A2UI / AG-UI operation
+sequence, see [protocol operation acceptance](./docs/protocol-operation-acceptance.md).
+Existing installations must also review its tenant namespace migration notes.
+
 ## What runs
 
 ```text

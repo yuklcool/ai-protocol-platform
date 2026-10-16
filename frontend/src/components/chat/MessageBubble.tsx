@@ -105,6 +105,7 @@ export function parseA2UIResult(
   if (!resultContent) return null;
   try {
     const parsed = JSON.parse(resultContent) as Record<string, unknown>;
+    if (parsed.a2ui_delivered === true) return null;
     const raw = parsed.validated_a2ui_json;
     if (raw === undefined || raw === null) return null;
     // SDK's parse_and_fix wraps a single message in a list before validation,

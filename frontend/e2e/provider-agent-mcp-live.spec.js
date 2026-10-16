@@ -80,7 +80,7 @@ function parseSseDataEvents(body) {
 }
 
 test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
 
   test("real model selects and executes the bound MCP tool in the product chat path", async ({ browser }) => {
     expect(ADMIN_PASSWORD, "SELFHOST_ADMIN_PASSWORD must be configured").not.toBe("");
@@ -106,6 +106,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let originalToolPermission = undefined;
     let toolPermissionTouched = false;
     let context = null;
+    const originalPlatform = await authedApi(token, "/api/admin/platform-config");
+    let rootTouched = false;
+    const uiSessionId = `real-e2e-ui-${RUN_ID}`;
 
     try {
       const provider = await putJson(token, `/api/admin/model-providers/${PROVIDER_ID}`, {
@@ -194,8 +197,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         : [];
       await putJson(token, permissionPath, {
         type: "user",
-        tools: [...new Set([...originalTools, "geocode", "show-map"])],
-        denied: originalDenied.filter((name) => name !== "geocode" && name !== "show-map"),
+        tools: [...new Set([...originalTools, "geocode", "show-map", "send_a2ui_json_to_client"])],
+        denied: originalDenied.filter((name) => !["geocode", "show-map", "send_a2ui_json_to_client"].includes(name)),
       });
       toolPermissionTouched = true;
 
@@ -228,6 +231,12 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       });
       skillId = skill.skillId;
       expect(skillId).toBeTruthy();
+      await putJson(token, "/api/admin/platform-config", { agent: {
+        ...originalPlatform.agent, model: MODEL_ID, skills: [skillId], tools: [], mcpServers: [SERVER_ID],
+        interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
+          allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
+      } });
+      rootTouched = true;
 
       context = await browser.newContext();
       const localJwtSession = {
@@ -362,6 +371,11 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         }),
       });
       actionSkillId = actionSkill.skillId;
+      await putJson(token, "/api/admin/platform-config", { agent: {
+        ...originalPlatform.agent, model: MODEL_ID, skills: [skillId, actionSkillId], tools: [], mcpServers: [SERVER_ID],
+        interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
+          allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
+      } });
       expect(actionSkillId).toBeTruthy();
 
       const actionBootstrap = await postJson(token, `/api/sessions/${ACTION_SESSION_ID}/bootstrap`, {
@@ -427,6 +441,46 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         },
       });
 
+      // Model → A2UI form → browser input → AG-UI action run → patch → reload
+      // → second operation. No seeded surface and no direct action HTTP call.
+      const sid = "acceptance-form";
+      const uiMessages = [
+        { version: "v0.9", createSurface: { surfaceId: sid, catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json" } },
+        { version: "v0.9", updateComponents: { surfaceId: sid, components: [
+          { id: "root", component: "Column", children: ["heading", "input", "submit", "status"] },
+          { id: "heading", component: "Text", text: "Root Agent acceptance form" },
+          { id: "input", component: "TextField", label: "Acceptance value", value: { path: "/formInput" } },
+          { id: "submit", component: "Button", child: "submit-label", action: { event: { name: "submit_form", context: { value: { path: "/formInput" } } } } },
+          { id: "submit-label", component: "Text", text: "Apply value" },
+          { id: "status", component: "Text", text: { path: "/status" } },
+        ] } },
+        { version: "v0.9", updateDataModel: { surfaceId: sid, value: { formInput: "initial", status: "Ready for input" } } },
+      ];
+      await putJson(token, "/api/admin/platform-config", { agent: {
+        ...originalPlatform.agent, model: MODEL_ID, skills: [], tools: [], mcpServers: [],
+        instructions: `For the initial request SHOW_ACCEPTANCE_FORM call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(uiMessages)}. For each submit_form UI action, read lastAction.context.value from the A2UI state. Call send_a2ui_json_to_client with v0.9 updateDataModel messages on surface acceptance-form: set /status to ACCEPTED: followed immediately by the exact submitted value, and set /formInput to that value. Never recreate or delete the surface on submit. Do not call other tools.`,
+        interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "workspace", defaultUpdateMode: "patch",
+          a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
+      } });
+      await page.goto(`${FRONTEND_URL}/chat/root-agent?session=${uiSessionId}`, { waitUntil: "domcontentloaded" });
+      const uiComposer = page.locator("textarea").first();
+      await expect(uiComposer).toBeEnabled({ timeout: 30_000 });
+      await uiComposer.fill("SHOW_ACCEPTANCE_FORM");
+      await uiComposer.press("Enter");
+      const input = page.getByRole("textbox", { name: "Acceptance value" });
+      await expect(input).toBeVisible({ timeout: 90_000 });
+      await input.fill("first-value");
+      await page.getByRole("button", { name: "Apply value" }).click();
+      await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 90_000 });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(input).toHaveValue("first-value");
+      await input.fill("second-value");
+      await page.getByRole("button", { name: "Apply value" }).click();
+      await expect(page.getByText("ACCEPTED:second-value", { exact: true })).toBeVisible({ timeout: 90_000 });
+      const uiState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
+      expect(uiState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
+
       const fatalDiagnostics = diagnostics.filter((line) =>
         [
           "MODEL_AUTH_FAILED",
@@ -440,6 +494,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       expect(fatalDiagnostics, diagnostics.join("\n")).toEqual([]);
     } finally {
       if (context) await context.close();
+      await authedApi(token, `/api/sessions/${uiSessionId}`, { method: "DELETE" }).catch(() => {});
+      if (rootTouched) await putJson(token, "/api/admin/platform-config", { agent: originalPlatform.agent });
       if (toolPermissionTouched) {
         const permissionPath = `/api/admin/tool-permissions/${encodeURIComponent(ADMIN_EMAIL)}`;
         if (originalToolPermission) {

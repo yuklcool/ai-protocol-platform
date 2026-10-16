@@ -581,6 +581,11 @@ async def get_recent_session(
     allowed = set(enabled) if enabled is not None else None
 
     for idx in most_recent_session_for_user(user.uid, limit=10):
+        if idx.skill_id == "root-agent" and ctx.can_access(idx):
+            trace.get_current_span().set_attribute("landing.outcome", "resumed")
+            return RecentSessionResponse(
+                session_id=idx.session_id, skill_id="root-agent", slug=None, owner_id="aitana-platform"
+            )
         skill = skill_config.get_skill(idx.skill_id)
         if skill is None or not ctx.can_access_skill(skill):
             continue

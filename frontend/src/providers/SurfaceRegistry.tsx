@@ -93,6 +93,7 @@ export interface A2uiArtifactEntry extends A2uiArtifact {
 }
 
 export interface SurfaceState {
+  error?: string;
   /**
    * Active v0.9 SurfaceModel for this surface, or `null` if no createSurface
    * has been processed (or after clear/delete). Consumers pass this straight
@@ -341,68 +342,39 @@ class SurfaceStore {
     // arriving twice would re-run createSurface (the SDK throws on
     // "Surface already exists"). Idempotent on tool-call id.
     if (entry.consumedToolCallIds.has(sourceToolCallId)) return;
-    entry.consumedToolCallIds.add(sourceToolCallId);
 
     if (!entry.processor) {
       entry.processor = makeProcessor();
     }
     const processor = entry.processor;
 
-    const surfaceExists = processor.model.getSurface(surfaceId) !== undefined;
-
-    // Re-declared surface. web_core throws A2uiStateError("Surface already
-    // exists") if a batch carries a createSurface for a surfaceId the processor
-    // already holds — but agents legitimately re-emit a full A2UI batch on each
-    // turn, and our click-counter fixture seeds the surface so the very first
-    // agent turn re-declares it. Left unhandled the throw was caught below and
-    // the WHOLE batch dropped, freezing the demo on turn 2. In v0.9
-    // createSurface only declares surfaceId/catalogId/theme (components + data
-    // arrive via updateComponents/updateDataModel), so for an existing surface
-    // the createSurface is redundant: strip it and apply the remaining updates,
-    // preserving the surface and its data model.
-    let toProcess = messages;
-    if (surfaceExists) {
-      toProcess = messages.filter((m) => !("createSurface" in m));
-      if (toProcess.length === 0) return; // nothing but a redundant re-create
-    }
-
-    // Auto-createSurface: if the first message isn't a createSurface AND
-    // the processor has no surface for this id, synthesize one. The SDK
-    // throws A2uiStateError("Surface not found") otherwise; the registry's
-    // job is to keep the demo robust against LLM message-ordering drift.
-    const firstHasCreate = "createSurface" in toProcess[0];
-    if (!firstHasCreate && !surfaceExists) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(
-          `[SurfaceRegistry] surface "${surfaceId}" received update without ` +
-            `prior createSurface — auto-creating with basicCatalog. ` +
-            `Skill prompt should emit createSurface first.`,
-        );
-      }
-      processor.processMessages([
-        {
-          version: "v0.9",
-          createSurface: {
-            surfaceId,
-            catalogId: basicCatalog.id,
-          },
-        } as A2uiMessage,
-      ]);
-    }
-
     try {
-      // SDK already validated structurally on the backend; cast at the
-      // boundary since our wire-format type is wider than the SDK's union.
-      processor.processMessages(toProcess as unknown as A2uiMessage[]);
-    } catch (err) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[SurfaceRegistry] processMessages failed for surface "${surfaceId}":`,
-          err,
-        );
+      // Evaluate existence per message. delete → create in one batch is a
+      // valid lifecycle, even if the surface existed at the start of the batch.
+      for (const message of messages) {
+        const exists = processor.model.getSurface(surfaceId) !== undefined;
+        if ("createSurface" in message && exists) continue;
+        if ("deleteSurface" in message && !exists) continue;
+        if (!("createSurface" in message) && !("deleteSurface" in message) && !exists) {
+          if (process.env.NODE_ENV !== "production") console.warn(`[SurfaceRegistry] auto-creating surface "${surfaceId}" before its update`);
+          processor.processMessages([{
+            version: "v0.9", createSurface: { surfaceId, catalogId: basicCatalog.id },
+          } as A2uiMessage]);
+        }
+        processor.processMessages([message] as unknown as A2uiMessage[]);
       }
+    } catch (err) {
+      entry.state = {
+        surface: processor.model.getSurface(surfaceId) ?? null,
+        lastUpdatedAt: Date.now(), sourceToolCallId,
+        artifact: artifact ?? entry.state?.artifact ?? null,
+        createdAt: entry.state?.createdAt ?? Date.now(),
+        error: err instanceof Error ? err.message : "The interactive result could not be displayed.",
+      };
+      this.notifyState(entry);
       return;
     }
+    entry.consumedToolCallIds.add(sourceToolCallId);
 
     const surface = processor.model.getSurface(surfaceId) ?? null;
     const now = Date.now();

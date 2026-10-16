@@ -19,8 +19,9 @@ import logging
 import os
 import secrets
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -76,14 +77,9 @@ def oidc_config() -> OidcConfig:
     issuer = _normalise_issuer(_required("OIDC_ISSUER"))
     client_id = _required("OIDC_CLIENT_ID")
     audience = os.environ.get("OIDC_AUDIENCE", "").strip() or client_id
-    discovery_url = (
-        os.environ.get("OIDC_DISCOVERY_URL", "").strip()
-        or f"{issuer}/.well-known/openid-configuration"
-    )
+    discovery_url = os.environ.get("OIDC_DISCOVERY_URL", "").strip() or f"{issuer}/.well-known/openid-configuration"
     algorithms = tuple(
-        item.strip()
-        for item in os.environ.get("OIDC_ALLOWED_ALGORITHMS", "RS256").split(",")
-        if item.strip()
+        item.strip() for item in os.environ.get("OIDC_ALLOWED_ALGORITHMS", "RS256").split(",") if item.strip()
     )
     if not algorithms:
         raise RuntimeError("OIDC_ALLOWED_ALGORITHMS must contain at least one algorithm")
@@ -117,9 +113,7 @@ def oidc_browser_config() -> OidcBrowserConfig:
     default_method = "client_secret_basic" if client_secret else "none"
     method = os.environ.get("OIDC_CLIENT_AUTH_METHOD", "").strip().lower() or default_method
     if method not in {"none", "client_secret_basic", "client_secret_post"}:
-        raise RuntimeError(
-            "OIDC_CLIENT_AUTH_METHOD must be none, client_secret_basic, or client_secret_post"
-        )
+        raise RuntimeError("OIDC_CLIENT_AUTH_METHOD must be none, client_secret_basic, or client_secret_post")
     if method != "none" and not client_secret:
         raise RuntimeError(f"OIDC_CLIENT_SECRET is required for {method}")
 
@@ -586,10 +580,10 @@ def reset_oidc_cache_for_testing() -> None:
 
 __all__ = [
     "AUTH_MODE",
-    "OidcBrowserConfig",
-    "OidcConfig",
     "SUBJECT_COLLECTION",
     "TRANSACTION_COLLECTION",
+    "OidcBrowserConfig",
+    "OidcConfig",
     "complete_oidc_authorization_code",
     "create_oidc_authorization_request",
     "decode_oidc_token",

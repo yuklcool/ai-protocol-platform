@@ -14,7 +14,7 @@ class _Body(BytesIO):
 
 
 class _Paginator:
-    def __init__(self, client: "_FakeS3Client") -> None:
+    def __init__(self, client: _FakeS3Client) -> None:
         self.client = client
 
     def paginate(self, *, Bucket: str, Prefix: str):

@@ -136,6 +136,7 @@ async def test_blocked_attempt_does_not_consume_remaining_budget():
 @pytest.mark.asyncio
 async def test_calls_in_one_turn_have_separate_holds_and_reconcile_independently():
     from dataclasses import replace
+
     repo = MemoryRepository()
     _tenant(repo, "tenant-a", cap=1.0)
     enforcer = TenantRepositoryBudgetEnforcer(repo)

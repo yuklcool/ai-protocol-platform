@@ -24,6 +24,7 @@ from google.adk.memory.memory_entry import MemoryEntry
 from typing_extensions import override
 
 from db.repository import Repository
+from observability.tenant_context import get_current_tenant_id
 
 if TYPE_CHECKING:
     from google.adk.sessions import Session
@@ -32,14 +33,19 @@ _UNKNOWN_SESSION_ID = "__unknown_session_id__"
 _COLLECTION_PREFIX = "adk_memory_events"
 
 
-def _scope_collection(app_name: str, user_id: str) -> str:
+def _scope_collection(app_name: str, user_id: str, *, require_tenant: bool = False) -> str:
     """Return a stable per-app/per-user collection partition.
 
     ``PostgresRepository`` stores documents by (collection, doc_id). Partitioning
     memory at the collection level means a recall only scans this user's rows,
     rather than every tenant/user memory row in the deployment.
     """
-    digest = hashlib.sha256(f"{app_name}\0{user_id}".encode()).hexdigest()[:32]
+    tenant_id = get_current_tenant_id()
+    if require_tenant and not tenant_id:
+        raise PermissionError("stable tenant context is required for memory access")
+    # Never search unattributed legacy memory from an authenticated tenant.
+    scope = f"{tenant_id}\0{app_name}\0{user_id}" if tenant_id else f"{app_name}\0{user_id}"
+    digest = hashlib.sha256(scope.encode()).hexdigest()[:32]
     return f"{_COLLECTION_PREFIX}_{digest}"
 
 
@@ -95,6 +101,7 @@ class PostgresMemoryService(BaseMemoryService):
         database_url: str | None = None,
         *,
         repository: Repository | None = None,
+        require_tenant: bool = False,
     ) -> None:
         if repository is None:
             from db.repositories.postgres import PostgresRepository
@@ -104,6 +111,7 @@ class PostgresMemoryService(BaseMemoryService):
                 raise RuntimeError("DATABASE_URL is required for PostgreSQL memory")
             repository = PostgresRepository(url)
         self._repository = repository
+        self._require_tenant = require_tenant
         try:
             self._scan_limit = max(1, int(os.environ.get("MEMORY_SEARCH_SCAN_LIMIT", "2000")))
         except ValueError:
@@ -130,7 +138,7 @@ class PostgresMemoryService(BaseMemoryService):
         }
 
     def _replace_session_sync(self, session: Session) -> None:
-        collection = _scope_collection(session.app_name, session.user_id)
+        collection = _scope_collection(session.app_name, session.user_id, require_tenant=self._require_tenant)
         existing = self._repository.query_documents(
             collection,
             filters=[("sessionId", "==", session.id)],
@@ -168,7 +176,7 @@ class PostgresMemoryService(BaseMemoryService):
         session_id: str,
         custom_metadata: Mapping[str, object] | None,
     ) -> None:
-        collection = _scope_collection(app_name, user_id)
+        collection = _scope_collection(app_name, user_id, require_tenant=self._require_tenant)
         for index, event in enumerate(events):
             if not event.content or not event.content.parts:
                 continue
@@ -205,7 +213,7 @@ class PostgresMemoryService(BaseMemoryService):
         )
 
     def _search_sync(self, *, app_name: str, user_id: str, query: str) -> SearchMemoryResponse:
-        collection = _scope_collection(app_name, user_id)
+        collection = _scope_collection(app_name, user_id, require_tenant=self._require_tenant)
         rows = self._repository.query_documents(
             collection,
             order_by="timestamp",

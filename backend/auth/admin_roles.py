@@ -48,8 +48,7 @@ def tenant_admin_tenant_ids(group_tags: Iterable[str] | None) -> frozenset[str]:
     return frozenset(
         suffix
         for tag in tags
-        if tag.startswith(TENANT_ADMIN_PREFIX)
-        and (suffix := tag[len(TENANT_ADMIN_PREFIX) :].strip())
+        if tag.startswith(TENANT_ADMIN_PREFIX) and (suffix := tag[len(TENANT_ADMIN_PREFIX) :].strip())
     )
 
 
