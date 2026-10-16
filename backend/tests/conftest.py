@@ -32,10 +32,73 @@ authoritative gate everywhere.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 from unittest import mock
 
 import pytest
+
+_network_patch = None
+_collection_credentials_patch = None
+
+
+def pytest_sessionstart(session):
+    """Optional hard network boundary for local, non-billable regression runs.
+
+    Installed before test collection, so even an SDK constructor at module
+    scope cannot contact a metadata service or a cloud identity endpoint.
+    Compose/real-provider integration gates run separately without this flag.
+    """
+    del session
+    # Fixtures run after collection. Some legacy modules construct SDK clients
+    # at import time, so prevent ADC/metadata discovery before importing them.
+    if os.environ.get("RUN_LIVE_GCP") != "1":
+        import google.auth
+        from google.auth.credentials import AnonymousCredentials
+
+        global _collection_credentials_patch
+        _collection_credentials_patch = pytest.MonkeyPatch()
+        _collection_credentials_patch.setattr(
+            google.auth, "default", lambda *args, **kwargs: (AnonymousCredentials(), "test-project")
+        )
+        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "test-project")
+    if os.environ.get("AIP_TEST_ISOLATED_NETWORK") != "1":
+        return
+    global _network_patch
+    _network_patch = pytest.MonkeyPatch()
+    original_connect = socket.socket.connect
+    original_getaddrinfo = socket.getaddrinfo
+
+    def local(host):
+        if host is None or host in ("localhost", b"localhost"):
+            return True
+        try:
+            address = ipaddress.ip_address(host.decode() if isinstance(host, bytes) else host)
+            return address.is_loopback or address.is_unspecified
+        except ValueError:
+            return False
+
+    def connect(sock, address):
+        if isinstance(address, tuple) and not local(address[0]):
+            raise PermissionError("External network is disabled for isolated tests")
+        return original_connect(sock, address)
+
+    def getaddrinfo(host, *args, **kwargs):
+        if not local(host):
+            raise PermissionError("External DNS is disabled for isolated tests")
+        return original_getaddrinfo(host, *args, **kwargs)
+
+    _network_patch.setattr(socket.socket, "connect", connect)
+    _network_patch.setattr(socket, "getaddrinfo", getaddrinfo)
+
+
+def pytest_unconfigure(config):
+    del config
+    if _network_patch is not None:
+        _network_patch.undo()
+    if _collection_credentials_patch is not None:
+        _collection_credentials_patch.undo()
 
 
 @pytest.fixture(autouse=True)
@@ -58,11 +121,14 @@ def _isolate_firebase_directory_and_root_policy():
 
         with (
             mock.patch.object(fb_auth, "get_user", side_effect=fb_auth.UserNotFoundError("isolated test directory")),
-            mock.patch.object(fb_auth, "get_user_by_email", side_effect=fb_auth.UserNotFoundError("isolated test directory")),
+            mock.patch.object(
+                fb_auth, "get_user_by_email", side_effect=fb_auth.UserNotFoundError("isolated test directory")
+            ),
         ):
             yield
     clear_user_cache()
     invalidate_cache(clear_last_known_good=True)
+
 
 # MODEL-RELIABILITY M3: the test suite runs under the `unrestricted`
 # residency policy by default, mirroring the Aitana dev deployment (the

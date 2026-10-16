@@ -161,12 +161,6 @@ def build_agui_adk_agent(
     """
     # Lazy import: adk.session imports heavy GCP SDKs whose presence we
     # don't want at module-import time (test isolation, fast CLI startup).
-    from adk.session import (
-        get_artifact_service,
-        get_memory_service,
-        get_session_service,
-    )
-
     # v6.23.0 COMPACTION-WIRE M1 — build via `from_app` so the deployment's App
     # (and therefore `events_compaction_config`) reaches the Runner.
     #
@@ -184,7 +178,32 @@ def build_agui_adk_agent(
     # root agent — the PPA expert, the doc comparer and the Studio copilot all
     # silently becoming the same generic assistant, with no error raised.
     # `app_name` rides on the same copy (the App owns the name under `from_app`).
-    base_app = _deployment_app()
+    # Construct the App from the already-authorized request agent. Importing
+    # backend/app.py here also constructs its unrelated bootstrap model under
+    # the current tenant policy; a tenant allowing only its gateway model then
+    # fails before any request even when its Root model is configured correctly.
+    from google.adk.apps import App
+
+    from adk.session import (
+        get_artifact_service,
+        get_compaction_config,
+        get_memory_service,
+        get_session_service,
+    )
+
+    runtime_model = getattr(agent, "model", "")
+    model_id = runtime_model if isinstance(runtime_model, str) else getattr(runtime_model, "model", "")
+    model_id = str(model_id).removeprefix("openai/").removeprefix("anthropic/")
+    # App construction requires a Python identifier. The bridge's established
+    # storage namespace ("root-agent") is restored on the request copy below,
+    # as with the previous deployment-App copy, so existing sessions keep their
+    # identity while the per-request App can be constructed without bootstrapping
+    # an unrelated model.
+    base_app = App(
+        root_agent=agent,
+        name=app_name.replace("-", "_"),
+        events_compaction_config=get_compaction_config(model_id),
+    )
 
     # TUNING-CONSOLE (1b) — the admin thresholds must be applied HERE, not only
     # in the before-agent callback.

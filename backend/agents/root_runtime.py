@@ -16,6 +16,7 @@ from auth.firebase_auth import User
 from db.clients import resolve_enabled_skills
 from db.models import DelegationConfig, FallbackConfig, SkillConfig, SkillMetadata
 from db.models.root_agent import RootAgentConfig
+from skills import platform
 from skills.skill_config import resolve_skill_ref
 
 ROOT_AGENT_ID = "root-agent"
@@ -28,7 +29,7 @@ def root_agent_skill(config: RootAgentConfig) -> SkillConfig:
         skillId=ROOT_AGENT_ID,
         displayName=config.display_name,
         description=config.description,
-        ownerId="aitana-platform",
+        ownerId=platform.PLATFORM_OWNER_UID,
         accessControl={"type": "public"},
         skillMetadata=SkillMetadata(model=config.model),
     )

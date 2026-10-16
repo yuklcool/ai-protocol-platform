@@ -347,9 +347,10 @@ class TestMalformedBodyHandling:
     @patch("protocols.mcp_proxy.skill_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
-    def test_non_json_request_body_passes_through(self, mock_client_cls, mock_get_doc, mock_skill_module):
-        """Non-JSON request body — proxy can't read the method, falls
-        back to pass-through (back-compat preserved for non-JSON-RPC)."""
+    def test_non_json_request_body_is_rejected_before_forwarding(
+        self, mock_client_cls, mock_get_doc, mock_skill_module
+    ):
+        """Malformed JSON cannot hide a tool call from permission checks."""
         mock_get_doc.return_value = _SERVER
         mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
 
@@ -376,5 +377,6 @@ class TestMalformedBodyHandling:
             headers={"content-type": "application/octet-stream"},
         )
 
-        assert resp.status_code == 200, resp.text
-        assert review_calls == [], "non-JSON body must short-circuit to pass-through"
+        assert resp.status_code == 400, resp.text
+        mock_client.request.assert_not_called()
+        assert review_calls == []

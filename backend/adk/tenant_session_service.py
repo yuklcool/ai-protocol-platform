@@ -58,4 +58,5 @@ class TenantScopedSessionService(BaseSessionService):
         session.state = scoped.state
         session.events = scoped.events
         session.last_update_time = scoped.last_update_time
+        session._storage_update_marker = scoped._storage_update_marker
         return result

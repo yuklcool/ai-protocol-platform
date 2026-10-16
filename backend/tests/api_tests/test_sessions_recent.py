@@ -22,7 +22,7 @@ from db.models.chat_session import ChatSessionIndex
 
 
 def _make_user() -> User:
-    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com")
+    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com", tenant_id="test-tenant")
 
 
 def _session(session_id: str, skill_id: str, minutes_ago: int) -> ChatSessionIndex:
@@ -31,6 +31,7 @@ def _session(session_id: str, skill_id: str, minutes_ago: int) -> ChatSessionInd
         sessionId=session_id,
         skillId=skill_id,
         ownerUid="caller-uid",
+        tenantId="test-tenant",
         accessControl=AccessControl(type="public"),
         firstMessageAt=ts,
         lastMessageAt=ts,
@@ -41,6 +42,7 @@ def _skill(skill_id: str, slug: str) -> SkillConfig:
     return SkillConfig(
         skillId=skill_id,
         name=slug,
+        tenantId="test-tenant",
         description="A skill.",
         slug=slug,
         accessControl=AccessControl(type="public"),

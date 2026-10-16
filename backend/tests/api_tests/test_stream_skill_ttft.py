@@ -56,13 +56,14 @@ def _make_skill(skill_id: str = "ttft-skill") -> SkillConfig:
         instructions="Be helpful.",
         skillId=skill_id,
         ownerId="someone-else",
+        tenantId="test-tenant",
         skillMetadata=SkillMetadata(model="gemini-2.5-flash"),
         accessControl={"type": "public"},
     )
 
 
 def _make_user() -> User:
-    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com")
+    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com", tenant_id="test-tenant")
 
 
 async def _fake_event_stream(input_data) -> AsyncGenerator:
@@ -116,7 +117,12 @@ def client(app):
         return user
 
     app.dependency_overrides[get_current_user] = _override
-    yield TestClient(app)
+    from skills import skill_processor
+
+    with patch(
+        "agents.root_runtime.resolve_skill_ref", side_effect=lambda ref, uid=None: skill_processor.get_skill(ref)
+    ):
+        yield TestClient(app)
     app.dependency_overrides.pop(get_current_user, None)
 
 

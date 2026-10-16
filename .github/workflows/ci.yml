@@ -80,6 +80,14 @@ jobs:
           # resolves a project there, which is exactly the local/CI gap the
           # repo's own pre-push guidance warns about.
           GOOGLE_CLOUD_PROJECT: test-project
+          AUTH_BACKEND: local-jwt
+          JWT_SIGNING_KEY: ci-test-only-signing-key-at-least-32-characters
+          DATA_BACKEND: memory
+          SESSION_BACKEND: memory
+          MEMORY_BACKEND: memory
+          TRACE_EXPORT_ENABLED: "0"
+          CLOUD_LOGGING_ENABLED: "0"
+          AIP_TEST_ISOLATED_NETWORK: "1"
         run: uv run pytest tests/ --ignore=tests/integration -m "not slow" --tb=short -q
 
   local-mode-safety:
@@ -95,7 +103,7 @@ jobs:
         run: python3 scripts/check_local_mode_safety.py
 
   template-parity:
-    name: Template parity (deletions-only gap)
+    name: Source template parity and documentation report
     runs-on: ubuntu-latest
     # BLOCKING as of TEMPLATE-INVERT M4 (gap reached 0, 2026-08-17).
     #
@@ -114,7 +122,15 @@ jobs:
         with:
           python-version: "3.11"
       - name: Report the parity gap
-        run: ./scripts/template-parity.sh --summary-md "$GITHUB_STEP_SUMMARY"
+        # This published downstream contains no source sanitizer. Its source-
+        # only parity check applies only when that tooling is present; do not
+        # call a nonexistent script in a self-host checkout.
+        run: |
+          if [[ -f scripts/sanitize-for-template.sh ]]; then
+            bash scripts/template-parity.sh --summary-md "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::Published downstream: source sanitizer is not part of this repository."
+          fi
       - name: Report dangling doc links (downstream feedback #11)
         # Also reporting-only: the repo carries ~794 pre-existing dangling
         # links, a far bigger number than the 35/55 a downstream fork measured

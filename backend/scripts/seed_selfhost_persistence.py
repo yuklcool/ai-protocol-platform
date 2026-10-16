@@ -9,6 +9,7 @@ idempotent.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import time
 
@@ -20,8 +21,8 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("seed_selfhost_persistence")
 
 
-def main() -> None:
-    if not is_local_mode():
+def main(*, fixture: bool = False) -> None:
+    if not fixture and not is_local_mode():
         log.info("LOCAL_MODE is off; self-host fixture seed skipped")
         return
     if data_backend() != "postgres":
@@ -58,4 +59,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--fixture", action="store_true", help="Explicitly seed a disposable test database without auth stubs"
+    )
+    main(fixture=parser.parse_args().fixture)
