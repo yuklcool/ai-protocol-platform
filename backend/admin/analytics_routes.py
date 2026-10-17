@@ -3,8 +3,8 @@
 Read-only, `aitana-admin`-gated. Lists chat sessions (the `chat_sessions` mirror)
 and reconstructs a session's full trace (messages, tool calls, delegations) by
 reusing the `sessions_route` reconstruction — no new capture. Access-scoped:
-Tenant-scoped by ownerDomain (v6.16.0 M4); the transcript endpoint stays
-platform-only pending the chat-transcript privacy ruling.
+Tenant-scoped by stable tenantId; legacy domains require a trusted mapping.
+Platform administrators can inspect attributed sessions across tenant scopes.
 
 See docs/design/v6.9.0/analytics-and-reporting.md.
 """
@@ -201,11 +201,8 @@ def list_sessions(
 ) -> SessionListResponse:
     """List chat sessions in scope (newest first), optionally filtered.
 
-    Tenant-scoped by ``ownerDomain``. A row with a **blank** ownerDomain (written
-    before the v6.16.0 backfill, or by the uid-only callback path) is treated as
-    OUT of a tenant's scope: showing an unattributable session to a tenant admin
-    because its owner is unknown would be exactly the leak this milestone
-    closes. Platform admins still see every row.
+    Tenant-scoped by explicit ownership, with trusted legacy domain mappings as
+    a migration bridge. Unattributed rows fail closed for all administrators.
     """
     docs = query_documents(_SESSIONS_COLLECTION)
     rows: list[SessionRow] = []
@@ -224,8 +221,7 @@ def list_sessions(
             archived=bool(d.get("archivedAt")),
             transcript_lost=bool(d.get("transcriptLost")),
         )
-        # Fail closed: scope.may("") is False, so blank-domain rows are hidden
-        # from tenant admins and visible only to platform scope.
+        # Email domain is display metadata, never an inferred tenant grant.
         if not scope.may_tenant(_session_tenant(d)):
             continue
         # Never-used husks: a chat page was opened but nothing was ever sent.

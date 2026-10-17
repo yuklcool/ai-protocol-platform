@@ -137,6 +137,7 @@ def _hash_email(email: str) -> str:
 
 __all__ = [
     "TenantEnricher",
+    "authorized_resource_tenant",
     "clear_tenant_enrichers",
     "get_current_tenant_id",
     "get_tenant_context",

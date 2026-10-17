@@ -85,6 +85,12 @@ jobs:
           DATA_BACKEND: memory
           SESSION_BACKEND: memory
           MEMORY_BACKEND: memory
+          OBJECT_STORAGE_BACKEND: local
+          ARTIFACT_BACKEND: memory
+          SELF_HOSTED_MODE: "1"
+          GOOGLE_GENAI_USE_VERTEXAI: "false"
+          OPENAI_API_KEY: ci-placeholder-not-a-real-key
+          GEMINI_API_KEY: ci-placeholder-not-a-real-key
           TRACE_EXPORT_ENABLED: "0"
           CLOUD_LOGGING_ENABLED: "0"
           AIP_TEST_ISOLATED_NETWORK: "1"
