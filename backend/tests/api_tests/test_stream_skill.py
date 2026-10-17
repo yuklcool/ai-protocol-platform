@@ -202,6 +202,8 @@ def test_stream_skill_omits_resumed_flag_for_fresh_chats(client):
         )
     assert resp.status_code == 200
     assert "app:resumed_session" not in captured["state"]
+    assert captured["state"]["a2ui_action_trigger"] is None
+    assert captured["state"]["a2ui_surface_state"] == {}
 
 
 def test_stream_skill_passes_all_document_ids_through_to_agent(client):

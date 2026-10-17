@@ -204,13 +204,17 @@ async def process_skill_request(
         app_name=app_name,
     )
 
-    initial_state: dict[str, Any] = {}
+    # These are per-turn signals. The ADK adapter merges state, so omitting
+    # them would keep a previous button's trigger (and closed surfaces) alive
+    # when the user returns to ordinary chat.
+    initial_state: dict[str, Any] = {
+        "a2ui_action_trigger": None,
+        "a2ui_surface_state": a2ui_surface_state or {},
+    }
     if document_ids:
         initial_state["document_ids"] = list(document_ids)
     if resumed_session:
         initial_state["app:resumed_session"] = True
-    if a2ui_surface_state:
-        initial_state["a2ui_surface_state"] = a2ui_surface_state
     run_input = RunAgentInput(
         threadId=thread_id,
         runId=f"run-{uuid.uuid4().hex[:8]}",

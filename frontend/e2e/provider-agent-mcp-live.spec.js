@@ -338,6 +338,14 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       // a persisted surface action must immediately drive a real Agent/LLM turn
       // through the production surface-action-run endpoint, without a typed chat
       // message. This proves the action-triggered path is not only unit-tested.
+      const actionUiMessages = [
+        { version: "v0.9", createSurface: { surfaceId: "workspace", catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json" } },
+        { version: "v0.9", updateComponents: { surfaceId: "workspace", components: [
+          { id: "root", component: "Column", children: ["accepted"] },
+          { id: "accepted", component: "Text", text: ACTION_RUN_MARKER },
+        ] } },
+      ];
+      const actionInstructions = `When accept_real_provider_action triggers this turn, call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(actionUiMessages)}. Do not call other tools.`;
       const actionSkill = await authedApi(token, "/api/skills", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -345,8 +353,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
           name: `real-provider-action-${RUN_ID}`,
           displayName: "Real Provider A2UI Action Acceptance",
           description: "CI-only real Provider surface-action-run acceptance skill",
-          instructions:
-            `When an interactive UI action triggers this turn, reply with the exact marker ${ACTION_RUN_MARKER} and briefly acknowledge the action name. Do not call tools.`,
+          instructions: actionInstructions,
           accessControl: { type: "private" },
           skillMetadata: {
             model: MODEL_ID,
@@ -358,7 +365,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
               a2ui: {
                 // The current Root interaction policy is authoritative. Its
                 // A2UI grant may allow a UI-only response on this legacy route.
-                enabled: false,
+                enabled: true,
                 allow_surface_context_writes: true,
                 allow_action_triggered_runs: true,
               },
@@ -369,6 +376,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       actionSkillId = actionSkill.skillId;
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: MODEL_ID, skills: [skillId, actionSkillId], tools: [], mcpServers: [SERVER_ID],
+        instructions: actionInstructions,
         interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
           allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
       } });
@@ -461,7 +469,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       ];
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: MODEL_ID, skills: [], tools: [], mcpServers: [],
-        instructions: `For the initial request SHOW_ACCEPTANCE_FORM call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(uiMessages)}. For each submit_form UI action, read lastAction.context.value from the A2UI state. Call send_a2ui_json_to_client with v0.9 updateDataModel messages on surface acceptance-form: set /status to ACCEPTED: followed immediately by the exact submitted value, and set /formInput to that value. Never recreate or delete the surface on submit. Do not call other tools.`,
+        instructions: `For the initial request SHOW_ACCEPTANCE_FORM call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(uiMessages)}. For each submit_form UI action, read lastAction.context.value from the A2UI state. Call send_a2ui_json_to_client with v0.9 updateDataModel messages on surface acceptance-form: set /status to ACCEPTED: followed immediately by the exact submitted value, and set /formInput to that value. Never recreate or delete the surface on submit. Only for the ordinary user message CONFIRM_CHAT_MODE reply CHAT_MODE_RESTORED in text without calling tools. Do not call other tools.`,
         interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "workspace", defaultUpdateMode: "patch",
           a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
       } });
@@ -513,6 +521,16 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await testInfo.attach("root-action-after-reload", { path: finalScreenshot, contentType: "image/png" });
       const uiState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
       expect(uiState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
+      // The action trigger is per turn: returning to the composer must clear
+      // it, while retaining the durable lastAction and current surface data.
+      await expect(uiComposer).toBeEnabled({ timeout: 30_000 });
+      await uiComposer.fill("CONFIRM_CHAT_MODE");
+      await uiComposer.press("Enter");
+      await expect(page.getByText("CHAT_MODE_RESTORED", { exact: true })).toBeVisible({ timeout: 90_000 });
+      const chatState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
+      expect(chatState.a2ui_action_trigger).toBeNull();
+      expect(chatState.a2ui_surface_state[sid].dataModel.formInput).toBe("second-value");
+      expect(chatState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
 
       const fatalDiagnostics = diagnostics.filter((line) =>
         [

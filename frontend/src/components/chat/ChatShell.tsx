@@ -169,10 +169,8 @@ function SurfaceSessionLifecycle({ sessionId }: { sessionId: string | null }) {
 /**
  * Routes backend-pushed A2UI surface events into the SurfaceRegistry
  * (tool-results-as-a2ui / 7.3, Model B). MUST live INSIDE
- * `SurfaceRegistryProvider` — `useSkillAgent` runs in ChatShell's body, which
- * is ABOVE this provider in the tree, so its `useOptionalSurfaceRegistry()`
- * returns null and can't reach the registry. This component subscribes to the
- * same AG-UI agent from inside the provider and appends the `A2UI_SURFACE`
+ * `SurfaceRegistryProvider`. This component subscribes to the shared AG-UI
+ * agent and appends the `A2UI_SURFACE`
  * messages so `A2UISurfaceMount("workspace")` draws them. Renders nothing.
  */
 /**
@@ -391,8 +389,7 @@ function WorkbenchPane({
    * fresh-chat examples). Parent uses this to hide the resize handle
    * and let chat take the full row when there's nothing in the
    * workbench worth showing. Lives here because the
-   * useSurfaceState("workspace") check has to run inside the
-   * SurfaceRegistryProvider, which only wraps the JSX subtree. */
+   * useSurfaceState("workspace") subscription belongs to this pane. */
   onContentChange?: (hasContent: boolean) => void;
 }) {
   const { locale } = useI18n();
@@ -859,15 +856,23 @@ function StreamErrorBanner({
   );
 }
 
-export function ChatShell({
-  skillId,
-  pathPrefix,
-  user,
-}: {
+interface ChatShellProps {
   skillId: string;
   pathPrefix: string;
   user: User;
-}) {
+}
+
+export function ChatShell(props: ChatShellProps) {
+  // Chat submission and UI actions must read the same live surface store.
+  // Place the provider above the chat hook, rather than only its JSX children.
+  return <SurfaceRegistryProvider><ChatShellContent {...props} /></SurfaceRegistryProvider>;
+}
+
+function ChatShellContent({
+  skillId,
+  pathPrefix,
+  user,
+}: ChatShellProps) {
   const { locale } = useI18n();
   const {
     sessionId: agentSessionId,
@@ -1687,7 +1692,7 @@ export function ChatShell({
   }, [isLoading, stop]);
 
   return (
-    <SurfaceRegistryProvider>
+    <>
     <SurfaceSessionLifecycle sessionId={sessionId} />
     <WorkspaceA2uiEventRouter />
     <ArtifactPresenceReporter onPresent={setHasAnyArtifact} />
@@ -2054,6 +2059,6 @@ export function ChatShell({
           the user-gesture guard so the agent can't pop one unprompted. */}
       <ModalSurfaceRegion sessionId={sessionId ?? agentSessionId} />
     </main>
-    </SurfaceRegistryProvider>
+    </>
   );
 }
