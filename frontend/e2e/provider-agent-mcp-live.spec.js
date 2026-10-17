@@ -462,6 +462,13 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "workspace", defaultUpdateMode: "patch",
           a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
       } });
+      // A resume URL must identify an existing session. Otherwise the product
+      // correctly clears a missing session and starts a new UUID, and the final
+      // state assertion would inspect an ID that was never used by the UI.
+      // This seeds only an empty session, never an A2UI surface or model output.
+      await postJson(token, `/api/sessions/${uiSessionId}/bootstrap`, {
+        skill_id: "root-agent", agent_id: "root-agent", document_ids: [],
+      });
       await page.goto(`${FRONTEND_URL}/chat/root-agent?session=${uiSessionId}`, { waitUntil: "domcontentloaded" });
       const uiComposer = page.locator("textarea").first();
       await expect(uiComposer).toBeEnabled({ timeout: 30_000 });
@@ -469,6 +476,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await uiComposer.press("Enter");
       const input = page.getByRole("textbox", { name: "Acceptance value" });
       await expect(input).toBeVisible({ timeout: 90_000 });
+      expect(new URL(page.url()).searchParams.get("session")).toBe(uiSessionId);
       await input.fill("first-value");
       await page.getByRole("button", { name: "Apply value" }).click();
       await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 90_000 });
