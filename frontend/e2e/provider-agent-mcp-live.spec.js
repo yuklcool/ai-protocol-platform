@@ -280,7 +280,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await modelSelect.selectOption(MODEL_ID);
       await expect(modelSelect).toHaveValue(MODEL_ID);
 
-      const saveButton = page.getByRole("button", { name: /^(Save|保存)$/ }).first();
+      const saveButton = page.getByRole("button", { name: /^(Save changes|保存修改)$/ }).first();
       await expect(saveButton).toBeEnabled();
       await saveButton.click();
       await expect(page.getByText(/^(Saved|已保存)$/)).toBeVisible({ timeout: 30_000 });

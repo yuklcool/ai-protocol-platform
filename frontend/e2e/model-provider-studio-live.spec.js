@@ -150,7 +150,7 @@ test.describe("dynamic model -> Root Agent live acceptance", () => {
       await modelSelect.selectOption(MODEL_ID);
       await expect(modelSelect).toHaveValue(MODEL_ID);
 
-      const saveButton = page.getByRole("button", { name: /^(Save|保存)$/ }).first();
+      const saveButton = page.getByRole("button", { name: /^(Save changes|保存修改)$/ }).first();
       await expect(saveButton).toBeEnabled();
       await saveButton.click();
       await expect(page.getByText(/^(Saved|已保存)$/)).toBeVisible({ timeout: 30_000 });
@@ -165,7 +165,7 @@ test.describe("dynamic model -> Root Agent live acceptance", () => {
       await expect(reloadedSelect).toHaveValue(MODEL_ID);
 
       await page.goto(`${FRONTEND_URL}/skills/studio/${skillId}`, { waitUntil: "domcontentloaded" });
-      const description = page.getByLabel(/^(Description|描述)$/);
+      const description = page.getByLabel(/^(Description|说明)$/);
       await expect(description).toBeVisible({ timeout: 30_000 });
       await expect(page.locator(`select:has(option[value="${MODEL_ID}"])`)).toHaveCount(0);
       await description.fill("Updated capability content");
