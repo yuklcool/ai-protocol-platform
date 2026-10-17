@@ -130,6 +130,7 @@ describe("useActionDrivenAgent", () => {
         { type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId },
         { type: EventType.STATE_SNAPSHOT, snapshot: { count: 0 } },
         { type: EventType.STATE_DELTA, delta: [{ op: "replace", path: "/count", value: 1 }] },
+        { type: EventType.STATE_DELTA, delta: [{ op: "add", path: "/a2ui_surface:form~1~0details", value: { value: "submitted" } }] },
         { type: EventType.TEXT_MESSAGE_START, messageId: "action-answer", role: "assistant" },
         { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "action-answer", delta: "Applied" },
         { type: EventType.TEXT_MESSAGE_END, messageId: "action-answer" },
@@ -139,7 +140,7 @@ describe("useActionDrivenAgent", () => {
     await result.current.triggerAction("form", { name: "submit", context: { value: "hello" } });
     expect(props).toMatchObject({ a2ui_action: { surfaceId: "form", action: { name: "submit", context: { value: "hello" } } } });
     expect(agent.messages).toEqual([{ id: "action-answer", role: "assistant", content: "Applied" }]);
-    expect(agent.state).toEqual({ count: 1 });
+    expect(agent.state).toEqual({ count: 1, "a2ui_surface:form/~details": { value: "submitted" } });
   });
   it("POSTs to the correct URL with {surfaceId, action, forwardedProps.a2ui_surface_state} payload", async () => {
     const snapshot = {

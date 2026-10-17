@@ -489,21 +489,28 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const actionEvents = parseSseDataEvents(actionWire);
       console.info("Root browser action events", JSON.stringify(actionEvents));
       try {
-        await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 30_000 });
+        await expect(page.getByText(/^ACCEPTED:\s*first-value$/)).toBeVisible({ timeout: 30_000 });
       } catch (error) {
-        await testInfo.attach("root-action-failure", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+        const screenshot = testInfo.outputPath("root-action-failure.png");
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await testInfo.attach("root-action-failure", { path: screenshot, contentType: "image/png" });
         console.info("Root browser action page", await page.locator("body").innerText());
         console.info("Root browser action state", JSON.stringify(await authedApi(token, `/api/sessions/${uiSessionId}/state`)));
         console.info("Root browser diagnostics", JSON.stringify(diagnostics));
         throw error;
       }
+      const firstScreenshot = testInfo.outputPath("root-action-first.png");
+      await page.screenshot({ path: firstScreenshot, fullPage: true });
+      await testInfo.attach("root-action-first", { path: firstScreenshot, contentType: "image/png" });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/^ACCEPTED:\s*first-value$/)).toBeVisible({ timeout: 30_000 });
       await expect(input).toHaveValue("first-value");
       await input.fill("second-value");
       await page.getByRole("button", { name: "Apply value" }).click();
-      await expect(page.getByText("ACCEPTED:second-value", { exact: true })).toBeVisible({ timeout: 90_000 });
-      await testInfo.attach("root-action-after-reload", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+      await expect(page.getByText(/^ACCEPTED:\s*second-value$/)).toBeVisible({ timeout: 90_000 });
+      const finalScreenshot = testInfo.outputPath("root-action-after-reload.png");
+      await page.screenshot({ path: finalScreenshot, fullPage: true });
+      await testInfo.attach("root-action-after-reload", { path: finalScreenshot, contentType: "image/png" });
       const uiState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
       expect(uiState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
 

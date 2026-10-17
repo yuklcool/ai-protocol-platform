@@ -480,7 +480,14 @@ async def stream_agui_events(
                 yield event.model_dump(by_alias=True, exclude_none=True)
                 continue
 
-            yield event.model_dump(by_alias=True, exclude_none=True)
+            payload = event.model_dump(by_alias=True, exclude_none=True)
+            if type_value == "STATE_DELTA" and isinstance(agui_agent, ADKAgent):
+                # ag-ui-adk 0.6.5 emits flat ADK state keys as raw /{key} paths.
+                # Escape each whole key as an RFC 6901 token; surface ids may
+                # contain '/' or '~', which otherwise change the target path.
+                for patch in payload["delta"]:
+                    patch["path"] = "/" + patch["path"][1:].replace("~", "~0").replace("/", "~1")
+            yield payload
 
             # Flush the pre-agent events (buffered above) now that the first real
             # event — RUN_STARTED — is on the wire. One-shot; cleared after.
