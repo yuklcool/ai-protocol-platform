@@ -602,11 +602,8 @@ export function useSkillAgent(options?: {
             },
           ]);
         }
-        // A2UI_SURFACE (tool-results-as-a2ui / 7.3, Model B) is handled by
-        // `WorkspaceA2uiEventRouter` in ChatShell, NOT here: this hook runs
-        // ABOVE the SurfaceRegistryProvider in the tree, so its
-        // `useOptionalSurfaceRegistry()` is null and can't reach the registry.
-        // The router subscribes to the same agent from inside the provider.
+        // WorkspaceA2uiEventRouter in ChatShell routes A2UI_SURFACE messages
+        // into the shared registry; this hook reads its snapshot on submission.
       },
       onTextMessageStartEvent: ({ event }: { event: { messageId?: string } }) => {
         markActivity();

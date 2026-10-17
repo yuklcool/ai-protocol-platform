@@ -34,7 +34,10 @@ def test_delete_removes_binary_then_metadata() -> None:
     storage = MagicMock()
     with (
         patch("tools.documents.routes._get_document_record", return_value=dict(DOC)),
-        patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", DOC["storagePath"], "local")),
+        patch(
+            "tools.documents.routes._storage_binding",
+            return_value=(storage, "example.com", DOC["storagePath"], "local"),
+        ),
         patch("tools.documents.routes._set_document_record") as mark,
         patch("tools.documents.routes._delete_document_record") as delete_record,
         patch("db.folders.update_folder_counts") as counts,
@@ -59,7 +62,10 @@ def test_delete_storage_failure_preserves_metadata() -> None:
     storage.delete.side_effect = OSError("storage unavailable")
     with (
         patch("tools.documents.routes._get_document_record", return_value=dict(DOC)),
-        patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", DOC["storagePath"], "local")),
+        patch(
+            "tools.documents.routes._storage_binding",
+            return_value=(storage, "example.com", DOC["storagePath"], "local"),
+        ),
         patch("tools.documents.routes._set_document_record") as mark,
         patch("tools.documents.routes._delete_document_record") as delete_record,
     ):

@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 class BootstrapRequest(BaseModel):
     skill_id: str
     document_ids: list[str] = Field(default_factory=list)
-    agent_id: str = "aitana_platform"
+    agent_id: str = "root-agent"
 
 
 class BootstrapResponse(BaseModel):

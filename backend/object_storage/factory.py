@@ -20,9 +20,7 @@ _storage_signature: tuple[str, ...] | None = None
 def object_storage_backend_name() -> str:
     value = os.environ.get("OBJECT_STORAGE_BACKEND", "local").strip().lower() or "local"
     if value not in _SUPPORTED_BACKENDS:
-        raise RuntimeError(
-            f"Unsupported OBJECT_STORAGE_BACKEND={value!r}; expected local, gcs, or s3"
-        )
+        raise RuntimeError(f"Unsupported OBJECT_STORAGE_BACKEND={value!r}; expected local, gcs, or s3")
     return value
 
 

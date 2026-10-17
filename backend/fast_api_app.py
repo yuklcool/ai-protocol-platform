@@ -5,8 +5,8 @@ Uses ADK's get_fast_api_app() for the agent endpoints,
 plus custom routes for channels, direct API, and protocols.
 """
 
-import logging
 import hashlib
+import logging
 import os
 import sys as _sys_for_local_mode
 
@@ -340,15 +340,8 @@ from fastapi import Depends, HTTPException, Request  # noqa: E402
 from fastapi.responses import StreamingResponse  # noqa: E402
 from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
 
-from adk.stream_invariants import redact_privileged_results, session_is_lower_trust  # noqa: E402
 from adk.agui import ROOT_AGENT_APP_NAME  # noqa: E402
-from agents.root_runtime import (  # noqa: E402
-    ROOT_AGENT_ID,
-    RootCapabilityDenied,
-    compose_root_skill,
-    effective_root_config,
-    resolve_root_capability,
-)
+from adk.stream_invariants import redact_privileged_results, session_is_lower_trust  # noqa: E402
 from admin.access_routes import router as admin_access_router  # noqa: E402
 from admin.analytics_routes import router as admin_analytics_router  # noqa: E402
 from admin.audit_routes import router as admin_audit_router  # noqa: E402
@@ -364,11 +357,18 @@ from admin.routes import router as admin_router  # noqa: E402
 from admin.tenants import router as admin_tenants_router  # noqa: E402
 from admin.tool_permissions_routes import router as admin_tool_permissions_router  # noqa: E402
 from admin.users_routes import router as admin_users_router  # noqa: E402
+from agents.root_runtime import (  # noqa: E402
+    ROOT_AGENT_ID,
+    RootCapabilityDenied,
+    compose_root_skill,
+    effective_root_config,
+    resolve_root_capability,
+)
 from auth import User, get_current_user  # noqa: E402
-from config.platform_config import PlatformConfigUnavailable, get_platform_config  # noqa: E402
 from auth.group_routes import router as group_auth_router  # noqa: E402
 from auth.routes import router as auth_router  # noqa: E402
 from buckets.routes import router as buckets_router  # noqa: E402
+from config.platform_config import PlatformConfigUnavailable, get_platform_config  # noqa: E402
 from internal_tasks.recompact_routes import router as internal_tasks_recompact_router  # noqa: E402
 from protocols.a2a import router as a2a_router  # noqa: E402
 from protocols.a2ui_surface_action_routes import router as a2ui_surface_action_router  # noqa: E402
@@ -394,6 +394,9 @@ from tools.media_utils import router as media_router  # noqa: E402
 app.include_router(auth_router)
 app.include_router(group_auth_router)
 app.include_router(skills_router)
+from agents.routes import router as root_agent_router  # noqa: E402
+
+app.include_router(root_agent_router)
 app.include_router(buckets_router)
 app.include_router(admin_router)
 app.include_router(admin_prewarm_router)
@@ -684,6 +687,11 @@ async def stream_skill(
     # ``get_current_tracker().mark(...)`` without explicit plumbing. The
     # finally below resets the binding and emits the structured log.
     runtime_skill = getattr(request.state, "root_runtime_skill", None)
+    if runtime_skill is None:
+        # Retained URLs are aliases of the Root runtime, never a policy bypass.
+        forwarded = dict(body.forwardedProps or {})
+        forwarded["capability_hint"] = skill_id
+        return await stream_root_agent(body.model_copy(update={"forwardedProps": forwarded}), request, user)
     session_agent_id = getattr(request.state, "session_agent_id", skill_id)
     app_name = getattr(request.state, "agent_app_name", "aitana_platform")
     agent_cache_scope = getattr(request.state, "agent_cache_scope", None)
@@ -844,6 +852,23 @@ async def stream_root_agent(
     the resolver intersects the Root Agent ceiling with tenant narrowing and
     the authenticated user's resource ACL before one capability is composed.
     """
+    action = (body.forwardedProps or {}).get("a2ui_action")
+    if action is not None:
+        # The production UI uses its existing AG-UI HttpAgent for actions as
+        # well as chat, so every standard event is applied by the same SDK.
+        from pydantic import ValidationError
+
+        from protocols._a2ui_surface_shared import _require_session
+        from protocols.a2ui_surface_action_run_routes import SurfaceActionRunRequest, post_surface_action_run
+
+        if not body.effective_session_id:
+            raise HTTPException(422, "A session is required for an A2UI action")
+        try:
+            action_body = SurfaceActionRunRequest.model_validate(action)
+        except ValidationError as exc:
+            raise HTTPException(422, "Invalid A2UI action") from exc
+        idx = _require_session(body.effective_session_id)
+        return await post_surface_action_run(idx.skill_id, idx.session_id, action_body, request, user)
     try:
         root_config = effective_root_config(
             get_platform_config().agent,

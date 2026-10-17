@@ -134,9 +134,7 @@ def assert_model_allowed(
     if active.allows(model_id):
         return
     stable_id = tenant_id if tenant_id is not None else _trusted_current_tenant_id()
-    raise TenantModelAccessError(
-        f"Model {model_id!r} is not allowed for tenant {stable_id or '(unknown)'!r}"
-    )
+    raise TenantModelAccessError(f"Model {model_id!r} is not allowed for tenant {stable_id or '(unknown)'!r}")
 
 
 def filter_allowed_model_ids(

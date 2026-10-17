@@ -51,7 +51,7 @@ describe("BRANDING — configurable fork display identity", () => {
     expect(BRANDING.contact.githubRepo).toBe(
       "https://github.com/yuklcool/ai-protocol-platform",
     );
-    expect(BRANDING.theme.primaryHsl).toBe("199 89% 48%");
+    expect(BRANDING.theme.primaryHsl).toBe("234 57% 59%");
     expect(CITATION_SCHEME).toBe("aip");
   });
 

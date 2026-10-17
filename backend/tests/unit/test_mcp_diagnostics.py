@@ -34,9 +34,7 @@ def test_authentication_error_is_classified() -> None:
 
 
 def test_nested_authentication_error_is_classified() -> None:
-    error = diagnostics._classify_exception(
-        ExceptionGroup("transport failed", [RuntimeError("403 Forbidden")])
-    )
+    error = diagnostics._classify_exception(ExceptionGroup("transport failed", [RuntimeError("403 Forbidden")]))
     assert error.category == "authentication"
 
 

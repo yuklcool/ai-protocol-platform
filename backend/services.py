@@ -20,7 +20,7 @@ def _postgres_memory_factory(uri: str, **kwargs):  # type: ignore[no-untyped-def
     database_url = os.environ.get("MEMORY_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL is required when MEMORY_BACKEND=postgres")
-    return PostgresMemoryService(database_url)
+    return PostgresMemoryService(database_url, require_tenant=True)
 
 
 get_service_registry().register_memory_service("aip-postgres-memory", _postgres_memory_factory)

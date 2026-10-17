@@ -32,6 +32,7 @@ def app():
             uid="user-1",
             email="owner@yourcompany.com",
             domain="aitana.ai",
+            tenant_id="test-tenant",
             group_tags=frozenset({"aitana-admin"}),
         )
         request.state.access = build_access_context(u)
@@ -53,7 +54,9 @@ def app_plain():
     app.include_router(router)
 
     async def _override(request: Request) -> User:
-        u = User(uid="user-2", email="jo@example.com", domain="example.com", group_tags=frozenset())
+        u = User(
+            uid="user-2", email="jo@example.com", domain="example.com", tenant_id="test-tenant", group_tags=frozenset()
+        )
         request.state.access = build_access_context(u)
         return u
 
@@ -84,6 +87,7 @@ def _make_config(**overrides) -> SkillConfig:
         "description": "A test skill.",
         "instructions": "Help with tests.",
         "skillId": "abc-123",
+        "tenantId": "test-tenant",
         "displayName": "Test Skill",
         "ownerEmail": "owner@yourcompany.com",
         "ownerId": "user-1",

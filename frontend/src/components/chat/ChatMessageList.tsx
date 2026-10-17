@@ -357,6 +357,7 @@ export function ChatMessageList({
         skillId={formSkillId ?? skillId}
         isConfirm={s.isConfirm}
         title={s.title}
+        reusable={s.reusable}
       />
     </div>
   );

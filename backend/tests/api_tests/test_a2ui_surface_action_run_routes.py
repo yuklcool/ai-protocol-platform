@@ -280,9 +280,7 @@ class TestHappyPath:
             final_event = SimpleNamespace(
                 timestamp=10**12,
                 author="action_agent",
-                content=SimpleNamespace(
-                    parts=[SimpleNamespace(text="ACTION-FINAL-TEXT")]
-                ),
+                content=SimpleNamespace(parts=[SimpleNamespace(text="ACTION-FINAL-TEXT")]),
             )
             session = MagicMock()
             session.state = {}
@@ -309,11 +307,10 @@ class TestHappyPath:
             "TEXT_MESSAGE_END",
             "RUN_FINISHED",
         ]
-        assert next(
-            event["delta"]
-            for event in events
-            if event.get("type") == "TEXT_MESSAGE_CONTENT"
-        ) == "ACTION-FINAL-TEXT"
+        assert (
+            next(event["delta"] for event in events if event.get("type") == "TEXT_MESSAGE_CONTENT")
+            == "ACTION-FINAL-TEXT"
+        )
 
     def test_does_not_recover_or_duplicate_when_agui_already_emits_text(self):
         patches = _patches(
@@ -357,9 +354,7 @@ class TestHappyPath:
 
         assert resp.status_code == 200, resp.text
         events = _parse_sse(resp.text)
-        content_events = [
-            event for event in events if event.get("type") == "TEXT_MESSAGE_CONTENT"
-        ]
+        content_events = [event for event in events if event.get("type") == "TEXT_MESSAGE_CONTENT"]
         assert content_events == [
             {
                 "type": "TEXT_MESSAGE_CONTENT",

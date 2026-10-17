@@ -29,7 +29,6 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from budget.enforcer import BudgetConsultation, BudgetDecision
 from db.repository import Repository
@@ -202,8 +201,7 @@ class TenantRepositoryBudgetEnforcer:
                 remaining_usd=remaining,
                 period_end=period_end,
                 message=(
-                    f"Tenant {request.identity_value} has used "
-                    f"{int(total / cap * 100)}% of this {period} LLM budget."
+                    f"Tenant {request.identity_value} has used {int(total / cap * 100)}% of this {period} LLM budget."
                 ),
                 retry_after_seconds=None,
             )

@@ -105,6 +105,7 @@ export function parseA2UIResult(
   if (!resultContent) return null;
   try {
     const parsed = JSON.parse(resultContent) as Record<string, unknown>;
+    if (parsed.a2ui_delivered === true) return null;
     const raw = parsed.validated_a2ui_json;
     if (raw === undefined || raw === null) return null;
     // SDK's parse_and_fix wraps a single message in a list before validation,
@@ -184,6 +185,9 @@ export const MessageBubble = React.memo(function MessageBubble({
     // is already populated by the time we return null. Without this, every
     // tool-only assistant turn renders an empty avatar+name+timestamp row.
     const inlineA2uiCalls = a2uiCalls.filter((tc) => {
+      try {
+        if (JSON.parse(tc.resultContent || "null")?.a2ui_delivered === true) return false;
+      } catch { /* Incomplete or failed results retain their existing feedback. */ }
       const parsed = parseA2UIResult(tc.resultContent);
       // Inline = no surface_id, or surface_id === "chat".
       return !parsed || !parsed.surfaceId || parsed.surfaceId === "chat";

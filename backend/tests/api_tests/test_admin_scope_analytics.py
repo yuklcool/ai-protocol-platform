@@ -33,8 +33,22 @@ _TENANT_A = User(
 )
 
 _ROWS = [
-    {"__id": "s-a1", "ownerUid": "u1", "ownerDomain": "a.com", "skillId": "one", "title": "Alpha chat"},
-    {"__id": "s-b1", "ownerUid": "u2", "ownerDomain": "b.com", "skillId": "one", "title": "Beta chat"},
+    {
+        "__id": "s-a1",
+        "tenantId": "a.com",
+        "ownerUid": "u1",
+        "ownerDomain": "a.com",
+        "skillId": "one",
+        "title": "Alpha chat",
+    },
+    {
+        "__id": "s-b1",
+        "tenantId": "b.com",
+        "ownerUid": "u2",
+        "ownerDomain": "b.com",
+        "skillId": "one",
+        "title": "Beta chat",
+    },
     # Pre-backfill row: owner unknown.
     {"__id": "s-legacy", "ownerUid": "u3", "skillId": "one", "title": "Legacy chat"},
 ]
@@ -54,11 +68,33 @@ def _app(user: User) -> TestClient:
 
 
 class TestSessionListScoping:
-    def test_platform_sees_every_session(self):
+    def test_local_jwt_directory_enrichment_never_initializes_firebase(self, monkeypatch):
+        from admin.analytics_routes import _fb_auth
+
+        monkeypatch.setenv("AUTH_BACKEND", "local-jwt")
+        with patch(
+            "firebase_admin.initialize_app", side_effect=AssertionError("local JWT must not initialize Firebase")
+        ):
+            assert _fb_auth() is None
+
+    def test_explicit_tenant_wins_over_shared_or_different_email_domains(self):
+        user = _TENANT_A.model_copy(
+            update={"tenant_id": "stable-a", "group_tags": frozenset({"tenant-admin:stable-a"})}
+        )
+        rows = [
+            {"__id": "owned", "tenantId": "stable-a", "ownerDomain": "other.example", "title": "Owned"},
+            {"__id": "foreign", "tenantId": "stable-b", "ownerDomain": "a.com", "title": "Foreign"},
+        ]
+        with patch("admin.analytics_routes.query_documents", return_value=rows):
+            response = _app(user).get("/api/admin/analytics/sessions")
+        assert response.status_code == 200
+        assert [row["session_id"] for row in response.json()["sessions"]] == ["owned"]
+
+    def test_platform_sees_every_attributed_session(self):
         with patch("admin.analytics_routes.query_documents", return_value=[dict(r) for r in _ROWS]):
             r = _app(_PLATFORM).get("/api/admin/analytics/sessions")
         assert r.status_code == 200
-        assert {s["session_id"] for s in r.json()["sessions"]} == {"s-a1", "s-b1", "s-legacy"}
+        assert {s["session_id"] for s in r.json()["sessions"]} == {"s-a1", "s-b1"}
 
     def test_tenant_sees_only_own_domain(self):
         with patch("admin.analytics_routes.query_documents", return_value=[dict(r) for r in _ROWS]):
@@ -86,6 +122,28 @@ class TestSessionListScoping:
 
 
 class TestTracePolicy:
+    def test_platform_reads_the_resources_tenant_and_app_namespace(self):
+        from observability.tenant_context import get_current_tenant_id
+
+        idx = SimpleNamespace(owner_uid="owner", tenant_id="stable-a", app_name="root-agent", skill_id="one")
+        observed = []
+
+        async def get_session(**kwargs):
+            observed.append((get_current_tenant_id(), kwargs))
+            return SimpleNamespace(events=[])
+
+        with (
+            patch("admin.analytics_routes.get_session_index", return_value=idx),
+            patch(
+                "admin.analytics_routes.get_messages_session_service",
+                return_value=SimpleNamespace(get_session=get_session),
+            ),
+        ):
+            response = _app(_PLATFORM).get("/api/admin/analytics/sessions/target")
+        assert response.status_code == 200
+        assert observed == [("stable-a", {"app_name": "root-agent", "user_id": "owner", "session_id": "target"})]
+        assert get_current_tenant_id() == ""
+
     """Transcript access, per the 2026-07-21 CHAT-TRANSCRIPT-ACCESS ruling.
 
     A tenant admin may read full conversations for their OWN domain (the tenant
@@ -93,7 +151,7 @@ class TestTracePolicy:
     """
 
     def _idx(self, domain: str):
-        return SimpleNamespace(owner_uid="u1", owner_domain=domain, skill_id="one")
+        return SimpleNamespace(owner_uid="u1", owner_domain=domain, tenant_id=domain, skill_id="one")
 
     def test_tenant_may_read_own_transcript(self):
         with (
@@ -117,14 +175,14 @@ class TestTracePolicy:
             r = _app(_TENANT_A).get("/api/admin/analytics/sessions/s-legacy")
         assert r.status_code == 403
 
-    def test_platform_may_read_an_unattributable_session(self):
+    def test_unattributable_session_also_fails_closed_for_platform(self):
         with (
             patch("admin.analytics_routes.get_session_index", return_value=self._idx("")),
             patch("admin.analytics_routes.get_messages_session_service") as svc,
         ):
             svc.return_value.get_session = AsyncMock(return_value=None)
             r = _app(_PLATFORM).get("/api/admin/analytics/sessions/s-legacy")
-        assert r.status_code == 200
+        assert r.status_code == 403
 
     def test_args_json_is_no_longer_redacted_for_an_in_scope_tenant_admin(self):
         """Follows from the ruling: redacting the arguments while serving the

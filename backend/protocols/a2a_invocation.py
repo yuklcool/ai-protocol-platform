@@ -265,12 +265,13 @@ def build_a2a_app(
     # Same lazy reason for the a2a-sdk symbols and ADK A2A executor.
     from a2a.server.apps import A2AStarletteApplication
     from a2a.server.request_handlers import DefaultRequestHandler
-    from a2a.server.tasks import InMemoryPushNotificationConfigStore, InMemoryTaskStore
+    from a2a.server.tasks import InMemoryPushNotificationConfigStore
     from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
     from google.adk.a2a.executor.config import A2aAgentExecutorConfig
     from starlette.applications import Starlette
 
     from protocols.a2a import _build_card_model
+    from protocols.a2a_task_store import OwnerScopedTaskStore
 
     agent_card = _build_card_model(base_url)
     runner = _build_runner(agent)
@@ -313,7 +314,7 @@ def build_a2a_app(
         # explicit resolver together with the tenant-scoped principal set by
         # A2AAuthMiddleware so the same task id cannot be read or updated by a
         # different authenticated user or tenant.
-        task_store=InMemoryTaskStore(owner_resolver=_a2a_owner_scope),
+        task_store=OwnerScopedTaskStore(owner_resolver=_a2a_owner_scope),
         push_config_store=InMemoryPushNotificationConfigStore(),
     )
     a2a_starlette = A2AStarletteApplication(

@@ -1,35 +1,15 @@
-// ACTION-TRIGGER M2 — useActionDrivenAgent
-//
-// Pattern 1 closing rung. The user clicks an A2UI button → this hook POSTs to
-// `/api/skills/{skillId}/sessions/{sessionId}/surface-action-run` with the
-// A2uiClientAction body + a snapshot of the live A2UI surface state, then
-// consumes the AG-UI SSE response and dispatches the resulting A2UI tool
-// calls into the same `SurfaceRegistry` the chat path uses. Result: the
-// surface re-renders exactly like it would after a chat turn — but no chat
-// message was sent.
-//
-// Why the hook parses SSE itself instead of routing through `HttpAgent`:
-// the @ag-ui/client `HttpAgent` is wired to ONE URL (the chat stream
-// endpoint) and updates ONE agent's `messages`/`state` arrays. The
-// action-triggered endpoint is a different URL and we explicitly do NOT
-// want to write a fake chat message into the agent's `messages` array
-// (that would render a stray bubble in the chat). The only thing the
-// SurfaceRegistry actually needs is the `send_a2ui_json_to_client` tool
-// call's `TOOL_CALL_RESULT.content`, which we parse here and feed to
-// `registry.appendMessages` — the same call the chat-bubble
-// `A2UISurfaceDispatcher` makes. Single point of dispatch into the
-// registry; this hook just feeds it through a different ingress.
-//
-// Graceful HTTP 4xx fallback: when the backend gate rejects (skill not
-// opted into `allow_action_triggered_runs`, missing JWT, etc.), the
-// promise resolves cleanly with a `console.warn`. The surface stays in
-// its last-rendered state — no broken loading spinner, no thrown error
-// bubbling into React's error boundary.
+// UI actions share the production Root Agent's HttpAgent and AG-UI reducers.
+// forwardedProps.a2ui_action carries the action and current surface snapshot;
+// Chat, Activity and Workspace receive the same events as a normal chat turn.
+// Standalone protocol previews retain the dedicated surface-action-run SSE
+// adapter. Both paths reject failed, cancelled or incomplete runs so the
+// surface can display the failure and allow retry.
 
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { useOptionalAGUIAgent } from "@/providers/AGUIProvider";
 import { useSurfaceRegistry } from "@/providers/SurfaceRegistry";
 import type { ToolCallState, DelegationMarkerItem } from "@/hooks/useSkillAgent";
 
@@ -93,11 +73,12 @@ export interface UseActionDrivenAgentArgs {
 }
 
 export interface UseActionDrivenAgentReturn {
+  cancelAction: () => void;
   /**
    * POST the action to `surface-action-run`, consume the SSE stream, and
    * dispatch A2UI updates into the SurfaceRegistry. Resolves on
-   * `RUN_FINISHED`; rejects on `RUN_ERROR`. Resolves cleanly (no throw)
-   * on HTTP 4xx — the skill is not opted in and the surface stays put.
+   * `RUN_FINISHED`; rejects on errors, cancellation and incomplete streams.
+   * HTTP authorization failures are surfaced to the calling UI.
    */
   triggerAction: (
     surfaceId: string,
@@ -128,6 +109,7 @@ function parseA2uiToolResult(
 ): ParsedA2uiToolResult | null {
   try {
     const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (parsed.a2ui_delivered === true) return null;
     const raw = parsed.validated_a2ui_json;
     if (raw === undefined || raw === null) return null;
     const messages = Array.isArray(raw)
@@ -152,15 +134,29 @@ function parseA2uiToolResult(
  */
 async function* readSSE(
   body: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
 ): AsyncGenerator<Record<string, unknown>> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  const abort = () => { void reader.cancel(); };
+  signal.addEventListener("abort", abort, { once: true });
   try {
     while (true) {
-      const { value, done } = await reader.read();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const { value, done } = await Promise.race([
+        reader.read(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            void reader.cancel();
+            reject(new Error("The agent stopped responding. Try the action again."));
+          }, 90_000);
+        }),
+      ]).finally(() => clearTimeout(timer));
+      if (signal.aborted) throw new Error("The action was stopped.");
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
       let sepIdx = buffer.indexOf("\n\n");
       while (sepIdx !== -1) {
         const frame = buffer.slice(0, sepIdx);
@@ -176,8 +172,7 @@ async function* readSSE(
           try {
             yield JSON.parse(payload) as Record<string, unknown>;
           } catch {
-            // Malformed frame — backend should never emit one, but if it
-            // does, dropping it is safer than killing the stream.
+            throw new Error("The server returned an invalid agent event. Try again.");
           }
         }
         sepIdx = buffer.indexOf("\n\n");
@@ -199,6 +194,8 @@ async function* readSSE(
       }
     }
   } finally {
+    signal.removeEventListener("abort", abort);
+    void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
@@ -209,12 +206,25 @@ export function useActionDrivenAgent({
   activitySink,
 }: UseActionDrivenAgentArgs): UseActionDrivenAgentReturn {
   const registry = useSurfaceRegistry();
+  const agent = useOptionalAGUIAgent();
+  const controllerRef = useRef<AbortController | null>(null);
+  const cancelAction = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      agent?.abortRun();
+    }
+  }, [agent]);
+  useEffect(() => () => cancelAction(), [sessionId, skillId, cancelAction]);
 
   const triggerAction = useCallback(
     async (
       surfaceId: string,
       action: ActionDrivenAgentAction,
     ): Promise<void> => {
+      if (controllerRef.current) throw new Error("An action is already running. Wait for it to finish.");
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      try {
       const url = `/api/proxy/api/skills/${encodeURIComponent(
         skillId,
       )}/sessions/${encodeURIComponent(sessionId)}/surface-action-run`;
@@ -225,6 +235,30 @@ export function useActionDrivenAgent({
         action,
         forwardedProps: { a2ui_surface_state: surfaceSnapshot },
       };
+      const runtime = (agent as (typeof agent & { __aitanaRuntime?: { agentId: string } }))?.__aitanaRuntime;
+      if (agent && runtime?.agentId === "root-agent") {
+        // Use the same official event reducer as normal chat. Text, state
+        // patches, tool lifecycles, reasoning and custom surfaces all reach
+        // the existing Chat/Activity/Workspace subscribers without a second
+        // hand-written AG-UI implementation or a fabricated user message.
+        let finished = false;
+        let error: string | undefined;
+        activitySink?.onRunStart?.();
+        try {
+          await agent.runAgent({ forwardedProps: { a2ui_action: body } }, {
+            onRunFinishedEvent: () => { finished = true; },
+            onRunErrorEvent: ({ event }) => { error = event.message; },
+          });
+          if (controller.signal.aborted) throw new Error("The action was stopped.");
+          if (error) throw new Error(error);
+          if (!finished) throw new Error("The agent connection ended before the action completed. Try again.");
+          activitySink?.onRunSettled?.({});
+        } catch (err) {
+          activitySink?.onRunSettled?.({ error: err instanceof Error ? err.message : "The action failed." });
+          throw err;
+        }
+        return;
+      }
 
       if (process.env.NODE_ENV !== "production") {
         // Submit self-diagnosis (7.8): the elicitation "Run" button's #1 failure
@@ -248,6 +282,7 @@ export function useActionDrivenAgent({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
 
       let res: Response;
@@ -285,7 +320,8 @@ export function useActionDrivenAgent({
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ skill_id: skillId }),
+              body: JSON.stringify({ skill_id: skillId, agent_id: "root-agent" }),
+              signal: controller.signal,
             },
           );
           res = await doPost();
@@ -329,7 +365,7 @@ export function useActionDrivenAgent({
             `[useActionDrivenAgent] surface-action-run returned 200 with empty body for ${url}`,
           );
         }
-        return;
+        throw new Error("The server returned no agent stream. Try again.");
       }
 
       // Track in-flight tool calls so we can pair TOOL_CALL_RESULT with
@@ -369,12 +405,37 @@ export function useActionDrivenAgent({
       activitySink?.onRunStart?.();
 
       try {
-        for await (const event of readSSE(res.body)) {
+        for await (const event of readSSE(res.body, controller.signal)) {
           if (terminated) break;
           const type = event.type;
           if (typeof type !== "string") continue;
 
           switch (type) {
+          case "TEXT_MESSAGE_START": {
+            if (agent && typeof event.messageId === "string" && !agent.messages.some((m) => m.id === event.messageId)) {
+              agent.addMessage({ id: event.messageId, role: "assistant", content: "" });
+            }
+            break;
+          }
+          case "TEXT_MESSAGE_CONTENT": {
+            if (agent && typeof event.messageId === "string" && typeof event.delta === "string") {
+              const messageId = event.messageId;
+              const delta = event.delta;
+              if (!agent.messages.some((m) => m.id === messageId)) {
+                agent.addMessage({ id: messageId, role: "assistant", content: delta });
+              } else {
+                agent.setMessages(agent.messages.map((m) => m.id === messageId && m.role === "assistant"
+                  ? { ...m, content: (typeof m.content === "string" ? m.content : "") + delta } : m));
+              }
+            }
+            break;
+          }
+          case "STATE_SNAPSHOT": {
+            if (agent && event.snapshot && typeof event.snapshot === "object" && !Array.isArray(event.snapshot)) {
+              agent.setState(event.snapshot as Record<string, unknown>);
+            }
+            break;
+          }
           case "TOOL_CALL_START": {
             const toolCallId = event.toolCallId;
             const toolCallName = event.toolCallName;
@@ -545,7 +606,16 @@ export function useActionDrivenAgent({
           default:
             break;
           }
+          if (terminated) break;
         }
+        if (!terminated) throw new Error("The agent connection ended before the action completed. Try again.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "The action failed.";
+        for (const [id, tc] of activityToolCalls) {
+          if (tc.status === "running") emitToolCall(id, { status: "error" });
+        }
+        settle(message);
+        throw err;
       } finally {
         // Backstop: a stream that ends without a terminal event (network
         // drop) still clears the in-flight indicator. No-op after a terminal
@@ -556,9 +626,12 @@ export function useActionDrivenAgent({
       if (runError) {
         throw runError;
       }
+      } finally {
+        if (controllerRef.current === controller) controllerRef.current = null;
+      }
     },
-    [registry, sessionId, skillId, activitySink],
+    [registry, sessionId, skillId, activitySink, agent],
   );
 
-  return { triggerAction };
+  return { triggerAction, cancelAction };
 }

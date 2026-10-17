@@ -185,10 +185,7 @@ def resolve_model(model_id: str) -> Gemini | LiteLlm:
         # Direct Anthropic API via LiteLLM. Adaptive-thinking transport is
         # still generation-specific, but provider selection no longer is.
         kwargs: dict = {}
-        if (
-            os.environ.get("CLAUDE_ADAPTIVE_THINKING", "on").strip().lower() != "off"
-            and "haiku" not in resolved
-        ):
+        if os.environ.get("CLAUDE_ADAPTIVE_THINKING", "on").strip().lower() != "off" and "haiku" not in resolved:
             _EFFORT = {"smart": "high", "default": "medium", "fast": "low"}
             effort = _EFFORT.get(getattr(entry, "tier", None) or "", "high")
             if _claude_uses_adaptive_thinking(resolved):
@@ -207,9 +204,7 @@ def resolve_model(model_id: str) -> Gemini | LiteLlm:
 
         # Registry capabilities are authoritative. Legacy raw official
         # OpenAI names preserve the historical heuristic for compatibility.
-        legacy_reasoner = entry is None and (
-            resolved.startswith("gpt-5") or resolved.startswith(("o1", "o3", "o4"))
-        )
+        legacy_reasoner = entry is None and (resolved.startswith("gpt-5") or resolved.startswith(("o1", "o3", "o4")))
         supports_reasoning = entry.supports_reasoning if entry is not None else legacy_reasoner
         supports_responses = entry.supports_responses_api if entry is not None else legacy_reasoner
         if supports_reasoning:
@@ -224,6 +219,7 @@ def resolve_model(model_id: str) -> Gemini | LiteLlm:
         return LiteLlm(model=f"openai/{resolved}", **kwargs)
 
     raise ValueError(f"Unsupported provider {provider!r} for model {model_id!r}")
+
 
 # --- MODEL-RELIABILITY M3: residency-gated fallback chains -------------------
 
@@ -326,7 +322,6 @@ def resolve_model_chain(model_ref: str, fallback: FallbackConfig | None = None) 
     allow_widening = bool(fallback and fallback.allow_cross_provider)
     members: list[BaseLlm] = [resolve_model(model_ref)]
     for link in candidates:
-        link_api = api_name_for(link.id)
         link_residency = _residency_of(link.id)
         if policy == "eu-strict" and link_residency != "eu":
             logger.warning(
@@ -914,6 +909,13 @@ def create_agent(
     ]
     tools.extend(_resolve_search_tools(md.tools, md.tool_configs))
     tools.extend(resolve_mcp_tools(md.tool_configs))
+    root_instruction = skill_config.instructions
+    if (md.tool_configs.get("root_agent") or {}).get("enabled") and access_context is not None:
+        from agents.capabilities import root_capability_tool
+
+        capability_tool, catalog_instruction = root_capability_tool(user, access_context)
+        tools.append(capability_tool)
+        root_instruction = "\n\n".join((catalog_instruction, root_instruction))
     from adk.callbacks import _RAG_DOCUMENTS_ENABLED
 
     if _RAG_DOCUMENTS_ENABLED:
@@ -1186,7 +1188,7 @@ def create_agent(
         # unconditionally for every skill. Adding another wrapper later is
         # just one more argument here — no nesting to re-order.
         instruction=compose_instruction_providers(
-            skill_config.instructions,
+            root_instruction,
             wrap_with_platform_preamble,
             wrap_with_iframe_context,
             wrap_with_a2ui_surface_context,

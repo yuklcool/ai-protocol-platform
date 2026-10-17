@@ -1,4 +1,5 @@
 """Real shared-repository accounting; never contacts an LLM."""
+
 import os
 from uuid import uuid4
 
@@ -20,12 +21,18 @@ async def test_postgres_budget_survives_recreation_and_isolates_tenants(monkeypa
     tenants = [f"budget-ci-{uuid4().hex}" for _ in range(2)]
     try:
         for tid in tenants:
-            TenantDirectory(repo).put(TenantConfig(
-                tenantId=tid, displayName=tid, storageNamespace=tid,
-                quota={"llmBudgetUsd": 1.0},
-            ))
+            TenantDirectory(repo).put(
+                TenantConfig(
+                    tenantId=tid,
+                    displayName=tid,
+                    storageNamespace=tid,
+                    quota={"llmBudgetUsd": 1.0},
+                )
+            )
+
         def request(tid, call):
             return BudgetConsultation(tid, "budget-ci", "test-model", 0.6, "same-turn", call)
+
         first = request(tenants[0], "first")
         enforcer = TenantRepositoryBudgetEnforcer(repo)
         assert (await enforcer.consult(first)).action == "allow"

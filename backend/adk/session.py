@@ -15,7 +15,7 @@ import os
 
 from google.adk.apps.app import EventsCompactionConfig
 from google.adk.memory import BaseMemoryService, InMemoryMemoryService, VertexAiMemoryBankService
-from google.adk.sessions import BaseSessionService, InMemorySessionService, VertexAiSessionService
+from google.adk.sessions import BaseSessionService, InMemorySessionService
 
 from config.gcp import require_gcp_project
 
@@ -165,7 +165,7 @@ def _compaction_summarizer():
     return _summarizer_singleton
 
 
-def get_compaction_config(model_id: str) -> EventsCompactionConfig:
+def get_compaction_config(model_id: str, *, summarizer_model=None) -> EventsCompactionConfig:
     """Return model-appropriate EventsCompactionConfig.
 
     Larger context windows get a higher token threshold and a higher turn-count
@@ -201,7 +201,13 @@ def get_compaction_config(model_id: str) -> EventsCompactionConfig:
     # Setting `summarizer` ourselves also makes that ADK branch return early, so
     # the copy is belt-and-braces — but the copy is what makes it SAFE if the
     # summarizer ever fails to build and comes back None.
-    config = config.model_copy(update={"summarizer": _compaction_summarizer()})
+    if summarizer_model is not None:
+        from adk.compaction_summarizer import build_compaction_summarizer
+
+        summarizer = build_compaction_summarizer(llm=summarizer_model)
+    else:
+        summarizer = _compaction_summarizer()
+    config = config.model_copy(update={"summarizer": summarizer})
 
     override = os.environ.get(_TOKEN_THRESHOLD_ENV)
     if override:
@@ -408,7 +414,9 @@ def get_session_service() -> BaseSessionService:
         # the SDK instead of maintaining a second home-grown session store.
         from google.adk.sessions import DatabaseSessionService
 
-        _session_service_singleton = DatabaseSessionService(db_url=_adk_postgres_url())
+        from adk.tenant_session_service import TenantScopedSessionService
+
+        _session_service_singleton = TenantScopedSessionService(DatabaseSessionService(db_url=_adk_postgres_url()))
         logger.info("session-service: PostgreSQL (ADK DatabaseSessionService)")
         return _session_service_singleton
 
@@ -441,7 +449,7 @@ def get_memory_service() -> BaseMemoryService:
     if backend == "postgres":
         from adk.postgres_memory import PostgresMemoryService
 
-        _memory_service_singleton = PostgresMemoryService(_database_url("MEMORY_DATABASE_URL"))
+        _memory_service_singleton = PostgresMemoryService(_database_url("MEMORY_DATABASE_URL"), require_tenant=True)
         logger.info("memory-service: PostgreSQL (platform repository)")
         return _memory_service_singleton
 

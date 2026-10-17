@@ -20,10 +20,11 @@ without round-tripping through session state.
 from __future__ import annotations
 
 import logging
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
 
 from adk.budget_config import BudgetConfig
+from adk.run_errors import record_run_error
 from auth.firebase_auth import User
 from budget.enforcer import (
     BudgetConsultation,
@@ -106,7 +107,7 @@ def make_budget_callbacks(
         if decision.action == "block":
             # Drain pending — record will never fire on block.
             pending.pop(callback_context.invocation_id, None)
-            raise BudgetExceededError(decision)
+            _raise_budget_block(decision)
         if decision.action == "warn":
             callback_context.state["budget:warn_message"] = decision.message
         return None
@@ -164,12 +165,21 @@ def _missing_identity_block_callbacks(*, skill_id: str, identity_key: str) -> tu
             ),
             retry_after_seconds=None,
         )
-        raise BudgetExceededError(decision)
+        _raise_budget_block(decision)
 
     async def _noop_after(callback_context: Any, llm_response: Any) -> None:
         return None
 
     return _block_before, _noop_after
+
+
+def _raise_budget_block(decision: BudgetDecision) -> None:
+    record_run_error(
+        code="BUDGET_EXCEEDED",
+        message=decision.message or "Budget exceeded.",
+        retry_after_seconds=decision.retry_after_seconds,
+    )
+    raise BudgetExceededError(decision)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -84,7 +84,10 @@ class TestTheInvariant:
         firestore.collection.return_value.document.return_value.get.return_value = snapshot
 
         with (
-            patch("channels.identity.get_client", return_value=firestore),
+            patch(
+                "channels.identity.fs.get_document",
+                side_effect=lambda collection, key: tampered_mirror if collection == "channel_identities" else None,
+            ),
             patch("db.firestore.get_client", return_value=firestore),
             patch("firebase_admin.auth.get_user", return_value=_record(email="real@corp.test", claims={})),
         ):

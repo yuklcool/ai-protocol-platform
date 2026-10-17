@@ -122,3 +122,14 @@ def test_unattributed_user_rule_only_applies_in_pure_legacy_domain_tenant() -> N
 def test_tenant_permission_key_rejects_empty_by_returning_no_key() -> None:
     assert tenant_permission_key("") == ""
     assert tenant_permission_key(" tenant-a ") == "tenant:tenant-a"
+
+
+@pytest.mark.parametrize("tenant_doc", [{"tools": [], "denied": ["search"]}, {"tools": ["read"], "denied": []}])
+def test_user_allow_cannot_widen_tenant_ceiling(tenant_doc):
+    with _docs(
+        {
+            "tenant:tenant-a": {"tenantId": "tenant-a", **tenant_doc},
+            "user@a.example": {"tenantId": "tenant-a", "tools": ["search"]},
+        }
+    ):
+        assert not can_use_tool("user@a.example", "a.example", "search", tenant_id="tenant-a")

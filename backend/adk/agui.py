@@ -47,6 +47,8 @@ from google.adk.artifacts import BaseArtifactService
 from google.adk.memory import BaseMemoryService
 from google.adk.sessions import BaseSessionService
 
+from adk.run_errors import current_run_error
+
 logger = logging.getLogger(__name__)
 
 APP_NAME = "aitana_platform"
@@ -114,11 +116,9 @@ def _deployment_app():
     spec.loader.exec_module(module)
     deployment_app = getattr(module, "app", None)
     if deployment_app is None or not hasattr(deployment_app, "model_copy"):
-        raise RuntimeError(
-            f"Deployment module {app_path} did not expose a Google ADK App as `app`"
-        )
+        raise RuntimeError(f"Deployment module {app_path} did not expose a Google ADK App as `app`")
 
-    setattr(_deployment_app, "_cached", deployment_app)
+    _deployment_app._cached = deployment_app
     return deployment_app
 
 
@@ -163,12 +163,6 @@ def build_agui_adk_agent(
     """
     # Lazy import: adk.session imports heavy GCP SDKs whose presence we
     # don't want at module-import time (test isolation, fast CLI startup).
-    from adk.session import (
-        get_artifact_service,
-        get_memory_service,
-        get_session_service,
-    )
-
     # v6.23.0 COMPACTION-WIRE M1 — build via `from_app` so the deployment's App
     # (and therefore `events_compaction_config`) reaches the Runner.
     #
@@ -186,7 +180,34 @@ def build_agui_adk_agent(
     # root agent — the PPA expert, the doc comparer and the Studio copilot all
     # silently becoming the same generic assistant, with no error raised.
     # `app_name` rides on the same copy (the App owns the name under `from_app`).
-    base_app = _deployment_app()
+    # Construct the App from the already-authorized request agent. Importing
+    # backend/app.py here also constructs its unrelated bootstrap model under
+    # the current tenant policy; a tenant allowing only its gateway model then
+    # fails before any request even when its Root model is configured correctly.
+    from google.adk.apps import App
+
+    from adk.session import (
+        get_artifact_service,
+        get_compaction_config,
+        get_memory_service,
+        get_session_service,
+    )
+
+    runtime_model = getattr(agent, "model", "")
+    model_id = runtime_model if isinstance(runtime_model, str) else getattr(runtime_model, "model", "")
+    model_id = str(model_id).removeprefix("openai/").removeprefix("anthropic/")
+    # App construction requires a Python identifier. The bridge's established
+    # storage namespace ("root-agent") is restored on the request copy below,
+    # as with the previous deployment-App copy, so existing sessions keep their
+    # identity while the per-request App can be constructed without bootstrapping
+    # an unrelated model.
+    base_app = App(
+        root_agent=agent,
+        name=app_name.replace("-", "_"),
+        events_compaction_config=get_compaction_config(
+            model_id, summarizer_model=getattr(agent, "canonical_model", None)
+        ),
+    )
 
     # TUNING-CONSOLE (1b) — the admin thresholds must be applied HERE, not only
     # in the before-agent callback.
@@ -290,6 +311,7 @@ async def stream_agui_events(
     )
 
     tracker = get_current_tracker()
+    typed_error: dict[str, Any] = {}
     first_agui_event_seen = False
     first_model_token_seen = False
     # NEVER SILENT (CLAUDE.md #8): did this run yield anything the user can see —
@@ -320,11 +342,22 @@ async def stream_agui_events(
     hb_interval = _heartbeat_interval(heartbeat_seconds)
     hb_count = 0
     source = agui_agent.run(run_input).__aiter__()
+
+    async def next_event():
+        # FastAPI peeks at the first event in the request task and streams the
+        # rest from another task. Bind/reset within each pull task so no token
+        # crosses that context boundary. SDK child tasks inherit the same slot.
+        token = current_run_error.set(typed_error)
+        try:
+            return await anext(source)
+        finally:
+            current_run_error.reset(token)
+
     pending: asyncio.Task | None = None
     try:
         while True:
             if pending is None:
-                pending = asyncio.ensure_future(anext(source))
+                pending = asyncio.ensure_future(next_event())
             if hb_interval > 0:
                 try:
                     event = await asyncio.wait_for(asyncio.shield(pending), timeout=hb_interval)
@@ -406,6 +439,10 @@ async def stream_agui_events(
                 continue
 
             if type_value in _TERMINAL_EVENT_TYPES:
+                if typed_error:
+                    terminal_event_yielded = "RUN_ERROR"
+                    yield dict(typed_error)
+                    continue
                 # NEVER SILENT (CLAUDE.md #8): a RUN_FINISHED carrying no text
                 # and no tool call is a SILENT FAILURE — the turn dies and the
                 # UI just stops, with nothing to see and nothing to retry.
@@ -443,7 +480,14 @@ async def stream_agui_events(
                 yield event.model_dump(by_alias=True, exclude_none=True)
                 continue
 
-            yield event.model_dump(by_alias=True, exclude_none=True)
+            payload = event.model_dump(by_alias=True, exclude_none=True)
+            if type_value == "STATE_DELTA" and isinstance(agui_agent, ADKAgent):
+                # ag-ui-adk 0.6.5 emits flat ADK state keys as raw /{key} paths.
+                # Escape each whole key as an RFC 6901 token; surface ids may
+                # contain '/' or '~', which otherwise change the target path.
+                for patch in payload["delta"]:
+                    patch["path"] = "/" + patch["path"][1:].replace("~", "~0").replace("/", "~1")
+            yield payload
 
             # Flush the pre-agent events (buffered above) now that the first real
             # event — RUN_STARTED — is on the wire. One-shot; cleared after.

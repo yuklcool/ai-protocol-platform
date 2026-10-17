@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from typing import Any, Optional, Union
+from typing import Any
 
 from google.adk.artifacts.base_artifact_service import ArtifactVersion, BaseArtifactService
 from google.genai import types
@@ -63,9 +63,9 @@ class TenantScopedArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        artifact: Union[types.Part, dict[str, Any]],
-        session_id: Optional[str] = None,
-        custom_metadata: Optional[dict[str, Any]] = None,
+        artifact: types.Part | dict[str, Any],
+        session_id: str | None = None,
+        custom_metadata: dict[str, Any] | None = None,
     ) -> int:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         return await self.delegate.save_artifact(
@@ -83,9 +83,9 @@ class TenantScopedArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
-        version: Optional[int] = None,
-    ) -> Optional[types.Part]:
+        session_id: str | None = None,
+        version: int | None = None,
+    ) -> types.Part | None:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         return await self.delegate.load_artifact(
             app_name=scoped_app,
@@ -100,7 +100,7 @@ class TenantScopedArtifactService(BaseArtifactService):
         *,
         app_name: str,
         user_id: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> list[str]:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         return await self.delegate.list_artifact_keys(
@@ -115,7 +115,7 @@ class TenantScopedArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> None:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         await self.delegate.delete_artifact(
@@ -131,7 +131,7 @@ class TenantScopedArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> list[int]:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         return await self.delegate.list_versions(
@@ -147,7 +147,7 @@ class TenantScopedArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> list[ArtifactVersion]:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         return await self.delegate.list_artifact_versions(
@@ -163,9 +163,9 @@ class TenantScopedArtifactService(BaseArtifactService):
         app_name: str,
         user_id: str,
         filename: str,
-        session_id: Optional[str] = None,
-        version: Optional[int] = None,
-    ) -> Optional[ArtifactVersion]:
+        session_id: str | None = None,
+        version: int | None = None,
+    ) -> ArtifactVersion | None:
         scoped_app, scoped_user = self._scope(app_name, user_id)
         return await self.delegate.get_artifact_version(
             app_name=scoped_app,

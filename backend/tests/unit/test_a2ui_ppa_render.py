@@ -279,7 +279,7 @@ def test_extract_routes_to_per_document_surface_with_artifact():
     # Tab label is the tool/kind, NOT the filename (that duplicates the Document
     # tabs); the filename + count live in the tooltip (description).
     assert rendered.artifact["title"] == "Clauses"
-    assert "docA.pdf" in rendered.artifact["description"]
+    assert "docA" in rendered.artifact["description"]
     assert "clauses extracted" in rendered.artifact["description"]
 
 

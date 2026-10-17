@@ -120,9 +120,7 @@ def test_discover_returns_tools_resources_prompts_and_mcp_apps(platform_admin: T
             "tools": [{"name": "show_map"}],
             "resources": [{"uri": "ui://maps/result", "mimeType": "text/html;profile=mcp-app"}],
             "prompts": [{"name": "map_prompt"}],
-            "warnings": [
-                {"capability": "prompts", "category": "protocol", "message": "method unsupported"}
-            ],
+            "warnings": [{"capability": "prompts", "category": "protocol", "message": "method unsupported"}],
             "mcpApps": {"supported": True, "resourceUris": ["ui://maps/result"]},
         }
     )

@@ -73,11 +73,11 @@ from observability.timing import (
 from protocols._a2ui_surface_shared import (
     _STATE_KEY_NAMESPACE,
     _delegate_with_grant,
-    _enforce_size_cap,
     _enforce_root_interaction,
+    _enforce_size_cap,
     _enforce_skill_opt_in,
-    _root_runtime_for_session,
     _require_session,
+    _root_runtime_for_session,
 )
 from skills import skill_config
 
@@ -311,11 +311,7 @@ async def _recover_latest_agent_text(
         parts = getattr(content, "parts", None) if content is not None else None
         if not parts:
             continue
-        text = "".join(
-            str(getattr(part, "text", "") or "")
-            for part in parts
-            if getattr(part, "text", None)
-        ).strip()
+        text = "".join(str(getattr(part, "text", "") or "") for part in parts if getattr(part, "text", None)).strip()
         if text:
             return text
     return None

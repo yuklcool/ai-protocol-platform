@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from auth import User
+from adk.agui import ROOT_AGENT_APP_NAME
 from agents.root_runtime import (
     ROOT_AGENT_ID,
     RootCapabilityDenied,
@@ -29,11 +29,11 @@ from agents.root_runtime import (
     effective_root_config,
     resolve_root_capability,
 )
+from auth import User
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.chat_sessions import get_session_index
-from db.models.chat_session import ChatSessionIndex
 from db.models import SkillConfig
-from adk.agui import ROOT_AGENT_APP_NAME
+from db.models.chat_session import ChatSessionIndex
 from skills import skill_config
 
 log = logging.getLogger(__name__)
@@ -72,13 +72,22 @@ def _root_runtime_for_session(
     created in the Root Agent namespace must pass the same capability resolver
     as the chat stream.
     """
-    if idx.app_name != ROOT_AGENT_APP_NAME and idx.agent_id != ROOT_AGENT_ID:
-        return None
+    # The storage namespace is preserved for old sessions, but their actions
+    # must obey the current policy just like a new Root Agent conversation.
     access = request.state.access
+    if not access.is_owner(idx):
+        raise HTTPException(status_code=403, detail="Shared conversations are read-only")
     try:
         config = effective_root_config(get_platform_config().agent, access.tenant_id)
     except PlatformConfigUnavailable as exc:
         raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
+    configured = bool(
+        config.skills or config.tools or config.mcp_servers or config.permissions.get("failClosed") is True
+    )
+    if idx.app_name != ROOT_AGENT_APP_NAME and idx.agent_id != ROOT_AGENT_ID and not configured:
+        # An unattributed legacy session can keep its saved opt-ins only before
+        # a Root ceiling is configured. A configured ceiling always wins.
+        return None
     try:
         capability = resolve_root_capability(config, user, access, idx.skill_id)
     except RootCapabilityDenied as exc:
@@ -230,9 +239,9 @@ def _enforce_size_cap(context: dict[str, Any] | None) -> str:
 __all__ = [
     "_MAX_CONTEXT_BYTES",
     "_STATE_KEY_NAMESPACE",
-    "_enforce_size_cap",
     "_enforce_root_interaction",
+    "_enforce_size_cap",
     "_enforce_skill_opt_in",
-    "_root_runtime_for_session",
     "_require_session",
+    "_root_runtime_for_session",
 ]

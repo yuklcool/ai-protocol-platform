@@ -67,9 +67,13 @@ def _load_first_class_tenant(tenant_id: str):
     return repository, tenant
 
 
-def _effective_default(policy: TenantModelPolicy, model_ids: set[str], platform_default: str, tier_default: str | None) -> str | None:
+def _effective_default(
+    policy: TenantModelPolicy, model_ids: set[str], platform_default: str, tier_default: str | None
+) -> str | None:
     if policy.default_model:
-        return policy.default_model if policy.default_model in model_ids and policy.allows(policy.default_model) else None
+        return (
+            policy.default_model if policy.default_model in model_ids and policy.allows(policy.default_model) else None
+        )
     candidate = tier_default or platform_default
     return candidate if candidate in model_ids and policy.allows(candidate) else None
 
@@ -126,9 +130,7 @@ def update_tenant_model_policy(
         raise HTTPException(status_code=422, detail={"error": "invalid_model_policy", "messages": errors})
 
     before = tenant.model_dump(by_alias=True, exclude_none=True)
-    updated = tenant.model_copy(
-        update={"model_policy": policy.model_dump(by_alias=True, exclude_none=True)}
-    )
+    updated = tenant.model_copy(update={"model_policy": policy.model_dump(by_alias=True, exclude_none=True)})
     saved = TenantDirectory(repository).put(updated)
     after = saved.model_dump(by_alias=True, exclude_none=True)
     record_admin_action(

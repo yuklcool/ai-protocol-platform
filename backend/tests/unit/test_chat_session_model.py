@@ -11,7 +11,6 @@ test_access_context.py. Here we verify:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
 
 from auth.access_context import AccessContext, can_access
 from db.models.access import AccessControl
@@ -30,6 +29,7 @@ def _make_session(
 ) -> ChatSessionIndex:
     return ChatSessionIndex(
         sessionId=session_id,
+        tenantId="test-tenant",
         documentIds=document_ids if document_ids is not None else ["doc-1"],
         skillId="skill-1",
         ownerUid=owner_uid,
@@ -83,7 +83,9 @@ class TestChatSessionIndexModel:
 
 class TestCanAccessForChatSession:
     def _ctx(self, uid="user-b", tags=()) -> AccessContext:
-        return AccessContext(uid=uid, email="b@example.com", domain="example.com", group_tags=frozenset(tags))
+        return AccessContext(
+            uid=uid, email="b@example.com", domain="example.com", tenant_id="test-tenant", group_tags=frozenset(tags)
+        )
 
     def test_owner_can_access_private(self):
         s = _make_session(owner_uid="owner-x", ac=AccessControl(type="private"))
@@ -127,80 +129,40 @@ class TestCanAccessForChatSession:
 
 class TestListSessionsForDocument:
     def _ctx(self, uid="viewer", tags=()):
-        return AccessContext(uid=uid, email="v@x.com", domain="x.com", group_tags=frozenset(tags))
+        return AccessContext(uid=uid, tenant_id="test-tenant", group_tags=frozenset(tags))
 
-    def _make_snap(self, session: ChatSessionIndex):
-        snap = MagicMock()
-        snap.id = session.session_id
-        snap.exists = True
-        from db.chat_sessions import _to_firestore
+    def _seed(self, *sessions):
+        from db.chat_sessions import _to_document
+        from db.persistence import get_repository
 
-        data = _to_firestore(session)
-        snap.to_dict.return_value = data
-        return snap
+        for session in sessions:
+            get_repository().set_document("chat_sessions", session.session_id, _to_document(session))
 
-    @patch("db.chat_sessions.get_client")
-    def test_mine_filter_excludes_others(self, mock_get_client):
-        own_sess = _make_session("s1", owner_uid="viewer", ac=AccessControl(type="private"))
-        other_sess = _make_session(
-            "s2",
-            owner_uid="other",
-            ac=AccessControl(type="tagged", tags=["shared"]),
+    def test_mine_filter_excludes_others(self):
+        from db.chat_sessions import list_sessions_for_document
+
+        self._seed(
+            _make_session("s1", owner_uid="viewer"),
+            _make_session("s2", owner_uid="other", ac=AccessControl(type="tagged", tags=["shared"])),
         )
+        rows, _ = list_sessions_for_document("doc-1", self._ctx(tags=["shared"]), filter="mine")
+        assert [row.session_id for row in rows] == ["s1"]
 
-        mock_col = MagicMock()
-        mock_query = MagicMock()
-        mock_col.where.return_value = mock_query
-        mock_query.where.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.stream.return_value = [self._make_snap(own_sess), self._make_snap(other_sess)]
-        mock_get_client.return_value.collection.return_value = mock_col
-
+    def test_team_filter_excludes_own(self):
         from db.chat_sessions import list_sessions_for_document
 
-        ctx = self._ctx(uid="viewer", tags=["shared"])
-        results, _ = list_sessions_for_document("doc-1", ctx, filter="mine")
-        assert all(s.owner_uid == "viewer" for s in results)
-        assert len(results) == 1
+        self._seed(
+            _make_session("s1", owner_uid="viewer", ac=AccessControl(type="tagged", tags=["shared"])),
+            _make_session("s2", owner_uid="alice", ac=AccessControl(type="tagged", tags=["shared"])),
+        )
+        rows, _ = list_sessions_for_document("doc-1", self._ctx(tags=["shared"]), filter="team")
+        assert [row.session_id for row in rows] == ["s2"]
 
-    @patch("db.chat_sessions.get_client")
-    def test_team_filter_excludes_own(self, mock_get_client):
-        own_sess = _make_session("s1", owner_uid="viewer", ac=AccessControl(type="tagged", tags=["shared"]))
-        team_sess = _make_session("s2", owner_uid="alice", ac=AccessControl(type="tagged", tags=["shared"]))
-
-        mock_col = MagicMock()
-        mock_query = MagicMock()
-        mock_col.where.return_value = mock_query
-        mock_query.where.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.stream.return_value = [self._make_snap(own_sess), self._make_snap(team_sess)]
-        mock_get_client.return_value.collection.return_value = mock_col
-
+    def test_inaccessible_sessions_excluded(self):
         from db.chat_sessions import list_sessions_for_document
 
-        ctx = self._ctx(uid="viewer", tags=["shared"])
-        results, _ = list_sessions_for_document("doc-1", ctx, filter="team")
-        assert all(s.owner_uid != "viewer" for s in results)
-        assert len(results) == 1
-
-    @patch("db.chat_sessions.get_client")
-    def test_inaccessible_sessions_excluded(self, mock_get_client):
-        private_other = _make_session("s1", owner_uid="bob", ac=AccessControl(type="private"))
-
-        mock_col = MagicMock()
-        mock_query = MagicMock()
-        mock_col.where.return_value = mock_query
-        mock_query.where.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.stream.return_value = [self._make_snap(private_other)]
-        mock_get_client.return_value.collection.return_value = mock_col
-
-        from db.chat_sessions import list_sessions_for_document
-
-        ctx = self._ctx(uid="viewer")
-        results, next_cursor = list_sessions_for_document("doc-1", ctx)
-        assert results == []
-        assert next_cursor is None
+        private = _make_session("private", owner_uid="bob")
+        cross_tenant = _make_session("other", owner_uid="viewer", ac=AccessControl(type="public"))
+        cross_tenant.tenant_id = "other-tenant"
+        self._seed(private, cross_tenant)
+        assert list_sessions_for_document("doc-1", self._ctx()) == ([], None)

@@ -55,9 +55,7 @@ class FirestoreRepository:
                 query = query.where(filter=firestore.FieldFilter(field, op, value))
         if order_by:
             direction = (
-                firestore.Query.DESCENDING
-                if order_direction.upper() == "DESCENDING"
-                else firestore.Query.ASCENDING
+                firestore.Query.DESCENDING if order_direction.upper() == "DESCENDING" else firestore.Query.ASCENDING
             )
             query = query.order_by(order_by, direction=direction)
         if start_after_id:

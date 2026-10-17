@@ -9,7 +9,6 @@ from google.genai import types
 
 from adk import session as session_mod
 
-
 pytestmark = pytest.mark.asyncio
 
 
@@ -17,6 +16,10 @@ def _database_url() -> str:
     value = os.environ.get("DATABASE_URL", "").strip()
     if not value:
         pytest.skip("DATABASE_URL is required for PostgreSQL integration test")
+    from auth import User
+    from observability.tenant_context import set_tenant_context
+
+    set_tenant_context(User(uid="ci-persistence", tenant_id="ci-persistence"))
     return value
 
 
@@ -85,9 +88,7 @@ async def test_adk_session_and_memory_survive_service_reconstruction(monkeypatch
     )
 
     assert any(
-        remembered_phrase in (part.text or "")
-        for memory in recalled.memories
-        for part in memory.content.parts or []
+        remembered_phrase in (part.text or "") for memory in recalled.memories for part in memory.content.parts or []
     )
 
     # Keep the shared CI PostgreSQL clean. Memory rows live in a randomized

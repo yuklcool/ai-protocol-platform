@@ -35,9 +35,9 @@ def _resource_uri(resource: Any) -> str:
 
 def _content_mime(item: Any) -> str:
     if hasattr(item, "mimeType"):
-        return str(getattr(item, "mimeType") or "")
+        return str(item.mimeType or "")
     if hasattr(item, "mime_type"):
-        return str(getattr(item, "mime_type") or "")
+        return str(item.mime_type or "")
     if isinstance(item, dict):
         return str(item.get("mimeType") or item.get("mime_type") or "")
     return ""
@@ -45,7 +45,7 @@ def _content_mime(item: Any) -> str:
 
 def _content_text(item: Any) -> str:
     if hasattr(item, "text"):
-        return str(getattr(item, "text") or "")
+        return str(item.text or "")
     if isinstance(item, dict):
         return str(item.get("text") or "")
     return ""
@@ -85,9 +85,7 @@ async def verify(proxy_url: str, token: str, expected_resource_uri: str = "") ->
                 if not target:
                     target = next((uri for uri in resource_uris if uri.startswith("ui://")), "")
                 if not target:
-                    raise RuntimeError(
-                        "no MCP Apps ui:// resource URI was supplied or discovered through proxy"
-                    )
+                    raise RuntimeError("no MCP Apps ui:// resource URI was supplied or discovered through proxy")
 
                 read_result = await session.read_resource(target)
                 contents = list(getattr(read_result, "contents", None) or [])
@@ -100,9 +98,7 @@ async def verify(proxy_url: str, token: str, expected_resource_uri: str = "") ->
                     "",
                 )
                 if not html:
-                    raise RuntimeError(
-                        f"resources/read {target!r} returned no non-empty text/html content"
-                    )
+                    raise RuntimeError(f"resources/read {target!r} returned no non-empty text/html content")
 
                 return {
                     "ok": True,

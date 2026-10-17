@@ -75,7 +75,7 @@ export function useSlugResolution(path: string[] | undefined, enabled: boolean =
     if (decoded && decoded.length === 2 && decoded[0].startsWith("@") && decoded[0].length >= 2) {
       resolveUrl = `/api/proxy/api/skills/by-slug/${encodeURIComponent(decoded[0].slice(1))}/${encodeURIComponent(decoded[1])}`;
     } else if (decoded && decoded.length === 1 && decoded[0] && !decoded[0].startsWith("@")) {
-      resolveUrl = `/api/proxy/api/skills/${encodeURIComponent(decoded[0])}`;
+      resolveUrl = decoded[0] === "root-agent" ? "/api/proxy/api/agent" : `/api/proxy/api/skills/${encodeURIComponent(decoded[0])}`;
     }
 
     if (!resolveUrl) {

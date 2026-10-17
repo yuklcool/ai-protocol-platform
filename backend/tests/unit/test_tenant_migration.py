@@ -10,10 +10,12 @@ from scripts.migrate_tenants import build_migration_plan, migrate, parse_mapping
 
 
 def test_parse_mapping_allows_multiple_domains_to_one_tenant() -> None:
-    mapping = parse_mapping([
-        "ACME.COM=tenant-acme",
-        "acme-energy.example=tenant-acme",
-    ])
+    mapping = parse_mapping(
+        [
+            "ACME.COM=tenant-acme",
+            "acme-energy.example=tenant-acme",
+        ]
+    )
     assert mapping == {
         "acme.com": "tenant-acme",
         "acme-energy.example": "tenant-acme",

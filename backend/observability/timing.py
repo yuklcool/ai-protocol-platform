@@ -497,3 +497,8 @@ def get_current_tracker() -> LatencyTracker:
     if tracker is None:
         return _NULL_TRACKER
     return tracker
+
+
+def has_current_tracker() -> bool:
+    """Whether protocol emissions have a real request stream to drain them."""
+    return _current_tracker.get() is not None

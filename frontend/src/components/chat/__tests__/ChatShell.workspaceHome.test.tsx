@@ -66,6 +66,7 @@ type CustomEventHandler = (e: { event: { name?: unknown; value?: unknown } }) =>
 const subscribers: CustomEventHandler[] = [];
 
 vi.mock("@/providers/AGUIProvider", () => ({
+  useOptionalAGUIAgent: () => null,
   AGUIProvider: ({ children }: { children: React.ReactNode }) => children,
   useAGUIAgent: () => ({
     subscribe: ({ onCustomEvent }: { onCustomEvent?: CustomEventHandler }) => {

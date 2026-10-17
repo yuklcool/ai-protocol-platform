@@ -32,8 +32,20 @@ _TENANT_A = User(
 _ROWS = [
     {"__id": "1", "ts": "2026-07-21T10:00:00Z", "action": "upsert_client", "target": "a.com", "tenantId": "tenant-a"},
     {"__id": "2", "ts": "2026-07-21T09:00:00Z", "action": "upsert_client", "target": "b.com", "tenantId": "tenant-b"},
-    {"__id": "3", "ts": "2026-07-21T08:00:00Z", "action": "grant_group_tag", "target": "user@a.com", "tenantId": "tenant-a"},
-    {"__id": "4", "ts": "2026-07-21T07:00:00Z", "action": "grant_group_tag", "target": "user@b.com", "tenantId": "tenant-b"},
+    {
+        "__id": "3",
+        "ts": "2026-07-21T08:00:00Z",
+        "action": "grant_group_tag",
+        "target": "user@a.com",
+        "tenantId": "tenant-a",
+    },
+    {
+        "__id": "4",
+        "ts": "2026-07-21T07:00:00Z",
+        "action": "grant_group_tag",
+        "target": "user@b.com",
+        "tenantId": "tenant-b",
+    },
     # Platform-level: the wildcard tool-permission doc.
     {"__id": "5", "ts": "2026-07-21T06:00:00Z", "action": "upsert_tool_permission", "target": "*"},
     # Platform-level: a group-tag registry id (no domain).

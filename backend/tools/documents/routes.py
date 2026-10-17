@@ -224,6 +224,7 @@ def download_document(doc_id: str, user: _CurrentUser):
 @router.get("/api/documents/{doc_id}/thumbnail")
 def thumbnail_document(doc_id: str, user: _CurrentUser, width: int = 600):
     from fastapi.responses import Response
+
     from tools.documents.thumbnail import cache_get, cache_put, is_thumbnailable, render_thumbnail_png
 
     width = max(64, min(1600, int(width)))

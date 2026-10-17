@@ -34,7 +34,7 @@ def _backend(name: str, fallback: str) -> str:
     return os.environ.get(name, "").strip().lower() or fallback
 
 
-def _llm_capability(*, self_hosted: bool, managed_gcp: bool) -> "Capability":
+def _llm_capability(*, self_hosted: bool, managed_gcp: bool) -> Capability:
     """Describe the configured LLM transport without importing a model SDK.
 
     Self-host prefers an OpenAI-compatible endpoint when ``OPENAI_API_BASE`` is

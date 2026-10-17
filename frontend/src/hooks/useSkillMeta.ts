@@ -151,7 +151,7 @@ export function useSkillMeta(skillId: string): SkillMeta {
 
   useEffect(() => {
     let cancelled = false;
-    fetchWithAuth(`/api/proxy/api/skills/${skillId}`)
+    fetchWithAuth(skillId === "root-agent" ? "/api/proxy/api/agent" : `/api/proxy/api/agent/capabilities/${encodeURIComponent(skillId)}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as SkillResponse;

@@ -8,6 +8,7 @@
 "use client";
 
 import { HttpAgent } from "@ag-ui/client";
+import jsonPatch from "fast-json-patch";
 import {
   createContext,
   type ReactNode,
@@ -87,6 +88,16 @@ export function AGUIProvider({
       headers: {},
       threadId: sessionId,
     });
+    // @ag-ui/client 0.0.52's ESM build namespace-imports a CommonJS module;
+    // its default STATE_DELTA handler can therefore call an undefined
+    // applyPatch and silently keep the old state. Apply it through the
+    // module's supported default export, before the SDK's fallback handler.
+    next.subscribe({
+      onStateDeltaEvent: ({ state, event }) => ({
+        state: jsonPatch.applyPatch(state, event.delta, true, false).newDocument,
+        stopPropagation: true,
+      }),
+    });
     // Keep runtime metadata on the stable HttpAgent instance so hooks and
     // isolated consumers can add forwardedProps without another provider.
     (next as HttpAgent & { __aitanaRuntime?: AGUIRuntime }).__aitanaRuntime = {
@@ -134,6 +145,11 @@ export function useAGUIAgent(): HttpAgent {
     throw new Error("useAGUIAgent must be used within an AGUIProvider");
   }
   return agent;
+}
+
+/** Protocol tools may also mount in a standalone developer preview. */
+export function useOptionalAGUIAgent(): HttpAgent | null {
+  return useContext(AGUIAgentContext);
 }
 
 export function useAGUIRuntime(): AGUIRuntime {

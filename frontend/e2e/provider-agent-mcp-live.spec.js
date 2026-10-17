@@ -79,10 +79,26 @@ function parseSseDataEvents(body) {
     .filter(Boolean);
 }
 
-test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
-  test.setTimeout(180_000);
+async function expectReadableControl(locator) {
+  const contrast = await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const luminance = (color) => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
+        const s = v / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const a = luminance(style.color), b = luminance(style.backgroundColor);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+  expect(contrast, "Input and button labels must remain legible in the console theme").toBeGreaterThanOrEqual(4.5);
+}
 
-  test("real model selects and executes the bound MCP tool in the product chat path", async ({ browser }) => {
+test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
+  test.setTimeout(360_000);
+
+  test("real model selects and executes the bound MCP tool in the product chat path", async ({ browser }, testInfo) => {
     expect(ADMIN_PASSWORD, "SELFHOST_ADMIN_PASSWORD must be configured").not.toBe("");
     expect(PROVIDER_BASE_URL, "REAL_PROVIDER_BASE_URL must be configured").not.toBe("");
     expect(MODEL_API_NAME, "REAL_PROVIDER_MODEL must be configured").not.toBe("");
@@ -106,6 +122,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let originalToolPermission = undefined;
     let toolPermissionTouched = false;
     let context = null;
+    const originalPlatform = await authedApi(token, "/api/admin/platform-config");
+    let rootTouched = false;
+    const uiSessionId = `real-e2e-ui-${RUN_ID}`;
 
     try {
       const provider = await putJson(token, `/api/admin/model-providers/${PROVIDER_ID}`, {
@@ -194,8 +213,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         : [];
       await putJson(token, permissionPath, {
         type: "user",
-        tools: [...new Set([...originalTools, "geocode", "show-map"])],
-        denied: originalDenied.filter((name) => name !== "geocode" && name !== "show-map"),
+        tools: [...new Set([...originalTools, "geocode", "show-map", "send_a2ui_json_to_client"])],
+        denied: originalDenied.filter((name) => !["geocode", "show-map", "send_a2ui_json_to_client"].includes(name)),
       });
       toolPermissionTouched = true;
 
@@ -228,6 +247,12 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       });
       skillId = skill.skillId;
       expect(skillId).toBeTruthy();
+      await putJson(token, "/api/admin/platform-config", { agent: {
+        ...originalPlatform.agent, model: MODEL_ID, skills: [skillId], tools: [], mcpServers: [SERVER_ID],
+        interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
+          allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
+      } });
+      rootTouched = true;
 
       context = await browser.newContext();
       const localJwtSession = {
@@ -329,6 +354,14 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       // a persisted surface action must immediately drive a real Agent/LLM turn
       // through the production surface-action-run endpoint, without a typed chat
       // message. This proves the action-triggered path is not only unit-tested.
+      const actionUiMessages = [
+        { version: "v0.9", createSurface: { surfaceId: "workspace", catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json" } },
+        { version: "v0.9", updateComponents: { surfaceId: "workspace", components: [
+          { id: "root", component: "Column", children: ["accepted"] },
+          { id: "accepted", component: "Text", text: ACTION_RUN_MARKER },
+        ] } },
+      ];
+      const actionInstructions = `When accept_real_provider_action triggers this turn, call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(actionUiMessages)}. Do not call other tools.`;
       const actionSkill = await authedApi(token, "/api/skills", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -336,8 +369,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
           name: `real-provider-action-${RUN_ID}`,
           displayName: "Real Provider A2UI Action Acceptance",
           description: "CI-only real Provider surface-action-run acceptance skill",
-          instructions:
-            `When an interactive UI action triggers this turn, reply with the exact marker ${ACTION_RUN_MARKER} and briefly acknowledge the action name. Do not call tools.`,
+          instructions: actionInstructions,
           accessControl: { type: "private" },
           skillMetadata: {
             model: MODEL_ID,
@@ -347,13 +379,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
             subSkills: [],
             toolConfigs: {
               a2ui: {
-                // The acceptance target here is the action-triggered Agent/LLM
-                // round-trip itself, not direct model-authored A2UI. Keep the
-                // A2UI toolset disabled so the model cannot opportunistically
-                // call send_a2ui_json_to_client and turn this gate into a Tool
-                // Permission test. The two trust grants below still enable the
-                // production surface-action-run endpoint.
-                enabled: false,
+                // The current Root interaction policy is authoritative. Its
+                // A2UI grant may allow a UI-only response on this legacy route.
+                enabled: true,
                 allow_surface_context_writes: true,
                 allow_action_triggered_runs: true,
               },
@@ -362,6 +390,12 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         }),
       });
       actionSkillId = actionSkill.skillId;
+      await putJson(token, "/api/admin/platform-config", { agent: {
+        ...originalPlatform.agent, model: MODEL_ID, skills: [skillId, actionSkillId], tools: [], mcpServers: [SERVER_ID],
+        instructions: actionInstructions,
+        interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
+          allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
+      } });
       expect(actionSkillId).toBeTruthy();
 
       const actionBootstrap = await postJson(token, `/api/sessions/${ACTION_SESSION_ID}/bootstrap`, {
@@ -411,9 +445,16 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         .filter((event) => event.type === "TEXT_MESSAGE_CONTENT")
         .map((event) => String(event.delta || ""))
         .join("");
+      const actionRunUi = actionRunEvents
+        .filter((event) => event.type === "CUSTOM" && event.name === "A2UI_SURFACE")
+        .map((event) => JSON.stringify(event.value?.messages || []))
+        .join("");
 
       expect(actionRunTypes).toContain("RUN_STARTED");
-      expect(actionRunText).toContain(ACTION_RUN_MARKER);
+      // Updating the UI is the action-triggered prompt's preferred response.
+      // Require the marker in delivered output, rather than a conversational
+      // answer that the model is explicitly instructed not to produce.
+      expect(actionRunText + actionRunUi, actionRunBody).toContain(ACTION_RUN_MARKER);
       expect(actionRunTypes).toContain("RUN_FINISHED");
       expect(actionRunTypes).not.toContain("RUN_ERROR");
 
@@ -426,6 +467,90 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
           source: "real-provider-release-gate",
         },
       });
+
+      // Model → A2UI form → browser input → AG-UI action run → patch → reload
+      // → second operation. No seeded surface and no direct action HTTP call.
+      const sid = "acceptance-form";
+      const uiMessages = [
+        { version: "v0.9", createSurface: { surfaceId: sid, catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json" } },
+        { version: "v0.9", updateComponents: { surfaceId: sid, components: [
+          { id: "root", component: "Column", children: ["heading", "input", "submit", "status"] },
+          { id: "heading", component: "Text", text: "Root Agent acceptance form" },
+          { id: "input", component: "TextField", label: "Acceptance value", value: { path: "/formInput" } },
+          { id: "submit", component: "Button", child: "submit-label", action: { event: { name: "submit_form", context: { value: { path: "/formInput" } } } } },
+          { id: "submit-label", component: "Text", text: "Apply value" },
+          { id: "status", component: "Text", text: { path: "/status" } },
+        ] } },
+        { version: "v0.9", updateDataModel: { surfaceId: sid, value: { formInput: "initial", status: "Ready for input" } } },
+      ];
+      await putJson(token, "/api/admin/platform-config", { agent: {
+        ...originalPlatform.agent, model: MODEL_ID, skills: [], tools: [], mcpServers: [],
+        instructions: `For the initial request SHOW_ACCEPTANCE_FORM call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(uiMessages)}. For each submit_form UI action, read lastAction.context.value from the A2UI state. Call send_a2ui_json_to_client with v0.9 updateDataModel messages on surface acceptance-form: set /status to ACCEPTED: followed immediately by the exact submitted value, and set /formInput to that value. Never recreate or delete the surface on submit. Only for the ordinary user message CONFIRM_CHAT_MODE reply CHAT_MODE_RESTORED in text without calling tools. Do not call other tools.`,
+        interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "workspace", defaultUpdateMode: "patch",
+          a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
+      } });
+      // A resume URL must identify an existing session. Otherwise the product
+      // correctly clears a missing session and starts a new UUID, and the final
+      // state assertion would inspect an ID that was never used by the UI.
+      // This seeds only an empty session, never an A2UI surface or model output.
+      await postJson(token, `/api/sessions/${uiSessionId}/bootstrap`, {
+        skill_id: "root-agent", agent_id: "root-agent", document_ids: [],
+      });
+      await page.goto(`${FRONTEND_URL}/chat/root-agent?session=${uiSessionId}`, { waitUntil: "domcontentloaded" });
+      const uiComposer = page.locator("textarea").first();
+      await expect(uiComposer).toBeEnabled({ timeout: 30_000 });
+      await uiComposer.fill("SHOW_ACCEPTANCE_FORM");
+      await uiComposer.press("Enter");
+      const input = page.getByRole("textbox", { name: "Acceptance value" });
+      await expect(input).toBeVisible({ timeout: 90_000 });
+      await expectReadableControl(input);
+      await expectReadableControl(page.getByRole("button", { name: "Apply value" }));
+      await expectReadableControl(uiComposer);
+      expect(new URL(page.url()).searchParams.get("session")).toBe(uiSessionId);
+      await input.fill("first-value");
+      const actionResponse = page.waitForResponse((response) =>
+        response.url().endsWith("/api/agent/stream") && response.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Apply value" }).click();
+      const actionWire = await (await actionResponse).text();
+      const actionEvents = parseSseDataEvents(actionWire);
+      console.info("Root browser action events", JSON.stringify(actionEvents));
+      try {
+        await expect(page.getByText(/^ACCEPTED:\s*first-value$/)).toBeVisible({ timeout: 30_000 });
+      } catch (error) {
+        const screenshot = testInfo.outputPath("root-action-failure.png");
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await testInfo.attach("root-action-failure", { path: screenshot, contentType: "image/png" });
+        console.info("Root browser action page", await page.locator("body").innerText());
+        console.info("Root browser action state", JSON.stringify(await authedApi(token, `/api/sessions/${uiSessionId}/state`)));
+        console.info("Root browser diagnostics", JSON.stringify(diagnostics));
+        throw error;
+      }
+      const firstScreenshot = testInfo.outputPath("root-action-first.png");
+      await page.screenshot({ path: firstScreenshot, fullPage: true });
+      await testInfo.attach("root-action-first", { path: firstScreenshot, contentType: "image/png" });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByText(/^ACCEPTED:\s*first-value$/)).toBeVisible({ timeout: 30_000 });
+      await expect(input).toHaveValue("first-value");
+      await expect(page.locator("body")).not.toContainText("Respond by updating the surface.");
+      await input.fill("second-value");
+      await page.getByRole("button", { name: "Apply value" }).click();
+      await expect(page.getByText(/^ACCEPTED:\s*second-value$/)).toBeVisible({ timeout: 90_000 });
+      const finalScreenshot = testInfo.outputPath("root-action-after-reload.png");
+      await page.screenshot({ path: finalScreenshot, fullPage: true });
+      await testInfo.attach("root-action-after-reload", { path: finalScreenshot, contentType: "image/png" });
+      const uiState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
+      expect(uiState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
+      // The action trigger is per turn: returning to the composer must clear
+      // it, while retaining the durable lastAction and current surface data.
+      await expect(uiComposer).toBeEnabled({ timeout: 30_000 });
+      await uiComposer.fill("CONFIRM_CHAT_MODE");
+      await uiComposer.press("Enter");
+      await expect(page.getByText("CHAT_MODE_RESTORED", { exact: true })).toBeVisible({ timeout: 90_000 });
+      const chatState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
+      expect(chatState.a2ui_action_trigger).toBeNull();
+      expect(chatState.a2ui_surface_state[sid].dataModel.formInput).toBe("second-value");
+      expect(chatState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
 
       const fatalDiagnostics = diagnostics.filter((line) =>
         [
@@ -440,6 +565,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       expect(fatalDiagnostics, diagnostics.join("\n")).toEqual([]);
     } finally {
       if (context) await context.close();
+      await authedApi(token, `/api/sessions/${uiSessionId}`, { method: "DELETE" }).catch(() => {});
+      if (rootTouched) await putJson(token, "/api/admin/platform-config", { agent: originalPlatform.agent });
       if (toolPermissionTouched) {
         const permissionPath = `/api/admin/tool-permissions/${encodeURIComponent(ADMIN_EMAIL)}`;
         if (originalToolPermission) {

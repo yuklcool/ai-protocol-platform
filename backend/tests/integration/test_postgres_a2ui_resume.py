@@ -14,7 +14,6 @@ from adk.a2ui_surface_context import render_instruction_with_a2ui_surface_contex
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from protocols.sessions_route import _state_to_a2ui_surfaces
 
-
 pytestmark = pytest.mark.asyncio
 
 
@@ -22,6 +21,10 @@ def _database_url() -> str:
     value = os.environ.get("DATABASE_URL", "").strip()
     if not value:
         pytest.skip("DATABASE_URL is required for PostgreSQL integration test")
+    from auth import User
+    from observability.tenant_context import set_tenant_context
+
+    set_tenant_context(User(uid="ci-persistence", tenant_id="ci-persistence"))
     return value
 
 

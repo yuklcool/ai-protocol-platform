@@ -76,12 +76,13 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
     base_url = str(provider.get("baseUrl") or "").rstrip("/")
     api_name = str(model.get("apiName") or "").strip()
     if not base_url or not api_name:
-        return ModelProbeResponse(ok=False, category="configuration", message="Provider base URL or model api_name is missing")
+        return ModelProbeResponse(
+            ok=False, category="configuration", message="Provider base URL or model api_name is missing"
+        )
 
     payload: dict = {
         "model": api_name,
         "messages": [{"role": "user", "content": body.prompt.strip() or "Reply OK."}],
-
     }
     if model.get("supportsReasoning", False):
         payload["max_completion_tokens"] = 1024
@@ -90,7 +91,9 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
         payload["temperature"] = 0
     if body.mode == "tool_call":
         if model.get("supportsTools", True) is False:
-            return ModelProbeResponse(ok=False, category="capability", message="Model is configured with supports_tools=false")
+            return ModelProbeResponse(
+                ok=False, category="capability", message="Model is configured with supports_tools=false"
+            )
         payload["tools"] = [
             {
                 "type": "function",
@@ -185,26 +188,40 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
 
     latency_ms = round((time.monotonic() - started) * 1000)
     if response.status_code in {401, 403}:
-        return ModelProbeResponse(ok=False, category="authentication", message=f"HTTP {response.status_code}", latency_ms=latency_ms)
+        return ModelProbeResponse(
+            ok=False, category="authentication", message=f"HTTP {response.status_code}", latency_ms=latency_ms
+        )
     if not 200 <= response.status_code < 300:
-        return ModelProbeResponse(ok=False, category="protocol", message=f"HTTP {response.status_code}", latency_ms=latency_ms)
+        return ModelProbeResponse(
+            ok=False, category="protocol", message=f"HTTP {response.status_code}", latency_ms=latency_ms
+        )
     try:
         data = response.json()
         message = data["choices"][0]["message"]
     except (ValueError, KeyError, IndexError, TypeError):
-        return ModelProbeResponse(ok=False, category="schema", message="Invalid chat/completions response schema", latency_ms=latency_ms)
+        return ModelProbeResponse(
+            ok=False, category="schema", message="Invalid chat/completions response schema", latency_ms=latency_ms
+        )
 
     if not isinstance(message, dict):
         return ModelProbeResponse(ok=False, category="schema", message="Invalid message schema", latency_ms=latency_ms)
     tool_calls = message.get("tool_calls")
     if body.mode == "tool_call":
         if not _has_requested_probe_tool_call(message):
-            return ModelProbeResponse(ok=False, category="capability", message="Model did not return the requested tool call", tool_called=False, latency_ms=latency_ms)
+            return ModelProbeResponse(
+                ok=False,
+                category="capability",
+                message="Model did not return the requested tool call",
+                tool_called=False,
+                latency_ms=latency_ms,
+            )
         return ModelProbeResponse(ok=True, message="Tool calling succeeded", tool_called=True, latency_ms=latency_ms)
 
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
-        return ModelProbeResponse(ok=False, category="schema", message="No text completion returned", latency_ms=latency_ms)
+        return ModelProbeResponse(
+            ok=False, category="schema", message="No text completion returned", latency_ms=latency_ms
+        )
     # A misconfigured upstream may echo request credentials in its response.
     safe_content = content.replace(api_key, "[REDACTED]") if api_key else content
     return ModelProbeResponse(ok=True, content=safe_content[:4000], tool_called=bool(tool_calls), latency_ms=latency_ms)

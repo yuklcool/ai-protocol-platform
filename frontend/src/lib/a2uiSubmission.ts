@@ -30,6 +30,10 @@ function displayValue(v: unknown): string {
 
 /** Parse `[a2ui:action] {json}` → structured submission, or null if it isn't one. */
 export function parseA2uiSubmission(content: string): A2uiSubmission | null {
+  // The action-run adapter persists a required synthetic ADK user turn. Render
+  // historical clicks as submissions, keeping its internal prompt off screen.
+  const legacy = /^\(The user triggered the '(.+)' action on the interactive UI surface\. Respond by updating the surface\.\)$/.exec(content.trim());
+  if (legacy) return { action: legacy[1], fields: [] };
   const m = RE.exec(content.trim());
   if (!m) return null;
   const action = m[1];

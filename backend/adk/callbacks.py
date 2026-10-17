@@ -94,7 +94,7 @@ _LARGE_OUTPUT_THRESHOLD = 50_000
 # transfer target set is pre-filtered. Gating it here would break auto-mode
 # delegation for any user whose permission set omits it (and surface a
 # confusing "Calling transfer_to_agent…" label).
-_INTERNAL_CONTROL_TOOLS = frozenset({"transfer_to_agent"})
+_INTERNAL_CONTROL_TOOLS = frozenset({"transfer_to_agent", "load_skill"})
 
 
 def make_permission_enforcer(

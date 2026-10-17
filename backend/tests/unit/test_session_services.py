@@ -37,14 +37,16 @@ class TestArtifactServiceSingleton:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ADK_ARTIFACT_BUCKET", None)
             svc = get_artifact_service()
-        assert isinstance(svc, InMemoryArtifactService)
+        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert isinstance(svc.delegate, InMemoryArtifactService)
 
     def test_with_bucket_env_returns_gcs(self):
         from google.adk.artifacts import GcsArtifactService
 
-        with patch.dict(os.environ, {"ADK_ARTIFACT_BUCKET": "my-test-bucket"}):
+        with patch.dict(os.environ, {"ADK_ARTIFACT_BUCKET": "my-test-bucket", "ARTIFACT_BACKEND": "gcs"}):
             svc = get_artifact_service()
-        assert isinstance(svc, GcsArtifactService)
+        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert isinstance(svc.delegate, GcsArtifactService)
 
     def test_reset_clears_singleton(self):
         svc1 = get_artifact_service()

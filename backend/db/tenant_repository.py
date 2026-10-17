@@ -40,17 +40,13 @@ class TenantRepository:
         if document is None:
             return None
         if document.get(self.tenant_field) != self.tenant_id:
-            raise TenantIsolationError(
-                f"{collection}/{doc_id} is not owned by tenant {self.tenant_id!r}"
-            )
+            raise TenantIsolationError(f"{collection}/{doc_id} is not owned by tenant {self.tenant_id!r}")
         return document
 
     def _scoped_data(self, data: dict[str, Any]) -> dict[str, Any]:
         explicit = data.get(self.tenant_field)
         if explicit is not None and explicit != self.tenant_id:
-            raise TenantIsolationError(
-                f"write tenant {explicit!r} conflicts with scoped tenant {self.tenant_id!r}"
-            )
+            raise TenantIsolationError(f"write tenant {explicit!r} conflicts with scoped tenant {self.tenant_id!r}")
         return {**data, self.tenant_field: self.tenant_id}
 
     def get_document(self, collection: str, doc_id: str) -> dict[str, Any] | None:

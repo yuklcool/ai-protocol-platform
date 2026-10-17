@@ -16,7 +16,6 @@ import asyncio
 import os
 from pathlib import Path
 
-
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "db" / "migrations"
 
 

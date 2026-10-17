@@ -43,7 +43,7 @@ class MigrationJournal:
     _seq: int = 0
 
     @classmethod
-    def start(cls, repository: Repository, *, mapping: dict[str, str]) -> "MigrationJournal":
+    def start(cls, repository: Repository, *, mapping: dict[str, str]) -> MigrationJournal:
         run_id = str(uuid.uuid4())
         repository.set_document(
             RUN_COLLECTION,
@@ -66,9 +66,7 @@ class MigrationJournal:
         current = self.repository.get_document(collection, doc_id)
         if current is not None:
             if current != data:
-                raise ValueError(
-                    f"migration conflict: {collection}/{doc_id} already exists with different content"
-                )
+                raise ValueError(f"migration conflict: {collection}/{doc_id} already exists with different content")
             return False
 
         seq, op_id = self._next_id()
@@ -193,9 +191,7 @@ def rollback_migration(repository: Repository, run_id: str) -> dict[str, int]:
         if state == "drifted":
             drifted.append(f"{op.get('collection')}/{op.get('docId')}")
     if drifted:
-        raise ValueError(
-            "rollback refused because migrated data changed after the run: " + ", ".join(drifted)
-        )
+        raise ValueError("rollback refused because migrated data changed after the run: " + ", ".join(drifted))
 
     restored = 0
     deleted = 0
@@ -239,8 +235,8 @@ def rollback_migration(repository: Repository, run_id: str) -> dict[str, int]:
 
 
 __all__ = [
-    "MigrationJournal",
     "OP_COLLECTION",
     "RUN_COLLECTION",
+    "MigrationJournal",
     "rollback_migration",
 ]

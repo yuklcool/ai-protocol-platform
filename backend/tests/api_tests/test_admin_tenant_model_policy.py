@@ -160,8 +160,6 @@ def test_explicit_empty_whitelist_is_persisted_as_deny_all(_repo) -> None:
 
 def test_legacy_domain_bridge_is_not_silently_migrated(_repo) -> None:
     _repo.set_document("clients", "legacy.example", {"display_name": "Legacy"})
-    response = _client(_PLATFORM_ADMIN).get(
-        "/api/admin/tenant-model-policies/legacy.example"
-    )
+    response = _client(_PLATFORM_ADMIN).get("/api/admin/tenant-model-policies/legacy.example")
     assert response.status_code == 409
     assert _repo.get_document("tenants", "legacy.example") is None

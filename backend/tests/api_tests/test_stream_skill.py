@@ -135,7 +135,14 @@ def client(app):
         return user
 
     app.dependency_overrides[get_current_user] = _override
-    yield TestClient(app)
+    # Both retained Skill URLs and /api/agent/stream resolve the same resource
+    # before entering the processor. Existing per-test skill doubles model it.
+    from skills import skill_processor
+
+    with patch(
+        "agents.root_runtime.resolve_skill_ref", side_effect=lambda ref, uid=None: skill_processor.get_skill(ref)
+    ):
+        yield TestClient(app)
     app.dependency_overrides.pop(get_current_user, None)
 
 
@@ -195,6 +202,8 @@ def test_stream_skill_omits_resumed_flag_for_fresh_chats(client):
         )
     assert resp.status_code == 200
     assert "app:resumed_session" not in captured["state"]
+    assert captured["state"]["a2ui_action_trigger"] is None
+    assert captured["state"]["a2ui_surface_state"] == {}
 
 
 def test_stream_skill_passes_all_document_ids_through_to_agent(client):
@@ -749,7 +758,10 @@ def test_root_agent_stream_resolves_one_capability_and_emits_sse(client):
     """The user-facing route is Root Agent identity, not a skill route."""
     skill = _make_skill(skill_id="capability-a", access_type="public")
     with (
-        patch("fast_api_app.get_platform_config", return_value=PlatformConfig(agent=RootAgentConfig(skills=["capability-a"]))),
+        patch(
+            "fast_api_app.get_platform_config",
+            return_value=PlatformConfig(agent=RootAgentConfig(skills=["capability-a"])),
+        ),
         patch("fast_api_app.resolve_root_capability", return_value=skill),
         patch("fast_api_app.compose_root_skill", return_value=skill),
         patch("db.chat_sessions.get_session_index", return_value=None),

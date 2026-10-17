@@ -41,13 +41,10 @@ def main() -> int:
             print("self-host admin bootstrap: existing local account found; bootstrap credentials not required")
             return 0
         raise SystemExit(
-            "AUTH_BACKEND=local-jwt requires SELFHOST_ADMIN_EMAIL and "
-            "SELFHOST_ADMIN_PASSWORD on first startup"
+            "AUTH_BACKEND=local-jwt requires SELFHOST_ADMIN_EMAIL and SELFHOST_ADMIN_PASSWORD on first startup"
         )
     if not email or not password:
-        raise SystemExit(
-            "SELFHOST_ADMIN_EMAIL and SELFHOST_ADMIN_PASSWORD must be configured together"
-        )
+        raise SystemExit("SELFHOST_ADMIN_EMAIL and SELFHOST_ADMIN_PASSWORD must be configured together")
 
     if get_local_user_by_email(email) is not None:
         print("self-host admin bootstrap: account already exists; leaving credentials unchanged")

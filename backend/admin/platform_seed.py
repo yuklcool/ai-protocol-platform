@@ -199,13 +199,9 @@ def seed(templates_root: Path | None = None, dry_run: bool = False) -> SeedSumma
     owner_email = _resolve_owner_email()
     root = templates_root or DEFAULT_TEMPLATES_ROOT
     summary = SeedSummary()
-    summary.tool_permissions_wildcard_seeded = _ensure_tool_permissions_wildcard(
-        dry_run=dry_run
-    )
+    summary.tool_permissions_wildcard_seeded = _ensure_tool_permissions_wildcard(dry_run=dry_run)
 
-    summary.purged = _purge_stale_owner_skills(
-        _previous_owner_uids(), dry_run=dry_run
-    )
+    summary.purged = _purge_stale_owner_skills(_previous_owner_uids(), dry_run=dry_run)
     existing_by_name = _existing_platform_skill_by_name()
     include_demos = _include_demo_skills()
 
@@ -257,9 +253,7 @@ def seed(templates_root: Path | None = None, dry_run: bool = False) -> SeedSumma
             if parsed.get("avatar"):
                 refresh_payload["avatar"] = parsed["avatar"]
             if not getattr(existing_cfg, "slug", None):
-                refresh_payload["slug"] = unique_slug(
-                    PLATFORM_OWNER_UID, slugify(parsed["name"])
-                )
+                refresh_payload["slug"] = unique_slug(PLATFORM_OWNER_UID, slugify(parsed["name"]))
 
             try:
                 if not dry_run:
@@ -322,9 +316,7 @@ def seed(templates_root: Path | None = None, dry_run: bool = False) -> SeedSumma
             logger.warning("platform_seed: mcp registry: %s", warning)
     except Exception as exc:
         logger.warning("platform_seed: mcp registry check crashed: %s", exc)
-        summary.mcp_warnings = [
-            f"mcp-registry check crashed (verification skipped): {exc}"
-        ]
+        summary.mcp_warnings = [f"mcp-registry check crashed (verification skipped): {exc}"]
 
     return summary
 

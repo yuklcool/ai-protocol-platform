@@ -37,9 +37,7 @@ def configure_budget_enforcer_from_env() -> str:
         log.info("budget.enforcer_registered mode=tenant-repository")
         return "tenant-repository"
 
-    raise RuntimeError(
-        "Unsupported BUDGET_ENFORCER={!r}; expected off, in-memory, or tenant-repository".format(raw)
-    )
+    raise RuntimeError(f"Unsupported BUDGET_ENFORCER={raw!r}; expected off, in-memory, or tenant-repository")
 
 
 __all__ = ["configure_budget_enforcer_from_env", "get_registered_enforcer"]

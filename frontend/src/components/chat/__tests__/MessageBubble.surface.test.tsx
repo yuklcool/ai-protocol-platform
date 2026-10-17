@@ -240,6 +240,15 @@ describe("MessageBubble — surface routing (v0.9)", () => {
     expect(container.textContent ?? "").not.toContain("test-skill");
   });
 
+  it("hides an empty assistant bubble after its UI was delivered by a custom event", () => {
+    const { container } = render(<MessageBubble message={botMsg("")} {...baseProps} toolCalls={[{
+      id: "delivered", name: "send_a2ui_json_to_client", status: "success",
+      resultContent: JSON.stringify({ a2ui_delivered: true, validated_a2ui_json: dashboardMessages, surface_id: "workspace" }),
+    }]} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(appendMessagesMock).not.toHaveBeenCalled();
+  });
+
   it("renders the visible bubble when assistant has text content alongside a routed A2UI call", () => {
     // Mixed turn: text reply + workspace-routed A2UI. The bubble should
     // render (to show the text) AND the dispatcher should fire.

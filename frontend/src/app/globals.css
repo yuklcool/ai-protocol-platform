@@ -16,6 +16,7 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
     /* Linear-inspired Enterprise Agent Console: dark-first product chrome. */
     --background: 230 17% 4%;
     --foreground: 216 25% 97%;
@@ -45,6 +46,7 @@
   }
 
   .light {
+    color-scheme: light;
     --background: 220 20% 97%;
     --foreground: 220 20% 10%;
     --card: 0 0% 100%;
@@ -74,6 +76,12 @@
 
   button, input, textarea, select {
     font: inherit;
+  }
+
+  input, textarea, select {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    accent-color: hsl(var(--primary));
   }
 
   ::selection {
@@ -251,6 +259,16 @@
   .console-content > main {
     min-height: 100%;
   }
+}
+
+/* The basic catalog's inline white cards, buttons and choice chips must share
+   the application theme on every surface, including workbench and inline UI.
+   Match backgrounds specifically so primary buttons keep their accent fill. */
+:is([data-surface], .a2ui-surface) [style*="background-color: rgb(255, 255, 255)"] {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+  box-shadow: none !important;
 }
 
 /* ── A2UI elicitation form skin (7.8) ────────────────────────────────────────

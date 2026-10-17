@@ -69,7 +69,10 @@ def test_thumbnail_owner_renders_png() -> None:
     storage = _storage(_one_page_pdf())
     with (
         patch("tools.documents.routes._get_document_record", return_value=dict(_DOC)),
-        patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", _DOC["storagePath"], "local")),
+        patch(
+            "tools.documents.routes._storage_binding",
+            return_value=(storage, "example.com", _DOC["storagePath"], "local"),
+        ),
     ):
         resp = client.get("/api/documents/doc_1/thumbnail?width=300")
     assert resp.status_code == 200
@@ -83,7 +86,10 @@ def test_thumbnail_image_doc_renders_png() -> None:
     storage = _storage(_png_image())
     with (
         patch("tools.documents.routes._get_document_record", return_value=doc),
-        patch("tools.documents.routes._storage_binding", return_value=(storage, "example.com", doc["storagePath"], "local")),
+        patch(
+            "tools.documents.routes._storage_binding",
+            return_value=(storage, "example.com", doc["storagePath"], "local"),
+        ),
     ):
         resp = client.get("/api/documents/doc_1/thumbnail?width=200")
     assert resp.status_code == 200

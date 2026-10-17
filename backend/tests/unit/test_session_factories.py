@@ -67,7 +67,8 @@ class TestGetArtifactService:
     def test_returns_in_memory_when_no_env(self):
         with patch.dict("os.environ", {}, clear=True):
             svc = session_mod.get_artifact_service()
-        assert type(svc).__name__ == "InMemoryArtifactService"
+        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert type(svc.delegate).__name__ == "InMemoryArtifactService"
 
     def test_returns_gcs_when_bucket_set(self):
         # GcsArtifactService instantiates a storage.Client in __init__, which
@@ -77,7 +78,8 @@ class TestGetArtifactService:
         env = {"ADK_ARTIFACT_BUCKET": "my-bucket", "GOOGLE_CLOUD_PROJECT": "test-project"}
         with patch.dict("os.environ", env, clear=True), patch("google.cloud.storage.Client"):
             svc = session_mod.get_artifact_service()
-        assert type(svc).__name__ == "GcsArtifactService"
+        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert type(svc.delegate).__name__ == "GcsArtifactService"
 
 
 class TestGetServiceUris:

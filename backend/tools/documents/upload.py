@@ -31,8 +31,21 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 _COLLECTION = "parsed_documents"
 
 _ALLOWED_EXTENSIONS = {
-    ".docx", ".pptx", ".xlsx", ".odt", ".odp", ".ods", ".epub", ".eml",
-    ".mbox", ".html", ".htm", ".md", ".csv", ".pdf", ".txt",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".odt",
+    ".odp",
+    ".ods",
+    ".epub",
+    ".eml",
+    ".mbox",
+    ".html",
+    ".htm",
+    ".md",
+    ".csv",
+    ".pdf",
+    ".txt",
 }
 _EXTENSION_CONTENT_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -55,7 +68,11 @@ _PLAIN_TEXT_EXTENSIONS = {".txt", ".log", ".text"}
 
 
 def _resolve_content_type(filename: str, client_content_type: str | None) -> str:
-    return _EXTENSION_CONTENT_TYPES.get(PurePosixPath(filename).suffix.lower()) or client_content_type or "application/octet-stream"
+    return (
+        _EXTENSION_CONTENT_TYPES.get(PurePosixPath(filename).suffix.lower())
+        or client_content_type
+        or "application/octet-stream"
+    )
 
 
 def _tenant_namespace(user: User) -> str:
@@ -160,8 +177,8 @@ async def _run_parse(
     source_ref: str | None = None,
 ) -> tuple[str, list, int, str | None]:
     """Compatibility parser for reparse bytes and historical ``gs://`` callers."""
-    from io import BytesIO
     import time
+    from io import BytesIO
 
     t0 = time.monotonic()
     if isinstance(file_bytes_or_source, str):
@@ -281,12 +298,20 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="File must have a name.")
     ext = PurePosixPath(file.filename).suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"File type {ext!r} is not supported. Allowed: {sorted(_ALLOWED_EXTENSIONS)}")
+        raise HTTPException(
+            status_code=400, detail=f"File type {ext!r} is not supported. Allowed: {sorted(_ALLOWED_EXTENSIONS)}"
+        )
 
     try:
         storage, tenant_id, storage_backend = _storage_for_user(user)
     except UnmappedTenantError as exc:
-        raise HTTPException(status_code=403, detail={"code": "TENANT_NOT_PROVISIONED", "message": "Document storage is not provisioned for this organization."}) from exc
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "TENANT_NOT_PROVISIONED",
+                "message": "Document storage is not provisioned for this organization.",
+            },
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=f"Object storage is not configured: {exc}") from exc
 
@@ -310,18 +335,18 @@ async def upload_document(
     doc_id = existing[0]["__id"] if is_overwrite else str(uuid.uuid4())
     storage_path = f"users/{user.uid}/docs/{effective_folder_id}/{safe_filename}"
     now = datetime.now(UTC)
-    base = dict(
-        user_id=user.uid,
-        tenant_id=tenant_id,
-        skill_id=skill_id,
-        storage_backend=storage_backend,
-        storage_path=storage_path,
-        content_type=content_type,
-        original_filename=safe_filename,
-        source_format=ext.lstrip("."),
-        folder_id=effective_folder_id,
-        now=now,
-    )
+    base = {
+        "user_id": user.uid,
+        "tenant_id": tenant_id,
+        "skill_id": skill_id,
+        "storage_backend": storage_backend,
+        "storage_path": storage_path,
+        "content_type": content_type,
+        "original_filename": safe_filename,
+        "source_format": ext.lstrip("."),
+        "folder_id": effective_folder_id,
+        "now": now,
+    }
     _store_document(doc_id, source_url="", parse_result=_ParseResult("pending", [], None, None), **base)
 
     try:
@@ -333,8 +358,12 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=f"Storage upload failed: {exc}") from exc
 
     await file.seek(0)
-    parse_status, blocks, parsed_ms, parse_error = await _run_parse_fileobj(file.file, safe_filename, source_ref=source_url)
-    _store_document(doc_id, source_url=source_url, parse_result=_ParseResult(parse_status, blocks, parse_error, parsed_ms), **base)
+    parse_status, blocks, parsed_ms, parse_error = await _run_parse_fileobj(
+        file.file, safe_filename, source_ref=source_url
+    )
+    _store_document(
+        doc_id, source_url=source_url, parse_result=_ParseResult(parse_status, blocks, parse_error, parsed_ms), **base
+    )
 
     if not is_overwrite:
         try:
@@ -356,11 +385,13 @@ async def upload_document(
         except Exception as exc:
             log.warning("Failed to update folder counts for %s: %s", effective_folder_id, exc)
 
-    return _to_response({
-        "__id": doc_id,
-        "parseStatus": parse_status,
-        "originalFilename": safe_filename,
-        "blockCount": len(blocks),
-        "storagePath": storage_path,
-        "folderId": effective_folder_id,
-    })
+    return _to_response(
+        {
+            "__id": doc_id,
+            "parseStatus": parse_status,
+            "originalFilename": safe_filename,
+            "blockCount": len(blocks),
+            "storagePath": storage_path,
+            "folderId": effective_folder_id,
+        }
+    )

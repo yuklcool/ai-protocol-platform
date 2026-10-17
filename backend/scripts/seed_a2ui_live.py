@@ -15,7 +15,6 @@ import time
 
 from google.adk.events import Event, EventActions
 
-from adk.agui import APP_NAME
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from adk.session import get_session_service
 
@@ -89,9 +88,17 @@ def _messages() -> list[dict]:
 
 
 async def _run(user_id: str, session_id: str) -> None:
+    from auth import User
+    from db.chat_sessions import app_name_for_session, get_session_index
+    from observability.tenant_context import set_tenant_context
+
+    idx = get_session_index(session_id)
+    if idx is None or idx.owner_uid != user_id:
+        raise SystemExit("Owned session index is required")
+    set_tenant_context(User(uid=user_id, tenant_id=idx.tenant_id))
     service = get_session_service()
     session = await service.get_session(
-        app_name=APP_NAME,
+        app_name=app_name_for_session(idx),
         user_id=user_id,
         session_id=session_id,
     )

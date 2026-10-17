@@ -141,6 +141,16 @@ def can_use_tool(
     if cached is not None:
         return cached
 
+    # A tenant policy is a ceiling. A more specific user rule may narrow it,
+    # but must never grant a tool the tenant has denied or omitted.
+    tenant_key = tenant_permission_key(stable_tenant)
+    tenant_doc = fs.get_document(COLLECTION, tenant_key) if tenant_key else None
+    if tenant_doc is not None:
+        owner = str(tenant_doc.get("tenantId") or stable_tenant).strip()
+        if owner != stable_tenant or not _doc_allows(tenant_doc, tool_name):
+            _cache_set(user_email, stable_tenant, user_domain, tool_name, False)
+            return False
+
     user_doc = fs.get_document(COLLECTION, user_email) if user_email else None
     if user_doc is not None:
         if _user_rule_matches_tenant(user_doc, stable_tenant, user_domain):
@@ -154,9 +164,7 @@ def can_use_tool(
             stable_tenant,
         )
 
-    tenant_key = tenant_permission_key(stable_tenant)
     if tenant_key:
-        tenant_doc = fs.get_document(COLLECTION, tenant_key)
         if tenant_doc is not None:
             owner = str(tenant_doc.get("tenantId") or stable_tenant).strip()
             if owner != stable_tenant:

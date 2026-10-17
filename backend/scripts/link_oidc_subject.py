@@ -8,9 +8,7 @@ from auth.oidc import link_oidc_subject
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Link an OIDC issuer/subject to an existing auth_users account."
-    )
+    parser = argparse.ArgumentParser(description="Link an OIDC issuer/subject to an existing auth_users account.")
     parser.add_argument("--issuer", required=True, help="Exact OIDC issuer URL")
     parser.add_argument("--subject", required=True, help="External OIDC sub claim")
     parser.add_argument("--email", required=True, help="Existing local platform user email")

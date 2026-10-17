@@ -134,21 +134,16 @@ def test_chat_runner_has_events_compaction_config(chat_agui_agent):
     assert cfg.event_retention_size is not None and cfg.event_retention_size > 0
 
 
-def test_compaction_config_matches_the_apps_own_config(chat_agui_agent):
-    """The chat path must use the SAME config the deployment declares.
-
-    Guards the half-fix: wiring an App in but building it from a different
-    source than `backend/app.py` would leave two tuning surfaces that drift
-    apart silently.
-    """
-    import app as app_mod
+def test_compaction_config_uses_the_request_models_shared_tuning(chat_agui_agent):
+    """The shared tuning table must be resolved for the actual request model."""
+    from adk.session import get_compaction_config
 
     runner = _runner_for(chat_agui_agent)
     assert runner.app is not None, "no App on the Runner"
-    assert runner.app.events_compaction_config == app_mod.app.events_compaction_config, (
-        "The chat Runner's compaction config differs from the App declared in "
-        "backend/app.py — there must be exactly one tuning surface."
-    )
+    cfg = runner.app.events_compaction_config
+    expected = get_compaction_config("gemini-2.5-flash")
+    assert cfg.model_dump(exclude={"summarizer"}) == expected.model_dump(exclude={"summarizer"})
+    assert cfg.summarizer._llm.model == "gemini-2.5-flash"
 
 
 class TestSessionSafetySurvivesTheWiring:

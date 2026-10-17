@@ -258,14 +258,13 @@ class FidelityEventSummarizer(LlmEventSummarizer):
         return compaction_event
 
 
-def build_compaction_summarizer() -> LlmEventSummarizer | None:
+def build_compaction_summarizer(*, llm=None) -> LlmEventSummarizer | None:
     """The summarizer every compaction config carries.
 
-    Pinned to one model rather than inheriting the compacting skill's, so a
-    conversation's history is condensed the same way whichever skill happens to
-    be answering when the threshold trips. Routed through `resolve_model_chain`
-    for retry + fallback like every other model call (backend/CLAUDE.md) — a
-    failed summarisation would otherwise abandon the compaction silently.
+    Request runtimes pass their already-authorized resilient model chain. This
+    keeps compaction on the configured provider and tenant policy. Legacy callers
+    without a supplied model resolve the configured summarizer model through
+    the same resilience layer.
 
     Returns None if the model can't be resolved (an unmounted provider on a
     fork, a residency violation). ADK then falls back to its own default
@@ -283,7 +282,8 @@ def build_compaction_summarizer() -> LlmEventSummarizer | None:
         # property, not a cost knob.)
         # TUNING-CONSOLE (1b): an admin may override the tier; the resolver
         # rejects raw api names so a bad value can't silently take a fallback.
-        llm = resolve_model_chain(summarizer_model_ref("pro"))
+        if llm is None:
+            llm = resolve_model_chain(summarizer_model_ref("pro"))
     except Exception as exc:
         logger.warning(
             "compaction summarizer unavailable (%s); ADK will use its default, which drops tool results from summaries",

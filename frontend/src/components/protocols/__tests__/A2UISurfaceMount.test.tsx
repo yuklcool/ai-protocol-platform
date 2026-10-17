@@ -209,6 +209,29 @@ function pushSurface(
 }
 
 describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => {
+  it("dispatches once when routing props change during an awaited SDK action", async () => {
+    let registry: ReturnType<typeof useSurfaceRegistry> | null = null;
+    function Capture() { registry = useSurfaceRegistry(); return null; }
+    let finish!: () => void;
+    triggerActionSpy.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const content = (onChatMessage: (text: string) => void) => wrap(<>
+      <Capture />
+      <A2UISurfaceMount surfaceId="workspace" sessionId="sess-1" skillId="root-agent"
+        triggerOnAction freezeAfterAction={false} onChatMessage={onChatMessage} />
+    </>);
+    const view = render(content(() => {}));
+    act(() => pushSurface(registry!, "workspace"));
+    const surface = registry!.getState("workspace")!.surface!;
+    let dispatched!: Promise<void>;
+    act(() => { dispatched = surface.dispatchAction({ event: { name: "submit" } }, "button"); });
+    await waitFor(() => expect(triggerActionSpy).toHaveBeenCalledTimes(1));
+    view.rerender(content(() => {}));
+    await act(async () => { finish(); await dispatched; });
+    expect(triggerActionSpy).toHaveBeenCalledTimes(1);
+    await act(async () => { await surface.dispatchAction({ event: { name: "submit" } }, "button"); });
+    expect(triggerActionSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("default (triggerOnAction omitted): clicks POST to the plain /surface-action endpoint — current behaviour preserved", async () => {
     let registryHandle: ReturnType<typeof useSurfaceRegistry> | null = null;
     function Capture() {
@@ -459,12 +482,13 @@ describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => 
             updateComponents: {
               surfaceId: SID,
               components: [
-                { id: "root", component: "Column", children: ["cap"] },
+                { id: "root", component: "Column", children: ["cap", "status"] },
                 { id: "cap", component: "TextField", value: { path: "/contract_capacity_mw" }, label: "Contract Capacity (MW)" },
+                { id: "status", component: "Text", text: { path: "/status" } },
               ],
             },
           },
-          { version: "v0.9", updateDataModel: { surfaceId: SID, value: { contract_capacity_mw: "" } } },
+          { version: "v0.9", updateDataModel: { surfaceId: SID, value: { contract_capacity_mw: "", status: "Ready" } } },
         ],
         `tc-${SID}`,
       );
@@ -480,6 +504,15 @@ describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => 
       const dm = snap[SID]?.dataModel as Record<string, unknown> | undefined;
       expect(dm?.contract_capacity_mw).toBe("100");
     });
+    // A model's patch must update the existing SDK view without losing the
+    // browser edit or requiring a new createSurface/component specification.
+    const surface = registryHandle!.getState(SID)!.surface;
+    act(() => registryHandle!.appendMessages(SID, [
+      { version: "v0.9", updateDataModel: { surfaceId: SID, path: "/status", value: "ACCEPTED:100" } },
+    ], "model-patch"));
+    expect(await screen.findByText("ACCEPTED:100")).toBeVisible();
+    expect(input).toHaveValue("100");
+    expect(registryHandle!.getState(SID)!.surface).toBe(surface);
   });
 
   it("triggerOnAction={true} but skillId missing: drops silently in dev — surface stays put, no POST, no triggerAction call", async () => {

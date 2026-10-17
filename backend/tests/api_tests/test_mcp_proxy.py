@@ -39,8 +39,11 @@ from protocols.mcp_proxy import router
 
 
 def _make_client(
-    uid: str = "viewer", tags: frozenset[str] = frozenset(),
-    *, tenant_id: str = "tenant-a", domain: str = "example.com",
+    uid: str = "viewer",
+    tags: frozenset[str] = frozenset(),
+    *,
+    tenant_id: str = "tenant-a",
+    domain: str = "example.com",
 ) -> TestClient:
     user = User(uid=uid, email=f"{uid}@example.com", domain=domain, tenant_id=tenant_id)
     ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
@@ -412,18 +415,21 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 @pytest.mark.parametrize("method", ["POST", "GET", "DELETE"])
-@pytest.mark.parametrize("config,tenant_id,domain,expected", [
-    ({"scope": "tenant", "tenantId": "tenant-a"}, "tenant-a", "shared.example", 200),
-    ({"scope": "tenant", "tenantId": "tenant-a"}, "tenant-b", "shared.example", 404),
-    ({"scope": "tenant", "tenantId": "shared.example"}, "tenant-b", "shared.example", 404),
-    ({"scope": "tenant"}, "tenant-a", "shared.example", 404),
-    ({}, "tenant-a", "shared.example", 404),
-    ({"scope": "unknown"}, "tenant-a", "shared.example", 404),
-    ({"scope": "platform"}, "tenant-a", "shared.example", 200),
-    ({"scope": "platform"}, "tenant-b", "shared.example", 200),
-    ({"scope": "platform"}, "", "", 403),
-    ({"scope": "tenant", "tenantId": "legacy.example"}, "", "legacy.example", 200),
-])
+@pytest.mark.parametrize(
+    "config,tenant_id,domain,expected",
+    [
+        ({"scope": "tenant", "tenantId": "tenant-a"}, "tenant-a", "shared.example", 200),
+        ({"scope": "tenant", "tenantId": "tenant-a"}, "tenant-b", "shared.example", 404),
+        ({"scope": "tenant", "tenantId": "shared.example"}, "tenant-b", "shared.example", 404),
+        ({"scope": "tenant"}, "tenant-a", "shared.example", 404),
+        ({}, "tenant-a", "shared.example", 404),
+        ({"scope": "unknown"}, "tenant-a", "shared.example", 404),
+        ({"scope": "platform"}, "tenant-a", "shared.example", 200),
+        ({"scope": "platform"}, "tenant-b", "shared.example", 200),
+        ({"scope": "platform"}, "", "", 403),
+        ({"scope": "tenant", "tenantId": "legacy.example"}, "", "legacy.example", 200),
+    ],
+)
 def test_proxy_tenant_boundary(method, config, tenant_id, domain, expected):
     # Same UID/email/domain must not allow access across stable tenant IDs.
     server = {**_HAPPY_SERVER, **config}
@@ -439,7 +445,8 @@ def test_proxy_tenant_boundary(method, config, tenant_id, domain, expected):
         client.request.return_value = upstream
         client_cls.return_value.__aenter__.return_value = client
         response = _make_client(tenant_id=tenant_id, domain=domain).request(
-            method, "/mcp/private-server",
+            method,
+            "/mcp/private-server",
             headers={"X-Tenant-ID": "tenant-a"},
         )
     assert response.status_code == expected

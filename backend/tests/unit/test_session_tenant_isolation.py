@@ -93,12 +93,8 @@ def test_recent_session_is_partitioned_by_tenant(repo: MemoryRepository) -> None
     _create(session_id="a-recent", tenant_id="tenant-a", owner_uid="same-uid")
     _create(session_id="b-recent", tenant_id="tenant-b", owner_uid="same-uid")
 
-    assert [row.session_id for row in most_recent_session_for_user("same-uid", tenant_id="tenant-a")] == [
-        "a-recent"
-    ]
-    assert [row.session_id for row in most_recent_session_for_user("same-uid", tenant_id="tenant-b")] == [
-        "b-recent"
-    ]
+    assert [row.session_id for row in most_recent_session_for_user("same-uid", tenant_id="tenant-a")] == ["a-recent"]
+    assert [row.session_id for row in most_recent_session_for_user("same-uid", tenant_id="tenant-b")] == ["b-recent"]
 
 
 def test_document_session_list_filters_tenant_before_acl(repo: MemoryRepository) -> None:

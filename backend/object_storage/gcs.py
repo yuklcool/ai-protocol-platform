@@ -114,7 +114,11 @@ class GcsObjectStorage:
                 continue
             key = name[len(namespace) :]
             if key:
-                result.append(ObjectInfo(tenant_id=tenant_id, key=key, size=int(blob.size or 0), uri=f"gs://{self.bucket_name}/{name}"))
+                result.append(
+                    ObjectInfo(
+                        tenant_id=tenant_id, key=key, size=int(blob.size or 0), uri=f"gs://{self.bucket_name}/{name}"
+                    )
+                )
         result.sort(key=lambda item: item.key)
         return result
 
@@ -164,7 +168,9 @@ class LegacyGcsObjectStorage(GcsObjectStorage):
     def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:  # pragma: no cover
         raise RuntimeError("LegacyGcsObjectStorage is read/delete compatibility only")
 
-    def put_fileobj(self, tenant_id: str, key: str, fileobj: BinaryIO, *, chunk_size: int = 1024 * 1024) -> ObjectInfo:  # pragma: no cover
+    def put_fileobj(
+        self, tenant_id: str, key: str, fileobj: BinaryIO, *, chunk_size: int = 1024 * 1024
+    ) -> ObjectInfo:  # pragma: no cover
         raise RuntimeError("LegacyGcsObjectStorage is read/delete compatibility only")
 
     def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]:  # pragma: no cover

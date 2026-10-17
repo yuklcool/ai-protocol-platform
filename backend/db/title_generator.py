@@ -31,7 +31,20 @@ def generate_title_fast(events: list) -> str | None:
     if not excerpt:
         return None
 
+    from config.deployment import is_self_hosted_mode
+
+    # A cosmetic title must not discover cloud credentials or send conversation
+    # excerpts to a second, unconfigured provider on an OpenAI-only self-host.
+    # Operators can explicitly opt into the separate Gemini title model.
+    if is_self_hosted_mode() and not os.environ.get("CHAT_TITLE_MODEL", "").strip():
+        for line in excerpt.splitlines():
+            if line.startswith("User: "):
+                return " ".join(line.removeprefix("User: ").split()[:8])[:80] or None
+        return None
+
     model_ref = os.environ.get("CHAT_TITLE_MODEL", "lite")
+    model_name = model_ref
+    client = None
     try:
         from google import genai
         from google.genai import types as genai_types
@@ -51,7 +64,8 @@ def generate_title_fast(events: list) -> str | None:
         location = entry.location if entry else None
         if location is None and entry is not None and entry.residency == "global":
             location = "global"
-        client = genai.Client(vertexai=True, location=location) if location else genai.Client()
+        use_vertex = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true", "yes", "on"}
+        client = genai.Client(location=location) if use_vertex and location else genai.Client()
         response = client.models.generate_content(
             model=model_name,
             contents=_PROMPT.format(excerpt=excerpt[:1000]),
@@ -78,6 +92,12 @@ def generate_title_fast(events: list) -> str | None:
     except Exception as exc:
         logger.warning("title generation failed (model=%s): %s", model_name, exc)
         return None
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                logger.debug("title client cleanup failed", exc_info=True)
 
 
 def _extract_excerpt(events: list) -> str:

@@ -41,9 +41,7 @@ def auth_backend() -> AuthBackend:
     }
     raw = aliases.get(raw, raw)
     if raw not in {"stub", "firebase", "local-jwt", "oidc"}:
-        raise RuntimeError(
-            f"Unsupported AUTH_BACKEND={raw!r}; expected stub, firebase, local-jwt, or oidc"
-        )
+        raise RuntimeError(f"Unsupported AUTH_BACKEND={raw!r}; expected stub, firebase, local-jwt, or oidc")
     if raw == "stub" and not is_local_mode():
         raise RuntimeError("AUTH_BACKEND=stub is only allowed when LOCAL_MODE=1")
     return raw  # type: ignore[return-value]

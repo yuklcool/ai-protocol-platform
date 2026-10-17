@@ -64,6 +64,7 @@ dependencies = [
     "pillow>=12.3.0",
     "google-cloud-tasks>=2.24.0",
     "anyio>=4.14.2,<5",
+    "fsspec>=2026.6.0",
 ]
 
 [dependency-groups]
