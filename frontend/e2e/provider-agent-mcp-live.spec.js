@@ -478,8 +478,21 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await expect(input).toBeVisible({ timeout: 90_000 });
       expect(new URL(page.url()).searchParams.get("session")).toBe(uiSessionId);
       await input.fill("first-value");
+      const actionResponse = page.waitForResponse((response) =>
+        response.url().endsWith("/api/agent/stream") && response.request().method() === "POST",
+      );
       await page.getByRole("button", { name: "Apply value" }).click();
-      await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 90_000 });
+      const actionWire = await (await actionResponse).text();
+      const actionEvents = parseSseDataEvents(actionWire);
+      console.info("Root browser action events", JSON.stringify(actionEvents));
+      try {
+        await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 30_000 });
+      } catch (error) {
+        console.info("Root browser action page", await page.locator("body").innerText());
+        console.info("Root browser action state", JSON.stringify(await authedApi(token, `/api/sessions/${uiSessionId}/state`)));
+        console.info("Root browser diagnostics", JSON.stringify(diagnostics));
+        throw error;
+      }
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 30_000 });
       await expect(input).toHaveValue("first-value");
