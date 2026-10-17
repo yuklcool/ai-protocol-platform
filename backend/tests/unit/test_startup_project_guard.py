@@ -19,6 +19,7 @@ from config.gcp import ProjectGuardError, check_startup_project
 
 @pytest.fixture(autouse=True)
 def _clear_project_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("SELF_HOSTED_MODE", raising=False)
     for var in ("GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "PLATFORM_EXPECTED_PROJECT"):
         monkeypatch.delenv(var, raising=False)
     # Neutralise ADC so tests never depend on the developer's gcloud login.

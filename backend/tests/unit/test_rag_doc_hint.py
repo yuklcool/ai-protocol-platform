@@ -116,7 +116,7 @@ async def test_rag_loader_records_error_and_never_raises_on_import_failure():
     with (
         patch("rag.corpus.get_or_create_user_corpus", new=AsyncMock(return_value="corpus/1")),
         patch("rag.corpus.import_document_from_gcs", new=AsyncMock(side_effect=Exception("403 denied on bucket"))),
-        patch("db.firestore.get_document", return_value={"sourceUrl": "gs://b/x.pdf"}),
+        patch("db.persistence.get_document", return_value={"sourceUrl": "gs://b/x.pdf"}),
     ):
         await _rag_loader(cc, state, ["doc-A"])  # must not raise
 
@@ -150,7 +150,7 @@ async def test_rag_loader_clears_stale_error_on_successful_retry():
     with (
         patch("rag.corpus.get_or_create_user_corpus", new=AsyncMock(return_value="corpus/1")),
         patch("rag.corpus.import_document_from_gcs", new=AsyncMock(return_value=None)),
-        patch("db.firestore.get_document", return_value={"sourceUrl": "gs://b/x.pdf"}),
+        patch("db.persistence.get_document", return_value={"sourceUrl": "gs://b/x.pdf"}),
     ):
         await _rag_loader(cc, state, ["doc-A"])
 

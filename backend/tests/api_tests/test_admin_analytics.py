@@ -92,6 +92,9 @@ _DOCS = [
 ]
 
 
+_DOCS = [{**doc, "tenantId": "yourcompany.com"} for doc in _DOCS]
+
+
 @pytest.fixture(autouse=True)
 def _hermetic_lookups():
     """Keep API tests off Firestore/skills: friendly-label + author-map lookups
@@ -272,6 +275,7 @@ def test_trace_known_session_reconstructs(admin_client: TestClient) -> None:
     from protocols.sessions_route import ChatMessage
 
     class _Idx:
+        tenant_id = "yourcompany.com"
         owner_uid = "u1"
         skill_id = "one-ppa-expert"
         title = "PPA review"
@@ -327,6 +331,7 @@ def test_trace_document_name_falls_back_to_id(admin_client: TestClient) -> None:
     from typing import ClassVar
 
     class _Idx:
+        tenant_id = "yourcompany.com"
         owner_uid = "u1"
         skill_id = "s"
         document_ids: ClassVar[list[str]] = ["doc-gone"]
@@ -352,6 +357,7 @@ def test_trace_transcript_unavailable_when_canonical_session_missing(admin_clien
     NOT a silent empty transcript. This is the 2026-07-23 divergence."""
 
     class _Idx:
+        tenant_id = "yourcompany.com"
         owner_uid = "u1"
         skill_id = "claude-assistant"
         turn_count = 117

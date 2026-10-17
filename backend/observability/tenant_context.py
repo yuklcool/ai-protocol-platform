@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections.abc import Callable
+from contextlib import contextmanager
 from contextvars import ContextVar
 
 from auth.firebase_auth import User
@@ -70,7 +71,7 @@ def set_tenant_context(user: User, extra: dict[str, str] | None = None) -> None:
     to override stable identity fields; doing so could collapse two explicit
     tenants that happen to share a legacy domain mapping.
     """
-    stable_tenant_id = (getattr(user, "tenant_id", "") or user.domain or "").strip()
+    stable_tenant_id = (getattr(user, "tenant_id", "") or getattr(user, "domain", "") or "").strip()
     attrs: dict[str, str] = {}
 
     for fn in _registered_enrichers:
@@ -111,6 +112,23 @@ def get_current_tenant_id() -> str:
     """
     ctx = _tenant_context.get() or {}
     return (ctx.get("tenant.id") or "").strip()
+
+
+@contextmanager
+def authorized_resource_tenant(tenant_id: str):
+    """Select storage scope after the caller has authorized a resource owner.
+
+    Used by platform administration for cross-tenant reads. Actor identity is
+    retained; the resource tenant is restored even on cancellation/failure.
+    This function grants no access and must follow a resource-specific check.
+    """
+    if not tenant_id.strip():
+        raise PermissionError("a trusted resource tenant is required")
+    token = _tenant_context.set({**(_tenant_context.get() or {}), "tenant.id": tenant_id.strip()})
+    try:
+        yield
+    finally:
+        _tenant_context.reset(token)
 
 
 def _hash_email(email: str) -> str:

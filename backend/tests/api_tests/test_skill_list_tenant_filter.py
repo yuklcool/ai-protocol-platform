@@ -30,7 +30,7 @@ def _make_config(slug: str, **overrides) -> SkillConfig:
         "skillId": f"id-{slug}",
         "displayName": slug.replace("-", " ").title(),
         "ownerEmail": "platform@aitana.ai",
-        "ownerId": "platform-uid",
+        "ownerId": "aitana-platform",
         "slug": slug,
         "accessControl": {"type": "public"},
     }

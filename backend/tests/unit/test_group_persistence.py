@@ -28,20 +28,12 @@ from auth.group_id_auth import (
 
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch: pytest.MonkeyPatch):
-    """Real in-memory Firestore, empty in-process cache.
-
-    The suite-wide autouse stub in conftest replaces the Firestore client with a
-    MagicMock whose reads always report "not found". That is the right default
-    for tests that must not touch Firestore, but it cannot round-trip — and a
-    round trip is the entire behaviour under test here. Swap in the repo's own
-    ``InMemoryFirestoreClient``: the same implementation LOCAL_MODE runs on, so
-    these tests exercise the real persistence path rather than a bespoke fake.
-    """
-    import db.firestore as fs
-    from db.firestore_inmemory import InMemoryFirestoreClient
+    """Exercise the repository contract with an isolated durable test store."""
+    from db.persistence import reset_repository_for_testing
+    from db.repositories.memory import MemoryRepository
 
     monkeypatch.setenv("GROUP_AUTH_SIGNING_SECRET", "test-secret-not-a-real-one")
-    monkeypatch.setattr(fs, "_client", InMemoryFirestoreClient())
+    reset_repository_for_testing(MemoryRepository())
 
     AnonymousGroupAuth.reset_for_tests()
     yield
@@ -133,18 +125,22 @@ class TestFailureModes:
         works in the demo and dies at the next deploy, with nothing telling
         the user. Fail at mint time instead.
         """
-        from db import firestore as fs
+        from auth import group_id_auth as storage
 
-        monkeypatch.setattr(fs, "set_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("firestore down")))
+        monkeypatch.setattr(
+            storage, "set_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("firestore down"))
+        )
 
         with pytest.raises(GroupPersistenceError, match="would stop working"):
             create_group(title="T", skill_ids=["s1"], creator_uid="teacher-1")
 
     def test_failed_create_leaves_no_phantom_in_cache(self, monkeypatch):
         """A code that was never persisted must not work on this instance either."""
-        from db import firestore as fs
+        from auth import group_id_auth as storage
 
-        monkeypatch.setattr(fs, "set_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("firestore down")))
+        monkeypatch.setattr(
+            storage, "set_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("firestore down"))
+        )
 
         with pytest.raises(GroupPersistenceError):
             create_group(title="T", skill_ids=["s1"], creator_uid="teacher-1")
@@ -156,9 +152,11 @@ class TestFailureModes:
         record = create_group(title="T", skill_ids=["s1"], creator_uid="teacher-1")
         _simulate_restart()
 
-        from db import firestore as fs
+        from auth import group_id_auth as storage
 
-        monkeypatch.setattr(fs, "get_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("firestore down")))
+        monkeypatch.setattr(
+            storage, "get_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("firestore down"))
+        )
 
         assert get_group(record.group_id) is None
 
@@ -166,9 +164,9 @@ class TestFailureModes:
         """In-memory state is already correct; don't fail the caller's request."""
         record = create_group(title="T", skill_ids=["s1"], creator_uid="teacher-1")
 
-        from db import firestore as fs
+        from auth import group_id_auth as storage
 
-        monkeypatch.setattr(fs, "update_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+        monkeypatch.setattr(storage, "update_document", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
 
         delete_group(record.group_id, requesting_uid="teacher-1")  # must not raise
         assert get_group(record.group_id) is None
@@ -178,12 +176,12 @@ def test_persist_uses_merge_so_external_fields_are_not_clobbered(monkeypatch):
     """Another script may own keys on this doc; a full overwrite drops them."""
     seen: dict = {}
 
-    from db import firestore as fs
+    from auth import group_id_auth as storage
 
     def _capture(collection, doc_id, data, merge=False):
         seen.update({"collection": collection, "merge": merge})
 
-    monkeypatch.setattr(fs, "set_document", _capture)
+    monkeypatch.setattr(storage, "set_document", _capture)
     create_group(title="T", skill_ids=["s1"], creator_uid="teacher-1")
 
     assert seen["collection"] == "anon_groups"

@@ -312,7 +312,6 @@ async def stream_agui_events(
 
     tracker = get_current_tracker()
     typed_error: dict[str, Any] = {}
-    error_token = current_run_error.set(typed_error)
     first_agui_event_seen = False
     first_model_token_seen = False
     # NEVER SILENT (CLAUDE.md #8): did this run yield anything the user can see —
@@ -343,11 +342,22 @@ async def stream_agui_events(
     hb_interval = _heartbeat_interval(heartbeat_seconds)
     hb_count = 0
     source = agui_agent.run(run_input).__aiter__()
+
+    async def next_event():
+        # FastAPI peeks at the first event in the request task and streams the
+        # rest from another task. Bind/reset within each pull task so no token
+        # crosses that context boundary. SDK child tasks inherit the same slot.
+        token = current_run_error.set(typed_error)
+        try:
+            return await anext(source)
+        finally:
+            current_run_error.reset(token)
+
     pending: asyncio.Task | None = None
     try:
         while True:
             if pending is None:
-                pending = asyncio.ensure_future(anext(source))
+                pending = asyncio.ensure_future(next_event())
             if hb_interval > 0:
                 try:
                     event = await asyncio.wait_for(asyncio.shield(pending), timeout=hb_interval)
@@ -486,7 +496,6 @@ async def stream_agui_events(
             for stage_event in tracker.drain_stage_events():
                 yield stage_event.model_dump(by_alias=True, exclude_none=True)
     finally:
-        current_run_error.reset(error_token)
         # Consumer disconnected (or agent errored): don't leak the in-flight
         # anext task — cancelling it also propagates into the underlying
         # ag_ui_adk generator so the ADK run can clean up.

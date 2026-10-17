@@ -322,18 +322,18 @@ class TestDeriveAccessControl:
         ac = _derive_access_control(None)
         assert ac.type == "private"
 
-    @patch("db.firestore.get_document", return_value={"accessControl": {"type": "tagged", "tags": ["finance"]}})
+    @patch("db.persistence.get_document", return_value={"accessControl": {"type": "tagged", "tags": ["finance"]}})
     def test_inherits_document_access_control(self, _mock):
         ac = _derive_access_control("doc-abc")
         assert ac.type == "tagged"
         assert ac.tags == ["finance"]
 
-    @patch("db.firestore.get_document", return_value=None)
+    @patch("db.persistence.get_document", return_value=None)
     def test_falls_back_to_private_when_doc_missing(self, _mock):
         ac = _derive_access_control("doc-missing")
         assert ac.type == "private"
 
-    @patch("db.firestore.get_document", side_effect=Exception("network error"))
+    @patch("db.persistence.get_document", side_effect=Exception("network error"))
     def test_falls_back_to_private_on_error(self, _mock):
         ac = _derive_access_control("doc-xyz")
         assert ac.type == "private"
@@ -754,7 +754,7 @@ class TestRagDocumentLoader:
             patch("adk.callbacks._RAG_DOCUMENTS_ENABLED", True),
             patch("rag.corpus.get_or_create_user_corpus", return_value=corpus),
             patch("rag.corpus.import_document_from_gcs"),
-            patch("db.firestore.get_document", return_value={"sourceUrl": "gs://bucket/doc-a.pdf"}),
+            patch("db.persistence.get_document", return_value={"sourceUrl": "gs://bucket/doc-a.pdf"}),
         ):
             await loader(ctx)
 
@@ -782,7 +782,7 @@ class TestRagDocumentLoader:
             patch("adk.callbacks._RAG_DOCUMENTS_ENABLED", True),
             patch("rag.corpus.get_or_create_user_corpus", return_value=corpus),
             patch("rag.corpus.import_document_from_gcs") as mock_import,
-            patch("db.firestore.get_document", return_value={"sourceUrl": "gs://bucket/doc-a.pdf"}),
+            patch("db.persistence.get_document", return_value={"sourceUrl": "gs://bucket/doc-a.pdf"}),
         ):
             await loader(ctx)
 
@@ -804,7 +804,7 @@ class TestRagDocumentLoader:
             patch("adk.callbacks._RAG_DOCUMENTS_ENABLED", True),
             patch("rag.corpus.get_or_create_user_corpus", return_value="projects/p/corpora/1"),
             patch("rag.corpus.import_document_from_gcs") as mock_import,
-            patch("db.firestore.get_document", return_value={}),
+            patch("db.persistence.get_document", return_value={}),
         ):
             await loader(ctx)
 

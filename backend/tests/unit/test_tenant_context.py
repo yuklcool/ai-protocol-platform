@@ -24,6 +24,7 @@ import pytest
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 
 from auth.firebase_auth import User
 from observability.tenant_context import (
@@ -53,7 +54,7 @@ def tracer_with_exporter():
     """Set up an isolated TracerProvider with InMemorySpanExporter +
     our TenantAttributeSpanProcessor, so we can assert spans carry the
     right attrs without touching the global OTel state."""
-    provider = TracerProvider()
+    provider = TracerProvider(sampler=ALWAYS_ON)
     provider.add_span_processor(TenantAttributeSpanProcessor())
     exporter = InMemorySpanExporter()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
@@ -344,18 +345,26 @@ def test_set_tenant_context_never_writes_raw_email_under_any_key(reset_state):
 
 
 def test_extra_kwarg_cannot_override_a_required_default(reset_state):
-    """The ``extra`` kwarg is for fork-side per-request attrs, NOT a
-    way to override the platform's identity defaults. If a fork passes
-    extra={'tenant.uid': 'forged'}, this currently DOES override
-    (set_tenant_context uses dict.update). Document the behaviour
-    explicitly — the override is intentional for testing but should
-    be loud in code review."""
+    """Observability metadata cannot override authenticated identity."""
     set_tenant_context(
         _user(uid="real-uid"),
         extra={"tenant.uid": "forged-uid", "tenant.skill_id": "physics-tutor"},
     )
     attrs = get_tenant_context()
     assert attrs is not None
-    # extra wins over platform defaults — explicit, not silent.
-    assert attrs["tenant.uid"] == "forged-uid"
+    # Trusted identity wins; non-identity metadata is still included.
+    assert attrs["tenant.uid"] == "real-uid"
     assert attrs["tenant.skill_id"] == "physics-tutor"
+
+
+def test_authorized_resource_scope_restores_actor_context_on_error(reset_state):
+    from observability.tenant_context import authorized_resource_tenant, get_current_tenant_id
+
+    set_tenant_context(_user(uid="actor"))
+    previous = get_tenant_context()
+    with pytest.raises(RuntimeError):
+        with authorized_resource_tenant("target-tenant"):
+            assert get_current_tenant_id() == "target-tenant"
+            assert get_tenant_context()["tenant.uid"] == "actor"
+            raise RuntimeError("failed read")
+    assert get_tenant_context() == previous

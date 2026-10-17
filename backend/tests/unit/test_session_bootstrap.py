@@ -27,12 +27,15 @@ def _make_user(uid: str = "user-123", email: str = "user@example.com") -> User:
     # A real User always carries an email; the bootstrap route derives
     # ownerDomain from it (v6.16.0 M4). Setting it keeps the stub honest.
     u.email = email
+    u.tenant_id = "test-tenant"
+    u.domain = "example.com"
     return u
 
 
 def _make_request_stub() -> MagicMock:
     req = MagicMock()
     req.state.access = MagicMock()
+    req.state.access.tenant_id = "test-tenant"
     return req
 
 
@@ -43,6 +46,7 @@ def _make_index(owner_uid: str = "user-123", session_id: str = "sess-abc") -> Ch
 
     return ChatSessionIndex(
         sessionId=session_id,
+        tenantId="test-tenant",
         skillId="skill-1",
         ownerUid=owner_uid,
         accessControl=AccessControl(type="private"),

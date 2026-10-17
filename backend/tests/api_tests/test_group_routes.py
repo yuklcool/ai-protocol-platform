@@ -34,7 +34,9 @@ from auth.group_routes import router
 
 
 @pytest.fixture(autouse=True)
-def isolate_state():
+def isolate_state(monkeypatch):
+    # This file exercises the legacy group-token dispatcher with SDK doubles.
+    monkeypatch.delenv("AUTH_BACKEND", raising=False)
     AnonymousGroupAuth.reset_for_tests()
     yield
     AnonymousGroupAuth.reset_for_tests()
@@ -325,6 +327,7 @@ class TestDispatcher:
     def test_dispatcher_local_mode_stub_still_works(self, monkeypatch):
         """Back-compat: LOCAL_MODE stub token continues to work."""
         monkeypatch.setenv("LOCAL_MODE", "1")
+        monkeypatch.setenv("AUTH_BACKEND", "stub")
         client = self._make_app_with_protected_endpoint()
         r = client.get(
             "/whoami",

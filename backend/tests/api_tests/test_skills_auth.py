@@ -47,6 +47,7 @@ def _make_skill(**overrides) -> SkillConfig:
         "description": "a sample",
         "instructions": "do the thing",
         "skillId": "skill-1",
+        "tenantId": "test-tenant",
         "displayName": "Sample Skill",
         "ownerEmail": OWNER_EMAIL,
         "ownerId": OWNER_UID,
@@ -62,7 +63,7 @@ def _make_user(
     domain: str = "yourcompany.com",
     group_tags: frozenset[str] = frozenset(),
 ) -> User:
-    return User(uid=uid, email=email, domain=domain, group_tags=group_tags)
+    return User(uid=uid, email=email, domain=domain, tenant_id="test-tenant", group_tags=group_tags)
 
 
 @pytest.fixture()

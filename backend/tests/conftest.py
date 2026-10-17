@@ -35,6 +35,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import socket
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -47,15 +48,18 @@ _collection_credentials_patch = None
 def _isolate_repository_and_memory_cache():
     from adk.session import _reset_memory_service_for_tests
     from db.persistence import reset_repository_for_testing
+    from observability.tenant_context import _tenant_context
 
     if os.environ.get("RUN_LIVE_GCP") == "1":
         yield
         return
     reset_repository_for_testing()
     _reset_memory_service_for_tests()
+    _tenant_context.set(None)
     yield
     reset_repository_for_testing()
     _reset_memory_service_for_tests()
+    _tenant_context.set(None)
 
 
 def pytest_sessionstart(session):
@@ -136,6 +140,8 @@ def _isolate_firebase_directory_and_root_policy():
         from firebase_admin import auth as fb_auth
 
         with (
+            mock.patch.object(fb_auth, "get_users", return_value=SimpleNamespace(users=[])),
+            mock.patch.object(fb_auth, "list_users", return_value=SimpleNamespace(iterate_all=lambda: iter(()))),
             mock.patch.object(fb_auth, "verify_id_token", side_effect=fb_auth.InvalidIdTokenError("isolated verifier")),
             mock.patch.object(
                 _http_client.HttpClient, "request", side_effect=RuntimeError("Firebase HTTP is disabled in unit tests")

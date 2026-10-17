@@ -105,8 +105,8 @@ class TestClientsScoping:
 
 
 _PERM_DOCS = [
-    {"__id": "user@a.com", "type": "user", "tools": ["x"], "denied": []},
-    {"__id": "b.com", "type": "domain", "tools": ["y"], "denied": []},
+    {"__id": "user@a.com", "tenantId": "a.com", "type": "user", "tools": ["x"], "denied": []},
+    {"__id": "b.com", "tenantId": "b.com", "type": "domain", "tools": ["y"], "denied": []},
     {"__id": "*", "type": "wildcard", "tools": ["z"], "denied": []},
 ]
 
@@ -117,15 +117,14 @@ class TestToolPermissionScoping:
 
         return _client(router, user)
 
-    def test_doc_domain_parsing(self):
-        from admin.tool_permissions_routes import _doc_domain
+    def test_trusted_ownership_does_not_come_from_email_syntax(self):
+        from admin.tool_permissions_routes import _trusted_tenant_owner
 
-        assert _doc_domain("user@a.com") == "a.com"
-        assert _doc_domain("a.com") == "a.com"
-        assert _doc_domain("USER@A.COM") == "a.com"
-        # The wildcard belongs to no single tenant.
-        assert _doc_domain("*") == ""
-        assert _doc_domain("") == ""
+        assert _trusted_tenant_owner("tenant:stable-a") == "stable-a"
+        assert _trusted_tenant_owner("USER@A.COM", {"tenantId": "stable-a"}) == "stable-a"
+        assert _trusted_tenant_owner("user@a.com") == ""
+        assert _trusted_tenant_owner("*") == ""
+        assert _trusted_tenant_owner("") == ""
 
     def test_tenant_list_excludes_wildcard_and_other_domains(self):
         with patch("admin.tool_permissions_routes.query_documents", return_value=[dict(d) for d in _PERM_DOCS]):
@@ -160,6 +159,7 @@ class TestToolPermissionScoping:
             patch("admin.tool_permissions_routes.set_document"),
             patch("admin.tool_permissions_routes.perms.clear_cache"),
             patch("admin.tool_permissions_routes.record_admin_action"),
+            patch("admin.tool_permissions_routes._tenant_from_local_user", return_value="a.com"),
         ):
             r = self._app(_TENANT_A).put(
                 "/api/admin/tool-permissions/user@a.com",

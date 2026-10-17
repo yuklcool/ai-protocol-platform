@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -55,7 +56,8 @@ async def test_run_parse_txt_read_failure_is_failed_not_stranded():
 
 
 @pytest.fixture
-def upload_client():
+def upload_client(monkeypatch):
+    monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "gcs")
     from tools.documents.upload import router
 
     app = FastAPI()
@@ -71,8 +73,11 @@ def _file(name: str = "report.docx") -> dict:
 def _common_patches(parse_return=("parsed", [{"type": "paragraph", "text": "Hi"}], 10, None)):
     return [
         patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-        patch("tools.documents.upload._upload_to_gcs"),
-        patch("tools.documents.upload._run_parse", return_value=parse_return),
+        patch(
+            "tools.documents.upload.GcsObjectStorage.put_fileobj",
+            return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+        ),
+        patch("tools.documents.upload._run_parse_fileobj", return_value=parse_return),
         patch("tools.documents.upload.set_document"),
         patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="folder1"),
         patch("tools.documents.upload.folders_db.update_folder_counts"),
@@ -92,8 +97,11 @@ class TestUploadEndpoint:
         fake_blocks = [{"type": "paragraph", "text": "Hello"}]
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
-            patch("tools.documents.upload._run_parse", return_value=("parsed", fake_blocks, 11, None)),
+            patch(
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", fake_blocks, 11, None)),
             patch("tools.documents.upload.set_document") as mock_set,
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="folder1"),
             patch("tools.documents.upload.folders_db.update_folder_counts"),
@@ -118,8 +126,11 @@ class TestUploadEndpoint:
 
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
-            patch("tools.documents.upload._run_parse", return_value=("parsed", fake_blocks, 20, None)),
+            patch(
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", fake_blocks, 20, None)),
             patch("tools.documents.upload.set_document", side_effect=capture_set),
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
             patch("tools.documents.upload.folders_db.update_folder_counts"),
@@ -138,8 +149,11 @@ class TestUploadEndpoint:
 
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
-            patch("tools.documents.upload._run_parse", return_value=("failed", [], 5, "timeout")),
+            patch(
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch("tools.documents.upload._run_parse_fileobj", return_value=("failed", [], 5, "timeout")),
             patch("tools.documents.upload.set_document", side_effect=capture_set),
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
             patch("tools.documents.upload.folders_db.update_folder_counts"),
@@ -152,8 +166,11 @@ class TestUploadEndpoint:
     def test_ailang_parse_failure_returns_failed_status(self, upload_client):
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
-            patch("tools.documents.upload._run_parse", return_value=("failed", [], 5, "parse error")),
+            patch(
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch("tools.documents.upload._run_parse_fileobj", return_value=("failed", [], 5, "parse error")),
             patch("tools.documents.upload.set_document"),
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="folder1"),
             patch("tools.documents.upload.folders_db.update_folder_counts"),
@@ -173,7 +190,10 @@ class TestUploadEndpoint:
         """
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
+            patch(
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
             patch("tools.documents.ailang_parse.is_parseable", return_value=False),
             patch("tools.documents.upload.set_document"),
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="folder1"),
@@ -188,22 +208,18 @@ class TestUploadEndpoint:
         assert resp.json()["status"] == "pending_ai_extraction"
 
     def test_bucket_comes_from_resolve_documents_bucket(self, upload_client):
-        calls = []
-
-        def capture_upload(bucket_name, *args, **kwargs):
-            calls.append(bucket_name)
-
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="client-specific-bucket"),
-            patch("tools.documents.upload._upload_to_gcs", side_effect=capture_upload),
-            patch("tools.documents.upload._run_parse", return_value=("parsed", [], 0, None)),
+            patch("tools.documents.upload.GcsObjectStorage") as storage,
+            patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 0, None)),
             patch("tools.documents.upload.set_document"),
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
             patch("tools.documents.upload.folders_db.update_folder_counts"),
         ):
-            upload_client.post("/api/documents/upload", files=_file())
-
-        assert calls == ["client-specific-bucket"]
+            storage.return_value.put_fileobj.return_value = SimpleNamespace(uri="gs://client-specific-bucket/object")
+            response = upload_client.post("/api/documents/upload", files=_file())
+        assert response.status_code == 200
+        storage.assert_called_once_with("client-specific-bucket")
 
     def test_reupload_same_filename_reuses_doc_id(self, upload_client):
         """Re-uploading the same filename in the same folder must reuse the existing doc_id."""
@@ -215,9 +231,12 @@ class TestUploadEndpoint:
 
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
             patch(
-                "tools.documents.upload._run_parse",
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch(
+                "tools.documents.upload._run_parse_fileobj",
                 return_value=("parsed", [{"type": "paragraph", "text": "v2"}], 10, None),
             ),
             patch("tools.documents.upload.set_document", side_effect=capture_set),
@@ -239,9 +258,12 @@ class TestUploadEndpoint:
 
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
             patch(
-                "tools.documents.upload._run_parse",
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch(
+                "tools.documents.upload._run_parse_fileobj",
                 return_value=("parsed", [{"type": "paragraph", "text": "v2"}], 10, None),
             ),
             patch("tools.documents.upload.set_document"),
@@ -262,8 +284,11 @@ class TestUploadEndpoint:
 
         with (
             patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch("tools.documents.upload._upload_to_gcs"),
-            patch("tools.documents.upload._run_parse", return_value=("parsed", [], 0, None)),
+            patch(
+                "tools.documents.upload.GcsObjectStorage.put_fileobj",
+                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
+            ),
+            patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 0, None)),
             patch("tools.documents.upload.set_document", side_effect=lambda _c, doc_id, _d: stored_ids.append(doc_id)),
             patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
             patch("tools.documents.upload.folders_db.update_folder_counts"),

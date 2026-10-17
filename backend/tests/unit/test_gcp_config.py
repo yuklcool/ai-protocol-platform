@@ -12,6 +12,8 @@ from config.gcp import neutralize_api_key_in_vertex_mode
 
 
 def test_pops_api_key_in_vertex_mode(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_GENAI_API_KEY", raising=False)
     monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-secret")
 

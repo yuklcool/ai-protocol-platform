@@ -79,6 +79,7 @@ def test_smart_tier_resolves_to_gemini_under_eu_strict(monkeypatch):
 
 
 def test_lite_tier_gets_eu_multiregion_chain(monkeypatch):
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
     # 2026-08-13: lite's eu-strict primary (gemini-3-5-flash-lite-eu) has no
     # single-region EU option at all (live-probed — see models.yaml), so it
     # has no cross-region rung; it's pinned to the "eu" jurisdictional
