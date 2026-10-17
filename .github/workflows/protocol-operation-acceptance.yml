@@ -8,6 +8,7 @@ on:
       - frontend/**
       - docker-compose.yml
       - .github/workflows/protocol-operation-acceptance.yml
+      - .github/workflows/release-images.yml
   workflow_dispatch:
 
 permissions:
