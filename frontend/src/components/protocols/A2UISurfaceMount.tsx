@@ -370,7 +370,7 @@ export function A2UISurfaceMount({
               className="mt-2 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
             >
               <span aria-hidden="true">✓</span>
-              <span>Sent — the response appears below, and in the Workspace and Activity.</span>
+              <span>{freezeAfterAction ? "Sent — the response appears below, and in the Workspace and Activity." : "Action completed"}</span>
             </div>
           )}
         </div>

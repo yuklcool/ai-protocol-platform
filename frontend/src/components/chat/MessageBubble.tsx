@@ -185,6 +185,9 @@ export const MessageBubble = React.memo(function MessageBubble({
     // is already populated by the time we return null. Without this, every
     // tool-only assistant turn renders an empty avatar+name+timestamp row.
     const inlineA2uiCalls = a2uiCalls.filter((tc) => {
+      try {
+        if (JSON.parse(tc.resultContent || "null")?.a2ui_delivered === true) return false;
+      } catch { /* Incomplete or failed results retain their existing feedback. */ }
       const parsed = parseA2UIResult(tc.resultContent);
       // Inline = no surface_id, or surface_id === "chat".
       return !parsed || !parsed.surfaceId || parsed.surfaceId === "chat";

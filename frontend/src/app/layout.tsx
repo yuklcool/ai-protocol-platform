@@ -23,7 +23,7 @@ const brandThemeStyle = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang={DEFAULT_LOCALE}>
+    <html lang={DEFAULT_LOCALE} className="dark">
       <body
         className="font-sans bg-background text-foreground h-screen flex flex-col antialiased"
         style={brandThemeStyle}

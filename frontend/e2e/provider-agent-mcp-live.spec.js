@@ -79,6 +79,22 @@ function parseSseDataEvents(body) {
     .filter(Boolean);
 }
 
+async function expectReadableControl(locator) {
+  const contrast = await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const luminance = (color) => {
+      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
+        const s = v / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const a = luminance(style.color), b = luminance(style.backgroundColor);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+  expect(contrast, "Input and button labels must remain legible in the console theme").toBeGreaterThanOrEqual(4.5);
+}
+
 test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
   test.setTimeout(360_000);
 
@@ -487,6 +503,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await uiComposer.press("Enter");
       const input = page.getByRole("textbox", { name: "Acceptance value" });
       await expect(input).toBeVisible({ timeout: 90_000 });
+      await expectReadableControl(input);
+      await expectReadableControl(page.getByRole("button", { name: "Apply value" }));
+      await expectReadableControl(uiComposer);
       expect(new URL(page.url()).searchParams.get("session")).toBe(uiSessionId);
       await input.fill("first-value");
       const actionResponse = page.waitForResponse((response) =>
@@ -513,6 +532,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByText(/^ACCEPTED:\s*first-value$/)).toBeVisible({ timeout: 30_000 });
       await expect(input).toHaveValue("first-value");
+      await expect(page.locator("body")).not.toContainText("Respond by updating the surface.");
       await input.fill("second-value");
       await page.getByRole("button", { name: "Apply value" }).click();
       await expect(page.getByText(/^ACCEPTED:\s*second-value$/)).toBeVisible({ timeout: 90_000 });

@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { parseA2uiSubmission } from "../a2uiSubmission";
 
+it("renders the action adapter's historical internal turn as a submission", () => {
+  expect(parseA2uiSubmission("(The user triggered the 'submit_form' action on the interactive UI surface. Respond by updating the surface.)")).toEqual({
+    action: "submit_form", fields: [],
+  });
+});
+
 describe("parseA2uiSubmission (6.11)", () => {
   it("parses the [a2ui:action] {json} form and humanizes fields", () => {
     const s = parseA2uiSubmission('[a2ui:savePreferences] {"tone":["neutral"],"style":["concise"],"verbosity":["short"]}');
