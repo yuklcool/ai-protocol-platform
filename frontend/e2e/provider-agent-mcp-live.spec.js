@@ -82,7 +82,7 @@ function parseSseDataEvents(body) {
 test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
   test.setTimeout(360_000);
 
-  test("real model selects and executes the bound MCP tool in the product chat path", async ({ browser }) => {
+  test("real model selects and executes the bound MCP tool in the product chat path", async ({ browser }, testInfo) => {
     expect(ADMIN_PASSWORD, "SELFHOST_ADMIN_PASSWORD must be configured").not.toBe("");
     expect(PROVIDER_BASE_URL, "REAL_PROVIDER_BASE_URL must be configured").not.toBe("");
     expect(MODEL_API_NAME, "REAL_PROVIDER_MODEL must be configured").not.toBe("");
@@ -356,12 +356,8 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
             subSkills: [],
             toolConfigs: {
               a2ui: {
-                // The acceptance target here is the action-triggered Agent/LLM
-                // round-trip itself, not direct model-authored A2UI. Keep the
-                // A2UI toolset disabled so the model cannot opportunistically
-                // call send_a2ui_json_to_client and turn this gate into a Tool
-                // Permission test. The two trust grants below still enable the
-                // production surface-action-run endpoint.
+                // The current Root interaction policy is authoritative. Its
+                // A2UI grant may allow a UI-only response on this legacy route.
                 enabled: false,
                 allow_surface_context_writes: true,
                 allow_action_triggered_runs: true,
@@ -425,9 +421,16 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         .filter((event) => event.type === "TEXT_MESSAGE_CONTENT")
         .map((event) => String(event.delta || ""))
         .join("");
+      const actionRunUi = actionRunEvents
+        .filter((event) => event.type === "CUSTOM" && event.name === "A2UI_SURFACE")
+        .map((event) => JSON.stringify(event.value?.messages || []))
+        .join("");
 
       expect(actionRunTypes).toContain("RUN_STARTED");
-      expect(actionRunText).toContain(ACTION_RUN_MARKER);
+      // Updating the UI is the action-triggered prompt's preferred response.
+      // Require the marker in delivered output, rather than a conversational
+      // answer that the model is explicitly instructed not to produce.
+      expect(actionRunText + actionRunUi, actionRunBody).toContain(ACTION_RUN_MARKER);
       expect(actionRunTypes).toContain("RUN_FINISHED");
       expect(actionRunTypes).not.toContain("RUN_ERROR");
 
@@ -488,6 +491,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       try {
         await expect(page.getByText("ACCEPTED:first-value", { exact: true })).toBeVisible({ timeout: 30_000 });
       } catch (error) {
+        await testInfo.attach("root-action-failure", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
         console.info("Root browser action page", await page.locator("body").innerText());
         console.info("Root browser action state", JSON.stringify(await authedApi(token, `/api/sessions/${uiSessionId}/state`)));
         console.info("Root browser diagnostics", JSON.stringify(diagnostics));
@@ -499,6 +503,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await input.fill("second-value");
       await page.getByRole("button", { name: "Apply value" }).click();
       await expect(page.getByText("ACCEPTED:second-value", { exact: true })).toBeVisible({ timeout: 90_000 });
+      await testInfo.attach("root-action-after-reload", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
       const uiState = await authedApi(token, `/api/sessions/${uiSessionId}/state`);
       expect(uiState[`a2ui_surface_context.${sid}.lastAction`].context.value).toBe("second-value");
 

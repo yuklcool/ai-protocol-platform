@@ -482,12 +482,13 @@ describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => 
             updateComponents: {
               surfaceId: SID,
               components: [
-                { id: "root", component: "Column", children: ["cap"] },
+                { id: "root", component: "Column", children: ["cap", "status"] },
                 { id: "cap", component: "TextField", value: { path: "/contract_capacity_mw" }, label: "Contract Capacity (MW)" },
+                { id: "status", component: "Text", text: { path: "/status" } },
               ],
             },
           },
-          { version: "v0.9", updateDataModel: { surfaceId: SID, value: { contract_capacity_mw: "" } } },
+          { version: "v0.9", updateDataModel: { surfaceId: SID, value: { contract_capacity_mw: "", status: "Ready" } } },
         ],
         `tc-${SID}`,
       );
@@ -503,6 +504,15 @@ describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => 
       const dm = snap[SID]?.dataModel as Record<string, unknown> | undefined;
       expect(dm?.contract_capacity_mw).toBe("100");
     });
+    // A model's patch must update the existing SDK view without losing the
+    // browser edit or requiring a new createSurface/component specification.
+    const surface = registryHandle!.getState(SID)!.surface;
+    act(() => registryHandle!.appendMessages(SID, [
+      { version: "v0.9", updateDataModel: { surfaceId: SID, path: "/status", value: "ACCEPTED:100" } },
+    ], "model-patch"));
+    expect(await screen.findByText("ACCEPTED:100")).toBeVisible();
+    expect(input).toHaveValue("100");
+    expect(registryHandle!.getState(SID)!.surface).toBe(surface);
   });
 
   it("triggerOnAction={true} but skillId missing: drops silently in dev — surface stays put, no POST, no triggerAction call", async () => {

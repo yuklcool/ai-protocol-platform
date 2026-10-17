@@ -1,30 +1,9 @@
-// ACTION-TRIGGER M2 — useActionDrivenAgent
-//
-// Pattern 1 closing rung. The user clicks an A2UI button → this hook POSTs to
-// `/api/skills/{skillId}/sessions/{sessionId}/surface-action-run` with the
-// A2uiClientAction body + a snapshot of the live A2UI surface state, then
-// consumes the AG-UI SSE response and dispatches the resulting A2UI tool
-// calls into the same `SurfaceRegistry` the chat path uses. Result: the
-// surface re-renders exactly like it would after a chat turn — but no chat
-// message was sent.
-//
-// Why the hook parses SSE itself instead of routing through `HttpAgent`:
-// the @ag-ui/client `HttpAgent` is wired to ONE URL (the chat stream
-// endpoint) and updates ONE agent's `messages`/`state` arrays. The
-// action-triggered endpoint is a different URL and we explicitly do NOT
-// want to write a fake chat message into the agent's `messages` array
-// (that would render a stray bubble in the chat). The only thing the
-// SurfaceRegistry actually needs is the `send_a2ui_json_to_client` tool
-// call's `TOOL_CALL_RESULT.content`, which we parse here and feed to
-// `registry.appendMessages` — the same call the chat-bubble
-// `A2UISurfaceDispatcher` makes. Single point of dispatch into the
-// registry; this hook just feeds it through a different ingress.
-//
-// Graceful HTTP 4xx fallback: when the backend gate rejects (skill not
-// opted into `allow_action_triggered_runs`, missing JWT, etc.), the
-// promise resolves cleanly with a `console.warn`. The surface stays in
-// its last-rendered state — no broken loading spinner, no thrown error
-// bubbling into React's error boundary.
+// UI actions share the production Root Agent's HttpAgent and AG-UI reducers.
+// forwardedProps.a2ui_action carries the action and current surface snapshot;
+// Chat, Activity and Workspace receive the same events as a normal chat turn.
+// Standalone protocol previews retain the dedicated surface-action-run SSE
+// adapter. Both paths reject failed, cancelled or incomplete runs so the
+// surface can display the failure and allow retry.
 
 "use client";
 
@@ -98,8 +77,8 @@ export interface UseActionDrivenAgentReturn {
   /**
    * POST the action to `surface-action-run`, consume the SSE stream, and
    * dispatch A2UI updates into the SurfaceRegistry. Resolves on
-   * `RUN_FINISHED`; rejects on `RUN_ERROR`. Resolves cleanly (no throw)
-   * on HTTP 4xx — the skill is not opted in and the surface stays put.
+   * `RUN_FINISHED`; rejects on errors, cancellation and incomplete streams.
+   * HTTP authorization failures are surfaced to the calling UI.
    */
   triggerAction: (
     surfaceId: string,

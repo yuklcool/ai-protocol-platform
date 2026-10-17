@@ -158,6 +158,15 @@ jobs:
           PROVIDER_E2E_BACKEND_URL: http://127.0.0.1:1956
         run: npx playwright test e2e/provider-agent-mcp-live.spec.js --reporter=line --workers=1
 
+      - name: Preserve browser operation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-agent-browser-operation-${{ github.run_id }}
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Show service logs on failure
         if: failure()
         run: docker compose --profile mcp-example logs backend frontend mcp-sandbox postgres mcp-example-map

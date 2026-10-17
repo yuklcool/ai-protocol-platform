@@ -22,6 +22,11 @@ compatibility with other A2UI versions or arbitrary unregistered catalogs.
    The Agent sees an authorized catalog and loads Skill instructions through
    `load_skill`; Skills do not become separate Agents or grant extra tools.
 
+Self-hosted chat titles use the first user turn locally. They do not invoke an
+additional Gemini model unless the operator explicitly sets `CHAT_TITLE_MODEL`.
+That optional title client respects `GOOGLE_GENAI_USE_VERTEXAI`; registering an
+OpenAI-compatible Root model does not implicitly require Google credentials.
+
 Both chat and UI actions use `/api/agent/stream` and the same frontend AG-UI
 agent. The existing Skill stream URL is an alias of that runtime. The separate
 surface-action-run route remains available for protocol clients and developer
