@@ -54,7 +54,7 @@ def test_protected_endpoint_no_auth_401(client: TestClient) -> None:
 
 def test_protected_endpoint_invalid_auth_401(client: TestClient) -> None:
     """Protected endpoint 401s when the token is rejected."""
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         from firebase_admin import auth as fb_auth  # local import to build exception
 
         mock_verify.side_effect = fb_auth.InvalidIdTokenError("bad")
@@ -64,7 +64,7 @@ def test_protected_endpoint_invalid_auth_401(client: TestClient) -> None:
 
 def test_protected_endpoint_valid_token_200(client: TestClient) -> None:
     """Mock-verified token → 200 and uid/domain land on the User."""
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.return_value = {
             "uid": "mark-uid",
             "email": "owner@yourcompany.com",

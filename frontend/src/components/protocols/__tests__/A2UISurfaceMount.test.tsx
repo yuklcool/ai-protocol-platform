@@ -209,6 +209,29 @@ function pushSurface(
 }
 
 describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => {
+  it("dispatches once when routing props change during an awaited SDK action", async () => {
+    let registry: ReturnType<typeof useSurfaceRegistry> | null = null;
+    function Capture() { registry = useSurfaceRegistry(); return null; }
+    let finish!: () => void;
+    triggerActionSpy.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const content = (onChatMessage: (text: string) => void) => wrap(<>
+      <Capture />
+      <A2UISurfaceMount surfaceId="workspace" sessionId="sess-1" skillId="root-agent"
+        triggerOnAction freezeAfterAction={false} onChatMessage={onChatMessage} />
+    </>);
+    const view = render(content(() => {}));
+    act(() => pushSurface(registry!, "workspace"));
+    const surface = registry!.getState("workspace")!.surface!;
+    let dispatched!: Promise<void>;
+    act(() => { dispatched = surface.dispatchAction({ event: { name: "submit" } }, "button"); });
+    await waitFor(() => expect(triggerActionSpy).toHaveBeenCalledTimes(1));
+    view.rerender(content(() => {}));
+    await act(async () => { finish(); await dispatched; });
+    expect(triggerActionSpy).toHaveBeenCalledTimes(1);
+    await act(async () => { await surface.dispatchAction({ event: { name: "submit" } }, "button"); });
+    expect(triggerActionSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("default (triggerOnAction omitted): clicks POST to the plain /surface-action endpoint — current behaviour preserved", async () => {
     let registryHandle: ReturnType<typeof useSurfaceRegistry> | null = null;
     function Capture() {

@@ -165,7 +165,7 @@ def _compaction_summarizer():
     return _summarizer_singleton
 
 
-def get_compaction_config(model_id: str) -> EventsCompactionConfig:
+def get_compaction_config(model_id: str, *, summarizer_model=None) -> EventsCompactionConfig:
     """Return model-appropriate EventsCompactionConfig.
 
     Larger context windows get a higher token threshold and a higher turn-count
@@ -201,7 +201,13 @@ def get_compaction_config(model_id: str) -> EventsCompactionConfig:
     # Setting `summarizer` ourselves also makes that ADK branch return early, so
     # the copy is belt-and-braces — but the copy is what makes it SAFE if the
     # summarizer ever fails to build and comes back None.
-    config = config.model_copy(update={"summarizer": _compaction_summarizer()})
+    if summarizer_model is not None:
+        from adk.compaction_summarizer import build_compaction_summarizer
+
+        summarizer = build_compaction_summarizer(llm=summarizer_model)
+    else:
+        summarizer = _compaction_summarizer()
+    config = config.model_copy(update={"summarizer": summarizer})
 
     override = os.environ.get(_TOKEN_THRESHOLD_ENV)
     if override:

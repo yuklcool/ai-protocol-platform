@@ -140,7 +140,10 @@ def test_compaction_config_uses_the_request_models_shared_tuning(chat_agui_agent
 
     runner = _runner_for(chat_agui_agent)
     assert runner.app is not None, "no App on the Runner"
-    assert runner.app.events_compaction_config == get_compaction_config("gemini-2.5-flash")
+    cfg = runner.app.events_compaction_config
+    expected = get_compaction_config("gemini-2.5-flash")
+    assert cfg.model_dump(exclude={"summarizer"}) == expected.model_dump(exclude={"summarizer"})
+    assert cfg.summarizer._llm.model == "gemini-2.5-flash"
 
 
 class TestSessionSafetySurvivesTheWiring:

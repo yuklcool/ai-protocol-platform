@@ -76,7 +76,7 @@ def _decoded(**overrides: Any) -> dict[str, Any]:
 
 
 async def test_valid_token_returns_user() -> None:
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.return_value = _decoded(groupTags=["aitana-admin"])
         user = await get_current_user(_make_request({"Authorization": "Bearer good.jwt"}))
     assert isinstance(user, User)
@@ -87,7 +87,7 @@ async def test_valid_token_returns_user() -> None:
 
 
 async def test_expired_token_returns_401() -> None:
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.side_effect = fb_auth.ExpiredIdTokenError("expired", cause=Exception())
         with pytest.raises(HTTPException) as exc:
             await get_current_user(_make_request({"Authorization": "Bearer expired.jwt"}))
@@ -96,7 +96,7 @@ async def test_expired_token_returns_401() -> None:
 
 
 async def test_invalid_token_returns_401() -> None:
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.side_effect = fb_auth.InvalidIdTokenError("bad signature")
         with pytest.raises(HTTPException) as exc:
             await get_current_user(_make_request({"Authorization": "Bearer bad.jwt"}))
@@ -106,7 +106,7 @@ async def test_invalid_token_returns_401() -> None:
 
 async def test_verify_raises_generic_error_returns_401() -> None:
     """firebase-admin can raise ValueError on shape errors; treat as 401."""
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.side_effect = ValueError("malformed payload")
         with pytest.raises(HTTPException) as exc:
             await get_current_user(_make_request({"Authorization": "Bearer shape.jwt"}))
@@ -116,7 +116,7 @@ async def test_verify_raises_generic_error_returns_401() -> None:
 async def test_pii_not_in_auth_failure_logs(caplog: pytest.LogCaptureFixture) -> None:
     """On auth failure we must not log the email or the raw token — only the error type."""
     caplog.set_level("INFO", logger="auth.firebase_auth")
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.side_effect = fb_auth.InvalidIdTokenError("oops")
         with pytest.raises(HTTPException):
             await get_current_user(_make_request({"Authorization": "Bearer sensitive.jwt"}))
@@ -145,14 +145,14 @@ def test_extract_domain(email: str, expected_domain: str) -> None:
 
 
 async def test_domain_populated_from_decoded_token() -> None:
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.return_value = _decoded(email="ceo@yourcompany.com")
         user = await get_current_user(_make_request({"Authorization": "Bearer x"}))
     assert user.domain == "yourcompany.com"
 
 
 async def test_domain_empty_when_no_at() -> None:
-    with patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify:
+    with patch("firebase_admin.auth.verify_id_token") as mock_verify:
         mock_verify.return_value = _decoded(email="weird")
         user = await get_current_user(_make_request({"Authorization": "Bearer x"}))
     assert user.domain == ""
@@ -193,7 +193,7 @@ def test_group_tags_is_frozen() -> None:
 async def test_derived_group_tags_unioned_with_jwt_claim() -> None:
     """acmeenergy.com user with no JWT groupTags gets ONE via clients/{domain}."""
     with (
-        patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify,
+        patch("firebase_admin.auth.verify_id_token") as mock_verify,
         patch("db.clients.resolve_derived_group_tags", return_value=frozenset({"ONE"})),
     ):
         mock_verify.return_value = _decoded(email="alice@acmeenergy.com")
@@ -205,7 +205,7 @@ async def test_derived_group_tags_unioned_with_jwt_claim() -> None:
 async def test_derived_tags_unioned_with_existing_jwt_tags() -> None:
     """JWT-provided tags survive — derived tags add to them, never replace."""
     with (
-        patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify,
+        patch("firebase_admin.auth.verify_id_token") as mock_verify,
         patch("db.clients.resolve_derived_group_tags", return_value=frozenset({"ONE"})),
     ):
         mock_verify.return_value = _decoded(email="alice@acmeenergy.com", groupTags=["aitana-admin"])
@@ -216,7 +216,7 @@ async def test_derived_tags_unioned_with_existing_jwt_tags() -> None:
 async def test_no_derived_tags_when_domain_unmapped() -> None:
     """gmail.com user gets nothing added — resolve returns empty frozenset."""
     with (
-        patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify,
+        patch("firebase_admin.auth.verify_id_token") as mock_verify,
         patch("db.clients.resolve_derived_group_tags", return_value=frozenset()),
     ):
         mock_verify.return_value = _decoded(email="alice@gmail.com")
@@ -227,7 +227,7 @@ async def test_no_derived_tags_when_domain_unmapped() -> None:
 async def test_derived_tags_lookup_failure_does_not_block_auth() -> None:
     """Firestore unavailability must not 500 the auth path — user keeps JWT tags only."""
     with (
-        patch("auth.firebase_auth.fb_auth.verify_id_token") as mock_verify,
+        patch("firebase_admin.auth.verify_id_token") as mock_verify,
         patch("db.clients.resolve_derived_group_tags", side_effect=RuntimeError("firestore down")),
     ):
         mock_verify.return_value = _decoded(email="alice@acmeenergy.com", groupTags=["x"])

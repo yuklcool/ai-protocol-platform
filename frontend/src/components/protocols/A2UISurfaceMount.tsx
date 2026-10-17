@@ -146,14 +146,20 @@ export function A2UISurfaceMount({
   // otherwise reads as "nothing happened" and gets clicked again (the 2026-07-14
   // obligation-handoff report). Freeze it + show a persistent "Sent" badge.
   const [hasCompleted, setHasCompleted] = useState(false);
+  // The SDK awaits listeners while iterating a live Set. Replacing a listener
+  // during its awaited run adds it back to that same dispatch and repeats the
+  // action. Subscribe once per SurfaceModel; read current routing from a ref.
+  const actionRouting = useRef({ surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage });
+  actionRouting.current = { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage };
 
   // Subscribe to surface actions and route each one through the
   // configured dispatch path. Re-subscribes whenever the SurfaceModel
   // identity changes (clearSurface → new createSurface).
   useEffect(() => {
     if (!state?.surface) return;
-    if (!sessionId) return;
     const sub = state.surface.onAction.subscribe(async (action) => {
+      const { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage } = actionRouting.current;
+      if (!sessionId) return;
       // chat:send — a surface Button asks to post a chat message (e.g. a diff
       // card's "Explain this difference", whose action carries a ready-built
       // prompt in `context.prompt`). Route to the chat composer so the agent's
@@ -292,7 +298,7 @@ export function A2UISurfaceMount({
       }
     });
     return () => sub.unsubscribe();
-  }, [state?.surface, surfaceId, sessionId, triggerOnAction, triggerAction, skillId, onChatMessage]);
+  }, [state?.surface]);
 
   return (
     <div ref={ref} className={className} data-surface={surfaceId}>

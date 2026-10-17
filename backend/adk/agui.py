@@ -47,6 +47,8 @@ from google.adk.artifacts import BaseArtifactService
 from google.adk.memory import BaseMemoryService
 from google.adk.sessions import BaseSessionService
 
+from adk.run_errors import current_run_error
+
 logger = logging.getLogger(__name__)
 
 APP_NAME = "aitana_platform"
@@ -202,7 +204,9 @@ def build_agui_adk_agent(
     base_app = App(
         root_agent=agent,
         name=app_name.replace("-", "_"),
-        events_compaction_config=get_compaction_config(model_id),
+        events_compaction_config=get_compaction_config(
+            model_id, summarizer_model=getattr(agent, "canonical_model", None)
+        ),
     )
 
     # TUNING-CONSOLE (1b) — the admin thresholds must be applied HERE, not only
@@ -307,6 +311,8 @@ async def stream_agui_events(
     )
 
     tracker = get_current_tracker()
+    typed_error: dict[str, Any] = {}
+    error_token = current_run_error.set(typed_error)
     first_agui_event_seen = False
     first_model_token_seen = False
     # NEVER SILENT (CLAUDE.md #8): did this run yield anything the user can see —
@@ -423,6 +429,10 @@ async def stream_agui_events(
                 continue
 
             if type_value in _TERMINAL_EVENT_TYPES:
+                if typed_error:
+                    terminal_event_yielded = "RUN_ERROR"
+                    yield dict(typed_error)
+                    continue
                 # NEVER SILENT (CLAUDE.md #8): a RUN_FINISHED carrying no text
                 # and no tool call is a SILENT FAILURE — the turn dies and the
                 # UI just stops, with nothing to see and nothing to retry.
@@ -476,6 +486,7 @@ async def stream_agui_events(
             for stage_event in tracker.drain_stage_events():
                 yield stage_event.model_dump(by_alias=True, exclude_none=True)
     finally:
+        current_run_error.reset(error_token)
         # Consumer disconnected (or agent errored): don't leak the in-flight
         # anext task — cancelling it also propagates into the underlying
         # ag_ui_adk generator so the ADK run can clean up.

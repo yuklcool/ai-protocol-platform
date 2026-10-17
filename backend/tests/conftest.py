@@ -43,6 +43,21 @@ _network_patch = None
 _collection_credentials_patch = None
 
 
+@pytest.fixture(autouse=True)
+def _isolate_repository_and_memory_cache():
+    from adk.session import _reset_memory_service_for_tests
+    from db.persistence import reset_repository_for_testing
+
+    if os.environ.get("RUN_LIVE_GCP") == "1":
+        yield
+        return
+    reset_repository_for_testing()
+    _reset_memory_service_for_tests()
+    yield
+    reset_repository_for_testing()
+    _reset_memory_service_for_tests()
+
+
 def pytest_sessionstart(session):
     """Optional hard network boundary for local, non-billable regression runs.
 
@@ -117,9 +132,14 @@ def _isolate_firebase_directory_and_root_policy():
     if os.environ.get("RUN_LIVE_GCP") == "1":
         yield
     else:
+        from firebase_admin import _http_client
         from firebase_admin import auth as fb_auth
 
         with (
+            mock.patch.object(fb_auth, "verify_id_token", side_effect=fb_auth.InvalidIdTokenError("isolated verifier")),
+            mock.patch.object(
+                _http_client.HttpClient, "request", side_effect=RuntimeError("Firebase HTTP is disabled in unit tests")
+            ),
             mock.patch.object(fb_auth, "get_user", side_effect=fb_auth.UserNotFoundError("isolated test directory")),
             mock.patch.object(
                 fb_auth, "get_user_by_email", side_effect=fb_auth.UserNotFoundError("isolated test directory")
