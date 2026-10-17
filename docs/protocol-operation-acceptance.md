@@ -22,6 +22,11 @@ compatibility with other A2UI versions or arbitrary unregistered catalogs.
    The Agent sees an authorized catalog and loads Skill instructions through
    `load_skill`; Skills do not become separate Agents or grant extra tools.
 
+The Skill content editor only changes instructions, supporting files and access
+control. Model/tool/MCP/A2UI settings live in Root Agent settings; normal Root
+chat is the place to test capabilities. See `module-simplification.md` for the
+current module boundaries and retired demonstration routes.
+
 Self-hosted chat titles use the first user turn locally. They do not invoke an
 additional Gemini model unless the operator explicitly sets `CHAT_TITLE_MODEL`.
 That optional title client respects `GOOGLE_GENAI_USE_VERTEXAI`; registering an

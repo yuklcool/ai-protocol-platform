@@ -11,27 +11,14 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { fetchWithAuth } from "@/lib/apiClient";
-import { AGUIProvider } from "@/providers/AGUIProvider";
 import { SignInRequired } from "@/components/chat/SignInRequired";
-import {
-  AuthoringCopilot,
-  threadStorageKey,
-} from "@/components/studio/AuthoringCopilot";
 import { StudioBuilderForm } from "@/components/studio/StudioBuilderForm";
-import { SkillStudioShell } from "@/components/agent/AgentStudioShell";
-import {
-  applyProposal,
-  type Proposal,
-  type StudioDraft,
-} from "@/components/studio/applyProposal";
+import { SkillStudioShell } from "@/components/studio/SkillStudioShell";
+import { buildSaveBody, emptyDraft, skillToDraft, type StudioDraft } from "@/components/studio/draft";
 import type { Skill } from "@/types/skill";
-import { randomGlyphAvatar } from "@/lib/defaultAvatars";
 import { translateSkillStudio } from "@/lib/i18n/skillStudio";
 
 const STUDIO_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SKILL_STUDIO === "true";
-
-/** The copilot always talks to this platform skill (seeded backend M3). */
-const AUTHORING_SKILL_ID = "skill-authoring-assistant";
 
 /** Sentinel owner uid for platform-owned (read-only) skills. Runtime identifier,
  * not display branding. Mirrors backend skills/platform.py PLATFORM_OWNER_UID. */
@@ -95,13 +82,6 @@ function StudioInner({ skillId }: { skillId: string }) {
     [locale],
   );
 
-  // Seed the copilot thread from localStorage so a reload resumes the same
-  // conversation for this edited skill.
-  const seededThreadId = useMemo(() => {
-    if (typeof window === "undefined") return undefined;
-    return window.localStorage.getItem(threadStorageKey(skillId)) ?? undefined;
-  }, [skillId]);
-
   useEffect(() => {
     if (isNew) return;
     let cancelled = false;
@@ -125,10 +105,6 @@ function StudioInner({ skillId }: { skillId: string }) {
       cancelled = true;
     };
   }, [isNew, skillId]);
-
-  const onApplyProposal = useCallback((proposal: Proposal) => {
-    setDraft((prev) => applyProposal(prev, proposal));
-  }, []);
 
   const handleSave = useCallback(async () => {
     setSaveState({ status: "saving" });
@@ -159,7 +135,9 @@ function StudioInner({ skillId }: { skillId: string }) {
     } catch (err) {
       setSaveState({
         status: "error",
-        message: err instanceof Error ? err.message : String(err),
+        message: err instanceof Error && err.message === "invalidSkillFiles"
+          ? t("builder.invalidFiles")
+          : err instanceof Error ? err.message : String(err),
       });
     }
   }, [draft, isNew, skillId, t]);
@@ -238,63 +216,8 @@ function StudioInner({ skillId }: { skillId: string }) {
         </div>
       )}
       <StudioBuilderForm draft={draft} setDraft={setDraft} isNew={isNew} />
-      <div className="mt-6 hidden border-t pt-6 xl:block">
-        <AGUIProvider agentId={AUTHORING_SKILL_ID} skillId={AUTHORING_SKILL_ID} sessionId={seededThreadId}>
-          <AuthoringCopilot skillId={skillId} onApplyProposal={onApplyProposal} />
-        </AGUIProvider>
-      </div>
     </SkillStudioShell>
   );
-}
-
-function emptyDraft(): StudioDraft {
-  return {
-    name: "",
-    displayName: "",
-    description: "",
-    instructions: "",
-    skillMetadata: { model: "smart", tools: [], subSkills: [], toolConfigs: {} },
-    persona: { avatar: randomGlyphAvatar(), interactionStyle: "concise", voice: {} },
-    welcome: {},
-  };
-}
-
-function skillToDraft(s: Skill): StudioDraft {
-  return {
-    skillId: s.skillId,
-    ownerId: s.ownerId,
-    name: s.name,
-    displayName: s.displayName,
-    description: s.description,
-    instructions: s.instructions,
-    avatar: s.avatar,
-    skillMetadata: {
-      model: s.skillMetadata?.model,
-      tools: s.skillMetadata?.tools ?? [],
-      subSkills: s.skillMetadata?.subSkills ?? [],
-      toolConfigs: s.skillMetadata?.toolConfigs ?? {},
-      ...(s.skillMetadata?.delegation ? { delegation: s.skillMetadata.delegation } : {}),
-      ...(s.skillMetadata?.category ? { category: s.skillMetadata.category } : {}),
-      ...(s.skillMetadata?.enableConfirmation === false ? { enableConfirmation: false } : {}),
-    },
-    persona: s.persona ?? { interactionStyle: "concise" },
-    welcome: s.welcome ?? {},
-    accessControl: s.accessControl as unknown as Record<string, unknown>,
-  };
-}
-
-function buildSaveBody(draft: StudioDraft, isNew: boolean): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    description: draft.description ?? "",
-    instructions: draft.instructions ?? "",
-    displayName: draft.displayName ?? "",
-    skillMetadata: draft.skillMetadata ?? {},
-    persona: draft.persona ?? {},
-    welcome: draft.welcome ?? {},
-    accessControl: draft.accessControl ?? { type: "private" },
-  };
-  if (isNew) body.name = draft.name ?? "";
-  return body;
 }
 
 async function safeErrorDetail(res: Response): Promise<string | null> {

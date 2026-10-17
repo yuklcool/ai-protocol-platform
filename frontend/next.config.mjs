@@ -5,8 +5,15 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
   },
-  serverRuntimeConfig: {
-    MAILGUN_WEBHOOK_SECRET: process.env.MAILGUN_WEBHOOK_SECRET,
+  async redirects() {
+    return [
+      { source: '/agents', destination: '/agent', permanent: true },
+      { source: '/agents/:agentId', destination: '/agent', permanent: true },
+      { source: '/skills/new', destination: '/skills/studio/new', permanent: true },
+      { source: '/dev/file-browser', destination: '/agent', permanent: true },
+      { source: '/dev/rich-media', destination: '/', permanent: true },
+      { source: '/workshop', destination: 'https://github.com/yuklcool/ai-protocol-platform/blob/main/SELFHOST.md', permanent: true },
+    ]
   },
   // G45 / Sprint A2A-INVOKE — Friction 25: Next.js's catch-all 404s every
   // `/a2a/*` request before FastAPI ever sees it. Forward them to the

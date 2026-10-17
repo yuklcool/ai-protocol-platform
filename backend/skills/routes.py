@@ -63,6 +63,7 @@ class CreateSkillRequest(BaseModel):
     initial_message: str = Field(default="", alias="initialMessage")
     tags: list[str] = []
     references: dict[str, str] = {}
+    assets: dict[str, str] = {}
     # v6.6.0 ONE-FORK-CONVERGENCE M3: Skill Studio persists persona + welcome as
     # part of the whole-draft Save. Pass-through dicts validated by SkillConfig.
     persona: dict | None = None
@@ -83,6 +84,7 @@ class UpdateSkillRequest(BaseModel):
     initial_message: str | None = Field(default=None, alias="initialMessage")
     tags: list[str] | None = None
     references: dict[str, str] | None = None
+    assets: dict[str, str] | None = None
     # v6.6.0 ONE-FORK-CONVERGENCE M3: Skill Studio persists persona + welcome as
     # part of the whole-draft Save. Pass-through dicts validated by SkillConfig.
     persona: dict | None = None
@@ -146,6 +148,13 @@ class SkillResponse(BaseModel):
         else:
             data["kind"] = "skill"
         return cls.model_validate(data)
+
+
+class SkillDetailResponse(SkillResponse):
+    """Content files are loaded only for an authorized individual Skill."""
+
+    references: dict[str, str] = Field(default_factory=dict)
+    assets: dict[str, str] = Field(default_factory=dict)
 
 
 class EffectiveAccessGates(BaseModel):
@@ -222,7 +231,7 @@ def _fill_welcome_buckets(resp: SkillResponse, user: User) -> SkillResponse:
 # === Routes ===
 
 
-@router.post("", status_code=201, response_model=SkillResponse)
+@router.post("", status_code=201, response_model=SkillDetailResponse)
 def create_skill(req: CreateSkillRequest, user: User = Depends(get_current_user)) -> Any:  # noqa: B008
     """Create a new skill. `ownerId` is always set from the JWT — never client-supplied.
 
@@ -247,6 +256,8 @@ def create_skill(req: CreateSkillRequest, user: User = Depends(get_current_user)
         kwargs["protocols"] = req.protocols
     if req.references:
         kwargs["references"] = req.references
+    if req.assets:
+        kwargs["assets"] = req.assets
     if req.persona:
         kwargs["persona"] = req.persona
     if req.welcome:
@@ -265,7 +276,7 @@ def create_skill(req: CreateSkillRequest, user: User = Depends(get_current_user)
         tags=req.tags,
         **kwargs,
     )
-    return SkillResponse.from_config(config)
+    return SkillDetailResponse.from_config(config)
 
 
 @router.get("", response_model=list[SkillResponse])
@@ -324,7 +335,7 @@ def get_skill_by_slug(
     return _fill_welcome_buckets(SkillResponse.from_config(config), user)
 
 
-@router.get("/{skill_id}", response_model=SkillResponse)
+@router.get("/{skill_id}", response_model=SkillDetailResponse)
 def get_skill(
     skill_id: str,
     request: Request,
@@ -341,7 +352,7 @@ def get_skill(
     if config is None or not request.state.access.can_access_skill(config):
         # Collapse "not found" and "not visible" into one response — don't leak existence.
         raise HTTPException(status_code=404, detail="Skill not found")
-    return _fill_welcome_buckets(SkillResponse.from_config(config), user)
+    return _fill_welcome_buckets(SkillDetailResponse.from_config(config), user)
 
 
 @router.get("/{skill_id}/effective-access", response_model=EffectiveAccessResponse)
@@ -432,7 +443,7 @@ def _skill_knowledge_sources(config: SkillConfig) -> list[str]:
     return [str(source) for source in sources] if isinstance(sources, list) else []
 
 
-@router.put("/{skill_id}", response_model=SkillResponse)
+@router.put("/{skill_id}", response_model=SkillDetailResponse)
 def update_skill(
     skill_id: str,
     req: UpdateSkillRequest,
@@ -485,7 +496,7 @@ def update_skill(
     updated = skill_config.update_skill(skill_id, updates)
     if updated is None:
         raise HTTPException(status_code=404, detail="Skill not found")
-    return SkillResponse.from_config(updated)
+    return SkillDetailResponse.from_config(updated)
 
 
 @router.delete("/{skill_id}", status_code=204)
@@ -512,7 +523,7 @@ def delete_skill(
         raise HTTPException(status_code=404, detail="Skill not found")
 
 
-@router.post("/{skill_id}/fork", status_code=201, response_model=SkillResponse)
+@router.post("/{skill_id}/fork", status_code=201, response_model=SkillDetailResponse)
 def fork_skill(
     skill_id: str,
     request: Request,
@@ -544,8 +555,9 @@ def fork_skill(
         protocols=source.protocols.model_dump(by_alias=True),
         tags=list(source.tags),
         references=dict(source.references),
+        assets=dict(source.assets),
     )
-    return SkillResponse.from_config(new_skill)
+    return SkillDetailResponse.from_config(new_skill)
 
 
 @router.get("/{skill_id}/sessions", response_model=ListSessionsResponse)

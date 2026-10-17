@@ -2,7 +2,7 @@ name: Protocol operation acceptance
 
 on:
   push:
-    branches: [main, fix/protocol-operation-completion]
+    branches: [main, fix/protocol-operation-completion, refactor/simplify-platform-modules]
     paths:
       - backend/**
       - frontend/**

@@ -34,10 +34,10 @@ export function LocalModeBanner() {
         </span>
       )}
       <a
-        href="/workshop#graduating-from-local-mode"
+        href="https://github.com/yuklcool/ai-protocol-platform/blob/main/SELFHOST.md"
         className="ml-auto underline hover:no-underline"
       >
-        {t("localMode.connectGcp")}
+        {t("localMode.selfHostGuide")}
       </a>
     </div>
   );
