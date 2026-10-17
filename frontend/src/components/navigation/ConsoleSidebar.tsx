@@ -7,11 +7,7 @@ import {
   Bot,
   Boxes,
   Building2,
-  Database,
-  FileSearch,
-  FlaskConical,
   LayoutDashboard,
-  PanelsTopLeft,
   Plug,
   ScrollText,
   Settings2,
@@ -61,7 +57,6 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
       { href: "/admin/tool-permissions", zh: "Tools", en: "Tools", icon: Wrench },
       { href: "/admin/mcp-servers", zh: "MCP Servers", en: "MCP Servers", icon: Plug },
       { href: "/admin/model-providers", zh: "Models", en: "Models", icon: Boxes },
-      { href: "/dev/file-browser", zh: "Knowledge", en: "Knowledge", icon: Database },
     ],
   },
   {
@@ -73,16 +68,6 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
       { href: "/admin/groups", zh: "Groups", en: "Groups", icon: ShieldCheck },
       { href: "/admin/analytics", zh: "Usage", en: "Usage", icon: Activity },
       { href: "/admin/audit", zh: "Audit", en: "Audit", icon: ScrollText },
-    ],
-  },
-  {
-    zh: "开发者",
-    en: "Developer",
-    items: [
-      { href: "/dev/a2ui", zh: "A2UI Playground", en: "A2UI Playground", icon: PanelsTopLeft },
-      { href: "/dev/mcp-apps", zh: "MCP Apps", en: "MCP Apps", icon: Plug },
-      { href: "/dev/rich-media", zh: "Rich Media", en: "Rich Media", icon: FileSearch },
-      { href: "/workshop", zh: "Workshop", en: "Workshop", icon: FlaskConical },
     ],
   },
 ];

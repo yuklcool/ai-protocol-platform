@@ -183,13 +183,22 @@ jobs:
           npm install --no-save --package-lock=false @playwright/test@1.55.0
           npx playwright install --with-deps chromium
 
-      - name: Run dynamic model Skill Studio browser acceptance
+      - name: Run Root model and Skill content browser acceptance
         working-directory: frontend
         env:
           MODEL_STUDIO_E2E_RUN_ID: studio-${{ github.run_id }}
           MODEL_STUDIO_FRONTEND_URL: http://localhost:3456
           MODEL_STUDIO_BACKEND_URL: http://127.0.0.1:1956
         run: npx playwright test e2e/model-provider-studio-live.spec.js --reporter=line --workers=1
+
+      - name: Preserve Skill editor screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-content-editor-${{ github.run_id }}
+          path: frontend/test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Show service logs on failure
         if: failure()

@@ -9,9 +9,13 @@ on:
       - README.md
       - docs/selfhost-release-images.md
       - backend/Dockerfile
+      - backend/pyproject.toml
+      - backend/uv.lock
       - backend/db/migrations/**
       - backend/scripts/apply_selfhost_migrations.py
       - frontend/Dockerfile
+      - frontend/package.json
+      - frontend/package-lock.json
       - frontend/docker-entrypoint.sh
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh

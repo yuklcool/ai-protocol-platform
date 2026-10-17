@@ -45,10 +45,10 @@ function putJson(token, path, body) {
   });
 }
 
-test.describe("dynamic model -> Skill Studio live acceptance", () => {
+test.describe("dynamic model -> Root Agent live acceptance", () => {
   test.setTimeout(120_000);
 
-  test("discovers a database-backed model in Studio and persists the selection", async ({ browser }) => {
+  test("persists the Root model and edits Skill content without overwriting Agent fields", async ({ browser }, testInfo) => {
     expect(ADMIN_PASSWORD, "SELFHOST_ADMIN_PASSWORD must be configured").not.toBe("");
 
     const login = await api("/api/auth/login", {
@@ -64,6 +64,8 @@ test.describe("dynamic model -> Skill Studio live acceptance", () => {
     let modelCreated = false;
     let skillId = null;
     let context = null;
+    const originalPlatform = await authedApi(token, "/api/admin/platform-config");
+    let rootTouched = false;
 
     try {
       const provider = await putJson(token, `/api/admin/model-providers/${PROVIDER_ID}`, {
@@ -108,6 +110,8 @@ test.describe("dynamic model -> Skill Studio live acceptance", () => {
           displayName: "Skill Studio Model Acceptance",
           description: "CI skill for dynamic model selection",
           instructions: "Reply concisely.",
+          references: { "guide.md": "Keep this reference when saving." },
+          assets: { "template.txt": "Keep this asset when saving." },
           accessControl: { type: "private" },
           skillMetadata: {
             model: "smart",
@@ -133,9 +137,10 @@ test.describe("dynamic model -> Skill Studio live acceptance", () => {
       );
 
       const page = await context.newPage();
-      await page.goto(`${FRONTEND_URL}/skills/studio/${skillId}`, { waitUntil: "domcontentloaded" });
-
-      await expect(page.getByText(/Skill Studio 已禁用|Skill Studio is disabled/i)).toHaveCount(0);
+      await putJson(token, "/api/admin/platform-config", { agent: { ...originalPlatform.agent, model: "smart" } });
+      rootTouched = true;
+      await page.goto(`${FRONTEND_URL}/agent`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: /^(Model|模型)$/ }).click();
 
       const modelSelect = page.locator(`select:has(option[value="${MODEL_ID}"])`).first();
       await expect(modelSelect).toBeVisible({ timeout: 30_000 });
@@ -145,20 +150,38 @@ test.describe("dynamic model -> Skill Studio live acceptance", () => {
       await modelSelect.selectOption(MODEL_ID);
       await expect(modelSelect).toHaveValue(MODEL_ID);
 
-      const saveButton = page.getByRole("button", { name: /^(Save|保存)$/ }).first();
+      const saveButton = page.getByRole("button", { name: /^(Save changes|保存修改)$/ }).first();
       await expect(saveButton).toBeEnabled();
       await saveButton.click();
-      await expect(page.getByText(/^(Saved\.|已保存。)$/)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/^(Saved|已保存)$/)).toBeVisible({ timeout: 30_000 });
 
-      const persisted = await authedApi(token, `/api/skills/${skillId}`);
-      expect(persisted.skillMetadata?.model).toBe(MODEL_ID);
+      const persisted = await authedApi(token, "/api/admin/platform-config");
+      expect(persisted.agent?.model).toBe(MODEL_ID);
 
       await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: /^(Model|模型)$/ }).click();
       const reloadedSelect = page.locator(`select:has(option[value="${MODEL_ID}"])`).first();
       await expect(reloadedSelect).toBeVisible({ timeout: 30_000 });
       await expect(reloadedSelect).toHaveValue(MODEL_ID);
+
+      await page.goto(`${FRONTEND_URL}/skills/studio/${skillId}`, { waitUntil: "domcontentloaded" });
+      const description = page.getByLabel(/^(Description|说明)$/);
+      await expect(description).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(`select:has(option[value="${MODEL_ID}"])`)).toHaveCount(0);
+      await description.fill("Updated capability content");
+      await page.getByRole("button", { name: /^(Save|保存)$/ }).click();
+      await expect(page.getByText(/^(Saved\.|已保存。)$/)).toBeVisible({ timeout: 30_000 });
+      const savedSkill = await authedApi(token, `/api/skills/${skillId}`);
+      expect(savedSkill.description).toBe("Updated capability content");
+      expect(savedSkill.skillMetadata?.model).toBe("smart");
+      expect(savedSkill.references).toEqual({ "guide.md": "Keep this reference when saving." });
+      expect(savedSkill.assets).toEqual({ "template.txt": "Keep this asset when saving." });
+      await page.screenshot({ path: testInfo.outputPath("skill-content-editor.png"), fullPage: true });
     } finally {
       if (context) await context.close();
+      if (rootTouched) {
+        await putJson(token, "/api/admin/platform-config", { agent: originalPlatform.agent }).catch(() => {});
+      }
       if (skillId) {
         await authedApi(token, `/api/skills/${skillId}`, { method: "DELETE" }).catch(() => {});
       }

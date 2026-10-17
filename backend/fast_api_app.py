@@ -437,11 +437,7 @@ app.include_router(voice_router)
 # Channels self-register via `ChannelRegistry.register(...)`. `mount_webhooks`
 # then exposes `POST /api/{name}/webhook` for each registered channel. M1
 # ships the framework with no adapters; M2/M3 register Discord + Email here.
-from channels.discord import DiscordChannel  # noqa: E402
-from channels.email_ import EmailChannel  # noqa: E402
 from channels.registry import ChannelRegistry  # noqa: E402
-from channels.telegram_ import TelegramChannel  # noqa: E402
-from channels.whatsapp import WhatsAppChannel  # noqa: E402
 
 # Phase 1+ adapters register here.
 # Each adapter gates on its required env var so local dev and LOCAL_MODE
@@ -454,6 +450,8 @@ from channels.whatsapp import WhatsAppChannel  # noqa: E402
 # gateway from inside `import` because it would block.
 _discord_public_key = os.getenv("DISCORD_PUBLIC_KEY", "")
 if _discord_public_key:
+    from channels.discord import DiscordChannel
+
     ChannelRegistry.register(DiscordChannel())
 else:
     _log.info("discord channel not registered: DISCORD_PUBLIC_KEY not set")
@@ -461,6 +459,8 @@ else:
 # M3 (Email): gated on MAILGUN_SIGNING_KEY.
 _mailgun_signing_key = os.getenv("MAILGUN_SIGNING_KEY", "")
 if _mailgun_signing_key:
+    from channels.email_ import EmailChannel
+
     ChannelRegistry.register(
         EmailChannel(
             signing_key=_mailgun_signing_key,
@@ -476,6 +476,8 @@ else:
 # M4 (Telegram): gated on TELEGRAM_BOT_TOKEN.
 _telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
 if _telegram_bot_token:
+    from channels.telegram_ import TelegramChannel
+
     ChannelRegistry.register(TelegramChannel())
 else:
     _log.info("telegram channel not registered: TELEGRAM_BOT_TOKEN not set")
@@ -483,6 +485,8 @@ else:
 # M4 (WhatsApp): gated on TWILIO_ACCOUNT_SID.
 _twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
 if _twilio_account_sid:
+    from channels.whatsapp import WhatsAppChannel
+
     ChannelRegistry.register(WhatsAppChannel())
 else:
     _log.info("whatsapp channel not registered: TWILIO_ACCOUNT_SID not set")

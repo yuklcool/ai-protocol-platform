@@ -116,6 +116,49 @@ def test_create_skill_invalid_name(client):
             client.post("/api/skills", json={"name": "Invalid Name!"})
 
 
+def test_content_files_round_trip_without_loading_them_in_catalog(client):
+    config = _make_config(references={"guide.md": "Reference"}, assets={"template.txt": "Template"})
+    with (
+        patch("skills.routes.skill_config.create_skill", return_value=config) as create,
+        patch("skills.routes.skill_config.get_skill", return_value=config),
+        patch("skills.routes.skill_config.list_skills", return_value=[config]),
+    ):
+        created = client.post(
+            "/api/skills",
+            json={"name": "test-skill", "references": config.references, "assets": config.assets},
+        )
+        assert created.status_code == 201
+        assert create.call_args.kwargs["assets"] == config.assets
+        detail = client.get("/api/skills/abc-123").json()
+        assert detail["references"] == config.references
+        assert detail["assets"] == config.assets
+        catalog = client.get("/api/skills").json()
+        assert "references" not in catalog[0]
+        assert "assets" not in catalog[0]
+
+
+def test_content_save_only_updates_submitted_fields(client):
+    config = _make_config(references={"guide.md": "Old reference"}, assets={"template.txt": "Old template"})
+
+    def update(_skill_id, updates):
+        assert set(updates) == {"description", "references", "assets"}
+        return config.model_copy(update=updates)
+
+    with (
+        patch("skills.routes.skill_config.get_skill", return_value=config),
+        patch("skills.routes.skill_config.update_skill", side_effect=update),
+    ):
+        response = client.put(
+            "/api/skills/abc-123",
+            json={"description": "Updated content", "references": {}, "assets": {"new.txt": "New content"}},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["references"] == {}
+        assert body["assets"] == {"new.txt": "New content"}
+        assert body["skillMetadata"] == config.skill_metadata.model_dump(by_alias=True)
+
+
 # === GET /api/skills ===
 
 
@@ -334,7 +377,7 @@ def test_fork_missing_skill_returns_404(client):
 
 def test_fork_own_skill_is_allowed(client):
     """Users can fork their own skills — useful for quick branching."""
-    own = _make_config(skillId="abc-123")  # ownerId defaults to user-1
+    own = _make_config(skillId="abc-123", assets={"template.txt": "Keep this asset"})
     with (
         patch("skills.routes.skill_config.get_skill") as mock_get,
         patch("skills.routes.skill_config.create_skill") as mock_create,
@@ -348,6 +391,7 @@ def test_fork_own_skill_is_allowed(client):
         resp = client.post("/api/skills/abc-123/fork")
         assert resp.status_code == 201
         assert resp.json()["skillId"] == "abc-fork-123"
+        assert mock_create.call_args.kwargs["assets"] == own.assets
 
 
 def test_fork_name_suffix_is_short(client):

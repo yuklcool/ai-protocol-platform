@@ -1,5 +1,15 @@
 # CLAUDE.md — Aitana Platform v6
 
+## Fork baseline
+
+This fork uses **one Root Agent**, with Skills as authorized, lazily loaded
+capabilities. Root owns the model, tools, MCP, knowledge and interaction. The
+default self-host stack is Docker Compose, PostgreSQL, local storage and JWT;
+GCP integrations are optional. See `docs/module-simplification.md` and
+`docs/protocol-operation-acceptance.md`. This baseline takes precedence over
+historical upstream examples below that describe Skills as separate Agents or
+GCP as the default infrastructure.
+
 ## Security Hard Rules
 
 **NEVER make confidential customer content publicly accessible — including
@@ -78,7 +88,7 @@ Aitana Platform v6 is a greenfield rebuild of the Aitana AI assistant platform. 
      (`references/a2ui-v0.9-basic-catalog.md`) — read it before designing a
      surface; don't re-derive.
    - Two wire hazards to handle **once** (learned the hard way): tool results
-     are double-wrapped `{"result":"{…}"}` (unwrap via `src/lib/toolResult.ts`)
+     are double-wrapped `{"result":"{…}"}` (unwrap at the protocol consumer)
      and >50K results are offloaded to an artifact (`_handle_large_output`) —
      any tool feeding a UI mapping must be marked so it's never offloaded.
    - **"A2UI won't render in the Workspace" is a RECURRING bug — do not

@@ -186,7 +186,10 @@ function assertSuccessfulToolRun(events, marker, label) {
     toolNames.some((name) => name.includes("show-map")),
     label + " did not call show-map: " + JSON.stringify(toolNames),
   );
-  assert(textFrom(events).includes(marker), label + " did not return its required final marker");
+  assert(
+    textFrom(events).includes(marker),
+    label + " did not return its required final marker; response=" + JSON.stringify(textFrom(events).slice(0, 2000)),
+  );
 }
 
 function ledgerRows(tenantId) {

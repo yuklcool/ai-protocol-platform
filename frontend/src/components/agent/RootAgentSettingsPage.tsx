@@ -158,7 +158,17 @@ function renderSection(section: Section, c: RenderContext) {
   const { config, setPatch, t } = c;
   const control = "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring";
   if (section === "overview") return <Card title={t("rootAgent.overview.identity")} hint={t("rootAgent.overview.identityHint")}><Field label={t("rootAgent.overview.displayName")}><input value={config.displayName} onChange={(e) => setPatch({ displayName: e.target.value })} className={control} /></Field><Field label={t("rootAgent.overview.description")}><input value={config.description} onChange={(e) => setPatch({ description: e.target.value })} className={control} /></Field></Card>;
-  if (section === "model") return <Card title={t("rootAgent.model.label")} hint={t("rootAgent.model.hint")}><select aria-label={t("rootAgent.model.label")} value={config.model} onChange={(e) => setPatch({ model: e.target.value })} className={control}>{c.models.length ? c.models.map((model) => <option key={String(model.id ?? model.name)} value={String(model.id ?? model.name)}>{model.label ?? model.name ?? model.id}</option>) : ["smart", "pro", "lite"].map((model) => <option key={model} value={model}>{model}</option>)}</select></Card>;
+  if (section === "model") {
+    const models = new Map(["smart", "pro", "lite"].map((id) => [id, id]));
+    for (const model of c.models) {
+      const id = model.id ?? model.name;
+      if (id) models.set(id, model.label ?? model.name ?? id);
+    }
+    // Preserve an existing alias or retired model until the admin changes it.
+    // A select without the current option silently displays its first item.
+    if (!models.has(config.model)) models.set(config.model, config.model);
+    return <Card title={t("rootAgent.model.label")} hint={t("rootAgent.model.hint")}><select aria-label={t("rootAgent.model.label")} value={config.model} onChange={(e) => setPatch({ model: e.target.value })} className={control}>{Array.from(models, ([id, label]) => <option key={id} value={id}>{label}</option>)}</select></Card>;
+  }
   if (section === "prompt") return <Card title={t("rootAgent.prompt.label")} hint={t("rootAgent.prompt.hint")}><textarea aria-label={t("rootAgent.prompt.label")} value={config.instructions} onChange={(e) => setPatch({ instructions: e.target.value })} rows={14} className={`${control} font-mono`} /></Card>;
   if (section === "skills") return <ResourceChecklist title={t("rootAgent.skills.title")} description={t("rootAgent.skills.description")} empty={t("rootAgent.skills.empty")} items={c.skills.filter((skill) => skill.kind !== "system").map((skill) => ({ id: skill.skillId, label: skill.displayName || skill.name, detail: `${skill.kind === "development" ? "Development" : skill.kind === "specialist" ? "Specialist" : "Skill"} · ${skill.description}` }))} selected={c.selectedSkills} onToggle={(id, checked) => c.toggle("skills", id, checked)} />;
   if (section === "tools") return <ResourceChecklist title={t("rootAgent.tools.title")} description={t("rootAgent.tools.description")} empty={t("rootAgent.tools.empty")} items={c.tools.map((tool) => ({ id: tool.name, label: tool.label || tool.name, detail: tool.description }))} selected={c.selectedTools} onToggle={(id, checked) => c.toggle("tools", id, checked)} />;

@@ -52,7 +52,7 @@ describe("LocalModeBanner", () => {
     ).toBeInTheDocument();
   });
 
-  it("links to the workshop graduation guide", () => {
+  it("links to the self-host deployment guide", () => {
     vi.mocked(localMode.isLocalMode).mockReturnValue(true);
     vi.stubGlobal(
       "fetch",
@@ -66,8 +66,8 @@ describe("LocalModeBanner", () => {
 
     render(<LocalModeBanner />);
 
-    const link = screen.getByRole("link", { name: /Connect to your own GCP/i });
-    expect(link).toHaveAttribute("href", "/workshop#graduating-from-local-mode");
+    const link = screen.getByRole("link", { name: /Self-host deployment guide/i });
+    expect(link).toHaveAttribute("href", "https://github.com/yuklcool/ai-protocol-platform/blob/main/SELFHOST.md");
   });
 
   it("shows the disabled-services list once fetched", async () => {

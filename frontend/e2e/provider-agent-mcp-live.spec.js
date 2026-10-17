@@ -248,7 +248,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       skillId = skill.skillId;
       expect(skillId).toBeTruthy();
       await putJson(token, "/api/admin/platform-config", { agent: {
-        ...originalPlatform.agent, model: MODEL_ID, skills: [skillId], tools: [], mcpServers: [SERVER_ID],
+        ...originalPlatform.agent, model: "smart", skills: [skillId], tools: [], mcpServers: [SERVER_ID],
         interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
           allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
       } });
@@ -270,11 +270,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       page.on("console", (msg) => diagnostics.push(`[console:${msg.type()}] ${msg.text()}`));
       page.on("pageerror", (err) => diagnostics.push(`[pageerror] ${err.message}`));
 
-      // Prove the product authoring path can discover and persist the dynamic
-      // database-backed model before exercising it in chat. The Skill starts on
-      // a managed tier so this is a real UI selection transition, not merely a
-      // read-only assertion of an API-created model id.
-      await page.goto(`${FRONTEND_URL}/skills/studio/${skillId}`, { waitUntil: "domcontentloaded" });
+      // Model configuration belongs to the single Root Agent, not a Skill.
+      await page.goto(`${FRONTEND_URL}/agent`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: /^(Model|模型)$/ }).click();
       const modelSelect = page.locator(`select:has(option[value="${MODEL_ID}"])`).first();
       await expect(modelSelect).toBeVisible({ timeout: 30_000 });
       await expect(modelSelect).toHaveValue("smart");
@@ -282,13 +280,13 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await modelSelect.selectOption(MODEL_ID);
       await expect(modelSelect).toHaveValue(MODEL_ID);
 
-      const saveButton = page.getByRole("button", { name: /^(Save|保存)$/ }).first();
+      const saveButton = page.getByRole("button", { name: /^(Save changes|保存修改)$/ }).first();
       await expect(saveButton).toBeEnabled();
       await saveButton.click();
-      await expect(page.getByText(/^(Saved\.|已保存。)$/)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/^(Saved|已保存)$/)).toBeVisible({ timeout: 30_000 });
 
-      const persistedSkill = await authedApi(token, `/api/skills/${skillId}`);
-      expect(persistedSkill.skillMetadata?.model).toBe(MODEL_ID);
+      const persistedRoot = await authedApi(token, "/api/admin/platform-config");
+      expect(persistedRoot.agent?.model).toBe(MODEL_ID);
 
       // Create the real tenant-scoped session explicitly before browser chat.
       // Fresh-chat UI also bootstraps a session, but doing that asynchronously

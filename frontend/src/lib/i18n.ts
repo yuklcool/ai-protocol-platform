@@ -117,7 +117,7 @@ const en = {
   "localMode.aria": "LOCAL_MODE active",
   "localMode.summary": "🛠️ LOCAL_MODE — All data is in-memory and ephemeral. Auth is stubbed.",
   "localMode.disabled": "Disabled: {services}",
-  "localMode.connectGcp": "Connect to your own GCP →",
+  "localMode.selfHostGuide": "Self-host deployment guide →",
 
   "home.hero.eyebrow": "Open agent platform",
   "home.hero.lineA": "Build AI agents",
@@ -319,7 +319,7 @@ const zhCN = {
   "localMode.aria": "LOCAL_MODE 已启用",
   "localMode.summary": "🛠️ LOCAL_MODE — 当前数据仅保存在内存中，重启后会丢失；认证使用开发模式替身。",
   "localMode.disabled": "已禁用：{services}",
-  "localMode.connectGcp": "连接自己的 GCP →",
+  "localMode.selfHostGuide": "自托管部署指南 →",
 
   "home.hero.eyebrow": "开放式智能体平台",
   "home.hero.lineA": "构建 AI 智能体",

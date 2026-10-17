@@ -2,12 +2,13 @@ name: Protocol operation acceptance
 
 on:
   push:
-    branches: [main, fix/protocol-operation-completion]
+    branches: [main, fix/protocol-operation-completion, refactor/simplify-platform-modules]
     paths:
       - backend/**
       - frontend/**
       - docker-compose.yml
       - .github/workflows/protocol-operation-acceptance.yml
+      - .github/workflows/release-images.yml
   workflow_dispatch:
 
 permissions:
