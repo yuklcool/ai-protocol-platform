@@ -3,15 +3,15 @@
 > 仓库：`yuklcool/ai-protocol-platform`
 > 上游：`sunholo-data/ai-protocol-platform`
 > 状态更新时间：**2026-10-18**
-> 当前主线：**真实 Provider / MCP / A2UI action-run 与 v1.0.1 发布已验收；#1/#3/#10/#11/#13 已关闭。当前集中处理 #9 的持久化租户预算、真实租户 LLM 隔离和目标部署迁移。**
+> 当前交付：**v1.1.1 已正式发布；Root 控制台、普通聊天额度、真实 Provider / MCP / A2UI 操作及双租户隔离均已验收。剩余 #9 为目标生产历史数据迁移和回滚，尚未升级或迁移目标生产环境。**
 
 ## 2026-10-18 控制台补齐（#111）
 
-Root 知识检索、普通聊天额度、语音、本地 JWT 账号、稳定租户策略、工具租户规则、Token/估算费用统计及角色导航已合入 PR #112。操作和边界见 [Root 控制台闭环](docs/root-console-completion.md)。主线后端 3572 项、前端 1205 项测试通过；真实 Provider / A2UI / MCP、普通 Root 额度、双租户、控制台浏览器和持久化门禁通过。v1.1.0 发布因 Sandbox 的 ARM64 QEMU / esbuild 安装崩溃超时，未生成正式 Release；#113 改为构建机原生编译平台无关资源，保留原标签并使用 v1.1.1 重新验收发布。候选配置不代表版本已经发布，最终以对应提交的 Actions 和 GitHub Release 为准。#9 的目标生产迁移及回滚仍保持开放。以下内容保留历史验收记录。
+Root 知识检索、普通聊天额度、语音、本地 JWT 账号、稳定租户策略、工具租户规则、Token/估算费用统计及角色导航已合入 PR #112。操作和边界见 [Root 控制台闭环](docs/root-console-completion.md)。[v1.1.1 正式版本](https://github.com/yuklcool/ai-protocol-platform/releases/tag/v1.1.1) 对应提交 `29688543e0b4c1749210a8be90b0c94a207ca87e`：后端 3572 项、前端 1205 项测试及真实 Provider / A2UI / MCP、普通 Root 额度、双租户、控制台浏览器和持久化门禁全部通过；[镜像发布门禁](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)通过三个组件的 AMD64 / ARM64 构建与扫描、匿名拉取、全新 Compose 启动和管理员登录。PR #114 / #115 修复 Sandbox QEMU / esbuild 崩溃及模型路由测试等待；v1.1.0 失败发布的标签保留。Release 的环境文件资产名为 `default.env.selfhost.example`，下载后保存为 `.env`；详见 [部署步骤](docs/selfhost-release-images.md)。#9 的目标生产迁移及回滚仍保持开放。以下内容保留历史验收记录，以本节为准。
 
 ---
 
-## 1. 当前结论
+## 1. 历史基线与验收记录
 
 基础 Self-host 已完成：PostgreSQL 平台数据 / Session / Memory / A2UI、local JWT、无 GCP 启动、本地文件存储、租户资源隔离、Model/MCP 管理、中文品牌、可选 S3/OIDC、版本化 GHCR 发布。
 

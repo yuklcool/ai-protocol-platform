@@ -21,7 +21,7 @@ The GitHub Release also attaches:
 
 ```text
 docker-compose.release.yml
-.env.selfhost.example
+default.env.selfhost.example
 ```
 
 The release Compose file has no source build contexts and no source-code bind mounts. PostgreSQL schema migrations are bundled in the backend image and applied idempotently before the backend starts.
@@ -32,13 +32,21 @@ From a GitHub Release, download:
 
 ```text
 docker-compose.release.yml
-.env.selfhost.example
+default.env.selfhost.example
 ```
 
 Then:
 
 ```bash
-cp .env.selfhost.example .env
+cp default.env.selfhost.example .env
+```
+
+The published environment asset is named `default.env.selfhost.example`. Save or copy it as `.env` before running Compose. For v1.1.1, the exact downloads are:
+
+```bash
+release_version=v1.1.1
+curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/docker-compose.release.yml" -o docker-compose.release.yml
+curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/default.env.selfhost.example" -o .env
 ```
 
 Release assets are generated with `APP_VERSION` already pinned to the exact Git tag that produced them. You can still override it deliberately, but a normal deployment does not need to edit the image version by hand.
@@ -53,7 +61,7 @@ For production, use the exact semver release tag shipped in the release asset:
 APP_VERSION=v1.2.3
 ```
 
-The downloaded release `.env.selfhost.example` is pre-pinned to that exact tag. `latest` is convenient for evaluation, but should not be used as the production rollback boundary. The production release workflow currently accepts stable `vX.Y.Z` tags only.
+The downloaded release environment template is pre-pinned to that exact tag. `latest` is convenient for evaluation, but should not be used as the production rollback boundary. The production release workflow currently accepts stable `vX.Y.Z` tags only.
 
 Every published image also receives an exact source tag:
 
