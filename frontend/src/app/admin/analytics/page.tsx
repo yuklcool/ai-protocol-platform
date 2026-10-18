@@ -17,10 +17,26 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { SignInRequired } from "@/components/chat/SignInRequired";
-import { ArrowIcon, CopyButton, StatusDot, WrenchIcon } from "@/components/activity/bits";
-import { ToolCallDetails, hasToolDetail } from "@/components/activity/ToolCallDetails";
+import { UsagePanel } from "@/components/admin/UsagePanel";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
+import {
+  ArrowIcon,
+  CopyButton,
+  StatusDot,
+  WrenchIcon,
+} from "@/components/activity/bits";
+import {
+  ToolCallDetails,
+  hasToolDetail,
+} from "@/components/activity/ToolCallDetails";
 import { DocIcon } from "@/components/icons";
-import { buildTimeline, type TimelineItem, type TraceDeleg, type TraceMsg, type TraceTool } from "./timeline";
+import {
+  buildTimeline,
+  type TimelineItem,
+  type TraceDeleg,
+  type TraceMsg,
+  type TraceTool,
+} from "./timeline";
 
 type SessionRow = {
   session_id: string;
@@ -38,12 +54,27 @@ type SessionRow = {
   transcript_lost?: boolean;
 };
 
-type OwnerFacet = { uid: string; email: string; name: string; sessions: number; last_active: string };
+type OwnerFacet = {
+  uid: string;
+  email: string;
+  name: string;
+  sessions: number;
+  last_active: string;
+};
 type SkillFacet = { id: string; label: string; sessions: number };
 
 /** Best friendly label for an owner: name, else email, else the raw uid. */
-function ownerLabel(o: { owner_name?: string; owner_email?: string; owner_uid: string }): string {
-  return (o.owner_name || "").trim() || (o.owner_email || "").trim() || o.owner_uid || "—";
+function ownerLabel(o: {
+  owner_name?: string;
+  owner_email?: string;
+  owner_uid: string;
+}): string {
+  return (
+    (o.owner_name || "").trim() ||
+    (o.owner_email || "").trim() ||
+    o.owner_uid ||
+    "—"
+  );
 }
 
 type Trace = {
@@ -99,6 +130,7 @@ function clockTime(ts: number): string {
 }
 
 export default function AnalyticsPage() {
+  const t = useConsoleCopy();
   const { user, loading } = useAuth();
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [owners, setOwners] = useState<OwnerFacet[]>([]);
@@ -112,26 +144,29 @@ export default function AnalyticsPage() {
   const [trace, setTrace] = useState<Trace | null>(null);
   const [traceState, setTraceState] = useState<TraceState>("idle");
 
-  const loadSessions = useCallback((query: string, owner: string, skill: string) => {
-    setState("loading");
-    const params = new URLSearchParams();
-    if (query) params.set("q", query);
-    if (owner) params.set("owner_uid", owner);
-    if (skill) params.set("skill_id", skill);
-    const qs = params.toString();
-    fetchWithAuth(qs ? `${API}/sessions?${qs}` : `${API}/sessions`)
-      .then(async (r) => {
-        if (r.status === 403) return setState("forbidden");
-        if (!r.ok) return setState("error");
-        const data = await r.json();
-        setRows(data.sessions ?? []);
-        setOwners(data.owners ?? []);
-        setSkills(data.skills ?? []);
-        setHiddenEmpty(data.hidden_empty ?? 0);
-        setState("ok");
-      })
-      .catch(() => setState("error"));
-  }, []);
+  const loadSessions = useCallback(
+    (query: string, owner: string, skill: string) => {
+      setState("loading");
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (owner) params.set("owner_uid", owner);
+      if (skill) params.set("skill_id", skill);
+      const qs = params.toString();
+      fetchWithAuth(qs ? `${API}/sessions?${qs}` : `${API}/sessions`)
+        .then(async (r) => {
+          if (r.status === 403) return setState("forbidden");
+          if (!r.ok) return setState("error");
+          const data = await r.json();
+          setRows(data.sessions ?? []);
+          setOwners(data.owners ?? []);
+          setSkills(data.skills ?? []);
+          setHiddenEmpty(data.hidden_empty ?? 0);
+          setState("ok");
+        })
+        .catch(() => setState("error"));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (loading || !user) return;
@@ -153,15 +188,19 @@ export default function AnalyticsPage() {
       .catch(() => setTraceState("error"));
   }, []);
 
-  if (loading) return <Centered>Loading…</Centered>;
+  if (loading) return <Centered>{t("加载中…", "Loading…")}</Centered>;
   if (!user) return <SignInRequired />;
   if (state === "forbidden") {
     return (
       <Centered>
         <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">Admins only</h1>
+          <h1 className="mb-2 text-lg font-semibold">
+            {t("需要管理员权限", "Admins only")}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Analytics requires the <code>aitana-admin</code> group.
+            {t("运行分析需要", "Analytics requires the")}
+            <code>aitana-admin</code>
+            {t("权限组。", "group.")}
           </p>
         </div>
       </Centered>
@@ -173,12 +212,17 @@ export default function AnalyticsPage() {
   return (
     <main className="mx-auto max-w-[1500px] p-6">
       <header className="mb-4">
-        <h1 className="text-xl font-semibold">Analytics</h1>
+        <h1 className="text-xl font-semibold">
+          {t("用量与运行分析", "Analytics")}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Browse and search past sessions; open a full trace of messages, tool calls, and delegations
-          in the order they happened.
+          {t(
+            "查看用量，并检索历史会话中的消息、工具调用及委派轨迹。",
+            "Browse and search past sessions; open a full trace of messages, tool calls, and delegations in the order they happened.",
+          )}
         </p>
       </header>
+      <UsagePanel />
 
       <form
         className="mb-4 flex flex-wrap items-center gap-2"
@@ -189,38 +233,55 @@ export default function AnalyticsPage() {
       >
         <input
           className="min-w-[16rem] flex-1 rounded-md border px-3 py-2 text-sm"
-          placeholder="Search title, owner, or skill…"
+          placeholder={t(
+            "搜索标题、用户或技能…",
+            "Search title, owner, or skill…",
+          )}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         <select
-          aria-label="Filter by user"
+          aria-label={t("按用户筛选", "Filter by user")}
           className="rounded-md border bg-background px-2 py-2 text-sm"
           value={ownerFilter}
           onChange={(e) => setOwnerFilter(e.target.value)}
         >
-          <option value="">All users ({owners.length})</option>
+          <option value="">
+            {t("全部用户（", "All users (")}
+            {owners.length})
+          </option>
           {owners.map((o) => (
             <option key={o.uid} value={o.uid}>
-              {ownerLabel({ owner_name: o.name, owner_email: o.email, owner_uid: o.uid })} ({o.sessions})
+              {ownerLabel({
+                owner_name: o.name,
+                owner_email: o.email,
+                owner_uid: o.uid,
+              })}{" "}
+              ({o.sessions})
             </option>
           ))}
         </select>
         <select
-          aria-label="Filter by skill"
+          aria-label={t("按技能筛选", "Filter by skill")}
           className="rounded-md border bg-background px-2 py-2 text-sm"
           value={skillFilter}
           onChange={(e) => setSkillFilter(e.target.value)}
         >
-          <option value="">All skills ({skills.length})</option>
+          <option value="">
+            {t("全部技能（", "All skills (")}
+            {skills.length})
+          </option>
           {skills.map((s) => (
             <option key={s.id} value={s.id}>
               {s.label || s.id} ({s.sessions})
             </option>
           ))}
         </select>
-        <button type="submit" className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40">
-          Search
+        <button
+          type="submit"
+          className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40"
+        >
+          {t("搜索", "Search")}
         </button>
         {hasFilters && (
           <button
@@ -232,7 +293,7 @@ export default function AnalyticsPage() {
               setSkillFilter("");
             }}
           >
-            Clear
+            {t("清除", "Clear")}
           </button>
         )}
       </form>
@@ -241,11 +302,23 @@ export default function AnalyticsPage() {
         {/* Session list */}
         <section className="rounded-lg border">
           <div className="border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
-            Sessions {state === "ok" && `(${rows.length})`}
+            {t("历史会话", "Sessions")}
+            {state === "ok" && `(${rows.length})`}
           </div>
-          {state === "loading" && <Note>Loading sessions…</Note>}
-          {state === "error" && <Note>Could not load sessions. Try again.</Note>}
-          {state === "ok" && rows.length === 0 && <Note>No sessions match.</Note>}
+          {state === "loading" && (
+            <Note>{t("正在加载会话…", "Loading sessions…")}</Note>
+          )}
+          {state === "error" && (
+            <Note>
+              {t(
+                "无法加载会话，请重试。",
+                "Could not load sessions. Try again.",
+              )}
+            </Note>
+          )}
+          {state === "ok" && rows.length === 0 && (
+            <Note>{t("没有匹配的会话。", "No sessions match.")}</Note>
+          )}
           {state === "ok" && rows.length > 0 && (
             <ul className="max-h-[75vh] divide-y overflow-auto">
               {rows.map((r) => (
@@ -258,23 +331,27 @@ export default function AnalyticsPage() {
                     }
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-medium">{r.title || "(untitled)"}</span>
+                      <span className="truncate font-medium">
+                        {r.title || "(untitled)"}
+                      </span>
                       <span className="flex shrink-0 items-center gap-1">
                         {r.transcript_lost && (
                           <span className="rounded-full border border-amber-500/50 px-1.5 text-[10px] uppercase text-amber-600 dark:text-amber-400">
-                            transcript lost
+                            {t("消息记录不可用", "transcript lost")}
                           </span>
                         )}
                         {r.archived && (
                           <span className="rounded-full border px-1.5 text-[10px] uppercase text-muted-foreground">
-                            archived
+                            {t("已归档", "archived")}
                           </span>
                         )}
                       </span>
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
                       {ownerLabel(r)}
-                      {r.owner_email && r.owner_name ? ` · ${r.owner_email}` : ""}
+                      {r.owner_email && r.owner_name
+                        ? ` · ${r.owner_email}`
+                        : ""}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                       {(r.skill_label || r.skill_id) && (
@@ -287,10 +364,13 @@ export default function AnalyticsPage() {
                       </span>
                       {(r.document_count ?? 0) > 0 && (
                         <span>
-                          · {r.document_count} {r.document_count === 1 ? "doc" : "docs"}
+                          · {r.document_count}{" "}
+                          {r.document_count === 1 ? "doc" : "docs"}
                         </span>
                       )}
-                      <span title={fmtTime(r.last_message_at)}>· {fmtAgo(r.last_message_at)}</span>
+                      <span title={fmtTime(r.last_message_at)}>
+                        · {fmtAgo(r.last_message_at)}
+                      </span>
                     </div>
                   </button>
                 </li>
@@ -302,7 +382,10 @@ export default function AnalyticsPage() {
               ever sent to; they stay reachable via the API by id. */}
           {state === "ok" && hiddenEmpty > 0 && (
             <div className="border-t px-3 py-1.5 text-[11px] text-muted-foreground/70">
-              {hiddenEmpty} never-used session{hiddenEmpty === 1 ? "" : "s"} hidden
+              {t(
+                `已隐藏 ${hiddenEmpty} 条未使用会话`,
+                `${hiddenEmpty} never-used session${hiddenEmpty === 1 ? "" : "s"} hidden`,
+              )}
             </div>
           )}
         </section>
@@ -310,11 +393,22 @@ export default function AnalyticsPage() {
         {/* Trace detail */}
         <section className="rounded-lg border">
           <div className="border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
-            Trace
+            {t("执行轨迹", "Trace")}
           </div>
-          {traceState === "idle" && <Note>Select a session to view its trace.</Note>}
-          {traceState === "loading" && <Note>Loading trace…</Note>}
-          {traceState === "error" && <Note>Could not load this trace.</Note>}
+          {traceState === "idle" && (
+            <Note>
+              {t(
+                "选择会话查看执行轨迹。",
+                "Select a session to view its trace.",
+              )}
+            </Note>
+          )}
+          {traceState === "loading" && (
+            <Note>{t("正在加载执行轨迹…", "Loading trace…")}</Note>
+          )}
+          {traceState === "error" && (
+            <Note>{t("无法加载执行轨迹。", "Could not load this trace.")}</Note>
+          )}
           {traceState === "ok" && trace && <TraceView trace={trace} />}
         </section>
       </div>
@@ -324,35 +418,48 @@ export default function AnalyticsPage() {
 
 /** Header metadata block: who / which skill / when / how much. */
 function TraceHeader({ trace }: { trace: Trace }) {
+  const t = useConsoleCopy();
   const docs = trace.documents ?? [];
   return (
     <div className="rounded-md border bg-muted/10 px-3 py-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{trace.title || "(untitled)"}</div>
+          <div className="truncate text-sm font-medium">
+            {trace.title || "(untitled)"}
+          </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
             {ownerLabel(trace)}
             {trace.owner_email ? ` · ${trace.owner_email}` : ""}
-            {trace.skill_label || trace.skill_id ? ` · ${trace.skill_label || trace.skill_id}` : ""}
+            {trace.skill_label || trace.skill_id
+              ? ` · ${trace.skill_label || trace.skill_id}`
+              : ""}
           </div>
         </div>
         <CopyButton text={trace.session_id} label="Copy id" />
       </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
         <div>
-          <dt className="text-[10px] uppercase text-muted-foreground/60">Started</dt>
+          <dt className="text-[10px] uppercase text-muted-foreground/60">
+            {t("开始时间", "Started")}
+          </dt>
           <dd>{fmtTime(trace.first_message_at || "")}</dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase text-muted-foreground/60">Last activity</dt>
+          <dt className="text-[10px] uppercase text-muted-foreground/60">
+            {t("最近活动", "Last activity")}
+          </dt>
           <dd>{fmtTime(trace.last_message_at || "")}</dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase text-muted-foreground/60">Turns</dt>
+          <dt className="text-[10px] uppercase text-muted-foreground/60">
+            {t("对话轮次", "Turns")}
+          </dt>
           <dd>{trace.turn_count ?? "—"}</dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase text-muted-foreground/60">Events</dt>
+          <dt className="text-[10px] uppercase text-muted-foreground/60">
+            {t("事件数", "Events")}
+          </dt>
           <dd>{trace.event_count ?? "—"}</dd>
         </div>
       </dl>
@@ -375,7 +482,11 @@ function TraceHeader({ trace }: { trace: Trace }) {
 }
 
 /** Expandable tool row in the timeline — same detail body as the chat Activity tab. */
-function TimelineToolRow({ item }: { item: Extract<TimelineItem, { kind: "tool" }> }) {
+function TimelineToolRow({
+  item,
+}: {
+  item: Extract<TimelineItem, { kind: "tool" }>;
+}) {
   const [open, setOpen] = useState(false);
   const hasDetail = hasToolDetail(item.argsJson, item.resultContent);
   return (
@@ -388,7 +499,9 @@ function TimelineToolRow({ item }: { item: Extract<TimelineItem, { kind: "tool" 
         aria-expanded={hasDetail ? open : undefined}
       >
         <WrenchIcon />
-        <span className="flex-1 truncate font-mono text-[11px] text-foreground/80">{item.name}</span>
+        <span className="flex-1 truncate font-mono text-[11px] text-foreground/80">
+          {item.name}
+        </span>
         <StatusDot status={item.status} />
         {item.ts ? (
           <time
@@ -400,30 +513,43 @@ function TimelineToolRow({ item }: { item: Extract<TimelineItem, { kind: "tool" 
           </time>
         ) : null}
         {hasDetail && (
-          <span aria-hidden className={`shrink-0 text-muted-foreground/60 transition-transform ${open ? "rotate-90" : ""}`}>
+          <span
+            aria-hidden
+            className={`shrink-0 text-muted-foreground/60 transition-transform ${open ? "rotate-90" : ""}`}
+          >
             ›
           </span>
         )}
       </button>
       {open && hasDetail && (
         <div className="ml-6 mb-1.5 mr-2">
-          <ToolCallDetails argsJson={item.argsJson} resultContent={item.resultContent} />
+          <ToolCallDetails
+            argsJson={item.argsJson}
+            resultContent={item.resultContent}
+          />
         </div>
       )}
     </li>
   );
 }
 
-function TimelineMessageRow({ item }: { item: Extract<TimelineItem, { kind: "message" }> }) {
+function TimelineMessageRow({
+  item,
+}: {
+  item: Extract<TimelineItem, { kind: "message" }>;
+}) {
   const who = item.role === "user" ? "User" : item.agentLabel || "Assistant";
   return (
     <li
       className={
-        "rounded-lg border px-3 py-2 text-sm " + (item.role === "user" ? "bg-muted/30" : "bg-background")
+        "rounded-lg border px-3 py-2 text-sm " +
+        (item.role === "user" ? "bg-muted/30" : "bg-background")
       }
     >
       <div className="mb-0.5 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium uppercase text-muted-foreground">{who}</span>
+        <span className="text-[10px] font-medium uppercase text-muted-foreground">
+          {who}
+        </span>
         {item.ts ? (
           <time
             dateTime={new Date(item.ts).toISOString()}
@@ -440,6 +566,7 @@ function TimelineMessageRow({ item }: { item: Extract<TimelineItem, { kind: "mes
 }
 
 function TraceView({ trace }: { trace: Trace }) {
+  const t = useConsoleCopy();
   const [view, setView] = useState<"timeline" | "raw">("timeline");
   const timeline = buildTimeline(trace);
 
@@ -449,13 +576,18 @@ function TraceView({ trace }: { trace: Trace }) {
 
       {trace.transcript_available === false && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-          Transcript unavailable — this session&rsquo;s stored messages could not be read (the
-          canonical session is missing while its index row survives). The session metadata is still
-          shown; the message history can&rsquo;t be reconstructed.
+          Transcript unavailable — this session&rsquo;s stored messages could
+          not be read (the canonical session is missing while its index row
+          survives). The session metadata is still shown; the message history
+          can&rsquo;t be reconstructed.
         </div>
       )}
 
-      <div className="flex items-center gap-1" role="tablist" aria-label="Trace view">
+      <div
+        className="flex items-center gap-1"
+        role="tablist"
+        aria-label="Trace view"
+      >
         {(["timeline", "raw"] as const).map((v) => (
           <button
             key={v}
@@ -465,7 +597,9 @@ function TraceView({ trace }: { trace: Trace }) {
             onClick={() => setView(v)}
             className={
               "rounded-md px-2 py-1 text-xs " +
-              (view === v ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")
+              (view === v
+                ? "bg-muted font-medium text-foreground"
+                : "text-muted-foreground hover:text-foreground")
             }
           >
             {v === "timeline" ? `Timeline (${timeline.length})` : "Raw JSON"}
@@ -477,7 +611,7 @@ function TraceView({ trace }: { trace: Trace }) {
         <div className="rounded-md border">
           <div className="flex items-center justify-between border-b px-2 py-1">
             <span className="text-[10px] font-medium uppercase text-muted-foreground/60">
-              Full trace payload
+              {t("完整执行数据", "Full trace payload")}
             </span>
             <CopyButton text={JSON.stringify(trace, null, 2)} />
           </div>
@@ -487,19 +621,28 @@ function TraceView({ trace }: { trace: Trace }) {
         </div>
       ) : timeline.length === 0 ? (
         <Note>
-          {trace.transcript_available === false ? "Transcript unavailable (see above)." : "No activity in this session."}
+          {trace.transcript_available === false
+            ? "Transcript unavailable (see above)."
+            : "No activity in this session."}
         </Note>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {timeline.map((item) => {
-            if (item.kind === "message") return <TimelineMessageRow key={item.key} item={item} />;
-            if (item.kind === "tool") return <TimelineToolRow key={item.key} item={item} />;
+            if (item.kind === "message")
+              return <TimelineMessageRow key={item.key} item={item} />;
+            if (item.kind === "tool")
+              return <TimelineToolRow key={item.key} item={item} />;
             return (
-              <li key={item.key} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
+              <li
+                key={item.key}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground"
+              >
                 <ArrowIcon />
                 <span className="min-w-0 flex-1 truncate">
                   {item.mode === "suggest" ? "Suggested " : "Delegated to "}
-                  <span className="font-medium text-foreground/80">{item.targetDisplay}</span>
+                  <span className="font-medium text-foreground/80">
+                    {item.targetDisplay}
+                  </span>
                 </span>
                 {item.ts ? (
                   <time
@@ -520,9 +663,17 @@ function TraceView({ trace }: { trace: Trace }) {
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <div className="px-3 py-6 text-center text-sm text-muted-foreground">{children}</div>;
+  return (
+    <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center p-8">
+      {children}
+    </main>
+  );
 }

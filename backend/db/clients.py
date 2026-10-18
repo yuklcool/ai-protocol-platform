@@ -181,6 +181,13 @@ def documents_bucket_for_domain(domain: str) -> str | None:
 
 
 def resolve_enabled_skills(user) -> list[str] | None:  # type: ignore[no-untyped-def]
+    stable_id = str(getattr(user, "tenant_id", "") or "").strip()
+    if stable_id:
+        from db.tenants import get_tenant
+
+        tenant = get_tenant(stable_id)
+        if tenant is not None:
+            return [] if tenant.disabled else tenant.enabled_skills
     domain = _user_domain(user)
     if not domain:
         return None

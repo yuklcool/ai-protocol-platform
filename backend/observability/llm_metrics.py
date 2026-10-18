@@ -63,18 +63,38 @@ _COST_PER_1M: dict[str, tuple[float, float]] = {
 }
 
 
+def pricing_for_model(model: str) -> tuple[float, float] | None:
+    """Use explicit registry pricing first; ambiguous API-name prices fail closed."""
+    from config.model_provider_registry import list_model_documents
+
+    key = model.casefold()
+    short = key.removeprefix("openai/").removeprefix("anthropic/")
+    prices: set[tuple[float, float]] = set()
+    for row in list_model_documents():
+        if row.get("enabled", True) is False:
+            continue
+        if key != str(row.get("__id") or "").casefold() and short != str(row.get("apiName") or "").casefold():
+            continue
+        if row.get("inputCostPerMillion") is not None and row.get("outputCostPerMillion") is not None:
+            prices.add((float(row["inputCostPerMillion"]), float(row["outputCostPerMillion"])))
+    if len(prices) > 1:
+        return None
+    if prices:
+        return next(iter(prices))
+    return next((rates for known, rates in _COST_PER_1M.items() if known in key), None)
+
+
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Estimate cost in USD for a model call.
 
     Returns 0.0 for unknown models — we don't want to block on missing pricing.
     """
     # Normalize model name: strip version suffixes, provider prefixes
-    key = model.lower()
-    for known in _COST_PER_1M:
-        if known in key:
-            input_rate, output_rate = _COST_PER_1M[known]
-            return (input_tokens * input_rate + output_tokens * output_rate) / 1_000_000
-    return 0.0
+    rates = pricing_for_model(model)
+    if rates is None:
+        return 0.0
+    input_rate, output_rate = rates
+    return (input_tokens * input_rate + output_tokens * output_rate) / 1_000_000
 
 
 def record_llm_cost(model: str, input_tokens: int, output_tokens: int) -> None:

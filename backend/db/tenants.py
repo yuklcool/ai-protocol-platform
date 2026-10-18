@@ -83,6 +83,20 @@ class TenantDirectory:
     def __init__(self, repository: Repository) -> None:
         self._repository = repository
 
+    def list(self) -> list[TenantConfig]:
+        """Enumerate stable tenants, retaining unmigrated legacy clients."""
+        configs = {}
+        for row in self._repository.query_documents(TENANT_COLLECTION, limit=None):
+            key = str(row.get("__id") or row.get("tenantId") or "")
+            if key:
+                configs[key] = TenantConfig.model_validate({**row, "tenantId": key}).normalized()
+        for row in self._repository.query_documents(LEGACY_CLIENT_COLLECTION, limit=None):
+            domain = str(row.get("__id") or row.get("domain") or "")
+            mapped = self.tenant_id_for_domain(domain)
+            if domain and domain not in configs and (not mapped or mapped == domain):
+                configs[domain] = self._legacy_config(domain, row)
+        return sorted(configs.values(), key=lambda config: config.tenant_id)
+
     def get(self, tenant_id: str) -> TenantConfig | None:
         key = normalize_tenant_id(tenant_id)
         if not key:

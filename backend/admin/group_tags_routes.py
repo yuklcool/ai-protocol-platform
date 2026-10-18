@@ -104,6 +104,14 @@ def upsert_group_tag(tag_id: str, body: GroupTagUpsert, scope: PlatformScope) ->
 
 
 def _fb_auth():
+    from auth import auth_backend
+
+    if auth_backend() == "local-jwt":
+        from auth.local_directory import LocalUserDirectory
+
+        return LocalUserDirectory()
+    if auth_backend() == "oidc":
+        raise HTTPException(409, "Group membership is managed by the OIDC identity provider")
     try:
         import firebase_admin
         from firebase_admin import auth as fb_auth
@@ -147,7 +155,7 @@ def list_tag_members(tag: str, scope: Scope) -> TagMembers:
             if tag in tags:
                 member_email = getattr(rec, "email", "") or ""
                 member_domain = member_email.rsplit("@", 1)[-1].lower() if "@" in member_email else ""
-                if not scope.may(member_domain):
+                if not scope.may_tenant(getattr(rec, "tenant_id", None) or member_domain):
                     continue
                 members.append(TagMember(email=member_email, uid=rec.uid))
     except HTTPException:

@@ -430,6 +430,9 @@ app.include_router(a2ui_surface_action_router)
 app.include_router(a2ui_surface_action_run_router)
 app.include_router(a2ui_surface_data_router)
 app.include_router(voice_router)
+from agents.knowledge import router as agent_knowledge_router  # noqa: E402
+
+app.include_router(agent_knowledge_router)
 
 # ----------------------------------------------------------------------------
 # Channel framework (v6.1.0 sprint 1.6 M1)

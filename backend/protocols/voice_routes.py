@@ -156,12 +156,19 @@ class SynthesizeRequest(BaseModel):
 # --- routes ---
 
 
-def _resolve(ref: str):
+def _resolve(ref: str, user: User | None = None):
     """Skill by canonical id, falling back to a friendly slug.
 
     Two-step (rather than resolve_skill_ref alone) so existing tests that
     patch ``voice_routes.get_skill`` keep working.
     """
+    if ref == "root-agent" and user is not None:
+        from agents.root_runtime import compose_root_skill, effective_root_config, root_agent_skill
+        from auth.access_context import build_access_context
+        from config.platform_config import get_platform_config
+
+        config = effective_root_config(get_platform_config().agent, build_access_context(user).tenant_id)
+        return compose_root_skill(root_agent_skill(config), config)
     skill = get_skill(ref)
     if skill is not None:
         return skill
@@ -186,7 +193,7 @@ async def get_config(user: _CurrentUser, skill_id: str | None = None) -> dict[st
     # Alias-tolerant (CLAUDE.md #9). This one fails SILENTLY: an unresolved
     # ref just yields None, so the caller silently gets the platform default
     # voice instead of the skill's persona — a wrong result, not an error.
-    skill = _resolve(skill_id) if skill_id else None
+    skill = _resolve(skill_id, user) if skill_id else None
     rv = resolve_voice(skill)
     tts = get_tts(rv.provider)
 
@@ -238,8 +245,10 @@ async def synthesize(body: SynthesizeRequest, user: _CurrentUser) -> Response:
         the frontend then uses Web Speech locally.
       - 400 on bad input, 503 on provider failure.
     """
-    skill = _resolve(body.skill_id) if body.skill_id else None
+    skill = _resolve(body.skill_id, user) if body.skill_id else None
     rv = resolve_voice(skill)
+    if not rv.enabled:
+        raise HTTPException(status_code=403, detail="Voice output is disabled for this Agent")
     provider = get_tts(rv.provider)
     # The frontend sends the voice + lang it got from /config; trust it, but
     # fall back to the resolver's values so a direct API caller still gets

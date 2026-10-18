@@ -5,6 +5,7 @@
 // renders the "admins only" state. Never-silent: loading / error / empty render.
 
 "use client";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,7 +20,13 @@ type GroupTag = {
   tenant_scope?: string | null;
 };
 type TagMember = { email: string; uid: string };
-type TagMembers = { tag: string; members: TagMember[]; scanned: number; truncated: boolean; note: string };
+type TagMembers = {
+  tag: string;
+  members: TagMember[];
+  scanned: number;
+  truncated: boolean;
+  note: string;
+};
 
 const REGISTRY = "/api/proxy/api/admin/group-tags";
 const MEMBERS = "/api/proxy/api/admin/groups";
@@ -27,6 +34,7 @@ const MEMBERS = "/api/proxy/api/admin/groups";
 type Probe = "loading" | "admin" | "forbidden" | "error";
 
 export default function GroupsPage() {
+  const t = useConsoleCopy();
   const { user, loading } = useAuth();
   const [probe, setProbe] = useState<Probe>("loading");
   const [tags, setTags] = useState<GroupTag[]>([]);
@@ -67,18 +75,21 @@ export default function GroupsPage() {
     setBusy(true);
     setNotice(null);
     try {
-      const r = await fetchWithAuth(`${REGISTRY}/${encodeURIComponent(tagId)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label: label.trim(),
-          description: description.trim(),
-          grants: grants
-            .split(",")
-            .map((g) => g.trim())
-            .filter(Boolean),
-        }),
-      });
+      const r = await fetchWithAuth(
+        `${REGISTRY}/${encodeURIComponent(tagId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            label: label.trim(),
+            description: description.trim(),
+            grants: grants
+              .split(",")
+              .map((g) => g.trim())
+              .filter(Boolean),
+          }),
+        },
+      );
       if (!r.ok) {
         const detail = await r.json().catch(() => null);
         setNotice(detail?.detail || `Could not save "${tagId}".`);
@@ -102,7 +113,9 @@ export default function GroupsPage() {
     setMembersOf(null);
     setNotice(null);
     try {
-      const r = await fetchWithAuth(`${MEMBERS}/${encodeURIComponent(tag)}/members`);
+      const r = await fetchWithAuth(
+        `${MEMBERS}/${encodeURIComponent(tag)}/members`,
+      );
       if (!r.ok) {
         setNotice(`Could not look up holders of "${tag}".`);
         return;
@@ -115,32 +128,50 @@ export default function GroupsPage() {
     }
   };
 
-  if (loading) return <Centered>Loading…</Centered>;
+  if (loading) return <Centered>{t("加载中…", "Loading…")}</Centered>;
   if (!user) return <SignInRequired />;
   if (probe === "forbidden") {
     return (
       <Centered>
         <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">Admins only</h1>
+          <h1 className="mb-2 text-lg font-semibold">
+            {t("需要管理员权限", "Admins only")}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Group-tag administration requires the <code>aitana-admin</code> group.
+            {t("分组管理需要", "Group-tag administration requires the")}
+            <code>aitana-admin</code>
+            {t("权限组。", "group.")}
           </p>
         </div>
       </Centered>
     );
   }
-  if (probe === "error") return <Centered>Something went wrong loading the registry.</Centered>;
+  if (probe === "error")
+    return (
+      <Centered>
+        {t(
+          "无法加载分组，请重试。",
+          "Something went wrong loading the registry.",
+        )}
+      </Centered>
+    );
 
   return (
     <main className="mx-auto max-w-3xl p-6">
       <header className="mb-4">
-        <h1 className="text-xl font-semibold">Group tags</h1>
+        <h1 className="text-xl font-semibold">{t("分组标签", "Group tags")}</h1>
         <p className="text-sm text-muted-foreground">
-          The tag registry — what each tag grants, and who holds it. Per-user grants are set under{" "}
+          {t(
+            "管理分组、授权能力及成员。用户授权请进入",
+            "The tag registry — what each tag grants, and who holds it. Per-user grants are set under",
+          )}{" "}
           <a className="underline" href="/admin/users">
-            Users
+            {t("用户管理", "Users")}
           </a>
-          ; a grant of an unregistered tag is rejected.
+          {t(
+            "；未知分组无法授予。",
+            "; a grant of an unregistered tag is rejected.",
+          )}
         </p>
       </header>
 
@@ -148,35 +179,50 @@ export default function GroupsPage() {
       <section className="mb-6 rounded-lg border">
         {tags.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No tags registered yet. Add the first one below.
+            {t(
+              "暂无分组，可在下方创建。",
+              "No tags registered yet. Add the first one below.",
+            )}
           </p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                <th className="px-4 py-2">Tag</th>
-                <th className="px-4 py-2">Grants</th>
+                <th className="px-4 py-2">{t("标签", "Tag")}</th>
+                <th className="px-4 py-2">{t("授权能力", "Grants")}</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {tags.map((t) => (
-                <tr key={t.id} className="border-b last:border-0">
+              {tags.map((tag) => (
+                <tr key={tag.id} className="border-b last:border-0">
                   <td className="px-4 py-2 align-top">
-                    <div className="font-mono text-xs">{t.id}</div>
-                    {t.label && <div className="text-xs text-muted-foreground">{t.label}</div>}
-                    {t.description && <div className="mt-0.5 text-xs text-muted-foreground">{t.description}</div>}
+                    <div className="font-mono text-xs">{tag.id}</div>
+                    {tag.label && (
+                      <div className="text-xs text-muted-foreground">
+                        {tag.label}
+                      </div>
+                    )}
+                    {tag.description && (
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {tag.description}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2 align-top text-xs text-muted-foreground">
-                    {t.grants?.length ? t.grants.join(", ") : <span className="opacity-50">—</span>}
+                    {tag.grants?.length ? (
+                      tag.grants.join(", ")
+                    ) : (
+                      <span className="opacity-50">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 align-top text-right">
                     <button
-                      onClick={() => lookupMembers(t.id)}
+                      onClick={() => lookupMembers(tag.id)}
                       disabled={membersBusy}
                       className="rounded-md border px-2 py-1 text-xs hover:bg-muted/40 disabled:opacity-50"
                     >
-                      Holders
+                      {t("成员", "Holders")}
                     </button>
                   </td>
                 </tr>
@@ -187,18 +233,24 @@ export default function GroupsPage() {
       </section>
 
       {/* Members panel */}
-      {membersBusy && <Note>Scanning holders…</Note>}
+      {membersBusy && <Note>{t("正在查询成员…", "Scanning holders…")}</Note>}
       {membersOf && (
         <section className="mb-6 rounded-lg border p-4">
           <h2 className="mb-2 text-sm font-medium">
-            Holders of <code className="font-mono">{membersOf.tag}</code>
+            {t("分组成员：", "Holders of")}
+            <code className="font-mono">{membersOf.tag}</code>
           </h2>
           {membersOf.members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No direct holders.</p>
+            <p className="text-sm text-muted-foreground">
+              {t("暂无直接授权成员。", "No direct holders.")}
+            </p>
           ) : (
             <ul className="flex flex-wrap gap-2">
               {membersOf.members.map((m) => (
-                <li key={m.uid} className="rounded-full border px-2 py-0.5 text-xs">
+                <li
+                  key={m.uid}
+                  className="rounded-full border px-2 py-0.5 text-xs"
+                >
                   {m.email}
                 </li>
               ))}
@@ -206,36 +258,48 @@ export default function GroupsPage() {
           )}
           <p className="mt-2 text-xs text-muted-foreground">
             {membersOf.note}
-            {membersOf.truncated && " — list truncated; refine or raise the scan cap."}
+            {membersOf.truncated &&
+              " — list truncated; refine or raise the scan cap."}
           </p>
         </section>
       )}
 
       {/* Upsert form */}
       <section className="rounded-lg border p-4">
-        <h2 className="mb-3 text-sm font-medium">Add / update a tag</h2>
+        <h2 className="mb-3 text-sm font-medium">
+          {t("新增或更新分组", "Add / update a tag")}
+        </h2>
         <div className="grid gap-2">
           <input
             className="rounded-md border px-3 py-2 text-sm"
-            placeholder="tag id (e.g. ONE, beta-tester)"
+            placeholder={t(
+              "标签标识（例如 analyst）",
+              "tag id (e.g. ONE, beta-tester)",
+            )}
             value={id}
             onChange={(e) => setId(e.target.value)}
           />
           <input
             className="rounded-md border px-3 py-2 text-sm"
-            placeholder="label (human name)"
+            placeholder={t("显示名称", "label (human name)")}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
           <input
             className="rounded-md border px-3 py-2 text-sm"
-            placeholder="description — what holding this tag grants"
+            placeholder={t(
+              "说明：该分组授予哪些能力",
+              "description — what holding this tag grants",
+            )}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
           <input
             className="rounded-md border px-3 py-2 text-sm"
-            placeholder="grants (comma-separated skill slugs / capabilities)"
+            placeholder={t(
+              "授权能力标识（逗号分隔）",
+              "grants (comma-separated skill slugs / capabilities)",
+            )}
             value={grants}
             onChange={(e) => setGrants(e.target.value)}
           />
@@ -245,20 +309,30 @@ export default function GroupsPage() {
               disabled={busy || !id.trim()}
               className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
             >
-              {busy ? "Saving…" : "Save tag"}
+              {busy ? t("保存中…", "Saving…") : "Save tag"}
             </button>
           </div>
         </div>
-        {notice && <p className="mt-2 text-xs text-muted-foreground">{notice}</p>}
+        {notice && (
+          <p className="mt-2 text-xs text-muted-foreground">{notice}</p>
+        )}
       </section>
     </main>
   );
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <div className="mb-6 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">{children}</div>;
+  return (
+    <div className="mb-6 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center p-8">
+      {children}
+    </main>
+  );
 }

@@ -89,3 +89,7 @@ Report unit tests, real PostgreSQL/browser tests and real-provider runs separate
 Do not close acceptance on a mocked model, seeded UI, skipped job, old commit or
 an unpublished source change. The released image must identify the same commit
 that passed the operation sequence.
+
+## Console configuration acceptance
+
+See [Root console completion](root-console-completion.md) for knowledge retrieval, tenant budgets, account lifecycle, provider pricing and usage accounting. `Model provider gate` also runs `frontend/e2e/root-console-live.spec.js` against the real PostgreSQL deployment stack. A release candidate must pass this gate, CI, persistence, A2UI and real-provider protocol acceptance on the same commit before tagging.

@@ -6,7 +6,8 @@ export type TranslationParams = Record<string, string | number>;
 const en = {
   "rootAgent.breadcrumb": "Agent",
   "rootAgent.title": "Root Agent",
-  "rootAgent.subtitle": "One user-facing agent, composed from permissioned capabilities.",
+  "rootAgent.subtitle":
+    "One user-facing agent, composed from permissioned capabilities.",
   "rootAgent.bar.capabilities": "One assistant · permissioned Skills",
   "rootAgent.bar.skills": "Skills",
   "rootAgent.bar.newChat": "New chat",
@@ -16,8 +17,17 @@ const en = {
   "rootAgent.saved": "Saved",
   "rootAgent.loadFailed": "Could not load Root Agent settings.",
   "rootAgent.saveFailed": "Could not save Root Agent settings.",
-  "rootAgent.adminOnly": "Root Agent settings require platform administrator access.",
-  "rootAgent.compatibility": "Compatibility mode: existing SkillConfig and streaming routes remain available while the Root Agent runtime migration is completed.",
+  "rootAgent.adminOnly":
+    "Root Agent settings require platform administrator access.",
+  "rootAgent.compatibility":
+    "Root Agent owns the runtime configuration. Skills provide authorized instructions and reference material.",
+  "rootAgent.nav.budget": "Tenant budgets",
+  "rootAgent.budget.enabled":
+    "Enforce tenant budgets on every Root Agent model call",
+  "rootAgent.budget.hint":
+    "Applies to chat and A2UI actions, including legacy capability links. Configure each tenant before enabling. A missing tenant is rejected; a zero or missing cap is unlimited. No restart is required.",
+  "rootAgent.budget.tenants": "Configure tenant budgets and models",
+  "rootAgent.budget.usage": "View tokens, estimated cost and quota usage",
   "rootAgent.nav.overview": "Overview",
   "rootAgent.nav.model": "Model",
   "rootAgent.nav.prompt": "Prompt",
@@ -29,26 +39,34 @@ const en = {
   "rootAgent.nav.permissions": "Permissions",
   "rootAgent.nav.advanced": "Advanced",
   "rootAgent.overview.identity": "Agent identity",
-  "rootAgent.overview.identityHint": "This is the only agent users select in the product.",
+  "rootAgent.overview.identityHint":
+    "This is the only agent users select in the product.",
   "rootAgent.overview.displayName": "Display name",
   "rootAgent.overview.description": "Description",
   "rootAgent.overview.activeCapabilities": "Active capabilities",
-  "rootAgent.overview.capabilitySummary": "{skills} Skills · {tools} Tools · {mcp} MCP servers",
+  "rootAgent.overview.capabilitySummary":
+    "{skills} Skills · {tools} Tools · {mcp} MCP servers",
   "rootAgent.model.label": "Language model",
-  "rootAgent.model.hint": "Model selection belongs to the Root Agent. Skills contribute instructions and requirements only.",
+  "rootAgent.model.hint":
+    "Model selection belongs to the Root Agent. Skills contribute instructions and requirements only.",
   "rootAgent.prompt.label": "System instructions",
-  "rootAgent.prompt.hint": "Shared instructions for the Root Agent. Skill instructions are resolved after permissions are applied.",
+  "rootAgent.prompt.hint":
+    "Shared instructions for the Root Agent. Skill instructions are resolved after permissions are applied.",
   "rootAgent.skills.title": "Effective Skills",
-  "rootAgent.skills.description": "Select the capabilities the Root Agent may load. Tenant, group and user policies still apply at runtime.",
+  "rootAgent.skills.description":
+    "Select the capabilities the Root Agent may load. Tenant, group and user policies still apply at runtime.",
   "rootAgent.skills.empty": "No Skills are visible in the current scope.",
   "rootAgent.tools.title": "Native Tools",
-  "rootAgent.tools.description": "Bind reusable platform tools to the Root Agent.",
+  "rootAgent.tools.description":
+    "Bind reusable platform tools to the Root Agent.",
   "rootAgent.tools.empty": "No native tools are available.",
   "rootAgent.mcp.title": "MCP Servers",
-  "rootAgent.mcp.description": "Connect MCP at the Agent level. Skills declare required MCP tools; they do not own servers.",
+  "rootAgent.mcp.description":
+    "Connect MCP at the Agent level. Skills declare required MCP tools; they do not own servers.",
   "rootAgent.mcp.empty": "No MCP servers are available in the current scope.",
   "rootAgent.knowledge.title": "Knowledge sources",
-  "rootAgent.knowledge.description": "Knowledge is an Agent resource, not a hidden Skill-specific bucket.",
+  "rootAgent.knowledge.description":
+    "Knowledge is an Agent resource, not a hidden Skill-specific bucket.",
   "rootAgent.knowledge.placeholder": "One source id per line",
   "rootAgent.interaction.title": "Interaction",
   "rootAgent.interaction.a2ui": "Enable A2UI surfaces",
@@ -60,14 +78,20 @@ const en = {
   "rootAgent.interaction.voice": "Enable voice output",
   "rootAgent.interaction.welcome": "Welcome message",
   "rootAgent.permissions.title": "Permission boundary",
-  "rootAgent.permissions.description": "The saved bindings are only a ceiling. Effective access is the intersection of platform, tenant, group and user policy.",
-  "rootAgent.permissions.failClosed": "Resolve Skills, Tools and MCP fail-closed",
+  "rootAgent.permissions.description":
+    "The saved bindings are only a ceiling. Effective access is the intersection of platform, tenant, group and user policy.",
+  "rootAgent.permissions.failClosed":
+    "Resolve Skills, Tools and MCP fail-closed",
   "rootAgent.advanced.title": "Advanced",
   "rootAgent.advanced.specialists": "Specialist Agents",
-  "rootAgent.advanced.specialistsHint": "Use only when a capability needs its own model, prompt or reasoning strategy.",
-  "rootAgent.advanced.legacy": "Legacy Skill Studio remains available under Resources → Skills during migration.",
+  "rootAgent.advanced.specialistsHint":
+    "Use only when a capability needs its own model, prompt or reasoning strategy.",
+  "rootAgent.advanced.legacy":
+    "Manage capability content under Resources → Skills. Test capabilities in the normal Root Agent chat.",
+  "resources.skills.content": "Instructions, references and assets",
   "resources.skills.title": "Skills",
-  "resources.skills.subtitle": "Reusable capabilities loaded by the Root Agent.",
+  "resources.skills.subtitle":
+    "Reusable capabilities loaded by the Root Agent.",
   "resources.skills.open": "Open Skill editor",
   "resources.skills.new": "Create Skill",
   "resources.skills.empty": "No Skills are available in the current scope.",
@@ -76,7 +100,8 @@ const en = {
   "agents.breadcrumb": "Agents",
   "agents.title": "Agent workspace",
   "agents.heading": "Your agents",
-  "agents.description": "Create, configure and test the AI agents available to your team.",
+  "agents.description":
+    "Create, configure and test the AI agents available to your team.",
   "agents.count": "{count} agents",
   "agents.create": "Create agent",
   "agents.noDescription": "No description yet",
@@ -84,7 +109,8 @@ const en = {
   "agents.category.default": "assistant",
   "agents.status.active": "Active",
   "agents.emptyTitle": "Create your first agent",
-  "agents.emptyDescription": "An agent combines a model, instructions and capabilities into one usable workspace.",
+  "agents.emptyDescription":
+    "An agent combines a model, instructions and capabilities into one usable workspace.",
   "agents.nav.overview": "Overview",
   "agents.nav.agents": "Agents",
   "agents.nav.resources": "Resources",
@@ -115,14 +141,16 @@ const en = {
   "auth.failed": "Sign-in failed",
 
   "localMode.aria": "LOCAL_MODE active",
-  "localMode.summary": "🛠️ LOCAL_MODE — All data is in-memory and ephemeral. Auth is stubbed.",
+  "localMode.summary":
+    "🛠️ LOCAL_MODE — All data is in-memory and ephemeral. Auth is stubbed.",
   "localMode.disabled": "Disabled: {services}",
   "localMode.selfHostGuide": "Self-host deployment guide →",
 
   "home.hero.eyebrow": "Open agent platform",
   "home.hero.lineA": "Build AI agents",
   "home.hero.lineB": "on open protocols",
-  "home.hero.body": "Run Skills, AG-UI, A2UI and MCP Apps on a self-hosted platform with durable identity, storage and tenant boundaries.",
+  "home.hero.body":
+    "Run Skills, AG-UI, A2UI and MCP Apps on a self-hosted platform with durable identity, storage and tenant boundaries.",
   "home.hero.ctaPrimary": "Open the assistant",
   "home.hero.ctaSecondary": "Explore skills",
   "home.builtOn": "Built on",
@@ -134,13 +162,16 @@ const en = {
   "home.audience.heading": "Built for teams operating AI agents",
   "home.audience.operator.role": "Platform operators",
   "home.audience.operator.headline": "Run a production-style self-host stack",
-  "home.audience.operator.body": "PostgreSQL, built-in JWT, local durable storage and a separate MCP Apps sandbox provide a minimal baseline without mandatory GCP infrastructure.",
+  "home.audience.operator.body":
+    "PostgreSQL, built-in JWT, local durable storage and a separate MCP Apps sandbox provide a minimal baseline without mandatory GCP infrastructure.",
   "home.audience.builder.role": "Agent builders",
   "home.audience.builder.headline": "Compose Skills, models and tools",
-  "home.audience.builder.body": "Use dynamic model Providers, Skill Studio and MCP bindings while keeping runtime policy and credentials server-authoritative.",
+  "home.audience.builder.body":
+    "Use dynamic model Providers, Skill Studio and MCP bindings while keeping runtime policy and credentials server-authoritative.",
   "home.audience.engineer.role": "Protocol engineers",
   "home.audience.engineer.headline": "Build on open protocols",
-  "home.audience.engineer.body": "Extend {appName} with AG-UI, A2UI, MCP and MCP Apps without replacing the upstream protocol path with a proprietary one.",
+  "home.audience.engineer.body":
+    "Extend {appName} with AG-UI, A2UI, MCP and MCP Apps without replacing the upstream protocol path with a proprietary one.",
   "home.pillar.extract.label": "Skill orchestration",
   "home.pillar.extract.tagline": "Prompts, tools and runtime policy",
   "home.pillar.compare.label": "Model Providers",
@@ -156,18 +187,24 @@ const en = {
 
   "admin.loading": "Loading…",
   "admin.accessCheckFailed": "Couldn’t check your access",
-  "admin.accessConnectionProblem": "We couldn’t reach the admin service. This is a connection problem rather than a permission decision. Reload and try again.",
+  "admin.accessConnectionProblem":
+    "We couldn’t reach the admin service. This is a connection problem rather than a permission decision. Reload and try again.",
   "admin.only": "Admins only",
-  "admin.onlyDescription": "The administration area requires platform administrator or tenant administrator permission.",
-  "admin.justGranted": "Granted access just now? Refresh your access context to pick up the new server-side role immediately.",
+  "admin.onlyDescription":
+    "The administration area requires platform administrator or tenant administrator permission.",
+  "admin.justGranted":
+    "Granted access just now? Refresh your access context to pick up the new server-side role immediately.",
   "admin.recheck": "Re-check my access",
   "admin.title": "Administration",
-  "admin.subtitle": "Manage tenants, skills, access, MCP integrations, model Providers and analytics.",
+  "admin.subtitle":
+    "Manage tenants, skills, access, MCP integrations, model Providers and analytics.",
   "admin.scopedTo": "Scoped to {domains} — you’re seeing your tenant only.",
   "admin.area.tenant.title": "Your tenant",
-  "admin.area.tenant.question": "What is my tenant configured to do, and what do my users actually see?",
+  "admin.area.tenant.question":
+    "What is my tenant configured to do, and what do my users actually see?",
   "admin.area.tenant.config": "Tenant config",
-  "admin.area.tenant.configNote": "enabled skills, landing skill, group tags and model policy",
+  "admin.area.tenant.configNote":
+    "enabled skills, landing skill, group tags and model policy",
   "admin.area.tenant.effective": "What your users actually see",
   "admin.area.tenant.effectiveNote": "effective access for one user",
   "admin.area.people.title": "People & access",
@@ -179,12 +216,14 @@ const en = {
   "admin.area.people.tools": "Tool permissions",
   "admin.area.people.toolsNote": "which tools a user or tenant may call",
   "admin.area.skills.title": "Skills & MCP",
-  "admin.area.skills.question": "What is published, what can it call, and to whom?",
+  "admin.area.skills.question":
+    "What is published, what can it call, and to whom?",
   "admin.area.skills.studio": "Skill Studio",
   "admin.area.skills.studioLegacy": "Legacy Skill Studio",
   "admin.area.skills.studioNote": "model, tools, instructions and access",
   "admin.area.skills.mcp": "MCP Servers",
-  "admin.area.skills.mcpNote": "endpoints, health, capabilities and Skill bindings",
+  "admin.area.skills.mcpNote":
+    "endpoints, health, capabilities and Skill bindings",
   "admin.area.activity.title": "Activity & audit",
   "admin.area.activity.question": "What happened, and who changed what?",
   "admin.area.activity.sessions": "Sessions",
@@ -194,13 +233,16 @@ const en = {
   "admin.area.platform.title": "Platform",
   "admin.area.platform.question": "Settings that apply across every tenant.",
   "admin.area.platform.models": "Model Providers",
-  "admin.area.platform.modelsNote": "endpoints, models, completion and Tool Calling tests",
+  "admin.area.platform.modelsNote":
+    "endpoints, models, completion and Tool Calling tests",
   "admin.area.platform.settings": "Platform settings",
-  "admin.area.platform.settingsNote": "global prompt and platform configuration",
+  "admin.area.platform.settingsNote":
+    "global prompt and platform configuration",
   "admin.area.agent.title": "Root Agent",
   "admin.area.agent.question": "What can the one user-facing agent do?",
   "admin.area.agent.settings": "Agent settings",
-  "admin.area.agent.settingsNote": "model, prompt, capabilities, interaction and permissions",
+  "admin.area.agent.settingsNote":
+    "model, prompt, capabilities, interaction and permissions",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -219,7 +261,14 @@ const zhCN = {
   "rootAgent.loadFailed": "无法加载 Root Agent 配置。",
   "rootAgent.saveFailed": "无法保存 Root Agent 配置。",
   "rootAgent.adminOnly": "Root Agent 配置需要平台管理员权限。",
-  "rootAgent.compatibility": "兼容模式：现有 SkillConfig 和流式接口仍然可用，Root Agent runtime 正在迁移中。",
+  "rootAgent.compatibility":
+    "Root Agent 统一管理运行配置；Skills 提供经授权的指令与参考资料。",
+  "rootAgent.nav.budget": "租户额度",
+  "rootAgent.budget.enabled": "对所有 Root Agent 模型调用执行租户额度控制",
+  "rootAgent.budget.hint":
+    "覆盖普通聊天、A2UI 操作及旧能力链接。启用前请创建租户并设置额度；租户不存在时拒绝调用，额度为零或未设置时不限额。保存后无需重启。",
+  "rootAgent.budget.tenants": "配置租户额度与模型策略",
+  "rootAgent.budget.usage": "查看 Token、估算费用和额度使用情况",
   "rootAgent.nav.overview": "概览",
   "rootAgent.nav.model": "模型",
   "rootAgent.nav.prompt": "提示词",
@@ -235,22 +284,27 @@ const zhCN = {
   "rootAgent.overview.displayName": "显示名称",
   "rootAgent.overview.description": "说明",
   "rootAgent.overview.activeCapabilities": "当前能力",
-  "rootAgent.overview.capabilitySummary": "{skills} 个 Skill · {tools} 个 Tool · {mcp} 个 MCP 服务",
+  "rootAgent.overview.capabilitySummary":
+    "{skills} 个 Skill · {tools} 个 Tool · {mcp} 个 MCP 服务",
   "rootAgent.model.label": "语言模型",
   "rootAgent.model.hint": "模型归属于 Root Agent；Skill 只提供指令和能力需求。",
   "rootAgent.prompt.label": "系统指令",
-  "rootAgent.prompt.hint": "Root Agent 的全局指令；Skill 指令会在权限计算后被加载。",
+  "rootAgent.prompt.hint":
+    "Root Agent 的全局指令；Skill 指令会在权限计算后被加载。",
   "rootAgent.skills.title": "生效 Skills",
-  "rootAgent.skills.description": "选择 Root Agent 可以加载的专业能力；运行时仍会应用租户、用户组和用户权限。",
+  "rootAgent.skills.description":
+    "选择 Root Agent 可以加载的专业能力；运行时仍会应用租户、用户组和用户权限。",
   "rootAgent.skills.empty": "当前权限范围内没有可用 Skill。",
   "rootAgent.tools.title": "原生 Tools",
   "rootAgent.tools.description": "为 Root Agent 绑定可复用的平台工具。",
   "rootAgent.tools.empty": "当前没有可用的原生 Tool。",
   "rootAgent.mcp.title": "MCP 服务",
-  "rootAgent.mcp.description": "MCP 归属于 Agent；Skill 只声明需要哪些 MCP Tool，不再拥有服务连接。",
+  "rootAgent.mcp.description":
+    "MCP 归属于 Agent；Skill 只声明需要哪些 MCP Tool，不再拥有服务连接。",
   "rootAgent.mcp.empty": "当前权限范围内没有可用 MCP 服务。",
   "rootAgent.knowledge.title": "知识来源",
-  "rootAgent.knowledge.description": "知识是 Agent 资源，不再隐藏在某个 Skill 的专属配置中。",
+  "rootAgent.knowledge.description":
+    "知识是 Agent 资源，不再隐藏在某个 Skill 的专属配置中。",
   "rootAgent.knowledge.placeholder": "每行填写一个资源 ID",
   "rootAgent.interaction.title": "交互",
   "rootAgent.interaction.a2ui": "启用 A2UI 界面",
@@ -262,12 +316,16 @@ const zhCN = {
   "rootAgent.interaction.voice": "启用语音输出",
   "rootAgent.interaction.welcome": "欢迎消息",
   "rootAgent.permissions.title": "权限边界",
-  "rootAgent.permissions.description": "这里保存的绑定只是上限；最终权限是平台、租户、用户组和用户权限的交集。",
+  "rootAgent.permissions.description":
+    "这里保存的绑定只是上限；最终权限是平台、租户、用户组和用户权限的交集。",
   "rootAgent.permissions.failClosed": "Skills、Tools、MCP 解析失败时默认拒绝",
   "rootAgent.advanced.title": "高级",
   "rootAgent.advanced.specialists": "Specialist Agents",
-  "rootAgent.advanced.specialistsHint": "只有需要独立模型、Prompt 或推理策略时才使用。",
-  "rootAgent.advanced.legacy": "迁移期间仍可从 Resources → Skills 进入旧 Skill 编辑器。",
+  "rootAgent.advanced.specialistsHint":
+    "只有需要独立模型、Prompt 或推理策略时才使用。",
+  "rootAgent.advanced.legacy":
+    "在资源 → Skills 中维护能力内容，在普通 Root Agent 对话中验证能力。",
+  "resources.skills.content": "指令、参考资料与附件",
   "resources.skills.title": "Skills",
   "resources.skills.subtitle": "由 Root Agent 加载的可复用专业能力。",
   "resources.skills.open": "打开 Skill 编辑器",
@@ -286,7 +344,8 @@ const zhCN = {
   "agents.category.default": "助手",
   "agents.status.active": "运行中",
   "agents.emptyTitle": "创建第一个智能体",
-  "agents.emptyDescription": "智能体将模型、指令和能力组合成一个可以直接使用的工作空间。",
+  "agents.emptyDescription":
+    "智能体将模型、指令和能力组合成一个可以直接使用的工作空间。",
   "agents.nav.overview": "概览",
   "agents.nav.agents": "智能体",
   "agents.nav.resources": "资源",
@@ -317,14 +376,16 @@ const zhCN = {
   "auth.failed": "登录失败",
 
   "localMode.aria": "LOCAL_MODE 已启用",
-  "localMode.summary": "🛠️ LOCAL_MODE — 当前数据仅保存在内存中，重启后会丢失；认证使用开发模式替身。",
+  "localMode.summary":
+    "🛠️ LOCAL_MODE — 当前数据仅保存在内存中，重启后会丢失；认证使用开发模式替身。",
   "localMode.disabled": "已禁用：{services}",
   "localMode.selfHostGuide": "自托管部署指南 →",
 
   "home.hero.eyebrow": "开放式智能体平台",
   "home.hero.lineA": "构建 AI 智能体",
   "home.hero.lineB": "连接开放协议",
-  "home.hero.body": "在可自托管的平台上运行 Skills、AG-UI、A2UI 与 MCP Apps，并获得持久化身份、存储和租户隔离能力。",
+  "home.hero.body":
+    "在可自托管的平台上运行 Skills、AG-UI、A2UI 与 MCP Apps，并获得持久化身份、存储和租户隔离能力。",
   "home.hero.ctaPrimary": "打开智能体",
   "home.hero.ctaSecondary": "浏览技能",
   "home.builtOn": "核心能力",
@@ -336,13 +397,16 @@ const zhCN = {
   "home.audience.heading": "面向真正运营 AI 智能体的团队",
   "home.audience.operator.role": "平台运维",
   "home.audience.operator.headline": "运行生产级自托管架构",
-  "home.audience.operator.body": "以 PostgreSQL、内置 JWT、本地持久化存储和独立 MCP Apps 沙箱构成最小生产基线，不强制依赖 GCP 基础设施。",
+  "home.audience.operator.body":
+    "以 PostgreSQL、内置 JWT、本地持久化存储和独立 MCP Apps 沙箱构成最小生产基线，不强制依赖 GCP 基础设施。",
   "home.audience.builder.role": "智能体开发者",
   "home.audience.builder.headline": "组合技能、模型与工具",
-  "home.audience.builder.body": "通过动态模型 Provider、Skill Studio 与 MCP Binding 进行配置，同时由服务端统一掌控运行时策略和凭据。",
+  "home.audience.builder.body":
+    "通过动态模型 Provider、Skill Studio 与 MCP Binding 进行配置，同时由服务端统一掌控运行时策略和凭据。",
   "home.audience.engineer.role": "协议工程师",
   "home.audience.engineer.headline": "基于开放协议持续扩展",
-  "home.audience.engineer.body": "在 {appName} 上扩展 AG-UI、A2UI、MCP 与 MCP Apps，同时保留上游标准协议链路，避免演变为私有协议实现。",
+  "home.audience.engineer.body":
+    "在 {appName} 上扩展 AG-UI、A2UI、MCP 与 MCP Apps，同时保留上游标准协议链路，避免演变为私有协议实现。",
   "home.pillar.extract.label": "技能编排",
   "home.pillar.extract.tagline": "提示词、工具与运行策略",
   "home.pillar.compare.label": "模型 Provider",
@@ -358,13 +422,16 @@ const zhCN = {
 
   "admin.loading": "加载中…",
   "admin.accessCheckFailed": "无法检查你的管理权限",
-  "admin.accessConnectionProblem": "当前无法连接管理服务，这是连接问题而不是权限判定。请刷新页面后重试。",
+  "admin.accessConnectionProblem":
+    "当前无法连接管理服务，这是连接问题而不是权限判定。请刷新页面后重试。",
   "admin.only": "仅管理员可访问",
   "admin.onlyDescription": "管理区域需要平台管理员或当前租户管理员权限。",
-  "admin.justGranted": "如果刚刚获得管理员权限，请重新检查访问上下文，以立即获取服务端最新角色。",
+  "admin.justGranted":
+    "如果刚刚获得管理员权限，请重新检查访问上下文，以立即获取服务端最新角色。",
   "admin.recheck": "重新检查权限",
   "admin.title": "管理中心",
-  "admin.subtitle": "统一管理租户、技能、访问权限、MCP 集成、模型 Provider 与审计分析。",
+  "admin.subtitle":
+    "统一管理租户、技能、访问权限、MCP 集成、模型 Provider 与审计分析。",
   "admin.scopedTo": "当前范围：{domains} — 你只能看到自己租户的数据。",
   "admin.area.tenant.title": "租户管理",
   "admin.area.tenant.question": "当前租户配置了什么能力，用户最终能看到什么？",
@@ -396,7 +463,8 @@ const zhCN = {
   "admin.area.platform.title": "平台配置",
   "admin.area.platform.question": "对所有租户生效的平台级设置。",
   "admin.area.platform.models": "模型 Provider",
-  "admin.area.platform.modelsNote": "Endpoint、模型、Completion 与 Tool Calling 测试",
+  "admin.area.platform.modelsNote":
+    "Endpoint、模型、Completion 与 Tool Calling 测试",
   "admin.area.platform.settings": "平台设置",
   "admin.area.platform.settingsNote": "全局 Prompt 与平台配置",
   "admin.area.agent.title": "Root Agent",
@@ -410,10 +478,16 @@ export const TRANSLATIONS: Record<Locale, Record<TranslationKey, string>> = {
   "zh-CN": zhCN,
 };
 
-export function normalizeLocale(value: string | null | undefined): Locale | null {
+export function normalizeLocale(
+  value: string | null | undefined,
+): Locale | null {
   const normalized = value?.trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized === "zh" || normalized === "zh-cn" || normalized === "zh-hans") {
+  if (
+    normalized === "zh" ||
+    normalized === "zh-cn" ||
+    normalized === "zh-hans"
+  ) {
     return "zh-CN";
   }
   if (normalized === "en" || normalized.startsWith("en-")) return "en";

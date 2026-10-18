@@ -109,6 +109,13 @@ def make_permission_enforcer(
         tool_context: ToolContext,
     ) -> dict[str, Any] | None:
         tool_name = tool.name
+        # The trusted resource tool checks Root bindings and source ACLs itself.
+        # A remote MCP tool with the same name must not inherit this exemption.
+        if (
+            tool_name == "search_agent_knowledge"
+            and getattr(getattr(tool, "func", None), "__module__", "") == "agents.knowledge"
+        ):
+            return None
         if tool_name in _INTERNAL_CONTROL_TOOLS:
             return None
         if not can_use_tool(user_email, user_domain, tool_name):

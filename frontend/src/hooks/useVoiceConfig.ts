@@ -77,7 +77,9 @@ export function useVoiceConfig(skillId: string | null): VoiceConfig {
         const data: Omit<VoiceConfig, "loading"> = {
           // Merge over defaults so a backend missing `enabled` still yields a
           // boolean (defaults to on).
-          tts: raw.tts ? { ...DEFAULT_CONFIG.tts, ...raw.tts } : DEFAULT_CONFIG.tts,
+          tts: raw.tts
+            ? { ...DEFAULT_CONFIG.tts, ...raw.tts }
+            : DEFAULT_CONFIG.tts,
         };
         if (!signal.cancelled) {
           _cache.set(cacheKey, data);
@@ -121,5 +123,10 @@ export function useVoiceConfig(skillId: string | null): VoiceConfig {
 
 /** Reset the module-level cache. Test helper; not exported in the bundle. */
 export function _resetVoiceConfigCacheForTests(): void {
+  _cache.clear();
+}
+
+/** Saved Root settings must apply when returning to chat in the same SPA. */
+export function invalidateVoiceConfig(): void {
   _cache.clear();
 }

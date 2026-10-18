@@ -38,6 +38,7 @@ class RootAgentTenantOverride(BaseModel):
     """
 
     model: str | None = None
+    budget_enabled: bool | None = Field(default=None, alias="budgetEnabled")
     instructions: str | None = None
     skills: list[str] | None = None
     tools: list[str] | None = None
@@ -65,6 +66,7 @@ class RootAgentConfig(BaseModel):
         max_length=1000,
     )
     model: str = "smart"
+    budget_enabled: bool = Field(default=False, alias="budgetEnabled")
     instructions: str = Field(default="", max_length=20000)
     skills: list[str] = Field(default_factory=list, max_length=200)
     tools: list[str] = Field(default_factory=list, max_length=200)

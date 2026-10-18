@@ -1,316 +1,513 @@
-// Tenant-Admin — manage client-org (domain) config in the app instead of by hand.
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useI18n } from "@/contexts/I18nContext";
-import { fetchWithAuth } from "@/lib/apiClient";
-import { translateTenantAdmin } from "@/lib/i18n/tenantAdmin";
-import { EffectiveAccessPanel } from "@/components/admin/EffectiveAccessPanel";
+import { useAdminScope } from "@/hooks/useAdminScope";
 import { SignInRequired } from "@/components/chat/SignInRequired";
-import { TenantEditor } from "@/components/admin/TenantEditor";
-import { TenantOnboardWizard } from "@/components/admin/TenantOnboardWizard";
-import type { ClientConfig, SkillOption, TenantValidation } from "@/components/admin/tenantAdmin";
-import { HealthBadge, type HealthState, ReachDot } from "@/components/admin/tenantHealth";
+import { TenantRootEditor } from "@/components/admin/TenantRootEditor";
+import {
+  action,
+  consoleApi,
+  control,
+  errorText,
+  Field,
+  jsonBody,
+  Notice,
+  useConsoleCopy,
+} from "@/components/admin/ConsolePrimitives";
 
-interface SkillLite {
-  slug?: string | null;
-  displayName?: string;
-  name?: string;
-}
-
-// Technical owner id used by the existing Skill API. This is not display branding.
-const PLATFORM_OWNER_UID = "aitana-platform";
-
-type Status =
-  | { kind: "loading" }
-  | { kind: "forbidden" }
-  | { kind: "error"; message: string }
-  | { kind: "ready" };
-
-type Panel =
-  | { mode: "none" }
-  | { mode: "new" }
-  | { mode: "edit"; tenant: ClientConfig }
-  | { mode: "access"; tenant: ClientConfig };
+type Tenant = {
+  tenantId: string;
+  displayName: string;
+  domains: string[];
+  enabledSkills?: string[] | null;
+  derivedGroupTags?: string[] | null;
+  storageNamespace: string;
+  documentsBucket?: string | null;
+  disabled: boolean;
+  modelPolicy: {
+    allowedModels?: string[] | null;
+    defaultModel?: string | null;
+  };
+  quota: {
+    llmBudgetUsd?: number;
+    llmBudgetPeriod?: string;
+    llmBudgetSoftThreshold?: number;
+  };
+};
+type Model = { id: string; label?: string; name?: string };
+const blank = (): Tenant => ({
+  tenantId: "",
+  displayName: "",
+  domains: [],
+  storageNamespace: "",
+  disabled: false,
+  modelPolicy: {},
+  quota: {},
+});
+const split = (value: string) => [
+  ...new Set(value.split(/[\s,]+/).filter(Boolean)),
+];
 
 export default function TenantAdminPage() {
-  const { user, loading: authLoading } = useAuth();
-  const { locale } = useI18n();
-  const t = (
-    key: Parameters<typeof translateTenantAdmin>[1],
-    params: Record<string, string | number> = {},
-  ) => translateTenantAdmin(locale, key, params);
-  const [status, setStatus] = useState<Status>({ kind: "loading" });
-  const [tenants, setTenants] = useState<ClientConfig[]>([]);
-  const [skills, setSkills] = useState<SkillOption[]>([]);
-  const [skillNotice, setSkillNotice] = useState<string | null>(null);
-  const [panel, setPanel] = useState<Panel>({ mode: "none" });
-  const [notice, setNotice] = useState<string | null>(null);
-  const [health, setHealth] = useState<Record<string, HealthState>>({});
-
-  const loadHealth = useCallback(async (domains: string[]) => {
-    setHealth(Object.fromEntries(domains.map((d) => [d, { kind: "loading" } as HealthState])));
-    await Promise.all(
-      domains.map(async (d) => {
-        try {
-          const r = await fetchWithAuth(
-            `/api/proxy/api/admin/tenants/${encodeURIComponent(d)}/validate`,
-          );
-          if (!r.ok) {
-            setHealth((h) => ({ ...h, [d]: { kind: "error" } }));
-            return;
-          }
-          const validation = (await r.json()) as TenantValidation;
-          setHealth((h) => ({ ...h, [d]: { kind: "ready", validation } }));
-        } catch {
-          setHealth((h) => ({ ...h, [d]: { kind: "error" } }));
-        }
-      }),
-    );
-  }, []);
-
-  const loadTenants = useCallback(async () => {
-    setStatus({ kind: "loading" });
-    try {
-      const r = await fetchWithAuth("/api/proxy/api/admin/clients");
-      if (r.status === 403) return setStatus({ kind: "forbidden" });
-      if (!r.ok) return setStatus({ kind: "error", message: `HTTP ${r.status}` });
-      const data: ClientConfig[] = await r.json();
-      data.sort((a, b) => a.domain.localeCompare(b.domain));
-      setTenants(data);
-      setStatus({ kind: "ready" });
-      void loadHealth(data.map((item) => item.domain));
-    } catch (e) {
-      setStatus({
-        kind: "error",
-        message: e instanceof Error ? e.message : translateTenantAdmin(locale, "page.loadFailed"),
-      });
-    }
-  }, [loadHealth, locale]);
-
-  const loadSkills = useCallback(async () => {
-    setSkillNotice(null);
-    try {
-      const [ownRes, platformRes] = await Promise.all([
-        fetchWithAuth("/api/proxy/api/skills"),
-        fetchWithAuth(`/api/proxy/api/skills?ownerId=${encodeURIComponent(PLATFORM_OWNER_UID)}`),
-      ]);
-      if (!ownRes.ok && !platformRes.ok) {
-        setSkillNotice(translateTenantAdmin(locale, "page.skillsUnavailable"));
-        return;
-      }
-      const own: SkillLite[] = ownRes.ok ? await ownRes.json() : [];
-      const platform: SkillLite[] = platformRes.ok ? await platformRes.json() : [];
-      const bySlug = new Map<string, SkillOption>();
-      for (const skill of [...own, ...platform]) {
-        if (!skill.slug) continue;
-        if (!bySlug.has(skill.slug)) {
-          bySlug.set(skill.slug, {
-            slug: skill.slug,
-            displayName: skill.displayName || skill.name || skill.slug,
-          });
-        }
-      }
-      setSkills([...bySlug.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)));
-    } catch (e) {
-      setSkillNotice(
-        translateTenantAdmin(locale, "page.skillsLoadFailed", {
-          error: e instanceof Error ? e.message : translateTenantAdmin(locale, "common.error"),
-        }),
-      );
-    }
-  }, [locale]);
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      void loadTenants();
-      void loadSkills();
-    }
-  }, [authLoading, user, loadTenants, loadSkills]);
-
-  function afterMutation(message: string) {
-    setNotice(message);
-    setPanel({ mode: "none" });
-    void loadTenants();
-  }
-
-  if (authLoading || status.kind === "loading") {
-    return <Centered>{t("page.loading")}</Centered>;
-  }
+  const { user, loading } = useAuth();
+  const t = useConsoleCopy();
+  if (loading) return <main className="p-8">{t("加载中…", "Loading…")}</main>;
   if (!user) return <SignInRequired />;
-  if (status.kind === "forbidden") {
-    return (
-      <Centered>
-        <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">{t("page.adminOnly")}</h1>
-          <p className="text-sm text-muted-foreground">{t("page.adminOnlyDescription")}</p>
-        </div>
-      </Centered>
-    );
-  }
-  if (status.kind === "error") {
-    return (
-      <Centered>
-        <div className="text-center">
-          <p className="mb-3 text-sm text-red-600">
-            {t("page.loadTenantsFailed", { error: status.message })}
-          </p>
-          <button className="rounded border px-3 py-1.5 text-sm" onClick={() => void loadTenants()}>
-            {t("page.retry")}
-          </button>
-        </div>
-      </Centered>
-    );
-  }
-
+  return <Tenants />;
+}
+function Tenants() {
+  const t = useConsoleCopy();
+  const scope = useAdminScope();
+  const [rows, setRows] = useState<Tenant[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
+  const [draft, setDraft] = useState<Tenant | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [domainsText, setDomainsText] = useState("");
+  const [tagsText, setTagsText] = useState("");
+  const [skillsText, setSkillsText] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [validation, setValidation] = useState<
+    Array<{ field: string; message: string; level: string }>
+  >([]);
+  const load = useCallback(async () => {
+    try {
+      const [tenants, registry] = await Promise.all([
+        consoleApi<Tenant[]>("/admin/tenants"),
+        consoleApi<{ models: Model[] }>("/models"),
+      ]);
+      setRows(tenants);
+      setModels(registry.models ?? []);
+    } catch (error) {
+      setNotice(errorText(error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const patch = (next: Partial<Tenant>) =>
+    setDraft((current) => (current ? { ...current, ...next } : current));
+  const open = (tenant: Tenant, exists: boolean) => {
+    setDraft(JSON.parse(JSON.stringify(tenant)) as Tenant);
+    setEditing(exists);
+    setValidation([]);
+    setDomainsText(tenant.domains.join(", "));
+    setTagsText((tenant.derivedGroupTags ?? []).join(", "));
+    setSkillsText((tenant.enabledSkills ?? []).join(", "));
+  };
+  const save = async () => {
+    if (!draft) return;
+    setBusy(true);
+    setNotice("");
+    setValidation([]);
+    const body = {
+      tenant_id: draft.tenantId.trim(),
+      display_name: draft.displayName,
+      domains: split(domainsText),
+      derived_group_tags: split(tagsText),
+      enabled_skills: split(skillsText),
+      disabled: draft.disabled,
+      ...(scope.isPlatform
+        ? { model_policy: draft.modelPolicy, quota: draft.quota }
+        : {}),
+    };
+    try {
+      const result = await consoleApi<Tenant | { config: Tenant }>(
+        editing
+          ? `/admin/tenants/${encodeURIComponent(draft.tenantId)}`
+          : "/admin/tenants",
+        jsonBody(editing ? "PATCH" : "POST", body),
+      );
+      const saved = "config" in result ? result.config : result;
+      open(saved, true);
+      await load();
+      setNotice(t("租户配置已保存。", "Tenant saved."));
+    } catch (error) {
+      setNotice(errorText(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const validate = async () => {
+    if (!draft) return;
+    setBusy(true);
+    try {
+      const result = await consoleApi<{ checks: typeof validation }>(
+        `/admin/tenants/${encodeURIComponent(draft.tenantId)}/validate`,
+      );
+      setValidation(result.checks);
+    } catch (error) {
+      setNotice(errorText(error));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <main className="mx-auto max-w-5xl p-6">
-      <header className="mb-6 flex items-center justify-between gap-4">
+    <main className="mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
+      <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">{t("page.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("page.description")}</p>
+          <h1 className="text-xl font-semibold">{t("租户管理", "Tenants")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t(
+              "以稳定租户 ID 管理身份域、可用能力、模型和额度。无域名租户同样适用。",
+              "Manage stable tenant identities, optional domains, capabilities, models and budgets.",
+            )}
+          </p>
         </div>
-        <button
-          className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-          onClick={() => {
-            setNotice(null);
-            setPanel({ mode: "new" });
-          }}
-        >
-          {t("page.newTenant")}
-        </button>
+        {scope.isPlatform && (
+          <button
+            className={action}
+            onClick={() => {
+              open(blank(), false);
+            }}
+          >
+            {t("新建租户", "New tenant")}
+          </button>
+        )}
       </header>
-
-      {notice && (
-        <div className="mb-4 rounded-md border bg-muted/40 px-3 py-2 text-sm" role="status">
-          {notice}
-        </div>
-      )}
-      {skillNotice && (
-        <div
-          className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700"
-          role="status"
-        >
-          {skillNotice}
-        </div>
-      )}
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+      <Notice>{notice}</Notice>
+      <section className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-left text-sm">
+          <thead>
             <tr>
-              <th className="px-3 py-2">{t("page.domain")}</th>
-              <th className="px-3 py-2">{t("page.documentsBucket")}</th>
-              <th className="px-3 py-2">{t("page.health")}</th>
-              <th className="px-3 py-2">{t("page.landingSkill")}</th>
-              <th className="px-3 py-2">{t("page.enabledSkills")}</th>
-              <th className="px-3 py-2">{t("page.groupTags")}</th>
-              <th className="px-3 py-2" />
+              {[
+                t("租户", "Tenant"),
+                t("身份域", "Identity domains"),
+                t("状态", "Status"),
+                t("操作", "Actions"),
+              ].map((label) => (
+                <th className="p-3 font-medium" key={label}>
+                  {label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {tenants.length === 0 && (
-              <tr>
-                <td className="px-3 py-4 text-muted-foreground" colSpan={7}>
-                  {t("page.noTenants")}
+            {rows.map((tenant) => (
+              <tr className="border-t" key={tenant.tenantId}>
+                <td className="p-3">
+                  <span className="font-medium">
+                    {tenant.displayName || tenant.tenantId}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {tenant.tenantId}
+                  </span>
                 </td>
-              </tr>
-            )}
-            {tenants.map((tenant) => (
-              <tr key={tenant.domain} className="border-t align-top">
-                <td className="px-3 py-2 font-medium">
-                  {tenant.domain}
-                  {tenant.display_name ? (
-                    <span className="block text-xs font-normal text-muted-foreground">
-                      {tenant.display_name}
-                    </span>
-                  ) : null}
+                <td className="p-3">
+                  {tenant.domains.join(", ") ||
+                    t("无域名映射", "No domain mapping")}
                 </td>
-                <td className="px-3 py-2">
-                  {tenant.documents_bucket ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <ReachDot state={health[tenant.domain]} />
-                      <span className="font-mono text-xs">{tenant.documents_bucket}</span>
-                    </span>
-                  ) : (
-                    <Dim>—</Dim>
-                  )}
+                <td className="p-3">
+                  {tenant.disabled
+                    ? t("已停用", "Disabled")
+                    : t("启用", "Enabled")}
                 </td>
-                <td className="px-3 py-2">
-                  <HealthBadge state={health[tenant.domain]} />
-                </td>
-                <td className="px-3 py-2">{tenant.default_skill || <Dim>—</Dim>}</td>
-                <td className="px-3 py-2">
-                  {tenant.enabled_skills?.length ? tenant.enabled_skills.join(", ") : <Dim>{t("page.allSkills")}</Dim>}
-                </td>
-                <td className="px-3 py-2">
-                  {tenant.derived_group_tags?.length ? tenant.derived_group_tags.join(", ") : <Dim>—</Dim>}
-                </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
+                <td className="p-3">
                   <button
-                    className="rounded border px-2 py-1 text-xs"
+                    className={action}
                     onClick={() => {
-                      setNotice(null);
-                      setPanel({ mode: "access", tenant });
-                    }}
-                    title={t("page.accessTitle")}
-                  >
-                    {t("page.whatUsersSee")}
-                  </button>
-                  <button
-                    className="ml-2 rounded border px-2 py-1 text-xs"
-                    onClick={() => {
-                      setNotice(null);
-                      setPanel({ mode: "edit", tenant });
+                      open(tenant, true);
                     }}
                   >
-                    {t("page.edit")}
+                    {t("编辑", "Edit")}
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {panel.mode === "new" && (
-        <TenantOnboardWizard
-          availableSkills={skills}
-          onCreated={() => afterMutation(t("page.onboarded"))}
-          onCancel={() => setPanel({ mode: "none" })}
-        />
-      )}
-      {panel.mode === "access" && (
-        <div className="mt-4" key={`access-${panel.tenant.domain}`}>
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold">{panel.tenant.domain}</h2>
-            <button className="text-xs underline" onClick={() => setPanel({ mode: "none" })}>
-              {t("page.close")}
-            </button>
-          </div>
-          <EffectiveAccessPanel domain={panel.tenant.domain} />
-        </div>
-      )}
-      {panel.mode === "edit" && (
-        <TenantEditor
-          key={`edit-${panel.tenant.domain}`}
-          tenant={panel.tenant}
-          availableSkills={skills}
-          onSaved={() => void loadTenants()}
-          onDeleted={() => afterMutation(t("page.deleted", { domain: panel.tenant.domain }))}
-          onCancel={() => setPanel({ mode: "none" })}
-        />
+        {loading ? (
+          <p className="p-4">{t("加载中…", "Loading…")}</p>
+        ) : (
+          rows.length === 0 && (
+            <p className="p-4 text-muted-foreground">
+              {t("暂无可管理租户。", "No tenants in your scope.")}
+            </p>
+          )
+        )}
+      </section>
+      {draft && (
+        <>
+          <section className="space-y-4 rounded-lg border p-5">
+            <h2 className="font-medium">
+              {editing
+                ? t("编辑租户", "Edit tenant")
+                : t("创建租户", "Create tenant")}
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t("稳定租户 ID", "Stable tenant ID")}>
+                <input
+                  className={control}
+                  value={draft.tenantId}
+                  disabled={editing}
+                  onChange={(e) => patch({ tenantId: e.target.value })}
+                />
+              </Field>
+              <Field label={t("显示名称", "Display name")}>
+                <input
+                  className={control}
+                  value={draft.displayName}
+                  onChange={(e) => patch({ displayName: e.target.value })}
+                />
+              </Field>
+              <Field
+                label={t(
+                  "身份域（逗号分隔，可留空）",
+                  "Identity domains (comma separated, optional)",
+                )}
+              >
+                <input
+                  className={control}
+                  value={domainsText}
+                  onChange={(e) => setDomainsText(e.target.value)}
+                />
+              </Field>
+              <Field label={t("派生分组标签", "Derived group tags")}>
+                <input
+                  className={control}
+                  value={tagsText}
+                  onChange={(e) => setTagsText(e.target.value)}
+                />
+              </Field>
+              <Field
+                label={t(
+                  "可用 Skill 标识（留空继承）",
+                  "Enabled Skill slugs (empty inherits)",
+                )}
+              >
+                <input
+                  className={control}
+                  value={skillsText}
+                  onChange={(e) => setSkillsText(e.target.value)}
+                />
+              </Field>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.disabled}
+                  onChange={(e) => patch({ disabled: e.target.checked })}
+                />
+                {t("停用租户", "Disable tenant")}
+              </label>
+            </div>
+            {scope.isPlatform && (
+              <>
+                <h3 className="border-t pt-4 text-sm font-medium">
+                  {t("模型与额度", "Models and budgets")}
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label={t("限制可用模型", "Restrict allowed models")}>
+                    <span className="flex gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={draft.modelPolicy.allowedModels != null}
+                        onChange={(e) =>
+                          patch({
+                            modelPolicy: {
+                              ...draft.modelPolicy,
+                              allowedModels: e.target.checked ? [] : null,
+                            },
+                          })
+                        }
+                      />
+                      {t("启用模型白名单", "Enable model allow-list")}
+                    </span>
+                    {draft.modelPolicy.allowedModels != null && (
+                      <div className="max-h-48 space-y-2 overflow-auto rounded-md border p-3">
+                        {models.map((model) => (
+                          <label className="flex gap-2 text-sm" key={model.id}>
+                            <input
+                              type="checkbox"
+                              checked={
+                                draft.modelPolicy.allowedModels?.includes(
+                                  model.id,
+                                ) ?? false
+                              }
+                              onChange={(e) =>
+                                patch({
+                                  modelPolicy: {
+                                    ...draft.modelPolicy,
+                                    allowedModels: e.target.checked
+                                      ? [
+                                          ...(draft.modelPolicy.allowedModels ??
+                                            []),
+                                          model.id,
+                                        ]
+                                      : (
+                                          draft.modelPolicy.allowedModels ?? []
+                                        ).filter((id) => id !== model.id),
+                                  },
+                                })
+                              }
+                            />
+                            {model.label || model.name || model.id}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </Field>
+                  <Field label={t("默认模型", "Default model")}>
+                    <select
+                      className={control}
+                      value={draft.modelPolicy.defaultModel ?? ""}
+                      onChange={(e) =>
+                        patch({
+                          modelPolicy: {
+                            ...draft.modelPolicy,
+                            defaultModel: e.target.value || null,
+                          },
+                        })
+                      }
+                    >
+                      <option value="">
+                        {t("继承平台路由", "Inherit platform routing")}
+                      </option>
+                      {models
+                        .filter(
+                          (model) =>
+                            draft.modelPolicy.allowedModels == null ||
+                            draft.modelPolicy.allowedModels.includes(model.id),
+                        )
+                        .map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.label || model.name || model.id}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                  <Field
+                    label={t(
+                      "LLM 额度（美元，0 表示不限额）",
+                      "LLM cap (USD, 0 means unlimited)",
+                    )}
+                  >
+                    <input
+                      className={control}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={draft.quota.llmBudgetUsd ?? 0}
+                      onChange={(e) =>
+                        patch({
+                          quota: {
+                            ...draft.quota,
+                            llmBudgetUsd: Number(e.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("额度周期", "Budget period")}>
+                    <select
+                      className={control}
+                      value={draft.quota.llmBudgetPeriod ?? "monthly"}
+                      onChange={(e) =>
+                        patch({
+                          quota: {
+                            ...draft.quota,
+                            llmBudgetPeriod: e.target.value,
+                          },
+                        })
+                      }
+                    >
+                      {[
+                        ["daily", t("每日", "Daily")],
+                        ["weekly", t("每周", "Weekly")],
+                        ["monthly", t("每月", "Monthly")],
+                      ].map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field
+                    label={t("提醒阈值（0–1）", "Warning threshold (0–1)")}
+                  >
+                    <input
+                      className={control}
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={draft.quota.llmBudgetSoftThreshold ?? 0.8}
+                      onChange={(e) =>
+                        patch({
+                          quota: {
+                            ...draft.quota,
+                            llmBudgetSoftThreshold: Number(e.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "额度控制需在下方租户 Agent 策略或 Root Agent 设置中启用。费用依据模型定价估算。",
+                    "Enable enforcement below or in Root Agent settings. Costs use estimated model pricing.",
+                  )}
+                </p>
+              </>
+            )}
+            <div className="flex gap-3">
+              <button
+                className={action}
+                disabled={busy || !draft.tenantId.trim()}
+                onClick={() => void save()}
+              >
+                {busy ? t("保存中…", "Saving…") : t("保存租户", "Save tenant")}
+              </button>
+              {editing && (
+                <button
+                  className={action}
+                  disabled={busy}
+                  onClick={() => void validate()}
+                >
+                  {t("检查配置", "Validate")}
+                </button>
+              )}
+              <button
+                className={action}
+                disabled={busy}
+                onClick={() => setDraft(null)}
+              >
+                {t("关闭", "Close")}
+              </button>
+            </div>
+            {validation.length > 0 && (
+              <ul className="space-y-2 text-sm">
+                {validation.map((check, index) => (
+                  <li
+                    key={index}
+                    className={
+                      check.level === "error"
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {check.field}: {check.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          {editing && scope.isPlatform && (
+            <TenantRootEditor
+              key={draft.tenantId}
+              tenantId={draft.tenantId}
+              models={models.map((model) => ({
+                id: model.id,
+                label: model.label || model.name || model.id,
+              }))}
+            />
+          )}
+        </>
       )}
     </main>
   );
-}
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
-}
-
-function Dim({ children }: { children: React.ReactNode }) {
-  return <span className="text-muted-foreground">{children}</span>;
 }

@@ -9,12 +9,13 @@ built as part of that turn.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from auth.access_context import AccessContext
 from auth.firebase_auth import User
 from db.clients import resolve_enabled_skills
-from db.models import DelegationConfig, FallbackConfig, SkillConfig, SkillMetadata
+from db.models import DelegationConfig, FallbackConfig, SkillConfig, SkillMetadata, SkillPersona, SkillVoiceConfig
 from db.models.root_agent import RootAgentConfig
 from skills import platform
 from skills.skill_config import resolve_skill_ref
@@ -54,6 +55,7 @@ def effective_root_config(config: RootAgentConfig, tenant_id: str | None) -> Roo
     updates: dict[str, Any] = {}
     for field in (
         "model",
+        "budget_enabled",
         "instructions",
         "skills",
         "tools",
@@ -148,7 +150,10 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
     )
     metadata = skill.skill_metadata.model_copy(deep=True)
     tool_configs = dict(metadata.tool_configs or {})
-    tool_configs["root_agent"] = {"enabled": True}
+    tool_configs["root_agent"] = {"enabled": True, "budget_enabled": config.budget_enabled}
+    if config.budget_enabled:
+        # A capability cannot exempt itself or choose another tenant bucket.
+        tool_configs["budget"] = {"identity_key": "tenant_id", "missing_identity_policy": "block"}
 
     # Skill-level model strategy and delegation are not Root Agent policy.
     # Clear them before composing so a capability cannot smuggle in a second
@@ -197,14 +202,19 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
         }
     )
     tool_configs["a2ui"] = a2ui
-    if config.knowledge:
-        tool_configs["knowledge"] = {"sources": list(config.knowledge)}
+    tool_configs["knowledge"] = {"sources": list(config.knowledge)}
 
     metadata.tool_configs = tool_configs
     metadata.model = config.model or metadata.model
     root_instructions = (config.instructions or "").strip()
     capability_instructions = (skill.instructions or "").strip()
     instructions = "\n\n".join(part for part in (root_instructions, capability_instructions) if part)
+    persona = skill.persona.model_copy(deep=True) if skill.persona else SkillPersona()
+    voice = persona.voice.model_copy(deep=True) if persona.voice else SkillVoiceConfig()
+    voice.enabled = interaction.voice_enabled
+    voice.tts_provider = os.environ.get("TTS_PROVIDER", "browser")
+    voice.language = os.environ.get("TTS_LANGUAGE", "zh-CN")
+    persona.voice = voice
 
     return skill.model_copy(
         deep=True,
@@ -213,6 +223,7 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
             "initial_message": config.interaction.welcome_message or skill.initial_message,
             "skill_metadata": metadata,
             "display_name": config.display_name,
+            "persona": persona,
         },
     )
 

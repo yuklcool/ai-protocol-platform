@@ -63,6 +63,8 @@ class DynamicModelWrite(BaseModel):
     context_window: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
     description: str = ""
+    input_cost_per_million: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    output_cost_per_million: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     supports_tools: bool = True
     supports_reasoning: bool = False
     supports_responses_api: bool = False
@@ -119,6 +121,8 @@ def _model_view(model_id: str, data: dict[str, Any]) -> DynamicModelView:
         context_window=int(data.get("contextWindow") or 1),
         max_output_tokens=int(data.get("maxOutputTokens") or 1),
         description=str(data.get("description") or ""),
+        input_cost_per_million=data.get("inputCostPerMillion"),
+        output_cost_per_million=data.get("outputCostPerMillion"),
         supports_tools=data.get("supportsTools", True) is not False,
         supports_reasoning=bool(data.get("supportsReasoning", False)),
         supports_responses_api=bool(data.get("supportsResponsesApi", False)),
@@ -238,6 +242,11 @@ def upsert_dynamic_model(model_id: str, body: DynamicModelWrite, scope: Platform
     if provider is None:
         raise HTTPException(status_code=422, detail="Unknown provider_id")
     before = get_document(MODELS_COLLECTION, model_id)
+    pricing_fields = {"input_cost_per_million", "output_cost_per_million"}
+    if body.model_fields_set & pricing_fields and (
+        (body.input_cost_per_million is None) != (body.output_cost_per_million is None)
+    ):
+        raise HTTPException(422, "Set both input and output pricing, or clear both")
     data = {
         "apiName": body.api_name.strip(),
         "providerId": provider_id,
@@ -245,6 +254,12 @@ def upsert_dynamic_model(model_id: str, body: DynamicModelWrite, scope: Platform
         "contextWindow": body.context_window,
         "maxOutputTokens": body.max_output_tokens,
         "description": body.description.strip(),
+        "inputCostPerMillion": body.input_cost_per_million
+        if body.model_fields_set & pricing_fields
+        else (before or {}).get("inputCostPerMillion"),
+        "outputCostPerMillion": body.output_cost_per_million
+        if body.model_fields_set & pricing_fields
+        else (before or {}).get("outputCostPerMillion"),
         "supportsTools": body.supports_tools,
         "supportsReasoning": body.supports_reasoning,
         "supportsResponsesApi": body.supports_responses_api,

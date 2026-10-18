@@ -18,6 +18,13 @@ from fastapi.testclient import TestClient
 from auth import User, get_current_user
 from auth.admin_roles import is_admin_conferring_tag
 
+
+@pytest.fixture(autouse=True)
+def firebase_identity_backend(monkeypatch):
+    """This suite exercises Firebase domain claims; local JWT has separate coverage."""
+    monkeypatch.setenv("AUTH_BACKEND", "firebase")
+
+
 _PLATFORM = User(
     uid="admin-uid",
     email="owner@yourcompany.com",

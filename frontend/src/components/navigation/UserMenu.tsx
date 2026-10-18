@@ -1,4 +1,5 @@
 "use client";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 /**
  * Top-right account area for the SkillsBar.
@@ -17,6 +18,7 @@ import { useAdminScope } from "@/hooks/useAdminScope";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function UserMenu() {
+  const t = useConsoleCopy();
   const { user, loading, signIn, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   // Admin discoverability: the /admin area was URL-only. Ask the backend for
@@ -30,7 +32,8 @@ export function UserMenu() {
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     }
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -44,7 +47,9 @@ export function UserMenu() {
   }, [open]);
 
   if (loading) {
-    return <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />;
+    return (
+      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
+    );
   }
 
   if (!user) {
@@ -54,13 +59,15 @@ export function UserMenu() {
         onClick={() => void signIn()}
         className="shrink-0 rounded-md border px-3 py-1.5 text-sm text-foreground hover:bg-muted"
       >
-        Sign in
+        {t("登录", "Sign in")}
       </button>
     );
   }
 
   const name = user.displayName || user.email || "Account";
-  const initial = (user.displayName || user.email || "?").charAt(0).toUpperCase();
+  const initial = (user.displayName || user.email || "?")
+    .charAt(0)
+    .toUpperCase();
 
   return (
     <div ref={ref} className="relative shrink-0">
@@ -69,12 +76,16 @@ export function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Account menu"
+        aria-label={t("账号菜单", "Account menu")}
         className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-sm font-medium text-muted-foreground hover:ring-2 hover:ring-primary/30"
       >
         {user.photoURL ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.photoURL} alt={name} className="h-full w-full object-cover" />
+          <img
+            src={user.photoURL}
+            alt={name}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <span aria-hidden>{initial}</span>
         )}
@@ -87,10 +98,12 @@ export function UserMenu() {
         >
           <div className="border-b px-3 py-2">
             <p className="truncate text-sm font-medium text-foreground">
-              {user.displayName || "Signed in"}
+              {user.displayName || t("已登录", "Signed in")}
             </p>
             {user.email && (
-              <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </p>
             )}
           </div>
           {isAdmin && (
@@ -100,7 +113,7 @@ export function UserMenu() {
               onClick={() => setOpen(false)}
               className="mt-1 block w-full rounded-sm px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
             >
-              Admin
+              {t("管理控制台", "Admin")}
             </Link>
           )}
           <button
@@ -112,7 +125,7 @@ export function UserMenu() {
             }}
             className="mt-1 w-full rounded-sm px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
           >
-            Sign out
+            {t("退出登录", "Sign out")}
           </button>
         </div>
       )}

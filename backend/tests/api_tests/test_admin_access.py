@@ -17,6 +17,12 @@ from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
 
+
+@pytest.fixture(autouse=True)
+def firebase_identity_backend(monkeypatch):
+    monkeypatch.setenv("AUTH_BACKEND", "firebase")
+
+
 _ADMIN = User(
     uid="admin-uid", email="owner@yourcompany.com", domain="yourcompany.com", group_tags=frozenset({"aitana-admin"})
 )
@@ -123,7 +129,7 @@ def test_access_check_tool_permission_domain_then_wildcard_order(admin_client: T
         resp = admin_client.post("/api/admin/access/check", json={"email": "alice@one.com", "toolName": "search"})
     assert resp.status_code == 200
     assert resp.json()["tool_permission"]["allowed"] is True
-    assert seen == ["alice@one.com", "one.com"]
+    assert seen == ["tenant:one.com", "alice@one.com", "one.com"]
 
 
 def test_access_check_tool_permission_default_deny(admin_client: TestClient) -> None:
