@@ -3,6 +3,7 @@ name: Model provider gate
 on:
   pull_request:
     paths:
+      - .github/release-candidate.json
       - frontend/src/app/admin/model-providers/**
       - frontend/src/app/skills/studio/**
       - frontend/src/components/studio/**
@@ -51,6 +52,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/release-candidate.json
       - frontend/src/app/admin/model-providers/**
       - frontend/src/app/skills/studio/**
       - frontend/src/components/studio/**

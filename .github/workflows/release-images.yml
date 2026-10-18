@@ -3,6 +3,7 @@ name: Self-host release images
 on:
   pull_request:
     paths:
+      - .github/release-candidate.json
       - docker-compose.yml
       - docker-compose.release.yml
       - .env.selfhost.example

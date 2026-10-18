@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/release-candidate.json
       - backend/admin/**
       - backend/adk/**
       - backend/channels/**
@@ -30,6 +31,7 @@ on:
       - .github/workflows/core-runtime-persistence.yml
   pull_request:
     paths:
+      - .github/release-candidate.json
       - backend/admin/**
       - backend/adk/**
       - backend/channels/**

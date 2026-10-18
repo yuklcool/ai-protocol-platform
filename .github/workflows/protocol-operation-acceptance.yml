@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, fix/protocol-operation-completion, refactor/simplify-platform-modules, feat/root-console-completion]
     paths:
+      - .github/release-candidate.json
+      - infrastructure/mcp-sandbox/**
       - backend/**
       - frontend/**
       - docker-compose.yml
