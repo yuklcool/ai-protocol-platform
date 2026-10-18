@@ -442,6 +442,10 @@ async function main() {
 
     const depletedCap = chargeA.charged / 2;
     await jsonApi(tokenA, "/api/admin/tenants/" + tenantA, "PATCH", {
+      quota: { llmBudgetUsd: depletedCap },
+    }, 403);
+    ok("Tenant admin cannot change its own platform-controlled quota");
+    await jsonApi(adminToken, "/api/admin/tenants/" + tenantA, "PATCH", {
       quota: {
         acceptanceBucket: "A",
         llmBudgetUsd: depletedCap,

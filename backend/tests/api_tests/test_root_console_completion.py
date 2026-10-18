@@ -262,6 +262,17 @@ def test_last_local_platform_admin_cannot_be_demoted(isolated):
     assert client().delete(f"/api/admin/users/{ADMIN.email}/groups/aitana-admin").status_code == 422
 
 
+def test_disable_account_in_disabled_tenant_with_same_uid_as_actor(isolated):
+    create_local_user(email=ADMIN.email, password="temporary-test-password-1", tenant_id="tenant-a", uid=ADMIN.uid)
+    create_local_user(email=B.email, password="temporary-test-password-1", tenant_id="tenant-b", uid=ADMIN.uid)
+    TenantDirectory(isolated).put(TenantConfig(tenantId="tenant-b", disabled=True))
+    assert (
+        client().patch(f"/api/admin/accounts/{B.email}", json={"tenant_id": "tenant-b", "disabled": True}).status_code
+        == 200
+    )
+    assert client().patch(f"/api/admin/accounts/{ADMIN.email}", json={"disabled": True}).status_code == 422
+
+
 def test_knowledge_sharing_changes_apply_to_existing_bindings(isolated):
     from agents.knowledge import search_sources
 

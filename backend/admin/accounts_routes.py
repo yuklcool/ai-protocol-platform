@@ -108,10 +108,10 @@ def edit_account(email: str, body: AccountPatch, scope: PlatformScope) -> dict[s
     if row is None:
         raise HTTPException(404, "Account not found")
     before = account_view(row)
-    if body.disabled is True and row.get("uid") == scope.user.uid:
+    if body.disabled is True and _user_doc_id(email) == _user_doc_id(scope.user.email or ""):
         raise HTTPException(422, "You cannot disable your current account")
     updates: dict[str, Any] = {"updatedAt": int(time.time())}
-    if body.tenant_id is not None:
+    if body.tenant_id is not None and body.tenant_id.strip() != row.get("tenantId"):
         updates["tenantId"] = _tenant(body.tenant_id)
     if body.disabled is not None:
         updates["disabled"] = body.disabled
