@@ -371,8 +371,8 @@ async function main() {
     delete temporaryRootAgent.tenant_overrides;
     temporaryRootAgent.tenantOverrides = {
       ...inheritedOverrides,
-      [tenantA]: { ...(inheritedOverrides[tenantA] || {}), model: MODEL_A },
-      [tenantB]: { ...(inheritedOverrides[tenantB] || {}), model: MODEL_B },
+      [tenantA]: { ...(inheritedOverrides[tenantA] || {}), model: MODEL_A, budgetEnabled: true },
+      [tenantB]: { ...(inheritedOverrides[tenantB] || {}), model: MODEL_B, budgetEnabled: true },
     };
     const updatedPlatformConfig = await jsonApi(adminToken, "/api/admin/platform-config", "PUT", {
       agent: temporaryRootAgent,
@@ -452,14 +452,16 @@ async function main() {
         llmBudgetPeriod: "daily",
       },
     });
-    const exhausted = await rootStream(tokenA, skillA, "Tenant A exhausted budget run");
+    // No capability hint: ordinary Root chat must be gated without a Skill's
+    // legacy toolConfigs.budget block supplying the enforcement configuration.
+    const exhausted = await rootStream(tokenA, "", "Tenant A exhausted plain Root budget run");
     const budgetError = exhausted.find((event) => event.type === "RUN_ERROR" && event.code === "BUDGET_EXCEEDED");
     assert(budgetError, "Tenant A did not emit typed BUDGET_EXCEEDED after reducing its cap below recorded spend");
     assert(
       !exhausted.some((event) => event.type === "TOOL_CALL_START"),
       "Tenant A invoked a tool after its budget was exhausted",
     );
-    ok("Tenant A budget blocks before a second Tool Calling attempt");
+    ok("Tenant A plain Root chat is budget-blocked before any Tool Calling attempt");
 
     const secondB = await rootStream(tokenB, skillB, "Tenant B remains independent after Tenant A exhaustion");
     assertSuccessfulToolRun(secondB, MARKER_B, "Tenant B independent run");
