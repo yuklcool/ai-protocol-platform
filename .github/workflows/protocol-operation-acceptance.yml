@@ -7,6 +7,9 @@ on:
       - backend/**
       - frontend/**
       - docker-compose.yml
+      - scripts/smoke-tenant-provider-acceptance.mjs
+      - .github/workflows/tenant-real-provider-acceptance.yml
+      - .github/workflows/real-provider-agent-mcp-acceptance.yml
       - .github/workflows/protocol-operation-acceptance.yml
       - .github/workflows/release-images.yml
   workflow_dispatch:
