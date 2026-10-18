@@ -31,6 +31,12 @@ from fastapi.testclient import TestClient
 from admin.scope import PlatformScope, Scope, require_admin_scope, require_platform_scope
 from auth import User, get_current_user
 
+
+@pytest.fixture(autouse=True)
+def firebase_identity_backend(monkeypatch):
+    monkeypatch.setenv("AUTH_BACKEND", "firebase")
+
+
 # ---------------------------------------------------------------------------
 # Route inventory
 # ---------------------------------------------------------------------------

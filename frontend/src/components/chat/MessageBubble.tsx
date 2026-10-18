@@ -32,7 +32,8 @@ import { translateChat } from "@/lib/i18n/chat";
  * (matches the NEXT_PUBLIC_* flag pattern used elsewhere, e.g.
  * NEXT_PUBLIC_SHOW_DEV_PROBES). When false the button never renders and
  * useVoiceConfig never fires a network call. */
-const READ_ALOUD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_READ_ALOUD === "true";
+const READ_ALOUD_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_READ_ALOUD !== "false";
 
 interface MessageBubbleProps {
   message: SkillMessage;
@@ -55,7 +56,10 @@ interface MessageBubbleProps {
   botLabel?: string | null;
   toolCalls: ToolCallState[];
   navigateToBlock: (docId: string, blockId: string) => void;
-  onAction: (event: { actionName: string; context: Record<string, unknown> }) => void;
+  onAction: (event: {
+    actionName: string;
+    context: Record<string, unknown>;
+  }) => void;
   /** MCP server IDs configured for this skill — passed to the
    * MCPAppToolCallRouter so it can attribute tool calls to the right
    * server and decide whether they have a UI surface. Optional / empty
@@ -128,7 +132,10 @@ export function parseA2UIResult(
 }
 
 function formatTime(timestamp: number | undefined, locale: Locale): string {
-  const when = typeof timestamp === "number" && Number.isFinite(timestamp) ? new Date(timestamp) : new Date();
+  const when =
+    typeof timestamp === "number" && Number.isFinite(timestamp)
+      ? new Date(timestamp)
+      : new Date();
   return new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", {
     hour: "numeric",
     minute: "2-digit",
@@ -186,8 +193,11 @@ export const MessageBubble = React.memo(function MessageBubble({
     // tool-only assistant turn renders an empty avatar+name+timestamp row.
     const inlineA2uiCalls = a2uiCalls.filter((tc) => {
       try {
-        if (JSON.parse(tc.resultContent || "null")?.a2ui_delivered === true) return false;
-      } catch { /* Incomplete or failed results retain their existing feedback. */ }
+        if (JSON.parse(tc.resultContent || "null")?.a2ui_delivered === true)
+          return false;
+      } catch {
+        /* Incomplete or failed results retain their existing feedback. */
+      }
       const parsed = parseA2UIResult(tc.resultContent);
       // Inline = no surface_id, or surface_id === "chat".
       return !parsed || !parsed.surfaceId || parsed.surfaceId === "chat";
@@ -203,7 +213,8 @@ export const MessageBubble = React.memo(function MessageBubble({
         <>
           {a2uiCalls.map((tc) => {
             const parsed = parseA2UIResult(tc.resultContent);
-            if (!parsed || !parsed.surfaceId || parsed.surfaceId === "chat") return null;
+            if (!parsed || !parsed.surfaceId || parsed.surfaceId === "chat")
+              return null;
             return (
               <A2UISurfaceDispatcher
                 key={tc.id}
@@ -231,7 +242,9 @@ export const MessageBubble = React.memo(function MessageBubble({
         )}
         <div className="flex max-w-[80%] flex-col gap-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-xs font-medium text-primary">{botLabel || skillId}</span>
+            <span className="text-xs font-medium text-primary">
+              {botLabel || skillId}
+            </span>
             <span className="text-xs text-muted-foreground">{time}</span>
             {showReadAloud && (
               <ReadAloudButton
@@ -245,7 +258,10 @@ export const MessageBubble = React.memo(function MessageBubble({
           </div>
           <div className="space-y-2 rounded-[2px_8px_8px_8px] border-l-[3px] border-primary bg-muted/40 px-3 py-2 text-sm">
             {message.content && (
-              <ChatMarkdown content={message.content} navigateToBlock={navigateToBlock} />
+              <ChatMarkdown
+                content={message.content}
+                navigateToBlock={navigateToBlock}
+              />
             )}
             {a2uiCalls.map((tc) => {
               const parsed = parseA2UIResult(tc.resultContent);
@@ -305,14 +321,29 @@ export const MessageBubble = React.memo(function MessageBubble({
       <div className="flex max-w-[80%] flex-col items-end gap-1">
         <div className="flex items-baseline gap-2">
           <span className="text-xs text-muted-foreground">{time}</span>
-          <span className="text-xs font-medium text-foreground">{userDisplayName}</span>
+          <span className="text-xs font-medium text-foreground">
+            {userDisplayName}
+          </span>
         </div>
         <div className="rounded-[2px_8px_8px_8px] border-l-[3px] border-primary bg-muted/50 px-3 py-2 text-sm">
           {submission ? (
-            <div className="flex flex-col gap-1.5" data-testid="a2ui-submission">
+            <div
+              className="flex flex-col gap-1.5"
+              data-testid="a2ui-submission"
+            >
               <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
                 {/* check glyph (SVG, no emoji) */}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
                 {translateChat(locale, "message.submitted")}
@@ -322,7 +353,9 @@ export const MessageBubble = React.memo(function MessageBubble({
                   {submission.fields.map((f) => (
                     <div key={f.key} className="contents">
                       <dt className="text-xs text-muted-foreground">{f.key}</dt>
-                      <dd className="text-xs font-medium text-foreground">{f.value}</dd>
+                      <dd className="text-xs font-medium text-foreground">
+                        {f.value}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -350,7 +383,6 @@ export const MessageBubble = React.memo(function MessageBubble({
     </div>
   );
 });
-
 
 // ─── A2UI Surface Dispatcher ────────────────────────────────────────────────
 // Effect-only React component — pushes a surface-targeted A2UI v0.9 message

@@ -425,3 +425,7 @@ For image-based deployment, application rollback is normally performed by restor
 - internet-facing installations remain responsible for TLS, secret management, backups and normal operational hardening.
 
 The project should not add Redis, MinIO, Keycloak, a dedicated vector database or a queue merely because those components are common in larger deployments. Add optional infrastructure only when a concrete workload requires it.
+
+### Root 控制台操作闭环
+
+稳定租户、无域名账号、租户 Agent 覆盖、知识资料上传与检索、普通 Root 对话额度、模型价格和用量统计的配置顺序见 [Root 控制台操作说明](docs/root-console-completion.md)。预算控制需主动启用；生产历史数据迁移仍按 #9 的备份与回滚验收执行。

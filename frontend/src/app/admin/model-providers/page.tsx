@@ -4,6 +4,7 @@ import NextLink from "next/link";
 import { useEffect, useState } from "react";
 
 import { SignInRequired } from "@/components/chat/SignInRequired";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAdminScope } from "@/hooks/useAdminScope";
@@ -24,6 +25,8 @@ type Provider = {
 };
 
 type Model = {
+  input_cost_per_million?: number | null;
+  output_cost_per_million?: number | null;
   model_id: string;
   api_name: string;
   provider_id: string;
@@ -79,6 +82,8 @@ const emptyProvider = {
 };
 
 const emptyModel = {
+  inputCostPerMillion: "",
+  outputCostPerMillion: "",
   modelId: "",
   apiName: "",
   providerId: "",
@@ -111,17 +116,21 @@ async function detail(response: Response, fallback: string) {
 }
 
 export default function ModelProvidersPage() {
+  const copy = useConsoleCopy();
   const { user, loading } = useAuth();
   const { locale } = useI18n();
   const { state, isAdmin, isPlatform } = useAdminScope(!loading && !!user);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
-  const [registrySettings, setRegistrySettings] = useState<RegistrySettings | null>(null);
+  const [registrySettings, setRegistrySettings] =
+    useState<RegistrySettings | null>(null);
   const [providerForm, setProviderForm] = useState(emptyProvider);
   const [modelForm, setModelForm] = useState(emptyModel);
   const [settingsForm, setSettingsForm] = useState(emptySettingsForm);
   const [notice, setNotice] = useState<string | null>(null);
-  const [probe, setProbe] = useState<{ label: string; result: Probe } | null>(null);
+  const [probe, setProbe] = useState<{ label: string; result: Probe } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
 
   const t = (
@@ -182,7 +191,9 @@ export default function ModelProvidersPage() {
         }),
       });
       if (!response.ok) {
-        return setNotice(await detail(response, t("save.providerFailed", { id })));
+        return setNotice(
+          await detail(response, t("save.providerFailed", { id })),
+        );
       }
       setProviderForm(emptyProvider);
       setNotice(t("save.providerOk", { id }));
@@ -197,27 +208,55 @@ export default function ModelProvidersPage() {
   const saveModel = async () => {
     const id = modelForm.modelId.trim();
     if (!id || !modelForm.apiName.trim() || !modelForm.providerId) return;
+    const prices = [
+      modelForm.inputCostPerMillion.trim(),
+      modelForm.outputCostPerMillion.trim(),
+    ];
+    if (
+      prices.some(Boolean) &&
+      (!prices.every(Boolean) ||
+        prices.some(
+          (value) => !Number.isFinite(Number(value)) || Number(value) < 0,
+        ))
+    ) {
+      setNotice(
+        copy(
+          "请同时填写有效的非负输入、输出价格，或同时留空。",
+          "Enter both non-negative input/output prices, or leave both empty.",
+        ),
+      );
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {
-      const response = await fetchWithAuth(`${API}/models/${encodeURIComponent(id)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_name: modelForm.apiName.trim(),
-          provider_id: modelForm.providerId,
-          tier: modelForm.tier,
-          context_window: Number(modelForm.contextWindow),
-          max_output_tokens: Number(modelForm.maxOutputTokens),
-          description: modelForm.description.trim(),
-          supports_tools: modelForm.supportsTools,
-          supports_reasoning: modelForm.supportsReasoning,
-          supports_responses_api: modelForm.supportsResponsesApi,
-          supports_vision: modelForm.supportsVision,
-          residency: modelForm.residency,
-          enabled: modelForm.enabled,
-        }),
-      });
+      const response = await fetchWithAuth(
+        `${API}/models/${encodeURIComponent(id)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_name: modelForm.apiName.trim(),
+            provider_id: modelForm.providerId,
+            tier: modelForm.tier,
+            context_window: Number(modelForm.contextWindow),
+            max_output_tokens: Number(modelForm.maxOutputTokens),
+            input_cost_per_million: modelForm.inputCostPerMillion.trim()
+              ? Number(modelForm.inputCostPerMillion)
+              : null,
+            output_cost_per_million: modelForm.outputCostPerMillion.trim()
+              ? Number(modelForm.outputCostPerMillion)
+              : null,
+            description: modelForm.description.trim(),
+            supports_tools: modelForm.supportsTools,
+            supports_reasoning: modelForm.supportsReasoning,
+            supports_responses_api: modelForm.supportsResponsesApi,
+            supports_vision: modelForm.supportsVision,
+            residency: modelForm.residency,
+            enabled: modelForm.enabled,
+          }),
+        },
+      );
       if (!response.ok) {
         return setNotice(await detail(response, t("save.modelFailed", { id })));
       }
@@ -282,7 +321,8 @@ export default function ModelProvidersPage() {
   };
 
   const removeProvider = async (item: Provider) => {
-    if (!window.confirm(t("delete.providerConfirm", { id: item.provider_id }))) return;
+    if (!window.confirm(t("delete.providerConfirm", { id: item.provider_id })))
+      return;
     const response = await fetchWithAuth(
       `${API}/${encodeURIComponent(item.provider_id)}`,
       { method: "DELETE" },
@@ -295,7 +335,8 @@ export default function ModelProvidersPage() {
   };
 
   const removeModel = async (item: Model) => {
-    if (!window.confirm(t("delete.modelConfirm", { id: item.model_id }))) return;
+    if (!window.confirm(t("delete.modelConfirm", { id: item.model_id })))
+      return;
     const response = await fetchWithAuth(
       `${API}/models/${encodeURIComponent(item.model_id)}`,
       { method: "DELETE" },
@@ -341,9 +382,11 @@ export default function ModelProvidersPage() {
     });
   };
 
-  if (loading || state === "loading") return <Centered>{t("state.loading")}</Centered>;
+  if (loading || state === "loading")
+    return <Centered>{t("state.loading")}</Centered>;
   if (!user) return <SignInRequired />;
-  if (state === "error") return <Centered>{t("state.adminUnavailable")}</Centered>;
+  if (state === "error")
+    return <Centered>{t("state.adminUnavailable")}</Centered>;
   if (!isAdmin) return <Centered>{t("state.adminRequired")}</Centered>;
   if (!isPlatform) return <Centered>{t("state.platformRequired")}</Centered>;
 
@@ -410,21 +453,27 @@ export default function ModelProvidersPage() {
             emptyLabel={t("routing.notConfigured")}
             value={settingsForm.default}
             models={registryModels}
-            onChange={(value) => setSettingsForm({ ...settingsForm, default: value })}
+            onChange={(value) =>
+              setSettingsForm({ ...settingsForm, default: value })
+            }
           />
           <ModelSelect
             label={t("routing.smartTier")}
             emptyLabel={t("routing.notConfigured")}
             value={settingsForm.smart}
             models={registryModels}
-            onChange={(value) => setSettingsForm({ ...settingsForm, smart: value })}
+            onChange={(value) =>
+              setSettingsForm({ ...settingsForm, smart: value })
+            }
           />
           <ModelSelect
             label={t("routing.fastTier")}
             emptyLabel={t("routing.notConfigured")}
             value={settingsForm.fast}
             models={registryModels}
-            onChange={(value) => setSettingsForm({ ...settingsForm, fast: value })}
+            onChange={(value) =>
+              setSettingsForm({ ...settingsForm, fast: value })
+            }
           />
         </div>
         <Button
@@ -434,7 +483,9 @@ export default function ModelProvidersPage() {
           {t("routing.save")}
         </Button>
         {!registrySettings?.writable && registrySettings && (
-          <p className="mt-2 text-xs text-muted-foreground">{t("routing.readonly")}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t("routing.readonly")}
+          </p>
         )}
       </section>
 
@@ -443,12 +494,17 @@ export default function ModelProvidersPage() {
           <h2 className="font-medium">{t("providers.title")}</h2>
           <div className="mt-3 space-y-3">
             {providers.map((item) => (
-              <div key={item.provider_id} className="rounded-md border p-3 text-sm">
+              <div
+                key={item.provider_id}
+                className="rounded-md border p-3 text-sm"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <b>{item.provider_id}</b>{" "}
                     <Badge>
-                      {item.enabled ? t("providers.enabled") : t("providers.disabled")}
+                      {item.enabled
+                        ? t("providers.enabled")
+                        : t("providers.disabled")}
                     </Badge>
                   </div>
                   <div className="flex gap-2">
@@ -485,7 +541,7 @@ export default function ModelProvidersPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t("providers.secret", {
                     value: item.has_api_key
-                      ? item.api_key_ref ?? t("providers.secretConfigured")
+                      ? (item.api_key_ref ?? t("providers.secretConfigured"))
                       : t("providers.secretNone"),
                   })}
                 </p>
@@ -506,7 +562,9 @@ export default function ModelProvidersPage() {
               <Input
                 placeholder={t("providers.name")}
                 value={providerForm.name}
-                onChange={(value) => setProviderForm({ ...providerForm, name: value })}
+                onChange={(value) =>
+                  setProviderForm({ ...providerForm, name: value })
+                }
               />
               <div className="sm:col-span-2">
                 <Input
@@ -550,7 +608,10 @@ export default function ModelProvidersPage() {
           <h2 className="font-medium">{t("models.title")}</h2>
           <div className="mt-3 space-y-3">
             {models.map((item) => (
-              <div key={item.model_id} className="rounded-md border p-3 text-sm">
+              <div
+                key={item.model_id}
+                className="rounded-md border p-3 text-sm"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <b>{item.model_id}</b> <Badge>{item.provider_id}</Badge>{" "}
@@ -559,13 +620,17 @@ export default function ModelProvidersPage() {
                   <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={busy}
-                      onClick={() => void runAction(() => testModel(item, "completion"))}
+                      onClick={() =>
+                        void runAction(() => testModel(item, "completion"))
+                      }
                     >
                       {t("models.completion")}
                     </Button>
                     <Button
                       disabled={busy || !item.supports_tools}
-                      onClick={() => void runAction(() => testModel(item, "tool_call"))}
+                      onClick={() =>
+                        void runAction(() => testModel(item, "tool_call"))
+                      }
                     >
                       {t("models.toolCall")}
                     </Button>
@@ -578,6 +643,14 @@ export default function ModelProvidersPage() {
                           tier: item.tier,
                           contextWindow: String(item.context_window),
                           maxOutputTokens: String(item.max_output_tokens),
+                          inputCostPerMillion:
+                            item.input_cost_per_million == null
+                              ? ""
+                              : String(item.input_cost_per_million),
+                          outputCostPerMillion:
+                            item.output_cost_per_million == null
+                              ? ""
+                              : String(item.output_cost_per_million),
                           description: item.description,
                           supportsTools: item.supports_tools,
                           supportsReasoning: item.supports_reasoning,
@@ -618,17 +691,23 @@ export default function ModelProvidersPage() {
               <Input
                 placeholder={t("models.id")}
                 value={modelForm.modelId}
-                onChange={(value) => setModelForm({ ...modelForm, modelId: value })}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, modelId: value })
+                }
               />
               <Input
                 placeholder={t("models.providerId")}
                 value={modelForm.providerId}
-                onChange={(value) => setModelForm({ ...modelForm, providerId: value })}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, providerId: value })
+                }
               />
               <Input
                 placeholder={t("models.apiName")}
                 value={modelForm.apiName}
-                onChange={(value) => setModelForm({ ...modelForm, apiName: value })}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, apiName: value })
+                }
               />
               <select
                 className="rounded-md border bg-background px-2 py-2 text-sm"
@@ -668,6 +747,26 @@ export default function ModelProvidersPage() {
                   }
                 />
               </div>
+              <Input
+                placeholder={copy(
+                  "输入价格（美元 / 百万 Token，可选）",
+                  "Input price (USD / million tokens, optional)",
+                )}
+                value={modelForm.inputCostPerMillion}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, inputCostPerMillion: value })
+                }
+              />
+              <Input
+                placeholder={copy(
+                  "输出价格（美元 / 百万 Token，可选）",
+                  "Output price (USD / million tokens, optional)",
+                )}
+                value={modelForm.outputCostPerMillion}
+                onChange={(value) =>
+                  setModelForm({ ...modelForm, outputCostPerMillion: value })
+                }
+              />
               <select
                 className="rounded-md border bg-background px-2 py-2 text-sm"
                 aria-label={t("models.residency")}
@@ -698,7 +797,10 @@ export default function ModelProvidersPage() {
                       type="checkbox"
                       checked={modelForm[key]}
                       onChange={(event) =>
-                        setModelForm({ ...modelForm, [key]: event.target.checked })
+                        setModelForm({
+                          ...modelForm,
+                          [key]: event.target.checked,
+                        })
                       }
                     />{" "}
                     {t(labelKey)}
@@ -799,5 +901,9 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center p-8">
+      {children}
+    </main>
+  );
 }

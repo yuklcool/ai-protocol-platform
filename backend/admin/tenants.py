@@ -13,7 +13,7 @@ import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from admin.audit import record_admin_action
 from admin.scope import AdminScope, require_admin_scope
@@ -92,6 +92,49 @@ class TenantOnboardResponse(BaseModel):
 
 def _directory() -> TenantDirectory:
     return TenantDirectory(get_repository())
+
+
+class TenantQuota(BaseModel):
+    llmBudgetUsd: float = Field(default=0, ge=0, allow_inf_nan=False)
+    llmBudgetSoftThreshold: float = Field(default=0.8, ge=0, le=1, allow_inf_nan=False)
+    llmBudgetPeriod: str = "monthly"
+
+
+def _validate_admin_policy(scope: AdminScope, model_policy: dict | None, quota: dict | None) -> None:
+    if model_policy is not None or quota is not None:
+        scope.assert_platform()
+    if quota:
+        try:
+            value = TenantQuota.model_validate(quota)
+        except ValidationError as exc:
+            raise HTTPException(422, "Invalid tenant quota") from exc
+        if value.llmBudgetPeriod not in {"daily", "weekly", "monthly"}:
+            raise HTTPException(422, "Budget period must be daily, weekly or monthly")
+    if model_policy:
+        from config.effective_models import load_effective_models_config
+        from config.tenant_models import TenantModelPolicy, validate_tenant_model_policy
+
+        try:
+            policy = TenantModelPolicy.model_validate(model_policy)
+        except ValidationError as exc:
+            raise HTTPException(422, "Invalid tenant model policy") from exc
+        errors = validate_tenant_model_policy(policy, (entry.id for entry in load_effective_models_config().models))
+        if errors:
+            raise HTTPException(422, {"error": "invalid_model_policy", "messages": errors})
+
+
+@router.get("", response_model=list[TenantConfig])
+def list_tenants(scope: Annotated[AdminScope, Depends(require_admin_scope)]) -> list[TenantConfig]:
+    return [tenant for tenant in _directory().list() if scope.may_tenant(tenant.tenant_id)]
+
+
+@router.get("/{tenant_id}", response_model=TenantConfig)
+def read_tenant(tenant_id: str, scope: Annotated[AdminScope, Depends(require_admin_scope)]) -> TenantConfig:
+    _assert_scope(scope, tenant_id)
+    tenant = _directory().get(tenant_id)
+    if tenant is None:
+        raise HTTPException(404, "Tenant not found")
+    return tenant
 
 
 def _normalize_identity(body: TenantOnboardRequest) -> tuple[str, list[str]]:
@@ -355,6 +398,16 @@ def onboard_tenant(
 ) -> TenantOnboardResponse:
     tenant_id, domains = _normalize_identity(body)
     _assert_scope(scope, tenant_id)
+    if body.derived_group_tags is not None and not scope.is_platform:
+        from auth.admin_roles import is_admin_conferring_tag
+
+        if any(is_admin_conferring_tag(tag) for tag in body.derived_group_tags):
+            raise HTTPException(403, "Only a platform admin may assign admin-conferring derived tags")
+    _validate_admin_policy(
+        scope,
+        body.model_policy if "model_policy" in body.model_fields_set else None,
+        body.quota if "quota" in body.model_fields_set else None,
+    )
 
     unknown = unknown_skill_refs(body.enabled_skills, body.default_skill, scope.user.uid)
     if unknown:
@@ -428,6 +481,14 @@ def edit_tenant(
 ) -> TenantConfig:
     tenant_id = normalize_tenant_id(tenant_id)
     _assert_scope(scope, tenant_id)
+    if body.derived_group_tags is not None and not scope.is_platform:
+        from auth.admin_roles import is_admin_conferring_tag
+
+        if any(is_admin_conferring_tag(tag) for tag in body.derived_group_tags):
+            raise HTTPException(403, "Only a platform admin may assign admin-conferring derived tags")
+    if body.model_policy is not None or body.quota is not None:
+        scope.assert_platform()
+    _validate_admin_policy(scope, body.model_policy, body.quota)
     directory = _directory()
     current = directory.get(tenant_id)
     if current is None:

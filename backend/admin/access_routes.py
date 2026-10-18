@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from admin.scope import Scope
@@ -95,6 +95,7 @@ class AccessCheckResponse(BaseModel):
     uid: str
     domain: str
     user_found: bool
+    tenant_id: str = Field(default="", alias="tenantId")
     tags: list[ProvenancedTag]
     tool_permission: ToolPermissionCheck | None = None
     skill_access: SkillAccessCheck | None = None
@@ -104,6 +105,14 @@ class AccessCheckResponse(BaseModel):
 
 
 def _fb_auth():
+    from auth import auth_backend
+
+    if auth_backend() == "local-jwt":
+        from auth.local_directory import LocalUserDirectory
+
+        return LocalUserDirectory()
+    if auth_backend() == "oidc":
+        raise HTTPException(409, "Inspect effective claims in the configured OIDC identity provider")
     try:
         import firebase_admin
         from firebase_admin import auth as fb_auth
@@ -134,15 +143,24 @@ def _domain_of(email: str) -> str:
     return email.rsplit("@", 1)[1] if "@" in email else ""
 
 
-def _explain_tool(email: str, domain: str, tool: str) -> tuple[bool, str]:
+def _explain_tool(email: str, domain: str, tool: str, tenant_id: str = "") -> tuple[bool, str]:
     """Replicate enforcement order using fresh configured-persistence reads."""
+    tenant_doc = get_document(perms.COLLECTION, perms.tenant_permission_key(tenant_id)) if tenant_id else None
+    if tenant_doc is not None and (
+        str(tenant_doc.get("tenantId") or tenant_id) != tenant_id or not perms._doc_allows(tenant_doc, tool)
+    ):
+        return False, "tenant-level ceiling → deny"
     user_doc = get_document(perms.COLLECTION, email) if email else None
-    if user_doc is not None:
+    if user_doc is not None and perms._user_rule_matches_tenant(user_doc, tenant_id, domain):
         ok = perms._doc_allows(user_doc, tool)
         return ok, f"user-level rule → {'allow' if ok else 'deny'}"
-    if domain:
+    if tenant_doc is not None:
+        return True, "tenant-level rule → allow"
+    if domain and perms._legacy_domain_belongs_to_tenant(domain, tenant_id):
         domain_doc = get_document(perms.COLLECTION, domain)
-        if domain_doc is not None:
+        if domain_doc is not None and (
+            not domain_doc.get("tenantId") or not tenant_id or domain_doc["tenantId"] == tenant_id
+        ):
             ok = perms._doc_allows(domain_doc, tool)
             return ok, f"domain-level rule ({domain}) → {'allow' if ok else 'deny'}"
     wildcard_doc = get_document(perms.COLLECTION, "*")
@@ -152,13 +170,15 @@ def _explain_tool(email: str, domain: str, tool: str) -> tuple[bool, str]:
     return False, "no matching rule → deny (default)"
 
 
-def _check_skill(skill_id: str, uid: str, email: str, domain: str, effective_tags: frozenset[str]) -> SkillAccessCheck:
+def _check_skill(
+    skill_id: str, uid: str, email: str, domain: str, effective_tags: frozenset[str], tenant_id: str = ""
+) -> SkillAccessCheck:
     from skills.skill_config import get_skill
 
     skill = get_skill(skill_id)
     if skill is None:
         return SkillAccessCheck(skill=skill_id, found=False, allowed=False, reason="skill not found (resolve by id)")
-    synthetic = User(uid=uid or "unknown", email=email, domain=domain, group_tags=effective_tags)
+    synthetic = User(uid=uid or "unknown", email=email, domain=domain, tenant_id=tenant_id, group_tags=effective_tags)
     ctx = build_access_context(synthetic)
     allowed = ctx.can_access(skill)
     ac_type = getattr(skill.access_control, "type", "unknown")
@@ -167,12 +187,13 @@ def _check_skill(skill_id: str, uid: str, email: str, domain: str, effective_tag
     return SkillAccessCheck(skill=label, found=True, allowed=allowed, reason=reason)
 
 
-def _skill_visibility(uid: str, email: str, domain: str, effective_tags: frozenset[str]) -> SkillVisibilityPlane:
-    from db.clients import get_client_cached
+def _skill_visibility(
+    uid: str, email: str, domain: str, effective_tags: frozenset[str], tenant_id: str = ""
+) -> SkillVisibilityPlane:
     from skills import skill_config
     from skills.visibility import evaluate_visibility
 
-    synthetic = User(uid=uid or "unknown", email=email, domain=domain, group_tags=effective_tags)
+    synthetic = User(uid=uid or "unknown", email=email, domain=domain, tenant_id=tenant_id, group_tags=effective_tags)
     ctx = build_access_context(synthetic)
 
     try:
@@ -181,8 +202,9 @@ def _skill_visibility(uid: str, email: str, domain: str, effective_tags: frozens
         log.warning("admin.access: skill list failed (%s)", type(exc).__name__)
         return SkillVisibilityPlane(enabled_skills=None, visible_count=0, total_count=0, skills=[])
 
-    client = get_client_cached(domain) if domain else None
-    enabled = client.enabled_skills if client is not None else None
+    from db.clients import resolve_enabled_skills
+
+    enabled = resolve_enabled_skills(synthetic)
 
     verdicts = evaluate_visibility(configs, ctx, enabled)
     rows = [
@@ -214,9 +236,29 @@ def _skill_visibility(uid: str, email: str, domain: str, effective_tags: frozens
 def access_check(body: AccessCheckRequest, scope: Scope) -> AccessCheckResponse:
     email = body.email.strip()
     domain = _domain_of(email)
-    scope.assert_may(domain)
+    from auth import auth_backend
+    from db.tenants import get_tenant, tenant_id_for_domain
+
+    tenant_id = str(tenant_id_for_domain(domain) or domain)
+    if auth_backend() == "local-jwt":
+        from auth.local_jwt import get_local_user_by_email
+
+        row = get_local_user_by_email(email)
+        if row is None:
+            if not scope.is_platform:
+                raise HTTPException(404, "Account not found")
+            tenant_id = ""
+        else:
+            tenant_id = str(row.get("tenantId") or row.get("domain") or "")
+    if not scope.is_platform:
+        scope.assert_may_tenant(tenant_id)
     uid, direct, user_found = _direct_tags(email)
-    derived = set(resolve_derived_group_tags(domain)) if domain else set()
+    tenant = get_tenant(tenant_id) if tenant_id else None
+    derived = (
+        set(tenant.derived_group_tags or [])
+        if tenant
+        else (set(resolve_derived_group_tags(domain)) if domain else set())
+    )
 
     direct_set = set(direct)
     provenanced: list[ProvenancedTag] = []
@@ -230,18 +272,18 @@ def access_check(body: AccessCheckRequest, scope: Scope) -> AccessCheckResponse:
 
     tool_perm: ToolPermissionCheck | None = None
     if body.tool_name:
-        allowed, reason = _explain_tool(email, domain, body.tool_name)
+        allowed, reason = _explain_tool(email, domain, body.tool_name, tenant_id)
         tool_perm = ToolPermissionCheck(tool=body.tool_name, allowed=allowed, reason=reason)
 
     effective_tags = frozenset(direct_set | derived)
 
     skill_access: SkillAccessCheck | None = None
     if body.skill_id:
-        skill_access = _check_skill(body.skill_id, uid, email, domain, effective_tags)
+        skill_access = _check_skill(body.skill_id, uid, email, domain, effective_tags, tenant_id)
 
     visibility: SkillVisibilityPlane | None = None
     if body.include_skills:
-        visibility = _skill_visibility(uid, email, domain, effective_tags)
+        visibility = _skill_visibility(uid, email, domain, effective_tags, tenant_id)
 
     log.info(
         "admin.access: check email=%s tags=%d tool=%s skill=%s by uid=%s",
@@ -256,6 +298,7 @@ def access_check(body: AccessCheckRequest, scope: Scope) -> AccessCheckResponse:
         uid=uid,
         domain=domain,
         user_found=user_found,
+        tenant_id=tenant_id,
         tags=provenanced,
         tool_permission=tool_perm,
         skill_access=skill_access,

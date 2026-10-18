@@ -14,6 +14,12 @@ from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
 
+
+@pytest.fixture(autouse=True)
+def firebase_identity_backend(monkeypatch):
+    monkeypatch.setenv("AUTH_BACKEND", "firebase")
+
+
 _ADMIN = User(
     uid="admin-uid", email="owner@yourcompany.com", domain="yourcompany.com", group_tags=frozenset({"aitana-admin"})
 )

@@ -56,6 +56,12 @@ export function useAdminScope(enabled: boolean = true): AdminScope {
   const [domains, setDomains] = useState<string[]>([]);
   const [checked, setChecked] = useState(false);
 
+  useEffect(() => {
+    setChecked(false);
+    setState("loading");
+    setDomains([]);
+  }, [user?.uid, user?.email]);
+
   const recheck = useCallback(async () => {
     setState("loading");
     try {
@@ -84,7 +90,10 @@ export function useAdminScope(enabled: boolean = true): AdminScope {
           return;
         }
         const body = (await r.json()) as { scope?: string; domains?: string[] };
-        const scope = body.scope === "platform" || body.scope === "tenant" ? body.scope : "none";
+        const scope =
+          body.scope === "platform" || body.scope === "tenant"
+            ? body.scope
+            : "none";
         setState(scope);
         setDomains(Array.isArray(body.domains) ? body.domains : []);
         setChecked(true);

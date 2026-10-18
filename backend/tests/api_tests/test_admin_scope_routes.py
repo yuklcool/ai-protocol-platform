@@ -10,10 +10,17 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+
+
+@pytest.fixture(autouse=True)
+def firebase_identity_backend(monkeypatch):
+    monkeypatch.setenv("AUTH_BACKEND", "firebase")
+
 
 _PLATFORM = User(
     uid="admin-uid",

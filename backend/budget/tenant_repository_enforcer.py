@@ -26,6 +26,7 @@ from __future__ import annotations
 import calendar
 import hashlib
 import logging
+import math
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -33,6 +34,7 @@ from datetime import UTC, datetime, timedelta
 from budget.enforcer import BudgetConsultation, BudgetDecision
 from db.repository import Repository
 from db.tenants import TenantDirectory
+from observability.llm_metrics import pricing_for_model
 
 logger = logging.getLogger("budget")
 
@@ -55,7 +57,9 @@ class TenantRepositoryBudgetEnforcer:
         try:
             cap = float(quota.get("llmBudgetUsd") or 0.0)
         except (TypeError, ValueError):
-            cap = 0.0
+            return None
+        if not math.isfinite(cap) or cap < 0:
+            return None
         if cap <= 0:
             return (0.0, self.default_soft_threshold, self.default_period)
 
@@ -137,6 +141,17 @@ class TenantRepositoryBudgetEnforcer:
                 remaining_usd=None,
                 period_end=period_end,
                 message=None,
+                retry_after_seconds=None,
+            )
+
+        if not math.isfinite(request.projected_cost_usd) or (
+            request.projected_cost_usd <= 0 and pricing_for_model(request.model_id) is None
+        ):
+            return BudgetDecision(
+                action="block",
+                remaining_usd=None,
+                period_end=period_end,
+                message="Model pricing is unavailable; configure pricing before using a capped tenant.",
                 retry_after_seconds=None,
             )
 

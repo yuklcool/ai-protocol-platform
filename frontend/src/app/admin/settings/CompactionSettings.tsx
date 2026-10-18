@@ -11,6 +11,7 @@
 // null; the backend stores the block whole for the same reason.
 
 "use client";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 import { useState } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
@@ -48,21 +49,33 @@ export function CompactionSettingsSection({
   defaultPrompt?: string;
   onSaved?: (updatedBy?: string, updatedAt?: number) => void;
 }) {
+  const t = useConsoleCopy();
   const [enabled, setEnabled] = useState(initial.enabled ?? true);
-  const [tokenThreshold, setTokenThreshold] = useState(initial.tokenThreshold?.toString() ?? "");
-  const [retention, setRetention] = useState(initial.eventRetentionSize?.toString() ?? "");
+  const [tokenThreshold, setTokenThreshold] = useState(
+    initial.tokenThreshold?.toString() ?? "",
+  );
+  const [retention, setRetention] = useState(
+    initial.eventRetentionSize?.toString() ?? "",
+  );
   const [model, setModel] = useState(initial.summarizerModel ?? "");
-  const [prompt, setPrompt] = useState(initial.summarizerPrompt ?? defaultPrompt);
-  const [secondPass, setSecondPass] = useState(initial.secondPassEnabled ?? false);
+  const [prompt, setPrompt] = useState(
+    initial.summarizerPrompt ?? defaultPrompt,
+  );
+  const [secondPass, setSecondPass] = useState(
+    initial.secondPassEnabled ?? false,
+  );
   const [idleMinutes, setIdleMinutes] = useState(
-    initial.secondPassIdleSeconds ? Math.round(initial.secondPassIdleSeconds / 60).toString() : "",
+    initial.secondPassIdleSeconds
+      ? Math.round(initial.secondPassIdleSeconds / 60).toString()
+      : "",
   );
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Client-side mirrors of the backend's write-time validation. The server is
   // still the gate (a stale tab, a curl, a script) — this only shortens the loop.
-  const promptInvalid = prompt.trim().length > 0 && !prompt.includes(PLACEHOLDER);
+  const promptInvalid =
+    prompt.trim().length > 0 && !prompt.includes(PLACEHOLDER);
   // Unedited text is NOT an override. Saving the default verbatim would freeze
   // a copy that no longer tracks improvements we ship to the shipped prompt —
   // the whole point of "empty = use the default", preserved now that the box is
@@ -71,7 +84,8 @@ export function CompactionSettingsSection({
   const thresholdInvalid = toNumberOrNull(tokenThreshold) === undefined;
   const retentionInvalid = toNumberOrNull(retention) === undefined;
   const idleInvalid = toNumberOrNull(idleMinutes) === undefined;
-  const blocked = promptInvalid || thresholdInvalid || retentionInvalid || idleInvalid;
+  const blocked =
+    promptInvalid || thresholdInvalid || retentionInvalid || idleInvalid;
 
   const save = async () => {
     setBusy(true);
@@ -94,14 +108,27 @@ export function CompactionSettingsSection({
       });
       if (!r.ok) {
         const detail = await r.json().catch(() => null);
-        setNotice(detail?.detail || "Could not save compaction settings.");
+        setNotice(
+          detail?.detail ||
+            t(
+              "无法保存上下文压缩设置。",
+              "Could not save compaction settings.",
+            ),
+        );
         return;
       }
       const cfg = await r.json();
       onSaved?.(cfg.updatedBy, cfg.updatedAt);
-      setNotice("Saved. Applies to new turns within about a minute — no deploy needed.");
+      setNotice(
+        t(
+          "已保存，约一分钟内对新轮次生效，无需部署。",
+          "Saved. Applies to new turns within about a minute — no deploy needed.",
+        ),
+      );
     } catch {
-      setNotice("Could not save compaction settings.");
+      setNotice(
+        t("无法保存上下文压缩设置。", "Could not save compaction settings."),
+      );
     } finally {
       setBusy(false);
     }
@@ -109,32 +136,63 @@ export function CompactionSettingsSection({
 
   return (
     <section className="mt-6 rounded-lg border p-4">
-      <h2 className="text-base font-semibold">Conversation compaction</h2>
+      <h2 className="text-base font-semibold">
+        {t("会话上下文压缩", "Conversation compaction")}
+      </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        When a conversation grows past the token threshold, older turns are replaced by an AI summary before the model
-        sees them. <strong>These settings change answer quality silently</strong> — the transcript on screen still shows
-        every turn, so a degraded answer looks identical to a good one. Watch the &quot;History summarised&quot; marker in
-        the Activity tab after changing anything.
+        {t(
+          "会话超过 Token 阈值时，模型上下文中的较早消息会替换为摘要。",
+          "When a conversation grows past the token threshold, older turns are replaced by an AI summary before the model sees them.",
+        )}
+        <strong>
+          {t(
+            "这些设置会影响摘要和回答质量",
+            "These settings change answer quality silently",
+          )}
+        </strong>
+        {t(
+          "。界面仍保留原始记录，调整后可在活动标签查看历史已摘要标记。",
+          ". The transcript still shows every turn. Check the History summarised marker in the Activity tab after changing settings.",
+        )}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">
-        Leave a field empty to use the shipped default for that lever.
+        {t(
+          "留空时使用系统默认值。",
+          "Leave a field empty to use the shipped default for that lever.",
+        )}
       </p>
 
       <label className="mt-4 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        <span>Compaction enabled (token-pressure trigger)</span>
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+        />
+        <span>
+          {t(
+            "启用上下文压缩（达到 Token 阈值时触发）",
+            "Compaction enabled (token-pressure trigger)",
+          )}
+        </span>
       </label>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field
-          label="Token threshold"
-          hint="Prompt size that triggers a compaction. Default is per model family (1M-context: 250,000)."
-          error={thresholdInvalid ? "Must be a whole number." : null}
+          label={t("Token 阈值", "Token threshold")}
+          hint={t(
+            "达到此提示 Token 数时触发压缩。默认值取决于模型（百万上下文模型为 250000）。",
+            "Prompt size that triggers a compaction. Default is per model family (1M-context: 250,000).",
+          )}
+          error={
+            thresholdInvalid
+              ? t("请输入非负整数。", "Must be a whole number.")
+              : null
+          }
         >
           <input
             type="text"
             inputMode="numeric"
-            aria-label="Token threshold"
+            aria-label={t("Token 阈值", "Token threshold")}
             className="w-full rounded-md border px-3 py-2 text-sm"
             placeholder="250000"
             value={tokenThreshold}
@@ -144,15 +202,22 @@ export function CompactionSettingsSection({
         </Field>
 
         <Field
-          label="Raw events retained"
+          label={t("保留原始事件数", "Raw events retained")}
           // The non-obvious second effect, stated where it can't be missed.
-          hint="Recent events kept verbatim. Also a FLOOR: compaction cannot fire until a conversation exceeds this many events, however large it is. Default 60."
-          error={retentionInvalid ? "Must be a whole number." : null}
+          hint={t(
+            "最近保留的原始事件数；事件总数必须超过此值才会触发压缩。默认 60。",
+            "Recent events kept verbatim. Also a FLOOR: compaction cannot fire until a conversation exceeds this many events, however large it is. Default 60.",
+          )}
+          error={
+            retentionInvalid
+              ? t("请输入非负整数。", "Must be a whole number.")
+              : null
+          }
         >
           <input
             type="text"
             inputMode="numeric"
-            aria-label="Raw events retained"
+            aria-label={t("保留原始事件数", "Raw events retained")}
             className="w-full rounded-md border px-3 py-2 text-sm"
             placeholder="60"
             value={retention}
@@ -161,37 +226,49 @@ export function CompactionSettingsSection({
           />
         </Field>
 
-        <Field label="Summariser model" hint="Tier used to write the summary. Default: pro.">
+        <Field
+          label={t("摘要模型", "Summariser model")}
+          hint={t(
+            "生成摘要使用的模型层级，默认为 pro。",
+            "Tier used to write the summary. Default: pro.",
+          )}
+        >
           <select
-            aria-label="Summariser model"
+            aria-label={t("摘要模型", "Summariser model")}
             className="w-full rounded-md border px-3 py-2 text-sm"
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={!enabled}
           >
-            <option value="">Default (pro)</option>
-            <option value="pro">pro — slower, keeps more detail</option>
+            <option value="">{t("默认（pro）", "Default (pro)")}</option>
+            <option value="pro">
+              {t("pro — 保留更多细节", "pro — slower, keeps more detail")}
+            </option>
             <option value="smart">smart</option>
-            <option value="lite">lite — fast and cheap</option>
+            <option value="lite">
+              {t("lite — 更快、费用更低", "lite — fast and cheap")}
+            </option>
           </select>
         </Field>
       </div>
 
       <div className="mt-4">
         <div className="flex items-baseline justify-between">
-          <label className="block text-sm font-medium">Summariser prompt</label>
+          <label className="block text-sm font-medium">
+            {t("摘要指令", "Summariser prompt")}
+          </label>
           {defaultPrompt && !promptIsDefault && (
             <button
               type="button"
               onClick={() => setPrompt(defaultPrompt)}
               className="text-xs underline hover:no-underline"
             >
-              Reset to shipped prompt
+              {t("恢复默认指令", "Reset to shipped prompt")}
             </button>
           )}
         </div>
         <textarea
-          aria-label="Summariser prompt"
+          aria-label={t("摘要指令", "Summariser prompt")}
           className="h-56 w-full rounded-md border px-3 py-2 font-mono text-xs"
           placeholder={`Must contain ${PLACEHOLDER}.`}
           value={prompt}
@@ -200,38 +277,70 @@ export function CompactionSettingsSection({
         />
         {promptInvalid ? (
           <p className="mt-1 text-xs text-red-600">
-            Must contain {PLACEHOLDER} — it is where the conversation is substituted in.
+            {t(
+              `必须包含 ${PLACEHOLDER}，用于填入原始会话内容。`,
+              `Must contain ${PLACEHOLDER} — it is where the conversation is substituted in.`,
+            )}
           </p>
         ) : (
           <p className="mt-1 text-xs text-muted-foreground">
-            What the summariser is told to preserve — the most consequential lever here.{" "}
+            {t(
+              "明确摘要中需要保留的信息。",
+              "What the summariser is told to preserve — the most consequential lever here.",
+            )}{" "}
             {promptIsDefault
-              ? "This is the shipped prompt; leaving it unchanged keeps you on future improvements to it."
-              : "Edited — this overrides the shipped prompt until you reset it."}
+              ? t(
+                  "当前为默认指令，保持不变可自动跟随后续更新。",
+                  "This is the shipped prompt; leaving it unchanged keeps you on future improvements to it.",
+                )
+              : t(
+                  "已自定义，将持续覆盖默认指令，直至恢复默认。",
+                  "Edited — this overrides the shipped prompt until you reset it.",
+                )}
           </p>
         )}
       </div>
 
       <div className="mt-6 rounded-md border border-dashed p-3">
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={secondPass} onChange={(e) => setSecondPass(e.target.checked)} />
-          <span>Second pass — re-summarise idle conversations</span>
+          <input
+            type="checkbox"
+            checked={secondPass}
+            onChange={(e) => setSecondPass(e.target.checked)}
+          />
+          <span>
+            {t(
+              "空闲会话二次摘要",
+              "Second pass — re-summarise idle conversations",
+            )}
+          </span>
         </label>
         <p className="mt-1 text-xs text-muted-foreground">
-          Once a conversation goes quiet, re-derive its summary from the original turns with more time and a stronger
-          model, replacing the one written mid-chat. Costs nothing in chat latency. Requires a task queue in this
-          environment — if none is configured the setting is ignored and the backend logs a warning.
+          {t(
+            "会话空闲后，使用原始消息重新生成摘要，不增加聊天等待时间。此选项需要部署任务队列；未配置时不会执行二次摘要。",
+            "Re-summarise idle conversations from original turns without adding chat latency. This option requires a configured task queue; without one, the second pass is unavailable.",
+          )}
         </p>
         <div className="mt-3 max-w-xs">
           <Field
-            label="Idle wait (minutes)"
-            hint="How long a conversation must be quiet first. Default 45."
-            error={idleInvalid ? "Must be a whole number of minutes." : null}
+            label={t("空闲等待（分钟）", "Idle wait (minutes)")}
+            hint={t(
+              "会话保持空闲多久后执行。默认 45 分钟。",
+              "How long a conversation must be quiet first. Default 45.",
+            )}
+            error={
+              idleInvalid
+                ? t(
+                    "请输入非负整数分钟。",
+                    "Must be a whole number of minutes.",
+                  )
+                : null
+            }
           >
             <input
               type="text"
               inputMode="numeric"
-              aria-label="Idle wait (minutes)"
+              aria-label={t("空闲等待（分钟）", "Idle wait (minutes)")}
               className="w-full rounded-md border px-3 py-2 text-sm"
               placeholder="45"
               value={idleMinutes}
@@ -249,7 +358,9 @@ export function CompactionSettingsSection({
           disabled={busy || blocked}
           className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save compaction settings"}
+          {busy
+            ? t("保存中…", "Saving…")
+            : t("保存压缩设置", "Save compaction settings")}
         </button>
       </div>
     </section>

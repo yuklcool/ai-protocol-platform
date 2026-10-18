@@ -2,11 +2,14 @@ name: Protocol operation acceptance
 
 on:
   push:
-    branches: [main, fix/protocol-operation-completion, refactor/simplify-platform-modules]
+    branches: [main, fix/protocol-operation-completion, refactor/simplify-platform-modules, feat/root-console-completion]
     paths:
       - backend/**
       - frontend/**
       - docker-compose.yml
+      - scripts/smoke-tenant-provider-acceptance.mjs
+      - .github/workflows/tenant-real-provider-acceptance.yml
+      - .github/workflows/real-provider-agent-mcp-acceptance.yml
       - .github/workflows/protocol-operation-acceptance.yml
       - .github/workflows/release-images.yml
   workflow_dispatch:

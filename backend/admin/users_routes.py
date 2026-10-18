@@ -44,6 +44,14 @@ _TOKEN_TTL_SECONDS = 3600
 
 def _fb_auth():
     """Return firebase_admin.auth, initializing the default app if needed."""
+    from auth import auth_backend
+
+    if auth_backend() == "local-jwt":
+        from auth.local_directory import LocalUserDirectory
+
+        return LocalUserDirectory()
+    if auth_backend() == "oidc":
+        raise HTTPException(409, "User groups are managed by the configured OIDC identity provider")
     try:
         import firebase_admin
         from firebase_admin import auth as fb_auth
@@ -108,6 +116,10 @@ def _write(fb, rec, tags: list[str]) -> None:
 
 
 def _on_next_refresh() -> Propagation:
+    from auth import auth_backend
+
+    if auth_backend() == "local-jwt":
+        return Propagation(effective="immediate", token_ttl_seconds=0)
     return Propagation(effective="on_next_refresh", token_ttl_seconds=_TOKEN_TTL_SECONDS)
 
 
@@ -121,6 +133,18 @@ def _target_domain(email: str) -> str:
 
 def _assert_may_administer(scope: Scope, email: str) -> None:
     """The target user must live in a domain the caller administers."""
+    if scope.is_platform:
+        return
+    from auth import auth_backend
+
+    if auth_backend() == "local-jwt":
+        from auth.local_jwt import get_local_user_by_email
+
+        row = get_local_user_by_email(email)
+        if row is None:
+            raise HTTPException(404, "Account not found")
+        scope.assert_may_tenant(str(row.get("tenantId") or ""))
+        return
     scope.assert_may(_target_domain(email))
 
 

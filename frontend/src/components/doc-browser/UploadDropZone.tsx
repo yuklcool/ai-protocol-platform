@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { getIdToken } from "@/lib/firebase";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 interface UploadProgress {
   filename: string;
@@ -18,7 +19,12 @@ interface UploadDropZoneProps {
 
 const MAX_CONCURRENT = 4;
 
-export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }: UploadDropZoneProps) {
+export function UploadDropZone({
+  folderId = "",
+  skillId = "",
+  onUploadComplete,
+}: UploadDropZoneProps) {
+  const t = useConsoleCopy();
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<UploadProgress[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,7 +34,8 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
   function updateProgress(filename: string, patch: Partial<UploadProgress>) {
     setProgress((prev) => {
       const idx = prev.findIndex((p) => p.filename === filename);
-      if (idx === -1) return [...prev, { filename, pct: 0, status: "uploading", ...patch }];
+      if (idx === -1)
+        return [...prev, { filename, pct: 0, status: "uploading", ...patch }];
       const next = [...prev];
       next[idx] = { ...next[idx], ...patch };
       return next;
@@ -51,7 +58,9 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
-          updateProgress(file.name, { pct: Math.round((e.loaded / e.total) * 100) });
+          updateProgress(file.name, {
+            pct: Math.round((e.loaded / e.total) * 100),
+          });
         }
       };
 
@@ -61,18 +70,28 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
           // bare status. FastAPI `detail` is either a string or a structured
           // {code, message} (e.g. TENANT_NOT_PROVISIONED on a fail-closed
           // tenant) — show whichever is present, falling back to the status.
-          let message = `Upload failed (${xhr.status})`;
+          let message = `${t("上传失败", "Upload failed")} (${xhr.status})`;
           try {
-            const detail = (JSON.parse(xhr.responseText) as { detail?: unknown }).detail;
+            const detail = (
+              JSON.parse(xhr.responseText) as { detail?: unknown }
+            ).detail;
             if (typeof detail === "string" && detail.trim()) {
               message = detail;
-            } else if (detail && typeof detail === "object" && typeof (detail as { message?: unknown }).message === "string") {
+            } else if (
+              detail &&
+              typeof detail === "object" &&
+              typeof (detail as { message?: unknown }).message === "string"
+            ) {
               message = (detail as { message: string }).message;
             }
           } catch {
             // non-JSON body — keep the generic status message
           }
-          updateProgress(file.name, { status: "error", pct: 0, error: message });
+          updateProgress(file.name, {
+            status: "error",
+            pct: 0,
+            error: message,
+          });
         } else {
           updateProgress(file.name, { status: "done", pct: 100 });
           try {
@@ -86,7 +105,11 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
       };
 
       xhr.onerror = () => {
-        updateProgress(file.name, { status: "error", pct: 0, error: "Network error" });
+        updateProgress(file.name, {
+          status: "error",
+          pct: 0,
+          error: t("网络错误", "Network error"),
+        });
         resolve();
       };
 
@@ -95,7 +118,10 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
   }
 
   async function drainQueue() {
-    while (queueRef.current.length > 0 && semaphoreRef.current < MAX_CONCURRENT) {
+    while (
+      queueRef.current.length > 0 &&
+      semaphoreRef.current < MAX_CONCURRENT
+    ) {
       const file = queueRef.current.shift();
       if (!file) break;
       semaphoreRef.current++;
@@ -142,12 +168,28 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
             : "border-muted-foreground/30 hover:border-primary/60 hover:bg-accent/30",
         ].join(" ")}
       >
-        <svg className="mb-2 h-6 w-6 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-          <path d="M12 16V8M9 11l3-3 3 3" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1" strokeLinecap="round" />
+        <svg
+          className="mb-2 h-6 w-6 text-muted-foreground"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 16V8M9 11l3-3 3 3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1"
+            strokeLinecap="round"
+          />
         </svg>
         <p className="text-xs font-medium text-foreground">
-          {isDragging ? "Drop to upload" : "Drop files here or click to browse"}
+          {isDragging
+            ? t("松开以上传", "Drop to upload")
+            : t("拖入文件或点击选择", "Drop files here or click to browse")}
         </p>
         <p className="mt-0.5 text-[10px] text-muted-foreground">
           PDF, DOCX, PPTX, XLSX, CSV, TXT, MD…
@@ -188,7 +230,10 @@ export function UploadDropZone({ folderId = "", skillId = "", onUploadComplete }
       {/* Summary */}
       {done > 0 && active.length === 0 && errors.length === 0 && (
         <p className="text-center text-[10px] text-muted-foreground">
-          {done} file{done !== 1 ? "s" : ""} uploaded
+          {t(
+            `已上传 ${done} 个文件`,
+            `${done} file${done !== 1 ? "s" : ""} uploaded`,
+          )}
         </p>
       )}
     </div>

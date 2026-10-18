@@ -30,6 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Release acceptance must run on main." >&2; exit 1; }
           file=".github/release-candidate.json"
           enabled="$(jq -r '.enabled' "$file")"
           version="$(jq -r '.version' "$file")"
@@ -79,11 +80,17 @@ jobs:
     name: Tag accepted commit and start release
     needs: [candidate, real-provider-acceptance]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout accepted main commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Require operation, console, persistence and CI gates on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/wait-release-checks.mjs
 
       - name: Create exact release tag
         env:

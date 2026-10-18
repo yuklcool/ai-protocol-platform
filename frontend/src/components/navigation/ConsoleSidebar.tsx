@@ -20,6 +20,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { BRANDING } from "@/lib/branding";
 import { UserMenu } from "./UserMenu";
+import { useAdminScope } from "@/hooks/useAdminScope";
 
 type NavigationItem = {
   href: string;
@@ -46,7 +47,12 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "智能体",
     en: "Agent",
     items: [
-      { href: "/agent", zh: "Root Agent 设置", en: "Root Agent Settings", icon: Bot },
+      {
+        href: "/agent",
+        zh: "Root Agent 设置",
+        en: "Root Agent Settings",
+        icon: Bot,
+      },
     ],
   },
   {
@@ -54,9 +60,24 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     en: "Resources",
     items: [
       { href: "/skills", zh: "Skills", en: "Skills", icon: Sparkles },
-      { href: "/admin/tool-permissions", zh: "Tools", en: "Tools", icon: Wrench },
-      { href: "/admin/mcp-servers", zh: "MCP Servers", en: "MCP Servers", icon: Plug },
-      { href: "/admin/model-providers", zh: "Models", en: "Models", icon: Boxes },
+      {
+        href: "/admin/tool-permissions",
+        zh: "Tools",
+        en: "Tools",
+        icon: Wrench,
+      },
+      {
+        href: "/admin/mcp-servers",
+        zh: "MCP Servers",
+        en: "MCP Servers",
+        icon: Plug,
+      },
+      {
+        href: "/admin/model-providers",
+        zh: "Models",
+        en: "Models",
+        icon: Boxes,
+      },
     ],
   },
   {
@@ -81,7 +102,30 @@ function label(item: { zh: string; en: string }, isChinese: boolean) {
   return isChinese ? item.zh : item.en;
 }
 
-function NavLink({ item, pathname, isChinese }: { item: NavigationItem; pathname: string; isChinese: boolean }) {
+export function visibleNavigation(isAdmin: boolean, isPlatform: boolean) {
+  const platformPaths = new Set([
+    "/agent",
+    "/admin/model-providers",
+    "/admin/groups",
+  ]);
+  return CONSOLE_NAVIGATION.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      if (platformPaths.has(item.href)) return isPlatform;
+      return !item.href.startsWith("/admin/") || isAdmin;
+    }),
+  })).filter((group) => group.items.length > 0);
+}
+
+function NavLink({
+  item,
+  pathname,
+  isChinese,
+}: {
+  item: NavigationItem;
+  pathname: string;
+  isChinese: boolean;
+}) {
   const active = isActive(pathname, item.href);
   const Icon = item.icon;
   return (
@@ -97,37 +141,71 @@ function NavLink({ item, pathname, isChinese }: { item: NavigationItem; pathname
 }
 
 export function ConsoleSidebar() {
+  const scope = useAdminScope();
   const pathname = usePathname() || "/";
   const { locale } = useI18n();
   const isChinese = locale.startsWith("zh");
 
   return (
-    <aside className="console-sidebar" aria-label={isChinese ? "主导航" : "Primary navigation"}>
+    <aside
+      className="console-sidebar"
+      aria-label={isChinese ? "主导航" : "Primary navigation"}
+    >
       <div className="console-sidebar-brand">
-        <Link href="/" className="flex min-w-0 items-center gap-2.5" aria-label={BRANDING.appName}>
+        <Link
+          href="/"
+          className="flex min-w-0 items-center gap-2.5"
+          aria-label={BRANDING.appName}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={BRANDING.logo.chatAvatar} alt="" className="h-7 w-7 rounded-md" />
-          <span className="truncate text-sm font-semibold tracking-tight">{BRANDING.appName}</span>
+          <img
+            src={BRANDING.logo.chatAvatar}
+            alt=""
+            className="h-7 w-7 rounded-md"
+          />
+          <span className="min-w-0 break-words text-xs font-semibold leading-4 tracking-tight">
+            {BRANDING.appName}
+          </span>
         </Link>
-        <span className="console-brand-status" aria-label={isChinese ? "系统在线" : "System online"} />
+        <span className="console-brand-status" aria-hidden="true" />
       </div>
 
       <nav className="console-sidebar-nav">
-        {CONSOLE_NAVIGATION.map((group) => (
+        {visibleNavigation(scope.isAdmin, scope.isPlatform).map((group) => (
           <div key={group.en} className="console-nav-group">
             <p className="console-nav-label">{label(group, isChinese)}</p>
             <div className="space-y-0.5">
-              {group.items.map((item) => <NavLink key={item.href} item={item} pathname={pathname} isChinese={isChinese} />)}
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  isChinese={isChinese}
+                />
+              ))}
             </div>
           </div>
         ))}
       </nav>
 
       <div className="console-sidebar-footer">
-        <Link href="/admin/settings" className="console-nav-item">
-          <Settings2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{isChinese ? "平台设置" : "Platform settings"}</span>
-        </Link>
+        {scope.isPlatform && (
+          <Link href="/admin/settings" className="console-nav-item">
+            <Settings2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{isChinese ? "平台设置" : "Platform settings"}</span>
+          </Link>
+        )}
+        {scope.state === "error" && (
+          <button
+            type="button"
+            onClick={() => void scope.recheck()}
+            className="px-2 text-xs text-destructive"
+          >
+            {isChinese
+              ? "权限加载失败，点击重试"
+              : "Permissions unavailable. Retry"}
+          </button>
+        )}
         <div className="mt-2 flex items-center justify-between px-2">
           <LanguageSwitcher compact />
           <UserMenu />
@@ -135,8 +213,12 @@ export function ConsoleSidebar() {
         <div className="console-runtime-card">
           <span className="console-runtime-dot" />
           <div className="min-w-0">
-            <p className="truncate text-xs font-medium">{isChinese ? "Root Agent" : "Root Agent"}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{isChinese ? "统一运行时" : "Unified runtime"}</p>
+            <p className="truncate text-xs font-medium">
+              {isChinese ? "Root Agent" : "Root Agent"}
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {isChinese ? "统一运行时" : "Unified runtime"}
+            </p>
           </div>
         </div>
       </div>
@@ -145,22 +227,38 @@ export function ConsoleSidebar() {
 }
 
 export function ConsoleMobileNav() {
+  const scope = useAdminScope();
   const pathname = usePathname() || "/";
   const { locale } = useI18n();
   const isChinese = locale.startsWith("zh");
-  const items = CONSOLE_NAVIGATION.flatMap((group) => group.items).slice(0, 8);
+  const items = visibleNavigation(scope.isAdmin, scope.isPlatform).flatMap(
+    (group) => group.items,
+  );
   return (
     <div className="console-mobile-nav no-scrollbar">
       {items.map((item) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
         return (
-          <Link key={item.href} href={item.href} className={active ? "console-mobile-link console-mobile-link-active" : "console-mobile-link"}>
+          <Link
+            key={item.href}
+            href={item.href}
+            className={
+              active
+                ? "console-mobile-link console-mobile-link-active"
+                : "console-mobile-link"
+            }
+          >
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
             {label(item, isChinese)}
           </Link>
         );
       })}
+      {scope.isPlatform && (
+        <Link href="/admin/settings" className="console-mobile-link">
+          {isChinese ? "平台设置" : "Settings"}
+        </Link>
+      )}
     </div>
   );
 }

@@ -104,7 +104,12 @@ def _record_to_user(record: dict[str, Any]) -> User:
     # Legacy auth_users rows predate explicit tenant ids. Domain fallback keeps
     # those accounts on their existing scope until a migration writes tenantId.
     tenant_id = _normalise_tenant_id(str(record.get("tenantId") or domain))
-    raw_tags = record.get("groupTags") or []
+    raw_tags = set(record.get("groupTags") or [])
+    from db.tenants import get_tenant
+
+    tenant = get_tenant(tenant_id) if tenant_id else None
+    if tenant is not None and not tenant.disabled:
+        raw_tags.update(tenant.derived_group_tags or [])
     return User(
         uid=str(record["uid"]),
         email=email,
@@ -237,6 +242,7 @@ def issue_access_token(user: User) -> tuple[str, int]:
         "nbf": now,
         "exp": now + expires_in,
         "jti": str(uuid.uuid4()),
+        "version": int((get_local_user_by_email(user.email or "") or {}).get("tokenVersion", 0)),
     }
     return jwt.encode(payload, _signing_key(), algorithm="HS256"), expires_in
 
@@ -276,6 +282,8 @@ def user_from_token(token: str) -> User:
         raise jwt.InvalidTokenError("local account is disabled or missing")
     if str(record.get("uid") or "") != str(decoded.get("sub") or ""):
         raise jwt.InvalidTokenError("subject does not match local account")
+    if int(decoded.get("version", 0)) != int(record.get("tokenVersion", 0)):
+        raise jwt.InvalidTokenError("account sessions were revoked")
     return _record_to_user(record)
 
 
