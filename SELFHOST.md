@@ -79,13 +79,13 @@ This is the preferred operational path after a versioned release is published. D
 
 ```text
 docker-compose.release.yml
-.env.selfhost.example
+default.env.selfhost.example
 ```
 
 Then:
 
 ```bash
-cp .env.selfhost.example .env
+cp default.env.selfhost.example .env
 # Release assets already pin APP_VERSION to the exact vX.Y.Z tag.
 # Configure required secrets/provider values.
 

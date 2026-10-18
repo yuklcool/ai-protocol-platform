@@ -36,12 +36,12 @@ mcp-sandbox   :3457
 
 ### Option A — versioned GHCR images (recommended for deployment)
 
-Tagged releases attach `docker-compose.release.yml` and `.env.selfhost.example`, so a server can deploy without cloning or building the repository.
+Tagged releases attach `docker-compose.release.yml` and `default.env.selfhost.example`, so a server can deploy without cloning or building the repository. Save the downloaded environment template as `.env`.
 
 Download those two files from the GitHub Release, then:
 
 ```bash
-cp .env.selfhost.example .env
+cp default.env.selfhost.example .env
 # edit .env:
 # - pin APP_VERSION to the release tag, e.g. v1.2.3
 # - set JWT_SIGNING_KEY
