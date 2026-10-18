@@ -69,11 +69,12 @@ it("retains the secret reference on provider edits", async () => {
 });
 it("saves platform default and default smart fast runtime mappings", async () => {
   render(<ModelProvidersPage />);
-  await screen.findByRole("button", { name: "Save model routing" });
-  expect(screen.getByLabelText("Platform default model")).toHaveValue("custom");
-  expect(screen.getByLabelText("Default tier model")).toHaveValue("custom");
-  expect(screen.getByLabelText("Smart tier model")).toHaveValue("custom");
-  expect(screen.getByLabelText("Fast tier model")).toHaveValue("custom");
+  await waitFor(() => {
+    expect(screen.getByLabelText("Platform default model")).toHaveValue("custom");
+    expect(screen.getByLabelText("Default tier model")).toHaveValue("custom");
+    expect(screen.getByLabelText("Smart tier model")).toHaveValue("custom");
+    expect(screen.getByLabelText("Fast tier model")).toHaveValue("custom");
+  });
 
   fireEvent.click(screen.getByRole("button", { name: "Save model routing" }));
   await waitFor(() => expect(fetcher).toHaveBeenCalledWith(SETTINGS_API, expect.objectContaining({ method: "PUT" })));
