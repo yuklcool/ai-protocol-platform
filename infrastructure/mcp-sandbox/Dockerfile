@@ -6,7 +6,11 @@
 # npm itself are deliberately excluded from the production image so release
 # vulnerability scanning reflects the actual runtime attack surface.
 
-FROM node:22-alpine AS build
+# These outputs are portable JavaScript and static assets. Run esbuild and its
+# install script on the builder's native architecture: ARM64 esbuild under QEMU
+# can crash with SIGILL and leave npm waiting until the release job times out.
+# Production dependencies and the final Node runtime still use TARGETPLATFORM.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 
 WORKDIR /app
 

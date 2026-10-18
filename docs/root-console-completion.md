@@ -23,7 +23,7 @@
 - 新增 API 回归：`backend/tests/api_tests/test_root_console_completion.py`，覆盖普通 Root 预算回调、账号会话撤销、同 UID 跨租户隔离、知识撤权、权限预览、价格和权限提升防护。
 - `Model provider gate` 在真实 PostgreSQL / 后端 / 前端上运行 `frontend/e2e/root-console-live.spec.js`，不拦截浏览器 API。覆盖租户策略、权限规则、账号、角色导航、文件上传、检索及移动端；截图作为 CI artifact 保存。
 - 现有 `Protocol operation acceptance` 继续运行真实 Provider → AG-UI → MCP / A2UI action-run 与租户隔离验收。A2UI 支持范围仍为 v0.9 SDK basic catalog，AG-UI 使用仓库锁定的 SDK；参见 [协议操作验收](protocol-operation-acceptance.md)。
-- v1.1.0 发布候选在相同提交的 CI、持久化、模型与控制台、A2UI、真实 Provider 协议验收全部成功后才允许打标签和启动镜像发布。候选配置或代码提交不代表镜像已发布。
+- v1.1.1 发布候选在相同提交的 CI、持久化、模型与控制台、A2UI、真实 Provider 协议验收全部成功后才允许打标签和启动镜像发布。候选配置或代码提交不代表镜像已发布。v1.1.0 镜像发布因 Sandbox 的 ARM64 QEMU 构建崩溃超时，未生成正式 Release；保留原标签，修复使用 v1.1.1。Sandbox 的平台无关 JavaScript 使用构建机原生架构编译，生产依赖与 Node 运行时继续按目标架构构建。
 
 ## 目标部署边界
 

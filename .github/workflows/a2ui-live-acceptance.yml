@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/release-candidate.json
       - docker-compose.yml
       - .env.selfhost.example
       - backend/adk/**
@@ -24,6 +25,7 @@ on:
       - .github/workflows/a2ui-live-acceptance.yml
   pull_request:
     paths:
+      - .github/release-candidate.json
       - docker-compose.yml
       - .env.selfhost.example
       - backend/adk/**
