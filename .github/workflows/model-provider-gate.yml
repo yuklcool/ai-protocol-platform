@@ -10,11 +10,12 @@ on:
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
+      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
       - frontend/src/app/admin/tenants/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/tool-permissions/**
+      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
       - backend/admin/tenant_root_routes.py
@@ -59,11 +60,12 @@ on:
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
+      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
       - frontend/src/app/admin/tenants/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/tool-permissions/**
+      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
       - backend/admin/tenant_root_routes.py

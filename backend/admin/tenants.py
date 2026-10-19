@@ -13,7 +13,7 @@ import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from admin.audit import record_admin_action
 from admin.scope import AdminScope, require_admin_scope
@@ -46,17 +46,13 @@ class TenantValidation(BaseModel):
 
 
 class TenantOnboardRequest(BaseModel):
-    # New first-class identity. Omitted for old callers: ``domain`` becomes
-    # the stable id until the tenant is explicitly migrated.
-    tenant_id: str = ""
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: str = Field(min_length=1)
     domains: list[str] = Field(default_factory=list)
-
-    # Historical single-domain field retained for frontend/API compatibility.
-    domain: str = ""
 
     display_name: str = ""
     enabled_skills: list[str] | None = None
-    derived_group_tags: list[str] | None = None
+    enabled_mcp_servers: list[str] | None = None
     default_skill: str | None = None
 
     model_policy: dict[str, Any] = Field(default_factory=dict)
@@ -70,10 +66,11 @@ class TenantOnboardRequest(BaseModel):
 
 
 class TenantPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     domains: list[str] | None = None
     display_name: str | None = None
     enabled_skills: list[str] | None = None
-    derived_group_tags: list[str] | None = None
+    enabled_mcp_servers: list[str] | None = None
     default_skill: str | None = None
     model_policy: dict[str, Any] | None = None
     storage_namespace: str | None = None
@@ -138,27 +135,10 @@ def read_tenant(tenant_id: str, scope: Annotated[AdminScope, Depends(require_adm
 
 
 def _normalize_identity(body: TenantOnboardRequest) -> tuple[str, list[str]]:
-    legacy_domain = normalize_domain(body.domain)
-    domains = [normalize_domain(value) for value in body.domains]
-    if legacy_domain:
-        domains.append(legacy_domain)
-    domains = sorted({value for value in domains if value})
-
     tenant_id = normalize_tenant_id(body.tenant_id)
     if not tenant_id:
-        if legacy_domain:
-            tenant_id = legacy_domain
-        elif len(domains) == 1:
-            tenant_id = domains[0]
-
-    if not tenant_id:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "tenant_id is required when no legacy domain is supplied. "
-                "Domain-less OIDC/JWT tenants are supported; give them a stable tenant_id."
-            ),
-        )
+        raise HTTPException(422, "tenant_id is required")
+    domains = sorted({normalize_domain(value) for value in body.domains if normalize_domain(value)})
     return tenant_id, domains
 
 
@@ -180,6 +160,22 @@ def _known_slugs(actor_uid: str) -> set[str]:
     return slugs
 
 
+def _validate_resource_scope(tenant_id: str, skills: list[str] | None, servers: list[str] | None) -> None:
+    for ref in skills or []:
+        skill = skill_config.get_skill(ref)
+        if skill is None or not (
+            skill.tenant_id == tenant_id or (not skill.tenant_id and skill.owner_id == PLATFORM_OWNER_UID)
+        ):
+            raise HTTPException(422, "Skill 不存在或不属于目标租户")
+    for ref in servers or []:
+        server = get_repository().get_document("mcp_servers", ref)
+        if not server or not (
+            server.get("scope") == "platform"
+            or (server.get("scope") == "tenant" and server.get("tenantId") == tenant_id)
+        ):
+            raise HTTPException(422, "MCP 服务器不存在或不属于目标租户")
+
+
 def unknown_skill_refs(
     enabled_skills: list[str] | None,
     default_skill: str | None,
@@ -191,62 +187,13 @@ def unknown_skill_refs(
     if not refs:
         return []
     known = _known_slugs(actor_uid)
-    # Preserve the historical fail-open behavior when a provider cannot list
-    # skills; onboarding must not become unavailable because validation storage
-    # is temporarily down.
-    if not known:
-        return []
     unknown: list[str] = []
     seen: set[str] = set()
     for value in refs:
-        if value not in known and value not in seen:
+        if value not in known and skill_config.get_skill(value) is None and value not in seen:
             unknown.append(value)
             seen.add(value)
     return unknown
-
-
-def _known_group_tags() -> set[str] | None:
-    try:
-        from auth import group_tags_registry  # type: ignore[attr-defined]
-    except Exception:
-        return None
-    fn = getattr(group_tags_registry, "known_group_tags", None)
-    if not callable(fn):
-        return None
-    try:
-        return set(fn())
-    except Exception:
-        return None
-
-
-def _validate_group_tags(tags: list[str] | None) -> ValidationCheck:
-    cleaned = [tag for tag in (tags or []) if tag]
-    registry = _known_group_tags()
-    if registry is None:
-        return ValidationCheck(
-            field="derived_group_tags",
-            level=_LEVEL_SKIPPED,
-            message=(
-                "No group-tag registry in this build; accepting tags without validation."
-                if cleaned
-                else "No derived group tags."
-            ),
-            details={"tags": cleaned},
-        )
-    unknown = [tag for tag in cleaned if tag not in registry]
-    if unknown:
-        return ValidationCheck(
-            field="derived_group_tags",
-            level=_LEVEL_ERROR,
-            message=f"Unknown group tag(s): {', '.join(unknown)}",
-            details={"unknown": unknown},
-        )
-    return ValidationCheck(
-        field="derived_group_tags",
-        level=_LEVEL_OK,
-        message="All derived group tags are recognized." if cleaned else "No derived group tags.",
-        details={"tags": cleaned},
-    )
 
 
 def _validate_skill_refs(
@@ -382,7 +329,6 @@ def build_validation(config: TenantConfig, *, actor_uid: str) -> TenantValidatio
     checks: list[ValidationCheck] = []
     checks.extend(_validate_skill_refs(config.enabled_skills, config.default_skill, actor_uid))
     checks.append(_validate_storage(config))
-    checks.append(_validate_group_tags(config.derived_group_tags))
     ok = not any(check.level == _LEVEL_ERROR for check in checks)
     return TenantValidation(tenant_id=config.tenant_id, ok=ok, checks=checks)
 
@@ -398,11 +344,6 @@ def onboard_tenant(
 ) -> TenantOnboardResponse:
     tenant_id, domains = _normalize_identity(body)
     _assert_scope(scope, tenant_id)
-    if body.derived_group_tags is not None and not scope.is_platform:
-        from auth.admin_roles import is_admin_conferring_tag
-
-        if any(is_admin_conferring_tag(tag) for tag in body.derived_group_tags):
-            raise HTTPException(403, "Only a platform admin may assign admin-conferring derived tags")
     _validate_admin_policy(
         scope,
         body.model_policy if "model_policy" in body.model_fields_set else None,
@@ -420,6 +361,7 @@ def onboard_tenant(
             },
         )
 
+    _validate_resource_scope(tenant_id, body.enabled_skills, body.enabled_mcp_servers)
     directory = _directory()
     if directory.get(tenant_id) is not None:
         raise HTTPException(status_code=409, detail=f"Tenant {tenant_id!r} already exists")
@@ -428,9 +370,9 @@ def onboard_tenant(
         tenantId=tenant_id,
         displayName=body.display_name.strip(),
         domains=domains,
-        enabledSkills=body.enabled_skills or None,
+        enabledSkills=body.enabled_skills or [],
         defaultSkill=(body.default_skill or "").strip() or None,
-        derivedGroupTags=body.derived_group_tags or None,
+        enabledMcpServers=body.enabled_mcp_servers or [],
         modelPolicy=body.model_policy,
         storageNamespace=body.storage_namespace.strip() or tenant_id,
         documentsBucket=(body.documents_bucket or "").strip() or None,
@@ -481,11 +423,6 @@ def edit_tenant(
 ) -> TenantConfig:
     tenant_id = normalize_tenant_id(tenant_id)
     _assert_scope(scope, tenant_id)
-    if body.derived_group_tags is not None and not scope.is_platform:
-        from auth.admin_roles import is_admin_conferring_tag
-
-        if any(is_admin_conferring_tag(tag) for tag in body.derived_group_tags):
-            raise HTTPException(403, "Only a platform admin may assign admin-conferring derived tags")
     if body.model_policy is not None or body.quota is not None:
         scope.assert_platform()
     _validate_admin_policy(scope, body.model_policy, body.quota)
@@ -500,9 +437,9 @@ def edit_tenant(
     if body.display_name is not None:
         updates["display_name"] = body.display_name.strip()
     if body.enabled_skills is not None:
-        updates["enabled_skills"] = body.enabled_skills or None
-    if body.derived_group_tags is not None:
-        updates["derived_group_tags"] = body.derived_group_tags or None
+        updates["enabled_skills"] = body.enabled_skills
+    if body.enabled_mcp_servers is not None:
+        updates["enabled_mcp_servers"] = body.enabled_mcp_servers
     if body.default_skill is not None:
         updates["default_skill"] = body.default_skill.strip() or None
     if body.model_policy is not None:
@@ -524,6 +461,7 @@ def edit_tenant(
             detail={"error": "unknown_skill_ref", "unknown": unknown},
         )
 
+    _validate_resource_scope(tenant_id, body.enabled_skills, body.enabled_mcp_servers)
     validation = build_validation(candidate, actor_uid=scope.user.uid)
     if not validation.ok:
         raise HTTPException(

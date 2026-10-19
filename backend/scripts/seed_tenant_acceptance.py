@@ -26,10 +26,8 @@ import os
 import re
 from typing import Any
 
-from auth.admin_roles import TENANT_ADMIN_PREFIX
+from auth.capability_access import GROUP_COLLECTION, PermissionGroup
 from auth.local_jwt import create_local_user
-from auth.permissions import COLLECTION as TOOL_PERMISSION_COLLECTION
-from auth.permissions import tenant_permission_key
 from config.effective_models import load_effective_models_config
 from db.chat_sessions import create_session_index
 from db.models.access import AccessControl
@@ -64,6 +62,8 @@ def fixture(run_id: str) -> dict[str, str]:
         "domain_b": domain_b,
         "email_a": f"admin@{domain_a}",
         "email_b": f"admin@{domain_b}",
+        "group_a": f"{prefix}-group-a",
+        "group_b": f"{prefix}-group-b",
         "shared_uid": f"{prefix}-shared-uid",
         "session_a": f"{prefix}-session-a",
         "session_b": f"{prefix}-session-b",
@@ -155,6 +155,15 @@ def seed(run_id: str) -> dict[str, Any]:
         )
     )
 
+    for suffix in ("a", "b"):
+        group = PermissionGroup(
+            id=ids[f"group_{suffix}"],
+            tenantId=ids[f"tenant_{suffix}"],
+            label=f"Tenant acceptance {suffix}",
+            role="tenant-admin",
+        )
+        repo.set_document(GROUP_COLLECTION, group.id, group.model_dump(by_alias=True))
+
     # Same uid is intentional.  Email + authoritative auth_users rows still
     # distinguish the two local identities and bind each to a different tenant.
     create_local_user(
@@ -162,35 +171,14 @@ def seed(run_id: str) -> dict[str, Any]:
         password=password_a,
         uid=ids["shared_uid"],
         tenant_id=ids["tenant_a"],
-        group_tags={f"{TENANT_ADMIN_PREFIX}{ids['tenant_a']}"},
+        permission_group_ids=[ids["group_a"]],
     )
     create_local_user(
         email=ids["email_b"],
         password=password_b,
         uid=ids["shared_uid"],
         tenant_id=ids["tenant_b"],
-        group_tags={f"{TENANT_ADMIN_PREFIX}{ids['tenant_b']}"},
-    )
-
-    repo.set_document(
-        TOOL_PERMISSION_COLLECTION,
-        tenant_permission_key(ids["tenant_a"]),
-        {
-            "type": "tenant",
-            "tenantId": ids["tenant_a"],
-            "tools": ["tenant_e2e_tool_a"],
-            "denied": ["tenant_e2e_tool_b"],
-        },
-    )
-    repo.set_document(
-        TOOL_PERMISSION_COLLECTION,
-        tenant_permission_key(ids["tenant_b"]),
-        {
-            "type": "tenant",
-            "tenantId": ids["tenant_b"],
-            "tools": ["tenant_e2e_tool_b"],
-            "denied": ["tenant_e2e_tool_a"],
-        },
+        permission_group_ids=[ids["group_b"]],
     )
 
     # Public ACL is deliberate: B must still be denied A's session because the
@@ -255,8 +243,8 @@ def cleanup(run_id: str) -> dict[str, Any]:
         repo.delete_document("chat_sessions", session_id)
     for server_id in (ids["mcp_a"], ids["mcp_b"]):
         repo.delete_document("mcp_servers", server_id)
-    for tenant_id in (ids["tenant_a"], ids["tenant_b"]):
-        repo.delete_document(TOOL_PERMISSION_COLLECTION, tenant_permission_key(tenant_id))
+    for group_id in (ids["group_a"], ids["group_b"]):
+        repo.delete_document(GROUP_COLLECTION, group_id)
 
     for raw in repo.query_documents("document_folders", limit=None):
         if str(raw.get("tenantId") or "") in {ids["tenant_a"], ids["tenant_b"]}:

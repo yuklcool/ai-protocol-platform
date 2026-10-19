@@ -21,20 +21,17 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from adk.agui import ROOT_AGENT_APP_NAME
 from agents.root_runtime import (
-    ROOT_AGENT_ID,
     RootCapabilityDenied,
     compose_root_skill,
-    effective_root_config,
     resolve_root_capability,
 )
 from auth import User
+from auth.capability_access import authorized_root_config
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.chat_sessions import get_session_index
 from db.models import SkillConfig
 from db.models.chat_session import ChatSessionIndex
-from skills import skill_config
 
 log = logging.getLogger(__name__)
 
@@ -63,31 +60,15 @@ def _root_runtime_for_session(
     idx: ChatSessionIndex,
     user: User,
     request: Any,
-) -> tuple[Any, SkillConfig] | None:
-    """Resolve the effective Root Agent policy for a protocol callback.
-
-    Protocol routes used to authorize against the stored SkillConfig directly,
-    which let a browser action or iframe write around the Root Agent's current
-    tenant policy. Legacy Skill sessions retain their old gates; sessions
-    created in the Root Agent namespace must pass the same capability resolver
-    as the chat stream.
-    """
-    # The storage namespace is preserved for old sessions, but their actions
-    # must obey the current policy just like a new Root Agent conversation.
+) -> tuple[Any, SkillConfig]:
+    """每次回调都读取当前 Root 和用户授权, 历史会话同样需要通过能力检查。"""
     access = request.state.access
     if not access.is_owner(idx):
         raise HTTPException(status_code=403, detail="Shared conversations are read-only")
     try:
-        config = effective_root_config(get_platform_config().agent, access.tenant_id)
+        config = authorized_root_config(get_platform_config().agent, user)
     except PlatformConfigUnavailable as exc:
         raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
-    configured = bool(
-        config.skills or config.tools or config.mcp_servers or config.permissions.get("failClosed") is True
-    )
-    if idx.app_name != ROOT_AGENT_APP_NAME and idx.agent_id != ROOT_AGENT_ID and not configured:
-        # An unattributed legacy session can keep its saved opt-ins only before
-        # a Root ceiling is configured. A configured ceiling always wins.
-        return None
     try:
         capability = resolve_root_capability(config, user, access, idx.skill_id)
     except RootCapabilityDenied as exc:
@@ -100,114 +81,13 @@ def _enforce_root_interaction(
     user: User,
     request: Any,
     flag: str,
-) -> SkillConfig | None:
-    """Enforce Root Agent A2UI/MCP callback policy, if this is a Root session."""
+) -> SkillConfig:
+    """Enforce the current Root Agent policy for every A2UI/MCP callback."""
     runtime = _root_runtime_for_session(idx, user, request)
-    if runtime is None:
-        return None
     config, composed = runtime
     if not config.interaction.a2ui_enabled or not getattr(config.interaction, flag, False):
         raise HTTPException(status_code=403, detail="Root Agent interaction is not permitted")
     return composed
-
-
-def _delegate_with_grant(skill: Any, user: User, flag: str) -> Any | None:
-    """First ACCESS-FILTERED delegate of ``skill`` whose a2ui config sets ``flag``.
-
-    Handoffs from a front door are TRANSPARENT (``transfer_to_agent``), so a
-    DELEGATE's tool can render a surface / elicitation form in the DOOR's chat —
-    and the follow-up request (surface-action, surface-data, surface-action-run)
-    is then made against the DOOR's skill id. The grant lives on the delegate that
-    produced the surface, not on the skill these gates inspect, so a door fronting
-    correctly-opted-in specialists gets wrongly denied (live 2026-07-21: ONE
-    Assistant → one-ppa-expert's entsoe_day_ahead_prices form 403'd on Submit).
-
-    Deny-by-default is preserved:
-      * the delegate set is the same access-filtered set ``create_agent`` builds,
-        so a delegate the user cannot reach can never unlock the door;
-      * the grant is read off a SINGLE delegate (never one condition from the door
-        and another from a delegate);
-      * direct delegates only (depth 1) — what a transparent handoff reaches;
-      * any resolution error returns None, so the caller falls through to its 403
-        (fails CLOSED, never opens the gate on an error path).
-    """
-    from adk.agent import accessible_delegate_rules
-    from auth.access_context import build_access_context
-
-    try:
-        rules = accessible_delegate_rules(skill, build_access_context(user))
-    except Exception as exc:  # never open a gate because resolution broke
-        log.warning("a2ui gate: delegate resolution failed (%s) — denying", type(exc).__name__)
-        return None
-    for delegate, _rule in rules:
-        cfg = (delegate.skill_metadata.tool_configs or {}).get("a2ui") or {}
-        if cfg.get(flag):
-            return delegate
-    return None
-
-
-def _enforce_skill_opt_in(skill_id: str, user: User) -> None:
-    """Enforce gates 4 + 5 + 6: the skill must exist, have an a2ui
-    tool_config, AND explicitly opt into surface-context writes.
-
-    Raises:
-        HTTPException(403): on any of the three sub-gate failures.
-    """
-    # Alias-tolerant (CLAUDE.md #9): the caller may hold a slug rather than the
-    # canonical id — the Skill Studio mounts its copilot by slug — and a raw
-    # id lookup turned that into a misleading 403 "Access denied".
-    skill = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
-    if skill is None:
-        log.info(
-            "surface_action: skill not found uid=%s skill_id=%s session deleted?",
-            user.uid,
-            skill_id,
-        )
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    a2ui_config = (skill.skill_metadata.tool_configs or {}).get("a2ui") or {}
-    if a2ui_config.get("allow_surface_context_writes"):
-        return
-
-    # Delegation-aware fallback — the surface being acted on may have been
-    # rendered by a delegate during a transparent handoff. See _delegate_with_grant
-    # for why this preserves deny-by-default.
-    delegate = _delegate_with_grant(skill, user, "allow_surface_context_writes")
-    if delegate is not None:
-        log.info(
-            "surface_action: allowed via opted-in delegate uid=%s skill_id=%s delegate=%s",
-            user.uid,
-            skill_id,
-            delegate.skill_id,
-        )
-        return
-
-    if not a2ui_config:
-        log.info(
-            "surface_action: skill has no a2ui tool_config uid=%s skill_id=%s",
-            user.uid,
-            skill_id,
-        )
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Skill '{skill_id}' has no A2UI tool_config — surface actions "
-                f"are only accepted from A2UI-enabled skills"
-            ),
-        )
-
-    log.info(
-        "surface_action: skill not opted into surface context writes uid=%s skill_id=%s",
-        user.uid,
-        skill_id,
-    )
-    raise HTTPException(
-        status_code=403,
-        detail=(
-            f"Skill '{skill_id}' has not opted into A2UI surface context "
-            f"writes (set tool_configs.a2ui.allow_surface_context_writes: true)"
-        ),
-    )
 
 
 def _enforce_size_cap(context: dict[str, Any] | None) -> str:
@@ -241,7 +121,6 @@ __all__ = [
     "_STATE_KEY_NAMESPACE",
     "_enforce_root_interaction",
     "_enforce_size_cap",
-    "_enforce_skill_opt_in",
     "_require_session",
     "_root_runtime_for_session",
 ]

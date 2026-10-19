@@ -58,18 +58,18 @@ class TestWhoAmI:
         r = _client(_PLATFORM).get("/api/admin/whoami")
         assert r.status_code == 200
         assert r.json()["scope"] == "platform"
-        assert r.json()["domains"] == []
+        assert r.json()["tenantIds"] == []
 
     def test_tenant_admin_reports_its_domain(self):
         r = _client(_TENANT).get("/api/admin/whoami")
         assert r.status_code == 200
         body = r.json()
         assert body["scope"] == "tenant"
-        assert body["domains"] == ["acmeenergy.com"]
+        assert body["tenantIds"] == ["acmeenergy.com"]
 
     def test_multi_domain_is_sorted_for_stable_ui(self):
         r = _client(_MULTI).get("/api/admin/whoami")
-        assert r.json()["domains"] == ["a.com", "b.com"]
+        assert r.json()["tenantIds"] == ["a.com", "b.com"]
 
     def test_non_admin_gets_200_none_not_403(self):
         """The never-silent contract: 'not an admin' is a *state*, not an error.
@@ -80,7 +80,7 @@ class TestWhoAmI:
         r = _client(_PLAIN).get("/api/admin/whoami")
         assert r.status_code == 200
         assert r.json()["scope"] == "none"
-        assert r.json()["domains"] == []
+        assert r.json()["tenantIds"] == []
 
     def test_tenant_scope_needs_no_env_config(self, monkeypatch):
         """Tenant scoping is unconditional — there is no flag to forget.

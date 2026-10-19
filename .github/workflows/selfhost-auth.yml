@@ -87,7 +87,7 @@ jobs:
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
-            backend uv run python -c "from auth.local_jwt import authenticate_credentials, issue_access_token, create_local_user, user_from_token; u=authenticate_credentials('admin@example.com','ci-admin-password-strong'); assert u is not None; t,_=issue_access_token(u); create_local_user(email='admin@example.com',password='ci-admin-password-new',group_tags={'tenant-admin:example.com'},overwrite=True); r=user_from_token(t); assert r.uid==u.uid; assert r.group_tags==frozenset({'tenant-admin:example.com'}); print('server-authoritative role reload OK')"
+            backend uv run python -c "from auth.local_jwt import authenticate_credentials, issue_access_token, create_local_user, user_from_token; u=authenticate_credentials('admin@example.com','ci-admin-password-strong'); assert u is not None; t,_=issue_access_token(u); from auth.capability_access import GROUP_COLLECTION, PermissionGroup, refresh_authorization; from db.persistence import get_repository; g=PermissionGroup(id='ci-admin-group',tenantId='example.com',label='CI admin',role='tenant-admin'); get_repository().set_document(GROUP_COLLECTION,g.id,g.model_dump(by_alias=True)); create_local_user(email='admin@example.com',password='ci-admin-password-new',permission_group_ids=[g.id],overwrite=True); r=refresh_authorization(user_from_token(t)); assert r.uid==u.uid; assert 'tenant-admin:example.com' in r.group_tags and 'aitana-admin' not in r.group_tags; print('server-authoritative role reload OK')"
 
       - name: Verify bootstrap is idempotent
         run: |

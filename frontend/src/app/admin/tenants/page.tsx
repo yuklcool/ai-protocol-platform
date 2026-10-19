@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminScope } from "@/hooks/useAdminScope";
 import { SignInRequired } from "@/components/chat/SignInRequired";
+import {
+  ResourceChecklist,
+  type ResourceOption,
+} from "@/components/admin/ResourceChecklist";
 import { TenantRootEditor } from "@/components/admin/TenantRootEditor";
 import {
   action,
@@ -21,7 +25,7 @@ type Tenant = {
   displayName: string;
   domains: string[];
   enabledSkills?: string[] | null;
-  derivedGroupTags?: string[] | null;
+  enabledMcpServers?: string[];
   storageNamespace: string;
   documentsBucket?: string | null;
   disabled: boolean;
@@ -64,8 +68,10 @@ function Tenants() {
   const [draft, setDraft] = useState<Tenant | null>(null);
   const [editing, setEditing] = useState(false);
   const [domainsText, setDomainsText] = useState("");
-  const [tagsText, setTagsText] = useState("");
-  const [skillsText, setSkillsText] = useState("");
+  const [resources, setResources] = useState<{
+    skills: ResourceOption[];
+    mcpServers: ResourceOption[];
+  }>({ skills: [], mcpServers: [] });
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -96,20 +102,36 @@ function Tenants() {
     setEditing(exists);
     setValidation([]);
     setDomainsText(tenant.domains.join(", "));
-    setTagsText((tenant.derivedGroupTags ?? []).join(", "));
-    setSkillsText((tenant.enabledSkills ?? []).join(", "));
   };
+  const selectedTenantId = draft?.tenantId ?? "";
+  useEffect(() => {
+    setResources({ skills: [], mcpServers: [] });
+    if (!editing || !selectedTenantId) return;
+    let active = true;
+    consoleApi<{ skills: ResourceOption[]; mcpServers: ResourceOption[] }>(
+      `/admin/tenant-root/${encodeURIComponent(selectedTenantId)}/resources`,
+    )
+      .then((value) => {
+        if (active) setResources(value);
+      })
+      .catch((error) => {
+        if (active) setNotice(errorText(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedTenantId, editing]);
   const save = async () => {
     if (!draft) return;
     setBusy(true);
     setNotice("");
     setValidation([]);
     const body = {
-      tenant_id: draft.tenantId.trim(),
+      ...(editing ? {} : { tenant_id: draft.tenantId.trim() }),
       display_name: draft.displayName,
       domains: split(domainsText),
-      derived_group_tags: split(tagsText),
-      enabled_skills: split(skillsText),
+      enabled_skills: draft.enabledSkills ?? [],
+      enabled_mcp_servers: draft.enabledMcpServers ?? [],
       disabled: draft.disabled,
       ...(scope.isPlatform
         ? { model_policy: draft.modelPolicy, quota: draft.quota }
@@ -266,25 +288,32 @@ function Tenants() {
                   onChange={(e) => setDomainsText(e.target.value)}
                 />
               </Field>
-              <Field label={t("派生分组标签", "Derived group tags")}>
-                <input
-                  className={control}
-                  value={tagsText}
-                  onChange={(e) => setTagsText(e.target.value)}
-                />
-              </Field>
-              <Field
-                label={t(
-                  "可用 Skill 标识（留空继承）",
-                  "Enabled Skill slugs (empty inherits)",
-                )}
-              >
-                <input
-                  className={control}
-                  value={skillsText}
-                  onChange={(e) => setSkillsText(e.target.value)}
-                />
-              </Field>
+              {editing ? (
+                <>
+                  <ResourceChecklist
+                    label="租户允许的 Skills"
+                    options={resources.skills}
+                    selected={draft.enabledSkills ?? []}
+                    onChange={(enabledSkills) => patch({ enabledSkills })}
+                  />
+                  <ResourceChecklist
+                    label="租户允许的 MCP 服务器"
+                    options={resources.mcpServers}
+                    selected={draft.enabledMcpServers ?? []}
+                    onChange={(enabledMcpServers) =>
+                      patch({ enabledMcpServers })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground sm:col-span-2">
+                    空列表表示不允许。还需在 Root
+                    绑定资源，并通过权限组分配给用户。
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  先保存租户，再选择允许的 Skills 和 MCP。
+                </p>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request  # Depends used inside Annotated[]
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from admin import platform_seed
 from admin.accounts_routes import router as accounts_router
@@ -52,7 +52,7 @@ class AdminWhoAmI(BaseModel):
     """
 
     scope: str
-    domains: list[str] = []
+    tenant_ids: list[str] = Field(default_factory=list, alias="tenantIds")
     email: str = ""
 
 
@@ -61,10 +61,10 @@ def admin_whoami(user: Annotated[User, Depends(get_current_user)]) -> AdminWhoAm
     """Report the caller's admin scope. Any authenticated user; never 403."""
     resolved = resolve_admin_scope(user)
     if resolved is None:
-        return AdminWhoAmI(scope="none", domains=[], email=user.email or "")
+        return AdminWhoAmI(scope="none", tenantIds=[], email=user.email or "")
     if resolved.is_platform:
-        return AdminWhoAmI(scope="platform", domains=[], email=user.email or "")
-    return AdminWhoAmI(scope="tenant", domains=sorted(resolved.domains or ()), email=user.email or "")
+        return AdminWhoAmI(scope="platform", tenantIds=[], email=user.email or "")
+    return AdminWhoAmI(scope="tenant", tenantIds=sorted(resolved.tenant_ids or ()), email=user.email or "")
 
 
 @router.post("/seed-platform-skills")

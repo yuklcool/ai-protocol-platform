@@ -642,21 +642,7 @@ function renderSection(section: Section, c: RenderContext) {
         title={t("rootAgent.permissions.title")}
         hint={t("rootAgent.permissions.description")}
       >
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={config.permissions.failClosed === true}
-            onChange={(e) =>
-              setPatch({
-                permissions: {
-                  ...config.permissions,
-                  failClosed: e.target.checked,
-                },
-              })
-            }
-          />
-          {t("rootAgent.permissions.failClosed")}
-        </label>
+        <p className="text-sm">{t("rootAgent.permissions.failClosed")}</p>
         <div className="mt-3 flex items-start gap-2 rounded-md bg-primary/5 p-3 text-xs text-muted-foreground">
           <CircleAlert
             className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"

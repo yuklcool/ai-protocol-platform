@@ -12,8 +12,8 @@ interface SkillMeta {
   avatar: string | null;
   ownerId: string | null;
   slug: string | null;
-  /** MCP server IDs this skill is configured to use, sourced from
-   * skillMetadata.toolConfigs.mcp.servers. Empty array if none. The chat
+  /** 当前 Root Agent 已授权的 MCP 服务器，来自后端组合后的运行元数据。
+   * Empty array if none. The chat
    * page passes this to MessageBubble so MCPAppToolCallRouter can decide
    * which tool calls have a UI surface. */
   mcpServerIds: readonly string[];
@@ -65,7 +65,9 @@ interface SkillResponse {
   slug?: string | null;
   skillMetadata?: SkillMetadataResponse;
   skill_metadata?: SkillMetadataResponse;
-  persona?: { voice?: { enabled?: boolean; language?: string | null } | null } | null;
+  persona?: {
+    voice?: { enabled?: boolean; language?: string | null } | null;
+  } | null;
   initialMessage?: string;
   initial_message?: string;
   welcome?: WelcomeConfig | null;
@@ -111,13 +113,19 @@ function extractCanDelegate(data: SkillResponse): boolean {
   if (Array.isArray(subSkills) && subSkills.length > 0) return true;
 
   const delegation = meta?.delegation as
-    | { enabled?: unknown; allow?: unknown; discoverJobs?: unknown; discover_jobs?: unknown }
+    | {
+        enabled?: unknown;
+        allow?: unknown;
+        discoverJobs?: unknown;
+        discover_jobs?: unknown;
+      }
     | undefined;
   if (!delegation || delegation.enabled !== true) return false;
   // A curated door lists `allow`; a generic door sets `discoverJobs` and reaches
   // any accessible `job:true` skill with no allow entry at all (v6.8.0 8.3).
   // Either makes it a front door. Both alias spellings appear on the wire.
-  if (delegation.discoverJobs === true || delegation.discover_jobs === true) return true;
+  if (delegation.discoverJobs === true || delegation.discover_jobs === true)
+    return true;
   return Array.isArray(delegation.allow) && delegation.allow.length > 0;
 }
 
@@ -151,12 +159,20 @@ export function useSkillMeta(skillId: string): SkillMeta {
 
   useEffect(() => {
     let cancelled = false;
-    fetchWithAuth(skillId === "root-agent" ? "/api/proxy/api/agent" : `/api/proxy/api/agent/capabilities/${encodeURIComponent(skillId)}`)
+    fetchWithAuth(
+      skillId === "root-agent"
+        ? "/api/proxy/api/agent"
+        : `/api/proxy/api/agent/capabilities/${encodeURIComponent(skillId)}`,
+    )
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as SkillResponse;
         if (!cancelled) {
-          const display = data.displayName || data.display_name || data.name || skillId.slice(0, 8);
+          const display =
+            data.displayName ||
+            data.display_name ||
+            data.name ||
+            skillId.slice(0, 8);
           setDisplayName(display);
           setAvatar(data.avatar || null);
           setOwnerId(data.ownerId || data.owner_id || null);
@@ -182,5 +198,19 @@ export function useSkillMeta(skillId: string): SkillMeta {
     };
   }, [skillId]);
 
-  return { displayName, avatar, ownerId, slug, mcpServerIds, initialMessage, welcome, model, voice, a2ui, tools, canDelegate, loading };
+  return {
+    displayName,
+    avatar,
+    ownerId,
+    slug,
+    mcpServerIds,
+    initialMessage,
+    welcome,
+    model,
+    voice,
+    a2ui,
+    tools,
+    canDelegate,
+    loading,
+  };
 }

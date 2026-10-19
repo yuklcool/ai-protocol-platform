@@ -100,6 +100,9 @@ _INTERNAL_CONTROL_TOOLS = frozenset({"transfer_to_agent", "load_skill"})
 def make_permission_enforcer(
     user_email: str,
     user_domain: str,
+    *,
+    user: Any,
+    root_agent: bool,
 ) -> Any:
     """Return a ``before_tool_callback`` that enforces tool permissions."""
 
@@ -109,22 +112,27 @@ def make_permission_enforcer(
         tool_context: ToolContext,
     ) -> dict[str, Any] | None:
         tool_name = tool.name
-        # The trusted resource tool checks Root bindings and source ACLs itself.
-        # A remote MCP tool with the same name must not inherit this exemption.
-        if (
-            tool_name == "search_agent_knowledge"
-            and getattr(getattr(tool, "func", None), "__module__", "") == "agents.knowledge"
-        ):
-            return None
-        if tool_name in _INTERNAL_CONTROL_TOOLS:
-            return None
-        if not can_use_tool(user_email, user_domain, tool_name):
-            logger.info(
-                "perm: blocked %s for %s (tool=%s)",
-                user_email,
-                tool_context.agent_name,
-                tool_name,
-            )
+        from auth.capability_access import authorized_root_config, mcp_call_allowed
+        from config.platform_config import get_platform_config
+        from tools.mcp.registry import SERVER_ID_ATTR
+
+        server_id = getattr(tool, SERVER_ID_ATTR, None)
+        if isinstance(server_id, str) and server_id:
+            allowed = mcp_call_allowed(user, server_id, tool_name)
+        elif root_agent:
+            root = authorized_root_config(get_platform_config().agent, user)
+            denied = set(root.permissions.get("deniedTools") or [])
+            allowed = tool_name not in denied and "*" not in denied
+        else:
+            # 独立后台任务仍执行其工具策略。MCP 不经过此路径。
+            if (
+                tool_name == "search_agent_knowledge"
+                and getattr(getattr(tool, "func", None), "__module__", "") == "agents.knowledge"
+            ) or tool_name in _INTERNAL_CONTROL_TOOLS:
+                return None
+            allowed = can_use_tool(user_email, user_domain, tool_name)
+        if not allowed:
+            logger.info("perm: blocked %s for %s (tool=%s)", user_email, tool_context.agent_name, tool_name)
             raise ToolPermissionDenied(user_email, tool_name)
 
         # TTFT: emit a STAGE_PROGRESS label per tool call so the UI can

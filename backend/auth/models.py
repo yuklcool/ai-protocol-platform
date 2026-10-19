@@ -37,6 +37,7 @@ class User(BaseModel):
     group_tags: frozenset[str] = Field(default_factory=frozenset)
     auth_mode: str = "firebase"
     group_id: str = ""
+    permission_group_ids: frozenset[str] = Field(default_factory=frozenset)
 
 
 __all__ = ["User"]

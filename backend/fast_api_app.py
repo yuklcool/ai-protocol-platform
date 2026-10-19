@@ -346,25 +346,21 @@ from admin.access_routes import router as admin_access_router  # noqa: E402
 from admin.analytics_routes import router as admin_analytics_router  # noqa: E402
 from admin.audit_routes import router as admin_audit_router  # noqa: E402
 from admin.clients import me_router as clients_me_router  # noqa: E402
-from admin.clients import router as admin_clients_router  # noqa: E402
 from admin.compaction_replay_routes import router as admin_compaction_replay_router  # noqa: E402
 from admin.compaction_second_pass_routes import router as admin_compaction_second_pass_router  # noqa: E402
-from admin.group_tags_routes import members_router as admin_group_members_router  # noqa: E402
-from admin.group_tags_routes import router as admin_group_tags_router  # noqa: E402
+from admin.groups_routes import router as admin_groups_router  # noqa: E402
 from admin.platform_config_routes import router as admin_platform_config_router  # noqa: E402
 from admin.prewarm_routes import router as admin_prewarm_router  # noqa: E402
 from admin.routes import router as admin_router  # noqa: E402
 from admin.tenants import router as admin_tenants_router  # noqa: E402
-from admin.tool_permissions_routes import router as admin_tool_permissions_router  # noqa: E402
-from admin.users_routes import router as admin_users_router  # noqa: E402
 from agents.root_runtime import (  # noqa: E402
     ROOT_AGENT_ID,
     RootCapabilityDenied,
     compose_root_skill,
-    effective_root_config,
     resolve_root_capability,
 )
 from auth import User, get_current_user  # noqa: E402
+from auth.capability_access import authorized_root_config  # noqa: E402
 from auth.group_routes import router as group_auth_router  # noqa: E402
 from auth.routes import router as auth_router  # noqa: E402
 from buckets.routes import router as buckets_router  # noqa: E402
@@ -400,15 +396,11 @@ app.include_router(root_agent_router)
 app.include_router(buckets_router)
 app.include_router(admin_router)
 app.include_router(admin_prewarm_router)
-app.include_router(admin_clients_router)
 app.include_router(admin_tenants_router)
 app.include_router(admin_analytics_router)
 app.include_router(admin_audit_router)  # v6.16.0 P4 audit reader
-app.include_router(admin_users_router)
-app.include_router(admin_group_tags_router)  # v6.9.0 9.3 group-tag registry
-app.include_router(admin_group_members_router)  # v6.9.0 9.3 tag-holders reverse lookup
+app.include_router(admin_groups_router)
 app.include_router(admin_access_router)  # v6.9.0 9.3 effective-access dry-run
-app.include_router(admin_tool_permissions_router)  # v6.9.0 9.3 tool-permission admin plane
 app.include_router(admin_platform_config_router)  # v6.14.0 platform preamble admin plane
 app.include_router(admin_compaction_replay_router)  # compaction replay — read-only tuning tool
 app.include_router(admin_compaction_second_pass_router)  # second-pass recompact — MUTATES; admin/CLI path (1e)
@@ -877,10 +869,7 @@ async def stream_root_agent(
         idx = _require_session(body.effective_session_id)
         return await post_surface_action_run(idx.skill_id, idx.session_id, action_body, request, user)
     try:
-        root_config = effective_root_config(
-            get_platform_config().agent,
-            request.state.access.tenant_id,
-        )
+        root_config = authorized_root_config(get_platform_config().agent, user)
     except PlatformConfigUnavailable as exc:
         _log.error("root-agent policy unavailable; refusing request: %s", exc)
         raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc

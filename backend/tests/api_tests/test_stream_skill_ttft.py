@@ -63,7 +63,13 @@ def _make_skill(skill_id: str = "ttft-skill") -> SkillConfig:
 
 
 def _make_user() -> User:
-    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com", tenant_id="test-tenant")
+    return User(
+        uid="caller-uid",
+        email="caller@yourcompany.com",
+        domain="yourcompany.com",
+        tenant_id="test-tenant",
+        permission_group_ids=frozenset({"stream-tests"}),
+    )
 
 
 async def _fake_event_stream(input_data) -> AsyncGenerator:
@@ -116,6 +122,31 @@ def client(app):
         request.state.access = build_access_context(user)
         return user
 
+    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
+    from config.platform_config import invalidate_cache, update_platform_config
+    from db.models.root_agent import RootAgentConfig
+    from db.persistence import reset_repository_for_testing
+    from db.repositories.memory import MemoryRepository
+    from db.tenants import TenantConfig, TenantDirectory
+
+    repo = MemoryRepository()
+    reset_repository_for_testing(repo)
+    invalidate_cache(clear_last_known_good=True)
+    ids = ["test-skill-id", "tool-skill", "door-skill", "specialist-skill", "private-id", "capability-a", "ttft-skill"]
+    from skills.skill_config import _cache
+
+    _cache.clear()
+    for ref in ids:
+        repo.set_document("skills", ref, _make_skill(skill_id=ref).model_dump(by_alias=True))
+    TenantDirectory(repo).put(TenantConfig(tenantId="test-tenant", enabledSkills=ids))
+    repo.set_document(
+        GROUP_COLLECTION,
+        "stream-tests",
+        PermissionGroup(id="stream-tests", tenantId="test-tenant", label="stream tests", skills=ids).model_dump(
+            by_alias=True
+        ),
+    )
+    update_platform_config({"agent": RootAgentConfig(skills=ids).model_dump(by_alias=True)}, updated_by="test")
     app.dependency_overrides[get_current_user] = _override
     from skills import skill_processor
 
@@ -124,6 +155,7 @@ def client(app):
     ):
         yield TestClient(app)
     app.dependency_overrides.pop(get_current_user, None)
+    invalidate_cache(clear_last_known_good=True)
 
 
 def _parse_sse(text: str) -> list[dict]:

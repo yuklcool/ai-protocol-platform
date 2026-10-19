@@ -13,8 +13,7 @@ import os
 from typing import Any
 
 from auth.access_context import AccessContext
-from auth.firebase_auth import User
-from db.clients import resolve_enabled_skills
+from auth.models import User
 from db.models import DelegationConfig, FallbackConfig, SkillConfig, SkillMetadata, SkillPersona, SkillVoiceConfig
 from db.models.root_agent import RootAgentConfig
 from skills import platform
@@ -41,7 +40,7 @@ class RootCapabilityDenied(Exception):
 
 
 def effective_root_config(config: RootAgentConfig, tenant_id: str | None) -> RootAgentConfig:
-    """Apply the tenant policy overlay without widening the global policy.
+    """Apply the tenant policy overlay; tenant lists replace platform defaults.
 
     A tenant override is an explicit replacement for list-valued bindings, so
     tenant-private Skills do not need to be stored in the platform-wide
@@ -81,19 +80,16 @@ def _permission_values(permissions: dict[str, Any], *names: str) -> set[str]:
 
 
 def _configured_ref(config: RootAgentConfig, ref: str, user: User, access: AccessContext) -> SkillConfig | None:
+    from auth.access_context import build_access_context
+    from auth.capability_access import refresh_authorization
+
+    user = refresh_authorization(user)
+    access = build_access_context(user)
     skill = resolve_skill_ref(ref, getattr(user, "uid", None))
     if skill is None:
         return None
     if not access.can_access_skill(skill):
         return None
-
-    enabled = resolve_enabled_skills(user)
-    if enabled is not None:
-        # Tenant narrowing is an additional ceiling, never a grant.  Accept
-        # ids as well as slugs because RootAgentConfig stores stable resource
-        # references while old tenant records store slugs.
-        if skill.skill_id not in enabled and (skill.slug or "") not in enabled:
-            return None
 
     denied = _permission_values(config.permissions, "deniedSkills", "denied_skills")
     if ref in denied or skill.skill_id in denied or (skill.slug or "") in denied:
@@ -107,47 +103,20 @@ def resolve_root_capability(
     access: AccessContext,
     requested_ref: str | None = None,
 ) -> SkillConfig:
-    """Resolve exactly one accessible capability for this turn.
-
-    A configured ``skills`` list is a hard Root Agent ceiling.  Before the
-    migration is configured, a supplied capability hint is kept as a narrow
-    compatibility bridge; it is still checked by ACL and tenant policy and is
-    never expanded into a list of all skills.
-    """
-    configured = [str(ref) for ref in config.skills if str(ref).strip()]
-    fail_closed = (config.permissions or {}).get("failClosed") is True
+    """只加载当前授权列表中的 Skill; 空列表禁止所有额外能力。"""
     requested = (requested_ref or "").strip()
     if not requested or requested == ROOT_AGENT_ID:
         return root_agent_skill(config)
-    if requested:
-        # A fail-closed Root Agent cannot be widened by a client-supplied
-        # capability hint when the admin has not configured an allow-list.
-        # Keep the legacy compatibility bridge only when it is explicitly
-        # opted into by leaving failClosed false.
-        if fail_closed and not configured:
-            raise RootCapabilityDenied("Root Agent capability ceiling is empty")
-        if configured and requested not in configured:
-            requested_skill = resolve_skill_ref(requested, getattr(user, "uid", None))
-            if requested_skill is None or (
-                requested_skill.skill_id not in configured and (requested_skill.slug or "") not in configured
-            ):
-                raise RootCapabilityDenied("requested capability is outside the Root Agent ceiling")
-        skill = _configured_ref(config, requested, user, access)
-        if skill is None:
-            raise RootCapabilityDenied("requested capability is unavailable")
-        return skill
+    if not config.skills:
+        raise RootCapabilityDenied("requested capability is outside the Root Agent ceiling")
+    skill = _configured_ref(config, requested, user, access)
+    if skill is None or skill.skill_id not in config.skills:
+        raise RootCapabilityDenied("requested capability is unavailable")
+    return skill
 
 
 def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConfig:
     """Compose Root Agent policy over one capability without mutating storage."""
-    permissions = config.permissions or {}
-    strict = bool(
-        skill.skill_id == ROOT_AGENT_ID
-        or config.skills
-        or config.tools
-        or config.mcp_servers
-        or permissions.get("failClosed") is True
-    )
     metadata = skill.skill_metadata.model_copy(deep=True)
     tool_configs = dict(metadata.tool_configs or {})
     tool_configs["root_agent"] = {"enabled": True, "budget_enabled": config.budget_enabled}
@@ -168,27 +137,22 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
         maxDepth=1,
     )
 
-    if strict:
-        allowed_tools = set(config.tools)
-        # Root-level bindings are the authoritative capability set. This is
-        # intentionally not an intersection with the Skill's old list: a
-        # Root Agent tool may be bound once at the Agent level even when a
-        # legacy Skill never declared it.
-        metadata.tools = list(dict.fromkeys(config.tools))
+    allowed_tools = set(config.tools)
+    # Root-level bindings are the authoritative capability set. This is
+    # intentionally not an intersection with the Skill's old list: a
+    # Root Agent tool may be bound once at the Agent level even when a
+    # legacy Skill never declared it.
+    metadata.tools = list(dict.fromkeys(config.tools))
 
-        # The legacy factory adds artifact/memory defaults outside metadata.tools.
-        # Make the Root Agent ceiling apply to those defaults too.
-        defaults = dict(tool_configs.get("defaults") or {})
-        defaults["artifacts"] = "load_artifacts_tool" in allowed_tools or "retrieve_artifact" in allowed_tools
-        defaults["memory"] = "load_memory_tool" in allowed_tools or "preload_memory_tool" in allowed_tools
-        tool_configs["defaults"] = defaults
+    # The legacy factory adds artifact/memory defaults outside metadata.tools.
+    # Make the Root Agent ceiling apply to those defaults too.
+    defaults = dict(tool_configs.get("defaults") or {})
+    defaults["artifacts"] = "load_artifacts_tool" in allowed_tools or "retrieve_artifact" in allowed_tools
+    defaults["memory"] = "load_memory_tool" in allowed_tools or "preload_memory_tool" in allowed_tools
+    tool_configs["defaults"] = defaults
 
-        mcp = dict(tool_configs.get("mcp") or {})
-        # MCP servers are Root Agent bindings, not Skill-owned connections.
-        # The registry and tenant visibility checks still apply when the ADK
-        # toolset is resolved.
-        mcp["servers"] = list(dict.fromkeys(config.mcp_servers))
-        tool_configs["mcp"] = mcp
+    # MCP 连接只来自当前 Root 配置;Skill 内容不能附带连接或写入授权。
+    tool_configs["mcp"] = {"servers": list(dict.fromkeys(config.mcp_servers))}
 
     interaction = config.interaction
     a2ui = dict(tool_configs.get("a2ui") or {})

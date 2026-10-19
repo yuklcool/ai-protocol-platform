@@ -39,48 +39,37 @@ def test_admin_config_domains_round_trip_through_postgres(monkeypatch, tmp_path)
     assert platform_config.get_platform_config().preamble == preamble
     assert updated.updated_by == f"ci-{suffix}"
 
-    from admin import group_tags_routes
+    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
 
-    tag_id = f"CI-{suffix}"
+    group_id = f"group-{suffix}"
+    group = PermissionGroup(id=group_id, tenantId="tenant-a", label="postgres group")
+    repository.set_document(GROUP_COLLECTION, group_id, group.model_dump(by_alias=True))
+    assert repository.get_document(GROUP_COLLECTION, group_id)["label"] == "postgres group"
+
+    from auth import User
+    from observability.tenant_context import set_tenant_context
+    from tools.mcp.registry import _cached_server_config, clear_registry_cache
+
+    server_id = f"mcp-{suffix}"
     repository.set_document(
-        group_tags_routes.COLLECTION,
-        tag_id,
-        {"label": "CI group", "description": "postgres", "grants": []},
+        "mcp_servers",
+        server_id,
+        {
+            "url": "https://mcp.example.test/mcp",
+            "enabled": True,
+            "scope": "tenant",
+            "tenantId": "tenant-a",
+        },
     )
-    assert tag_id in group_tags_routes.registry_ids()
+    clear_registry_cache()
+    set_tenant_context(User(uid="viewer", tenant_id="tenant-a"))
+    assert _cached_server_config(server_id)["url"] == "https://mcp.example.test/mcp"
+    set_tenant_context(User(uid="viewer", tenant_id="tenant-b"))
+    assert _cached_server_config(server_id) is None
+    clear_registry_cache()
+    set_tenant_context(User(uid=""))
 
-    from admin.access_routes import _explain_tool
-    from auth import permissions as perms
-
-    email = f"alice-{suffix}@example.com"
-    repository.set_document(perms.COLLECTION, email, {"type": "user", "tools": ["search"]})
-    allowed, reason = _explain_tool(email, "example.com", "search")
-    assert allowed is True
-    assert "user-level" in reason
-
-    from admin.mcp_registry_check import verify_mcp_registry
-
-    server_id = "ext-apps-map"
-    repository.set_document("mcp_servers", server_id, {"url": "https://mcp.example.test/mcp"})
-    skill_dir = tmp_path / f"skill-{suffix}"
-    skill_dir.mkdir()
-    (skill_dir / "SKILL.md").write_text(
-        "---\n"
-        f"name: skill-{suffix}\n"
-        "description: postgres registry probe\n"
-        "metadata:\n"
-        "  toolConfigs:\n"
-        "    mcp:\n"
-        "      servers:\n"
-        f"        - {server_id}\n"
-        "---\n\nProbe.\n"
-    )
-    result = verify_mcp_registry(tmp_path, deployed=False)
-    assert result["ok"] is True
-    assert result["mcp_missing"] == []
-
-    repository.delete_document(group_tags_routes.COLLECTION, tag_id)
-    repository.delete_document(perms.COLLECTION, email)
+    repository.delete_document(GROUP_COLLECTION, group_id)
     repository.delete_document("mcp_servers", server_id)
     repository.delete_document(platform_config.COLLECTION, PLATFORM_CONFIG_DOC_ID)
     platform_config.invalidate_cache()

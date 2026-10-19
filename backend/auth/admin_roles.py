@@ -52,15 +52,6 @@ def tenant_admin_tenant_ids(group_tags: Iterable[str] | None) -> frozenset[str]:
     )
 
 
-def tenant_admin_domains(group_tags: Iterable[str] | None) -> frozenset[str]:
-    """Backward-compatible alias for pre-tenant-id call sites.
-
-    The returned suffixes are tenant ids. Legacy tenants whose ids are domains
-    therefore continue to behave exactly as before.
-    """
-    return tenant_admin_tenant_ids(group_tags)
-
-
 def is_tenant_admin(group_tags: Iterable[str] | None, tenant_id: str) -> bool:
     """True iff the caller may administer ``tenant_id``.
 
@@ -100,6 +91,5 @@ __all__ = [
     "is_platform_admin",
     "is_skill_admin",
     "is_tenant_admin",
-    "tenant_admin_domains",
     "tenant_admin_tenant_ids",
 ]

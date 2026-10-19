@@ -190,7 +190,7 @@ def test_group_tags_is_frozen() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_derived_group_tags_unioned_with_jwt_claim() -> None:
+async def test_old_derived_group_tags_cannot_grant_permissions() -> None:
     """acmeenergy.com user with no JWT groupTags gets ONE via clients/{domain}."""
     with (
         patch("firebase_admin.auth.verify_id_token") as mock_verify,
@@ -199,10 +199,10 @@ async def test_derived_group_tags_unioned_with_jwt_claim() -> None:
         mock_verify.return_value = _decoded(email="alice@acmeenergy.com")
         user = await get_current_user(_make_request({"Authorization": "Bearer good.jwt"}))
     assert user.domain == "acmeenergy.com"
-    assert user.group_tags == frozenset({"ONE"})
+    assert user.group_tags == frozenset()
 
 
-async def test_derived_tags_unioned_with_existing_jwt_tags() -> None:
+async def test_old_derived_tags_cannot_elevate_provider_claims() -> None:
     """JWT-provided tags survive — derived tags add to them, never replace."""
     with (
         patch("firebase_admin.auth.verify_id_token") as mock_verify,
@@ -210,7 +210,7 @@ async def test_derived_tags_unioned_with_existing_jwt_tags() -> None:
     ):
         mock_verify.return_value = _decoded(email="alice@acmeenergy.com", groupTags=["aitana-admin"])
         user = await get_current_user(_make_request({"Authorization": "Bearer good.jwt"}))
-    assert user.group_tags == frozenset({"ONE", "aitana-admin"})
+    assert user.group_tags == frozenset({"aitana-admin"})
 
 
 async def test_no_derived_tags_when_domain_unmapped() -> None:

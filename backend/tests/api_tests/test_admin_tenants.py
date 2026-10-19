@@ -97,26 +97,8 @@ def test_tenant_admin_cannot_manage_other_tenant() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_legacy_domain_request_creates_first_class_tenant(_repository) -> None:
-    with _allow_skill_validation(), patch("admin.tenants.record_admin_action"):
-        response = _client(_PLATFORM_ADMIN).post(
-            "/api/admin/tenants",
-            json={"domain": "legacy.example", "display_name": "Legacy"},
-        )
-
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["tenant_id"] == "legacy.example"
-    assert body["domain"] == "legacy.example"
-    assert body["config"]["tenantId"] == "legacy.example"
-    assert body["config"]["domains"] == ["legacy.example"]
-
-    tenant = _repository.get_document("tenants", "legacy.example")
-    mapping = _repository.get_document("tenant_domains", "legacy.example")
-    assert tenant is not None
-    assert mapping == {"domain": "legacy.example", "tenantId": "legacy.example"}
-    # New onboarding must not keep creating legacy client records.
-    assert _repository.get_document("clients", "legacy.example") is None
+def test_legacy_domain_request_is_rejected() -> None:
+    assert _client(_PLATFORM_ADMIN).post("/api/admin/tenants", json={"domain": "old.example"}).status_code == 422
 
 
 def test_explicit_tenant_supports_multiple_domains(_repository) -> None:

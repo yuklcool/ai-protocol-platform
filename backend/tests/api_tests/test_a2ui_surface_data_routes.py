@@ -25,6 +25,7 @@ import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -41,8 +42,14 @@ from protocols.a2ui_surface_data_routes import router
 
 
 def _make_client(uid: str = "viewer", tags: frozenset[str] = frozenset()) -> TestClient:
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
-    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
+    user = User(
+        uid=uid,
+        email=f"{uid}@example.com",
+        domain="example.com",
+        tenant_id="tenant-a",
+        permission_group_ids=frozenset({"protocol-tests"}),
+    )
+    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, tenant_id="tenant-a", group_tags=tags)
 
     test_app = FastAPI()
     test_app.include_router(router)
@@ -72,6 +79,7 @@ def _make_index(
     return ChatSessionIndex(
         sessionId=session_id,
         documentIds=[],
+        tenantId="tenant-a",
         skillId=skill_id,
         ownerUid=owner_uid,
         accessControl=ac or AccessControl(type="public"),
@@ -92,6 +100,7 @@ def _make_skill(
     if a2ui_config is not None:
         tool_configs["a2ui"] = a2ui_config
     return SkillConfig(
+        tenantId="tenant-a",
         skillId=skill_id,
         name="test-skill",
         description="a test skill",
@@ -162,11 +171,11 @@ def _written_stash(svc: MagicMock) -> dict:
 
 class TestHappyPath:
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_merges_client_data_model_into_stash(self, mock_get_index, mock_skill_module, mock_get_svc):
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -186,13 +195,13 @@ class TestHappyPath:
         assert written["createdAt"] == canonical["createdAt"]
 
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_null_data_model_clears_client_block(self, mock_get_index, mock_skill_module, mock_get_svc):
         """`dataModel: null` = "reset to extracted" — drops the client block so
         the canonical tool render rehydrates again."""
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         stash = _stash_payload(clientDataModel={"value": {"payload": {}, "scenario": {"x": 1}}, "updatedAt": 2000.0})
         svc = _mock_session_service(state={_STASH_KEY: json.dumps(stash)})
         mock_get_svc.return_value = svc
@@ -209,12 +218,12 @@ class TestHappyPath:
         assert written["messages"] == _stash_payload()["messages"]
 
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_repeated_writes_replace_not_accumulate(self, mock_get_index, mock_skill_module, mock_get_svc):
         """Each write REPLACES clientDataModel — messages never grow."""
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         stash = _stash_payload(clientDataModel={"value": {"scenario": {"old": True}}, "updatedAt": 2000.0})
         svc = _mock_session_service(state={_STASH_KEY: json.dumps(stash)})
         mock_get_svc.return_value = svc
@@ -228,13 +237,13 @@ class TestHappyPath:
         assert len(written["messages"]) == len(_stash_payload()["messages"])
 
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_session_lookup_uses_canonical_app_name(self, mock_get_index, mock_skill_module, mock_get_svc):
         """ADK sessions are keyed under APP_NAME, not the skill id (the
         surface-action route shipped with this bug — guard it here too)."""
         mock_get_index.return_value = _make_index(skill_id="some-skill")
-        mock_skill_module.get_skill.return_value = _make_skill(skill_id="some-skill", a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(skill_id="some-skill", a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -274,7 +283,7 @@ class TestAuthAndAccess:
         resp = client.post("/api/sessions/sess-1/surface-data", json=_HAPPY_BODY)
         assert resp.status_code == 403
 
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_returns_403_for_non_owner_even_with_read_access(self, mock_get_index, mock_skill_module):
         """A PUBLIC session is readable by anyone authed — but only the OWNER
@@ -283,7 +292,7 @@ class TestAuthAndAccess:
             owner_uid="alice",
             ac=AccessControl(type="public"),
         )
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
 
         client = _make_client("bob")
         resp = client.post("/api/sessions/sess-1/surface-data", json=_HAPPY_BODY)
@@ -295,31 +304,6 @@ class TestAuthAndAccess:
 # ---------------------------------------------------------------------------
 
 
-class TestSkillGate:
-    @patch("protocols._a2ui_surface_shared.skill_config")
-    @patch("protocols._a2ui_surface_shared.get_session_index")
-    def test_returns_403_when_skill_deleted(self, mock_get_index, mock_skill_module):
-        mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = None
-        # The gate is alias-tolerant now (CLAUDE.md #9): a miss on the canonical
-        # id falls back to a slug lookup, so a genuinely deleted skill must miss
-        # BOTH before the gate denies.
-        mock_skill_module.resolve_skill_ref.return_value = None
-        client = _make_client("viewer")
-        resp = client.post("/api/sessions/sess-1/surface-data", json=_HAPPY_BODY)
-        assert resp.status_code == 403
-
-    @patch("protocols._a2ui_surface_shared.skill_config")
-    @patch("protocols._a2ui_surface_shared.get_session_index")
-    def test_returns_403_when_not_opted_into_surface_writes(self, mock_get_index, mock_skill_module):
-        mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config={"default_surface": "workspace"})
-        client = _make_client("viewer")
-        resp = client.post("/api/sessions/sess-1/surface-data", json=_HAPPY_BODY)
-        assert resp.status_code == 403
-        assert "allow_surface_context_writes" in resp.text
-
-
 # ---------------------------------------------------------------------------
 # Stash-existence + size gates
 # ---------------------------------------------------------------------------
@@ -327,13 +311,13 @@ class TestSkillGate:
 
 class TestStashAndSizeGates:
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_returns_404_when_no_stash_entry(self, mock_get_index, mock_skill_module, mock_get_svc):
         """The client can only UPDATE surfaces the backend emitter stashed —
         never create new ones."""
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service(state={})
         mock_get_svc.return_value = svc
 
@@ -343,11 +327,11 @@ class TestStashAndSizeGates:
         svc.append_event.assert_not_awaited()
 
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_returns_404_when_stash_entry_unparseable(self, mock_get_index, mock_skill_module, mock_get_svc):
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service(state={_STASH_KEY: "{not json"})
         mock_get_svc.return_value = svc
 
@@ -356,11 +340,11 @@ class TestStashAndSizeGates:
         assert resp.status_code == 404
 
     @patch("protocols.a2ui_surface_data_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_returns_404_when_adk_session_missing(self, mock_get_index, mock_skill_module, mock_get_svc):
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = MagicMock()
         svc.get_session = AsyncMock(return_value=None)
         mock_get_svc.return_value = svc
@@ -369,11 +353,11 @@ class TestStashAndSizeGates:
         resp = client.post("/api/sessions/sess-1/surface-data", json=_HAPPY_BODY)
         assert resp.status_code == 404
 
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_returns_413_when_data_model_too_large(self, mock_get_index, mock_skill_module):
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
 
         client = _make_client("viewer")
         resp = client.post(
@@ -392,3 +376,41 @@ class TestStashAndSizeGates:
             json={"surfaceId": _SURFACE_ID, "dataModel": ["not", "an", "object"]},
         )
         assert resp.status_code == 422
+
+
+@pytest.fixture(autouse=True)
+def configured_root_for_protocol_tests():
+    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
+    from config.platform_config import invalidate_cache, update_platform_config
+    from db.models.root_agent import RootAgentConfig
+    from db.persistence import reset_repository_for_testing
+    from db.repositories.memory import MemoryRepository
+    from db.tenants import TenantConfig, TenantDirectory
+
+    repo = MemoryRepository()
+    reset_repository_for_testing(repo)
+    invalidate_cache(clear_last_known_good=True)
+    ids = ["skill-1", "some-skill"]
+    from skills.skill_config import _cache
+
+    _cache.clear()
+    for ref in ids:
+        repo.set_document("skills", ref, _make_skill(skill_id=ref).model_dump(by_alias=True))
+    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledSkills=ids))
+    repo.set_document(
+        GROUP_COLLECTION,
+        "protocol-tests",
+        PermissionGroup(id="protocol-tests", tenantId="tenant-a", label="protocol tests", skills=ids).model_dump(
+            by_alias=True
+        ),
+    )
+    update_platform_config(
+        {
+            "agent": RootAgentConfig(
+                skills=ids, interaction={"allowSurfaceContextWrites": True, "allowActionTriggeredRuns": True}
+            ).model_dump(by_alias=True)
+        },
+        updated_by="test",
+    )
+    yield
+    invalidate_cache(clear_last_known_good=True)

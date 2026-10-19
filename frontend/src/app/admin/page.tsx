@@ -67,11 +67,6 @@ const AREAS: Area[] = [
         label: "admin.area.people.groups",
         note: "admin.area.people.groupsNote",
       },
-      {
-        href: "/admin/tool-permissions",
-        label: "admin.area.people.tools",
-        note: "admin.area.people.toolsNote",
-      },
     ],
   },
   {
@@ -138,16 +133,21 @@ const AREAS: Area[] = [
 export default function AdminHub() {
   const { t } = useI18n();
   const { user, loading } = useAuth();
-  const { state, domains, isAdmin, isPlatform, recheck } = useAdminScope(!loading && !!user);
+  const { state, tenantIds, isAdmin, isPlatform, recheck } = useAdminScope(
+    !loading && !!user,
+  );
 
-  if (loading || state === "loading") return <Centered>{t("admin.loading")}</Centered>;
+  if (loading || state === "loading")
+    return <Centered>{t("admin.loading")}</Centered>;
   if (!user) return <SignInRequired />;
 
   if (state === "error") {
     return (
       <Centered>
         <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">{t("admin.accessCheckFailed")}</h1>
+          <h1 className="mb-2 text-lg font-semibold">
+            {t("admin.accessCheckFailed")}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {t("admin.accessConnectionProblem")}
           </p>
@@ -161,8 +161,12 @@ export default function AdminHub() {
       <Centered>
         <div className="max-w-md text-center">
           <h1 className="mb-2 text-lg font-semibold">{t("admin.only")}</h1>
-          <p className="text-sm text-muted-foreground">{t("admin.onlyDescription")}</p>
-          <p className="mt-3 text-sm text-muted-foreground">{t("admin.justGranted")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("admin.onlyDescription")}
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {t("admin.justGranted")}
+          </p>
           <button
             type="button"
             onClick={() => void recheck()}
@@ -183,9 +187,9 @@ export default function AdminHub() {
         <div>
           <h1 className="text-xl font-semibold">{t("admin.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("admin.subtitle")}</p>
-          {!isPlatform && domains.length > 0 && (
+          {!isPlatform && tenantIds.length > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {t("admin.scopedTo", { domains: domains.join(", ") })}
+              {t("admin.scopedTo", { domains: tenantIds.join(", ") })}
             </p>
           )}
         </div>
@@ -195,7 +199,9 @@ export default function AdminHub() {
         {areas.map((area) => (
           <section key={area.title} className="rounded-lg border p-4">
             <h2 className="font-medium">{t(area.title)}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t(area.question)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t(area.question)}
+            </p>
             <ul className="mt-3 space-y-1.5">
               {area.links.map((link) => (
                 <li key={link.label}>
@@ -206,7 +212,9 @@ export default function AdminHub() {
                     {t(link.label)}
                   </NextLink>
                   {link.note && (
-                    <span className="ml-2 text-xs text-muted-foreground">{t(link.note)}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {t(link.note)}
+                    </span>
                   )}
                 </li>
               ))}
@@ -219,5 +227,9 @@ export default function AdminHub() {
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center p-8">
+      {children}
+    </main>
+  );
 }

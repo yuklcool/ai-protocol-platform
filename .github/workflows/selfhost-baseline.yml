@@ -47,12 +47,9 @@ on:
       - backend/admin/clients.py
       - backend/admin/tool_permissions_routes.py
       - backend/admin/access_routes.py
-      - backend/admin/group_tags_routes.py
-      - backend/admin/mcp_registry_check.py
-      - backend/tests/api_tests/test_admin_clients.py
-      - backend/tests/api_tests/test_admin_tool_permissions.py
-      - backend/tests/api_tests/test_admin_access.py
-      - backend/tests/api_tests/test_admin_group_tags.py
+      - backend/admin/groups_routes.py
+      - backend/auth/capability_access.py
+      - backend/tests/api_tests/test_permission_groups.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_upload.py
@@ -75,7 +72,6 @@ on:
       - backend/tests/unit/test_document_folders_persistence.py
       - backend/tests/unit/test_permissions.py
       - backend/tests/unit/test_platform_config.py
-      - backend/tests/unit/test_mcp_registry_check.py
       - backend/tests/unit/test_postgres_memory.py
       - backend/tests/unit/test_postgres_session_memory_factories.py
       - backend/tests/unit/test_session_factories.py
@@ -128,12 +124,9 @@ on:
       - backend/admin/clients.py
       - backend/admin/tool_permissions_routes.py
       - backend/admin/access_routes.py
-      - backend/admin/group_tags_routes.py
-      - backend/admin/mcp_registry_check.py
-      - backend/tests/api_tests/test_admin_clients.py
-      - backend/tests/api_tests/test_admin_tool_permissions.py
-      - backend/tests/api_tests/test_admin_access.py
-      - backend/tests/api_tests/test_admin_group_tags.py
+      - backend/admin/groups_routes.py
+      - backend/auth/capability_access.py
+      - backend/tests/api_tests/test_permission_groups.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_upload.py
@@ -156,7 +149,6 @@ on:
       - backend/tests/unit/test_document_folders_persistence.py
       - backend/tests/unit/test_permissions.py
       - backend/tests/unit/test_platform_config.py
-      - backend/tests/unit/test_mcp_registry_check.py
       - backend/tests/unit/test_postgres_memory.py
       - backend/tests/unit/test_postgres_session_memory_factories.py
       - backend/tests/unit/test_session_factories.py
@@ -263,11 +255,7 @@ jobs:
               tests/unit/test_permissions.py \
               tests/unit/test_skill_config.py \
               tests/unit/test_platform_config.py \
-              tests/unit/test_mcp_registry_check.py \
-              tests/api_tests/test_admin_clients.py \
-              tests/api_tests/test_admin_tool_permissions.py \
-              tests/api_tests/test_admin_access.py \
-              tests/api_tests/test_admin_group_tags.py \
+              tests/api_tests/test_permission_groups.py \
               tests/api_tests/test_sessions_recent.py \
               tests/api_tests/test_sessions_route.py
           docker compose run --rm --no-deps \
@@ -275,7 +263,7 @@ jobs:
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
             -e GROUP_AUTH_SIGNING_SECRET=ci-group-auth-repository-secret \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, tool_permissions_routes, access_routes, group_tags_routes, mcp_registry_check; from auth import group_id_auth, permissions; from config import platform_config; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); platform_config.invalidate_cache(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, accounts_routes, access_routes, groups_routes; from auth import group_id_auth, permissions; from config import platform_config; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); platform_config.invalidate_cache(); print('migrated persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |

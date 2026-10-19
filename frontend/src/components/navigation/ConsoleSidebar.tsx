@@ -61,12 +61,6 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     items: [
       { href: "/skills", zh: "Skills", en: "Skills", icon: Sparkles },
       {
-        href: "/admin/tool-permissions",
-        zh: "Tools",
-        en: "Tools",
-        icon: Wrench,
-      },
-      {
         href: "/admin/mcp-servers",
         zh: "MCP Servers",
         en: "MCP Servers",
@@ -84,9 +78,14 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "管理",
     en: "Administration",
     items: [
-      { href: "/admin/tenants", zh: "Tenants", en: "Tenants", icon: Building2 },
-      { href: "/admin/users", zh: "Users", en: "Users", icon: UsersRound },
-      { href: "/admin/groups", zh: "Groups", en: "Groups", icon: ShieldCheck },
+      {
+        href: "/admin/tenants",
+        zh: "租户管理",
+        en: "Tenants",
+        icon: Building2,
+      },
+      { href: "/admin/users", zh: "用户管理", en: "Users", icon: UsersRound },
+      { href: "/admin/groups", zh: "权限组", en: "Groups", icon: ShieldCheck },
       { href: "/admin/analytics", zh: "Usage", en: "Usage", icon: Activity },
       { href: "/admin/audit", zh: "Audit", en: "Audit", icon: ScrollText },
     ],

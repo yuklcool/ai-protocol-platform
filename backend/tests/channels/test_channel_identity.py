@@ -127,7 +127,7 @@ class TestAuthoritativeResolution:
 
         assert user.group_tags == frozenset()
 
-    def test_derived_domain_tags_are_unioned_not_forked(self, enrichment_on: None) -> None:
+    def test_derived_domain_tags_cannot_grant_channel_permissions(self, enrichment_on: None) -> None:
         """Reuses `_apply_derived_group_tags` — same union as the JWT path."""
         with (
             patch(
@@ -138,7 +138,7 @@ class TestAuthoritativeResolution:
         ):
             user = _build_channel_user("uid-1")
 
-        assert user.group_tags == frozenset({"BASE", "ONE"})
+        assert user.group_tags == frozenset({"BASE"})
 
     def test_malformed_claim_grants_nothing(self, enrichment_on: None) -> None:
         """A non-iterable groupTags claim must not raise or grant."""

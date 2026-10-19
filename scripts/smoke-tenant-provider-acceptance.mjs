@@ -341,11 +341,6 @@ async function main() {
       [tokenA, tenantA, SERVER_A, "Tenant A"],
       [tokenB, tenantB, SERVER_B, "Tenant B"],
     ]) {
-      await jsonApi(token, "/api/admin/tool-permissions/" + encodeURIComponent("tenant:" + tenantId), "PUT", {
-        type: "tenant",
-        tools: ["geocode", "show-map"],
-        denied: [],
-      });
       await jsonApi(token, "/api/admin/mcp-servers/" + serverId, "PUT", {
         url: MCP_URL,
         transport: "streamable-http",
@@ -361,7 +356,7 @@ async function main() {
         label + " MCP discovery did not expose show-map",
       );
     }
-    ok("Tenant-scoped MCP bindings and fail-closed Tool Permissions");
+    ok("Tenant-scoped MCP registration and discovery");
 
     const platformConfig = await jsonApi(adminToken, "/api/admin/platform-config", "GET");
     assert(platformConfig.body && platformConfig.body.agent, "platform config did not return a Root Agent policy");
@@ -401,7 +396,6 @@ async function main() {
           enableConfirmation: false,
           toolConfigs: {
             defaults: { artifacts: false, memory: false },
-            mcp: { servers: [serverId] },
             budget: {
               identity_key: "tenant_id",
               missing_identity_policy: "block",
@@ -417,6 +411,23 @@ async function main() {
     skillA = await createTenantSkill(tokenA, "Tenant A", MODEL_A, SERVER_A, MARKER_A);
     skillB = await createTenantSkill(tokenB, "Tenant B", MODEL_B, SERVER_B, MARKER_B);
     ok("Tenant-private Root Agent capabilities created");
+    for (const [tenantId, skillId, serverId, modelId, groupId] of [
+      [tenantA, skillA, SERVER_A, MODEL_A, fixture.group_a],
+      [tenantB, skillB, SERVER_B, MODEL_B, fixture.group_b],
+    ]) {
+      await jsonApi(adminToken, "/api/admin/tenants/" + tenantId, "PATCH", {
+        enabled_skills: [skillId], enabled_mcp_servers: [serverId],
+      });
+      await jsonApi(adminToken, "/api/admin/tenant-root/" + tenantId, "PUT", {
+        override: { model: modelId, budgetEnabled: true, skills: [skillId], mcpServers: [serverId], tools: [], knowledge: [], specialistAgents: [] },
+      });
+      await jsonApi(adminToken, "/api/admin/groups/" + groupId, "PUT", {
+        id: groupId, tenantId, label: "Real provider acceptance", role: "tenant-admin",
+        skills: [skillId], mcpServers: [serverId],
+      });
+    }
+    ok("Root, tenant allowlists and real permission-group grants are configured");
+
 
     const firstA = await rootStream(tokenA, skillA, "Tenant A first budgeted tool run");
     assertSuccessfulToolRun(firstA, MARKER_A, "Tenant A first run");

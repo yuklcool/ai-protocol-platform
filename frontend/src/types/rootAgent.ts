@@ -43,7 +43,7 @@ export const DEFAULT_ROOT_AGENT_CONFIG: RootAgentConfig = {
     welcomeMessage: "",
     voiceEnabled: false,
   },
-  permissions: { failClosed: false },
+  permissions: {},
   specialistAgents: [],
   tenantOverrides: {},
 };

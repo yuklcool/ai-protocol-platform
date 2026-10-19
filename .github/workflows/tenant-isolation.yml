@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - backend/auth/models.py
+      - backend/auth/capability_access.py
       - backend/auth/access_context.py
       - backend/auth/local_jwt.py
       - backend/auth/firebase_auth.py
@@ -12,14 +13,13 @@ on:
       - backend/auth/permissions.py
       - backend/auth/routes.py
       - backend/admin/audit*.py
-      - backend/admin/tool_permissions_routes.py
+      - backend/admin/groups_routes.py
       - backend/admin/tenant_model_policy_routes.py
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/api_tests/test_admin_audit_read.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_stream_skill.py
-      - backend/tests/api_tests/test_admin_tool_permissions.py
-      - backend/tests/api_tests/test_admin_tenant_tool_permissions.py
+      - backend/tests/api_tests/test_permission_groups.py
       - backend/tests/api_tests/test_admin_tenant_model_policy.py
       - backend/tests/api_tests/test_tenant_models_route.py
       - backend/admin/scope.py
@@ -70,6 +70,7 @@ on:
   pull_request:
     paths:
       - backend/auth/models.py
+      - backend/auth/capability_access.py
       - backend/auth/access_context.py
       - backend/auth/local_jwt.py
       - backend/auth/firebase_auth.py
@@ -77,14 +78,13 @@ on:
       - backend/auth/permissions.py
       - backend/auth/routes.py
       - backend/admin/audit*.py
-      - backend/admin/tool_permissions_routes.py
+      - backend/admin/groups_routes.py
       - backend/admin/tenant_model_policy_routes.py
       - backend/tests/unit/test_admin_audit.py
       - backend/tests/api_tests/test_admin_audit_read.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_stream_skill.py
-      - backend/tests/api_tests/test_admin_tool_permissions.py
-      - backend/tests/api_tests/test_admin_tenant_tool_permissions.py
+      - backend/tests/api_tests/test_permission_groups.py
       - backend/tests/api_tests/test_admin_tenant_model_policy.py
       - backend/tests/api_tests/test_tenant_models_route.py
       - backend/admin/scope.py
@@ -163,8 +163,7 @@ jobs:
             tests/api_tests/test_admin_audit_read.py \
             tests/api_tests/test_sessions_route.py \
             tests/api_tests/test_stream_skill.py \
-            tests/api_tests/test_admin_tool_permissions.py \
-            tests/api_tests/test_admin_tenant_tool_permissions.py \
+            tests/api_tests/test_permission_groups.py \
             tests/api_tests/test_admin_tenant_model_policy.py \
             tests/api_tests/test_tenant_models_route.py \
             tests/unit/test_permissions.py \

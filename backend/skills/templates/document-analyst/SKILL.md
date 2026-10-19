@@ -42,22 +42,6 @@ metadata:
       # the field round-trips through SkillConfig with no behaviour
       # change. See docs/design/v6.2.0/implemented/multi-surface-rendering.md.
       default_surface: workspace
-    mcp:
-      # MCP servers this skill may invoke. Surfaced via useSkillMeta to
-      # MCPAppToolCallRouter on the frontend. Server config (URL, transport,
-      # headers) lives in Firestore mcp_servers/{id}. Seed locally with
-      # backend/scripts/seed_mcp_servers.py. See
-      # docs/design/v6.1.0/mcp-app-integrations.md.
-      servers:
-        - ext-apps-map
-      # Per-server opt-in: which servers' iframes are allowed to push
-      # `ui/update-model-context` into this skill's session state for the
-      # agent's NEXT-turn context (sprint 1.25). Distinct from `servers`
-      # so "skill activates server" doesn't auto-grant "iframe writes
-      # context" — those are different trust grants. See
-      # docs/design/v6.1.0/mcp-app-update-model-context.md.
-      allow_context_writes:
-        - ext-apps-map
 # v6.4.0 SHELL-MODES: standing public demo of the workbench-primary page shell.
 # The workbench (workspace A2UI surface — structured extractions + the
 # ext-apps-map MCP app) fills the viewport; chat is a left drawer, open by

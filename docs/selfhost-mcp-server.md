@@ -37,9 +37,9 @@ X-Api-Key=${MCP_API_KEY}
 
 ## 4. Root 绑定和工具权限
 
-在 `/agent` 的“MCP”勾选服务，保存；在工具规则允许实际发现的工具，并检查租户归属和 Root 权限。使用 `/chat/root-agent` 提出具体任务，观察模型真实选择和执行工具。
+在 `/agent` 或租户 Root 覆盖中绑定服务，保存；在租户允许资源中选中，再通过权限组分配给用户。使用 `/chat/root-agent` 提出具体任务，观察模型真实选择和执行工具。
 
-管理页保留“绑定 Skill”的兼容操作，写入旧 `skillMetadata.toolConfigs.mcp.servers`。它不替代当前 Root 的显式绑定，也不会绕过 Skill 或工具权限。
+Skill 不配置 MCP 连接。旧“绑定 Skill”入口、运行时与代理中的 Skill 回退已删除；Skill 写入接口收到 `toolConfigs.mcp` 会返回 422。当前 Root 的 MCP 列表为空时不允许使用任何 MCP。MCP Apps 上下文写入也必须通过当前授权及 Root 交互开关，旧会话不能恢复旧绑定。
 
 ## 5. MCP Apps 浏览器验证
 

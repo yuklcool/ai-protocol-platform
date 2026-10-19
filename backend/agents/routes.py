@@ -2,8 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from agents.root_runtime import RootCapabilityDenied, compose_root_skill, effective_root_config, resolve_root_capability
+from agents.root_runtime import RootCapabilityDenied, compose_root_skill, resolve_root_capability
 from auth import User, get_current_user
+from auth.capability_access import authorized_root_config
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from skills.routes import SkillResponse
 
@@ -18,7 +19,7 @@ def get_agent_metadata(
     user: User = Depends(get_current_user),  # noqa: B008
 ) -> SkillResponse:
     try:
-        config = effective_root_config(get_platform_config().agent, request.state.access.tenant_id)
+        config = authorized_root_config(get_platform_config().agent, user)
         skill = resolve_root_capability(config, user, request.state.access, capability_ref)
     except PlatformConfigUnavailable as exc:
         raise HTTPException(503, "Root Agent policy is temporarily unavailable") from exc

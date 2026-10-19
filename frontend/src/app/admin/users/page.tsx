@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminScope } from "@/hooks/useAdminScope";
 import { SignInRequired } from "@/components/chat/SignInRequired";
-import { LocalAccountsPanel } from "@/components/admin/LocalAccountsPanel";
+import { ResourceChecklist } from "@/components/admin/ResourceChecklist";
 import {
   action,
   consoleApi,
@@ -13,76 +13,125 @@ import {
   Field,
   jsonBody,
   Notice,
-  useConsoleCopy,
 } from "@/components/admin/ConsolePrimitives";
 
-type UserGroups = {
+type Account = {
   email: string;
   uid: string;
-  group_tags: string[];
-  propagation?: { effective: string };
+  tenantId: string;
+  permissionGroupIds: string[];
+  disabled: boolean;
+  platformAdmin: boolean;
 };
-type Access = { tags: Array<{ tag: string; provenances: string[] }> };
+type Tenant = { tenantId: string; displayName: string; disabled: boolean };
+type Group = {
+  id: string;
+  tenantId: string;
+  label: string;
+  role: "member" | "tenant-admin";
+};
+type Access = {
+  skills: { id: string; label: string }[];
+  mcpServers: string[];
+  reason: string;
+};
+
 export default function UsersPage() {
   const { user, loading } = useAuth();
-  const t = useConsoleCopy();
-  if (loading) return <main className="p-8">{t("加载中…", "Loading…")}</main>;
+  if (loading) return <main className="p-8">加载中…</main>;
   if (!user) return <SignInRequired />;
   return <Users />;
 }
 function Users() {
-  const t = useConsoleCopy();
   const scope = useAdminScope();
-  const [backend, setBackend] = useState("");
-  const [email, setEmail] = useState("");
-  const [data, setData] = useState<UserGroups | null>(null);
-  const [tag, setTag] = useState("");
+  const [rows, setRows] = useState<Account[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [provider, setProvider] = useState("");
+  const [draft, setDraft] = useState<Account | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [password, setPassword] = useState("");
+  const [q, setQ] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [access, setAccess] = useState<Access | null>(null);
-  useEffect(() => {
-    consoleApi<{ backend: string }>("/auth/provider")
-      .then((result) => setBackend(result.backend))
-      .catch((error) => setNotice(errorText(error)));
+  const [preview, setPreview] = useState<{
+    email: string;
+    result: Access;
+  } | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const [accounts, directory, permissions, identity] = await Promise.all([
+        consoleApi<Account[]>("/admin/accounts"),
+        consoleApi<Tenant[]>("/admin/tenants"),
+        consoleApi<Group[]>("/admin/groups"),
+        consoleApi<{ backend: string }>("/auth/provider"),
+      ]);
+      setRows(accounts);
+      setTenants(directory);
+      setGroups(permissions);
+      setProvider(identity.backend);
+    } catch (error) {
+      setNotice(errorText(error));
+    }
   }, []);
-  const lookup = async (value: string) => {
-    setEmail(value);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const patch = (next: Partial<Account>) =>
+    setDraft((current) => (current ? { ...current, ...next } : current));
+  const save = async () => {
+    if (!draft) return;
     setBusy(true);
     setNotice("");
-    setAccess(null);
-    setData(null);
+    setPreview(null);
     try {
-      setData(
-        await consoleApi<UserGroups>(
-          `/admin/users/${encodeURIComponent(value.trim())}`,
-        ),
+      const endpoint = `/admin/accounts${creating ? "" : `/${encodeURIComponent(draft.email)}`}`;
+      await consoleApi(
+        endpoint,
+        jsonBody(creating ? "POST" : "PATCH", {
+          ...(creating
+            ? { email: draft.email, password, tenant_id: draft.tenantId }
+            : { disabled: draft.disabled }),
+          permission_group_ids: draft.permissionGroupIds,
+        }),
       );
+      setPassword("");
+      setDraft(null);
+      await load();
+      setNotice("账号与权限组已保存，授权在后续请求生效。");
     } catch (error) {
       setNotice(errorText(error));
     } finally {
       setBusy(false);
     }
   };
-  const changeTag = async (remove?: string) => {
-    if (!data) return;
+  const resetPassword = async () => {
+    if (!draft || !password) return;
     setBusy(true);
-    setNotice("");
     try {
-      const result = await consoleApi<UserGroups>(
-        `/admin/users/${encodeURIComponent(data.email)}/groups${remove ? `/${encodeURIComponent(remove)}` : ""}`,
-        remove ? { method: "DELETE" } : jsonBody("POST", { tag: tag.trim() }),
+      await consoleApi(
+        `/admin/accounts/${encodeURIComponent(draft.email)}/password`,
+        jsonBody("POST", { password }),
       );
-      setData(result);
-      setTag("");
-      setAccess(null);
-      setNotice(
-        result.propagation?.effective === "immediate"
-          ? t("权限已立即更新。", "Permissions updated immediately.")
-          : t(
-              "权限已保存，下次登录或令牌刷新后生效。",
-              "Permissions saved. They apply after the next sign-in or token refresh.",
-            ),
-      );
+      setPassword("");
+      setNotice("密码已重置，原有令牌已失效。");
+    } catch (error) {
+      setNotice(errorText(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const inspect = async (email: string) => {
+    setBusy(true);
+    setPreview(null);
+    try {
+      setPreview({
+        email,
+        result: await consoleApi<Access>(
+          "/admin/access/check",
+          jsonBody("POST", { email }),
+        ),
+      });
     } catch (error) {
       setNotice(errorText(error));
     } finally {
@@ -91,137 +140,233 @@ function Users() {
   };
   return (
     <main className="mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
-      <header>
-        <h1 className="text-xl font-semibold">{t("用户管理", "Users")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t(
-            "管理本地账号及用户分组授权。外部身份源的账号由对应身份服务维护。",
-            "Manage local accounts and group grants. External-provider accounts are managed by that identity service.",
-          )}
-        </p>
-      </header>
-      <Notice>{notice}</Notice>
-      {backend === "local-jwt" && scope.isPlatform && (
-        <LocalAccountsPanel
-          onSelect={(value) => {
-            void lookup(value);
-          }}
-        />
-      )}
-      {backend === "oidc" ? (
-        <Notice>
-          {t(
-            "当前使用 OIDC。请在身份服务中维护账号与分组，重新登录后同步。",
-            "OIDC is active. Manage accounts and groups in your identity provider, then sign in again.",
-          )}
-        </Notice>
-      ) : (
-        <section className="space-y-4 rounded-lg border p-5">
-          <h2 className="font-medium">
-            {t("用户分组授权", "User group grants")}
-          </h2>
-          <form
-            className="flex items-end gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void lookup(email);
+      <header className="flex flex-wrap justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">用户管理</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            选择用户所属租户和权限组，即可完成授权。平台超级管理员账号受保护。
+          </p>
+        </div>
+        {provider === "local-jwt" && (
+          <button
+            className={action}
+            disabled={busy || !tenants.some((tenant) => !tenant.disabled)}
+            onClick={() => {
+              setCreating(true);
+              setPassword("");
+              setDraft({
+                email: "",
+                uid: "",
+                tenantId:
+                  tenants.find((tenant) => !tenant.disabled)?.tenantId ?? "",
+                permissionGroupIds: [],
+                disabled: false,
+                platformAdmin: false,
+              });
             }}
           >
-            <div className="flex-1">
-              <Field label={t("邮箱", "Email")}>
+            新建用户
+          </button>
+        )}
+      </header>
+      <Notice>{notice}</Notice>
+      {provider === "oidc" && (
+        <p className="text-sm text-muted-foreground">
+          登录身份和密码由 OIDC
+          身份源管理，此处管理已关联账号的权限组与启用状态。
+        </p>
+      )}
+      {draft && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+          className="space-y-4 rounded-xl border p-5"
+        >
+          <h2 className="font-medium">
+            {creating ? "新建用户" : `编辑 ${draft.email}`}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="邮箱">
+              <input
+                className={control}
+                type="email"
+                value={draft.email}
+                disabled={!creating || busy}
+                onChange={(event) => patch({ email: event.target.value })}
+                required
+              />
+            </Field>
+            <Field label="所属租户">
+              <select
+                className={control}
+                value={draft.tenantId}
+                disabled={!creating || busy}
+                onChange={(event) =>
+                  patch({
+                    tenantId: event.target.value,
+                    permissionGroupIds: [],
+                  })
+                }
+                required
+              >
+                {tenants.map((tenant) => (
+                  <option
+                    key={tenant.tenantId}
+                    value={tenant.tenantId}
+                    disabled={tenant.disabled}
+                  >
+                    {tenant.displayName || tenant.tenantId}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <ResourceChecklist
+            label="权限组（可多选）"
+            options={groups
+              .filter((group) => group.tenantId === draft.tenantId)
+              .map((group) => ({ id: group.id, label: group.label }))}
+            selected={draft.permissionGroupIds}
+            onChange={(permissionGroupIds) => patch({ permissionGroupIds })}
+          />
+          {provider === "local-jwt" && (
+            <div className="flex items-end gap-2">
+              <Field
+                label={
+                  creating ? "初始密码（至少 12 位）" : "重置密码（至少 12 位）"
+                }
+              >
                 <input
                   className={control}
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  required={creating}
+                  minLength={12}
+                  onChange={(event) => setPassword(event.target.value)}
                 />
               </Field>
-            </div>
-            <button className={action} disabled={busy}>
-              {busy ? t("查询中…", "Loading…") : t("查询用户", "Find user")}
-            </button>
-          </form>
-          {data && (
-            <div className="space-y-4">
-              <p className="text-sm font-medium">{data.email}</p>
-              <div className="flex flex-wrap gap-2">
-                {data.group_tags.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {t("尚未分配分组。", "No group grants.")}
-                  </p>
-                )}
-                {data.group_tags.map((value) => (
-                  <span
-                    className="inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
-                    key={value}
-                  >
-                    {value}
-                    <button
-                      aria-label={`${t("撤销", "Revoke")} ${value}`}
-                      disabled={busy}
-                      onClick={() => void changeTag(value)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <form
-                className="flex items-end gap-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void changeTag();
-                }}
-              >
-                <div className="flex-1">
-                  <Field label={t("分组标签", "Group tag")}>
-                    <input
-                      className={control}
-                      value={tag}
-                      onChange={(e) => setTag(e.target.value)}
-                    />
-                  </Field>
-                </div>
-                <button className={action} disabled={busy || !tag.trim()}>
-                  {t("授予分组", "Grant group")}
+              {!creating && (
+                <button
+                  className={action}
+                  type="button"
+                  disabled={busy || password.length < 12}
+                  onClick={() => void resetPassword()}
+                >
+                  重置密码
                 </button>
-              </form>
-              <button
-                className={action}
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    setAccess(
-                      await consoleApi<Access>(
-                        "/admin/access/check",
-                        jsonBody("POST", { email: data.email }),
-                      ),
-                    );
-                  } catch (error) {
-                    setNotice(errorText(error));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {t("检查有效权限", "Check effective access")}
-              </button>
-              {access && (
-                <ul className="space-y-2 text-sm">
-                  {access.tags.map((row) => (
-                    <li key={row.tag}>
-                      {row.tag}{" "}
-                      <span className="text-muted-foreground">
-                        {row.provenances.join(" · ")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
               )}
             </div>
           )}
+          {!creating && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={draft.disabled}
+                onChange={(event) => patch({ disabled: event.target.checked })}
+              />
+              停用账号
+            </label>
+          )}
+          <div className="flex gap-2">
+            <button className={action} disabled={busy} type="submit">
+              保存
+            </button>
+            <button
+              className={action}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setDraft(null);
+                setPassword("");
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </form>
+      )}
+      <Field label="搜索用户">
+        <input
+          className={control}
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+          placeholder="按邮箱搜索"
+        />
+      </Field>
+      <div className="space-y-3">
+        {rows
+          .filter((row) => row.email.toLowerCase().includes(q.toLowerCase()))
+          .map((row) => (
+            <article
+              className="flex flex-wrap justify-between gap-3 rounded-xl border p-4"
+              key={row.email}
+            >
+              <div>
+                <h2 className="font-medium">{row.email}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {tenants.find((tenant) => tenant.tenantId === row.tenantId)
+                    ?.displayName || row.tenantId}{" "}
+                  · {row.disabled ? "已停用" : "已启用"} ·{" "}
+                  {row.platformAdmin
+                    ? "平台超级管理员"
+                    : row.permissionGroupIds
+                        .map(
+                          (id) =>
+                            groups.find((group) => group.id === id)?.label,
+                        )
+                        .filter(Boolean)
+                        .join("、") || "未分配权限组"}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className={action}
+                  disabled={
+                    busy ||
+                    row.platformAdmin ||
+                    (!scope.isPlatform &&
+                      row.permissionGroupIds.some(
+                        (id) =>
+                          groups.find((group) => group.id === id)?.role ===
+                          "tenant-admin",
+                      ))
+                  }
+                  onClick={() => {
+                    setCreating(false);
+                    setDraft({ ...row });
+                    setPassword("");
+                  }}
+                >
+                  编辑
+                </button>
+                <button
+                  className={action}
+                  disabled={busy}
+                  onClick={() => void inspect(row.email)}
+                >
+                  有效权限
+                </button>
+              </div>
+            </article>
+          ))}
+      </div>
+      {preview && (
+        <section className="rounded-xl border p-5">
+          <h2 className="font-medium">{preview.email} 的有效权限</h2>
+          <p className="my-2 text-sm text-muted-foreground">
+            {preview.result.reason}
+          </p>
+          <p className="text-sm">
+            Skills：
+            {preview.result.skills.map((skill) => skill.label).join("、") ||
+              "无"}
+          </p>
+          <p className="mt-2 text-sm">
+            MCP：{preview.result.mcpServers.join("、") || "无"}
+          </p>
         </section>
       )}
     </main>

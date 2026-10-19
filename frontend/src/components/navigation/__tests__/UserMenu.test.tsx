@@ -7,7 +7,11 @@ import { fetchWithAuth } from "@/lib/apiClient";
 // Mutable auth stub — the mocked useAuth reads it at call time, so tests can
 // flip user state between cases.
 const auth = {
-  user: null as { displayName?: string; email?: string; photoURL?: string | null } | null,
+  user: null as {
+    displayName?: string;
+    email?: string;
+    photoURL?: string | null;
+  } | null,
   loading: false,
   signIn: vi.fn(),
   signOut: vi.fn(),
@@ -21,7 +25,10 @@ vi.mock("@/lib/apiClient", () => ({ fetchWithAuth: vi.fn() }));
 describe("UserMenu", () => {
   beforeEach(() => {
     // Default: the admin probe denies (non-admin). Individual tests override.
-    vi.mocked(fetchWithAuth).mockResolvedValue({ ok: false, status: 403 } as Response);
+    vi.mocked(fetchWithAuth).mockResolvedValue({
+      ok: false,
+      status: 403,
+    } as Response);
   });
 
   it("shows Sign in when logged out and calls signIn on click", () => {
@@ -33,7 +40,11 @@ describe("UserMenu", () => {
   });
 
   it("shows the avatar menu with name/email and Sign out when logged in", () => {
-    auth.user = { displayName: "Mark", email: "owner@yourcompany.com", photoURL: null };
+    auth.user = {
+      displayName: "Mark",
+      email: "owner@yourcompany.com",
+      photoURL: null,
+    };
     render(<UserMenu />);
     // Menu is closed initially — open it.
     fireEvent.click(screen.getByLabelText("Account menu"));
@@ -51,11 +62,15 @@ describe("UserMenu", () => {
   });
 
   it("reveals an Admin link for a platform admin", async () => {
-    auth.user = { displayName: "Mark", email: "owner@yourcompany.com", photoURL: null };
+    auth.user = {
+      displayName: "Mark",
+      email: "owner@yourcompany.com",
+      photoURL: null,
+    };
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ scope: "platform", domains: [] }),
+      json: async () => ({ scope: "platform", tenantIds: [] }),
     } as unknown as Response);
     render(<UserMenu />);
     fireEvent.click(screen.getByLabelText("Account menu"));
@@ -68,11 +83,15 @@ describe("UserMenu", () => {
   it("reveals an Admin link for a TENANT admin (the v6.16.0 fix)", async () => {
     // The whole point of the whoami probe: this user used to see nothing,
     // because the old probe hit a platform-only endpoint and got a 403.
-    auth.user = { displayName: "Ops", email: "ops@acmeenergy.com", photoURL: null };
+    auth.user = {
+      displayName: "Ops",
+      email: "ops@acmeenergy.com",
+      photoURL: null,
+    };
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ scope: "tenant", domains: ["acmeenergy.com"] }),
+      json: async () => ({ scope: "tenant", tenantIds: ["acmeenergy.com"] }),
     } as unknown as Response);
     render(<UserMenu />);
     fireEvent.click(screen.getByLabelText("Account menu"));
@@ -85,7 +104,7 @@ describe("UserMenu", () => {
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ scope: "none", domains: [] }),
+      json: async () => ({ scope: "none", tenantIds: [] }),
     } as unknown as Response);
     render(<UserMenu />);
     fireEvent.click(screen.getByLabelText("Account menu"));

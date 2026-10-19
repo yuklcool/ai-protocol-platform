@@ -49,6 +49,7 @@ class TenantConfig(BaseModel):
     display_name: str = Field(default="", alias="displayName")
     domains: list[str] = Field(default_factory=list)
     enabled_skills: list[str] | None = Field(default=None, alias="enabledSkills")
+    enabled_mcp_servers: list[str] = Field(default_factory=list, alias="enabledMcpServers")
     default_skill: str | None = Field(default=None, alias="defaultSkill")
     derived_group_tags: list[str] | None = Field(default=None, alias="derivedGroupTags")
     model_policy: dict[str, Any] = Field(default_factory=dict, alias="modelPolicy")

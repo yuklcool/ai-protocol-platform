@@ -209,7 +209,7 @@ def upsert_mcp_server(server_id: str, body: McpServerWrite, scope: Scope) -> Mcp
     if transport not in _ALLOWED_TRANSPORTS:
         raise HTTPException(status_code=422, detail="Unsupported MCP transport")
 
-    tenant_id = (body.tenant_id or "").strip().casefold()
+    tenant_id = (body.tenant_id or "").strip()
     if body.scope == PLATFORM_SCOPE:
         scope.assert_platform()
         tenant_id = ""
@@ -267,7 +267,7 @@ def delete_mcp_server(server_id: str, scope: Scope) -> McpServerView:
         raise HTTPException(status_code=404, detail="MCP server not found")
     _assert_may_mutate(scope, data)
 
-    tenant_id = str(data.get("tenantId") or "").strip().casefold()
+    tenant_id = str(data.get("tenantId") or "").strip()
     delete_document(_COLLECTION, server_id)
     clear_registry_cache()
     record_admin_action(

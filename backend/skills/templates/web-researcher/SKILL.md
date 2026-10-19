@@ -24,27 +24,6 @@ metadata:
     - url_processing
     - list_documents
     - get_document_content
-  toolConfigs:
-    mcp:
-      # MCP servers this skill may invoke. Surfaced via useSkillMeta to
-      # MCPAppToolCallRouter on the frontend. Server config (URL, transport,
-      # headers) lives in Firestore mcp_servers/{id}. Seed locally with
-      # backend/scripts/seed_mcp_servers.py. See
-      # docs/design/v6.1.0/mcp-app-integrations.md.
-      # ext-apps-map DROPPED 2026-07-21 (issue #14): non-essential for research,
-      # and G42 strict resolution hard-500s the WHOLE skill on any env whose
-      # mcp_servers/ registry lacks the doc (bit the ONE team on test, where the
-      # map Cloud Run service is still the terraform placeholder). Re-add only
-      # after the map service is provisioned via the multivac-aitana terraform
-      # repo on every env this skill ships to.
-      servers: []
-      # Per-server opt-in: which servers' iframes are allowed to push
-      # `ui/update-model-context` into this skill's session state for the
-      # agent's NEXT-turn context (sprint 1.25). Distinct from `servers`
-      # so "skill activates server" doesn't auto-grant "iframe writes
-      # context" — those are different trust grants. See
-      # docs/design/v6.1.0/mcp-app-update-model-context.md.
-      allow_context_writes: []
 ---
 
 You are a web research specialist. When the user asks a research question:

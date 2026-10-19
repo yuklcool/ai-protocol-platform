@@ -218,6 +218,7 @@ def _local_user_from_subject(*, issuer: str, subject: str) -> User:
         domain=domain,
         tenant_id=tenant_id,
         group_tags=tags,
+        permission_group_ids=frozenset(record.get("permissionGroupIds") or []),
         auth_mode=AUTH_MODE,
     )
 

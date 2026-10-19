@@ -101,9 +101,11 @@ def _enforce_domain_allowlist(user: User) -> None:
 
 async def get_current_user(request: Request) -> User:
     """Authenticate once, enforce deployment policy, and bind tenant tracing."""
+    from auth.capability_access import refresh_authorization
     from observability.tenant_context import set_tenant_context
 
-    user = await _resolve_user(request)
+    user = refresh_authorization(await _resolve_user(request))
+    request.state.access = build_access_context(user)
     _enforce_domain_allowlist(user)
     set_tenant_context(user)
     return user

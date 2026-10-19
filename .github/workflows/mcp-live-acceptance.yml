@@ -82,7 +82,7 @@ jobs:
           docker compose --profile mcp-example logs backend frontend mcp-sandbox postgres mcp-example-map
           exit 1
 
-      - name: Run real MCP Admin binding proxy and Apps-resource acceptance
+      - name: Run real MCP Root tenant authorization proxy and Apps-resource acceptance
         env:
           MCP_E2E_RUN_ID: ci-${{ github.run_id }}
         run: bash scripts/smoke-mcp-selfhost.sh

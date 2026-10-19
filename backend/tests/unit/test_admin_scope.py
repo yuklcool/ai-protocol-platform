@@ -29,18 +29,18 @@ class TestResolution:
         scope = resolve_admin_scope(_user("aitana-admin"))
         assert scope is not None
         assert scope.is_platform
-        assert scope.domains is None
+        assert scope.tenant_ids is None
 
     def test_single_tenant_admin(self):
         scope = resolve_admin_scope(_user("tenant-admin:acmeenergy.com"))
         assert scope is not None
         assert not scope.is_platform
-        assert scope.domains == frozenset({"acmeenergy.com"})
+        assert scope.tenant_ids == frozenset({"acmeenergy.com"})
 
     def test_multi_tenant_admin(self):
         scope = resolve_admin_scope(_user("tenant-admin:a.com", "tenant-admin:b.com"))
         assert scope is not None
-        assert scope.domains == frozenset({"a.com", "b.com"})
+        assert scope.tenant_ids == frozenset({"a.com", "b.com"})
 
     def test_no_admin_tags_resolves_none(self):
         assert resolve_admin_scope(_user()) is None
@@ -64,41 +64,41 @@ class TestResolution:
 class TestAssertMay:
     @pytest.fixture
     def tenant(self):
-        return AdminScope(user=_user("tenant-admin:a.com"), domains=frozenset({"a.com"}))
+        return AdminScope(user=_user("tenant-admin:a.com"), tenant_ids=frozenset({"a.com"}))
 
     @pytest.fixture
     def platform(self):
-        return AdminScope(user=_user("aitana-admin"), domains=None)
+        return AdminScope(user=_user("aitana-admin"), tenant_ids=None)
 
     def test_in_scope_allowed(self, tenant):
-        tenant.assert_may("a.com")  # no raise
+        tenant.assert_may_tenant("a.com")  # no raise
 
     def test_out_of_scope_denied(self, tenant):
         with pytest.raises(HTTPException) as exc:
-            tenant.assert_may("b.com")
+            tenant.assert_may_tenant("b.com")
         assert exc.value.status_code == 403
 
     def test_denial_does_not_leak_scope_contents(self, tenant):
         """A tenant admin probing for other tenants must learn nothing."""
         with pytest.raises(HTTPException) as exc:
-            tenant.assert_may("b.com")
+            tenant.assert_may_tenant("b.com")
         assert "a.com" not in str(exc.value.detail)
 
     def test_platform_may_touch_anything(self, platform):
-        platform.assert_may("a.com")
-        platform.assert_may("literally-anything.com")
+        platform.assert_may_tenant("a.com")
+        platform.assert_may_tenant("literally-anything.com")
 
     @pytest.mark.parametrize("blank", ["", "   ", None])
     def test_blank_domain_is_denied_for_tenant(self, tenant, blank):
         """A blank domain must never satisfy a tenant scope — the classic
         'unset means allow' bug."""
-        assert tenant.may(blank) is False
+        assert tenant.may_tenant(blank) is False
         with pytest.raises(HTTPException):
-            tenant.assert_may(blank)
+            tenant.assert_may_tenant(blank)
 
-    def test_case_and_whitespace_are_normalised_not_bypasses(self, tenant):
-        assert tenant.may("A.COM") is True
-        assert tenant.may("  a.com  ") is True
+    def test_tenant_id_casing_is_not_normalized(self, tenant):
+        assert tenant.may_tenant("A.COM") is False
+        assert tenant.may_tenant("  a.com  ") is True
 
     @pytest.mark.parametrize(
         "lookalike",
@@ -106,7 +106,7 @@ class TestAssertMay:
     )
     def test_lookalike_domains_denied(self, tenant, lookalike):
         """Scope matching is exact-set membership, never substring/suffix."""
-        assert tenant.may(lookalike) is False
+        assert tenant.may_tenant(lookalike) is False
 
     def test_assert_platform_denies_tenant(self, tenant, platform):
         with pytest.raises(HTTPException) as exc:
@@ -117,18 +117,18 @@ class TestAssertMay:
 
 class TestFilterDomains:
     def test_tenant_filters_to_scope(self):
-        scope = AdminScope(user=_user(), domains=frozenset({"a.com"}))
-        assert scope.filter_domains(["a.com", "b.com", "c.com"]) == ["a.com"]
+        scope = AdminScope(user=_user(), tenant_ids=frozenset({"a.com"}))
+        assert scope.filter_tenant_ids(["a.com", "b.com", "c.com"]) == ["a.com"]
 
     def test_platform_passes_everything(self):
-        scope = AdminScope(user=_user(), domains=None)
-        assert scope.filter_domains(["a.com", "b.com"]) == ["a.com", "b.com"]
+        scope = AdminScope(user=_user(), tenant_ids=None)
+        assert scope.filter_tenant_ids(["a.com", "b.com"]) == ["a.com", "b.com"]
 
     def test_empty_and_none_are_safe(self):
-        scope = AdminScope(user=_user(), domains=frozenset({"a.com"}))
-        assert scope.filter_domains([]) == []
-        assert scope.filter_domains(None) == []
+        scope = AdminScope(user=_user(), tenant_ids=frozenset({"a.com"}))
+        assert scope.filter_tenant_ids([]) == []
+        assert scope.filter_tenant_ids(None) == []
 
-    def test_filter_is_case_insensitive(self):
-        scope = AdminScope(user=_user(), domains=frozenset({"a.com"}))
-        assert scope.filter_domains(["A.COM"]) == ["A.COM"]  # kept, original casing preserved
+    def test_filter_distinguishes_tenant_id_casing(self):
+        scope = AdminScope(user=_user(), tenant_ids=frozenset({"a.com"}))
+        assert scope.filter_tenant_ids(["A.COM"]) == []

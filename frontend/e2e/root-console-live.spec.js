@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { provisionAdminTenant } = require("./selfhost-fixtures");
 const { randomUUID } = require("node:crypto");
 
 const FRONTEND =
@@ -47,7 +48,7 @@ async function signedContext(browser, login) {
   return context;
 }
 
-test("self-host console persists tenant policies, knowledge, accounts and tool rules", async ({
+test("self-host console persists tenant policies, knowledge, accounts and permission groups", async ({
   browser,
 }, testInfo) => {
   test.setTimeout(180_000);
@@ -57,6 +58,7 @@ test("self-host console persists tenant policies, knowledge, accounts and tool r
     password: PASSWORD,
   });
   const token = login.access_token;
+  await provisionAdminTenant(BACKEND, login);
   const original = await api("/api/admin/platform-config", token);
   const context = await signedContext(browser, login);
   const page = await context.newPage();
@@ -89,30 +91,27 @@ test("self-host console persists tenant policies, knowledge, accounts and tool r
         .budgetEnabled,
     ).toBe(true);
 
-    await page.goto(`${FRONTEND}/admin/tool-permissions`);
-    await page.getByLabel("规则类型", { exact: true }).selectOption("tenant");
-    await page.getByLabel("稳定租户 ID", { exact: true }).fill(TENANT);
-    await page
-      .getByLabel("允许工具", { exact: false })
-      .fill("search_documents");
-    await page.getByRole("button", { name: "保存规则", exact: true }).click();
-    await expect(
-      page.getByText(`tenant:${TENANT}`, { exact: true }),
-    ).toBeVisible();
+    const groupLabel = `${TENANT} 成员`;
+    await page.goto(`${FRONTEND}/admin/groups`);
+    await page.getByRole("button", { name: "新建权限组", exact: true }).click();
+    await page.getByLabel("所属租户", { exact: true }).selectOption(TENANT);
+    await page.getByLabel("组名称", { exact: true }).fill(groupLabel);
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByText("权限组已保存，后续请求立即使用新授权。", { exact: true })).toBeVisible();
+    const groups = await api(`/api/admin/groups?tenant_id=${TENANT}`, token);
+    const group = groups.find((entry) => entry.label === groupLabel);
+    expect(group).toMatchObject({ tenantId: TENANT, role: "member", skills: [], mcpServers: [] });
 
     await page.goto(`${FRONTEND}/admin/users`);
-    const accountForm = page
-      .locator("form")
-      .filter({
-        has: page.getByRole("button", { name: "创建账号", exact: true }),
-      });
-    await accountForm.locator('input[type="email"]').fill(EMAIL);
+    await page.getByRole("button", { name: "新建用户", exact: true }).click();
+    const accountForm = page.locator("form");
+    await page.getByLabel("邮箱", { exact: true }).fill(EMAIL);
     await page.getByLabel("初始密码", { exact: false }).fill(MEMBER_PASSWORD);
     await page.getByLabel("所属租户", { exact: true }).selectOption(TENANT);
+    await page.getByRole("checkbox", { name: groupLabel, exact: true }).check();
     expect(
       await page
         .locator("form")
-        .first()
         .evaluate((form) =>
           [...form.elements]
             .filter((field) => field.validity && !field.validity.valid)
@@ -122,19 +121,32 @@ test("self-host console persists tenant policies, knowledge, accounts and tool r
             })),
         ),
     ).toEqual([]);
-    await page.getByRole("button", { name: "创建账号", exact: true }).click();
-    await expect(page.getByText("账号已创建。", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("初始密码", { exact: false })).toHaveValue("");
+    await accountForm.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByText("账号与权限组已保存，授权在后续请求生效。", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("初始密码", { exact: false })).toHaveCount(0);
+    const account = page.locator("article").filter({ has: page.getByRole("heading", { name: EMAIL, exact: true }) });
+    await account.getByRole("button", { name: "有效权限", exact: true }).click();
+    await expect(page.getByRole("heading", { name: `${EMAIL} 的有效权限`, exact: true })).toBeVisible();
+    expect((await api("/api/admin/access/check", token, "POST", { email: EMAIL })).groups.map((entry) => entry.id)).toEqual([group.id]);
     const member = await api("/api/auth/login", null, "POST", {
       email: EMAIL,
       password: MEMBER_PASSWORD,
     });
+    expect((await api("/api/auth/whoami", member.access_token)).groupTags).toContain(group.id);
     memberContext = await signedContext(browser, member);
     const memberPage = await memberContext.newPage();
     await memberPage.goto(`${FRONTEND}/skills`);
     await expect(memberPage.locator('a[href="/skills"]').first()).toBeVisible();
     await expect(memberPage.locator('a[href="/admin/users"]')).toHaveCount(0);
     await expect(memberPage.locator('a[href="/agent"]')).toHaveCount(0);
+
+    // Removing membership must affect an existing token on its next request.
+    await account.getByRole("button", { name: "编辑", exact: true }).click();
+    await page.getByRole("checkbox", { name: groupLabel, exact: true }).uncheck();
+    await page.locator("form").getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByText("账号与权限组已保存，授权在后续请求生效。", { exact: true })).toBeVisible();
+    expect((await api("/api/admin/access/check", token, "POST", { email: EMAIL })).groups).toEqual([]);
+    expect((await api("/api/auth/whoami", member.access_token)).groupTags).not.toContain(group.id);
 
     // Knowledge upload uses the authenticated administrator's own tenant.
     await page.goto(`${FRONTEND}/agent`);

@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from google.adk.tools import FunctionTool, ToolContext
 
-from agents.root_runtime import RootCapabilityDenied, _configured_ref, effective_root_config, resolve_root_capability
+from agents.root_runtime import RootCapabilityDenied, _configured_ref, resolve_root_capability
 from auth import User
 from auth.access_context import AccessContext
+from auth.capability_access import authorized_root_config
 from config.platform_config import get_platform_config
 
 
 def root_capability_tool(user: User, access: AccessContext) -> tuple[FunctionTool, str]:
-    config = effective_root_config(get_platform_config().agent, access.tenant_id)
+    config = authorized_root_config(get_platform_config().agent, user)
     catalog: list[str] = []
     for ref in config.skills:
         skill = _configured_ref(config, ref, user, access)
@@ -25,7 +26,7 @@ def root_capability_tool(user: User, access: AccessContext) -> tuple[FunctionToo
         They do not change the model or grant additional tools/MCP access.
         Call again when a task needs another capability from the catalog.
         """
-        policy = effective_root_config(get_platform_config().agent, access.tenant_id)
+        policy = authorized_root_config(get_platform_config().agent, user)
         try:
             skill = resolve_root_capability(policy, user, access, skill_ref)
         except RootCapabilityDenied:

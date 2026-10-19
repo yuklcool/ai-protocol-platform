@@ -3,6 +3,7 @@ name: MCP admin gate
 on:
   pull_request:
     paths:
+      - backend/auth/capability_access.py
       - backend/admin/**
       - backend/tools/mcp/**
       - backend/protocols/mcp_proxy.py
@@ -22,6 +23,7 @@ on:
   push:
     branches: [main]
     paths:
+      - backend/auth/capability_access.py
       - backend/admin/**
       - backend/tools/mcp/**
       - backend/protocols/mcp_proxy.py

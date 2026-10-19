@@ -331,11 +331,11 @@ def resolve_mcp_tools(tool_configs: dict[str, dict]) -> list:
     resolved, missing = get_mcp_tools_with_status(server_ids)
     if missing:
         raise McpServerResolutionError(
-            f"SKILL.md declares {len(server_ids)} MCP server(s) "
+            f"Root Agent binds {len(server_ids)} MCP server(s) "
             f"({sorted(server_ids)!r}) but only {len(resolved)} resolved. "
             f"Missing: {sorted(missing)!r}. "
             "Common causes: (1) the server doc doesn't exist in the configured "
             "mcp_servers persistence registry; (2) the server doc is missing the "
-            "'url' field; (3) the SKILL.md typoed the server name."
+            "'url' field; (3) the Root Agent binding uses an incorrect server ID."
         )
     return resolved

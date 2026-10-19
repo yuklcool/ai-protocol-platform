@@ -1,13 +1,10 @@
 const { test, expect } = require("@playwright/test");
+const { provisionAdminTenant } = require("./selfhost-fixtures");
 
 const FRONTEND_URL = process.env.MCP_BROWSER_FRONTEND_URL || "http://localhost:3456";
 const BACKEND_URL = process.env.MCP_BROWSER_BACKEND_URL || "http://127.0.0.1:1956";
 const ADMIN_EMAIL = process.env.SELFHOST_ADMIN_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.SELFHOST_ADMIN_PASSWORD || "";
-const RUN_ID = (process.env.MCP_E2E_RUN_ID || `${Date.now()}`)
-  .toLowerCase()
-  .replace(/[^a-z0-9-]/g, "-")
-  .slice(0, 24);
 const SERVER_ID = "ext-apps-map";
 const UPSTREAM_URL = "http://mcp-example-map:8080/mcp";
 const SESSION_KEY = "aitana:local_jwt_session";
@@ -50,27 +47,14 @@ test.describe("real MCP Apps browser acceptance", () => {
     expect(token).toBeTruthy();
     expect(login.user?.groupTags || []).toContain("aitana-admin");
 
-    const skillName = `mcp-browser-${RUN_ID}`;
-    let skillId = null;
     let serverCreated = false;
     let context = null;
+    const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
+    const rootPath = `/api/admin/tenant-root/${encodeURIComponent(login.user.tenantId)}`;
+    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
+    const originalRoot = await authedApi(token, rootPath);
 
     try {
-      const skill = await authedApi(token, "/api/skills", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: skillName,
-          description: "Browser MCP Apps acceptance skill",
-          instructions: "Use the bound map MCP server.",
-          displayName: "MCP Browser Acceptance",
-          accessControl: { type: "private" },
-          skillMetadata: {},
-        }),
-      });
-      skillId = skill.skillId;
-      expect(skillId).toBeTruthy();
-
       await authedApi(token, `/api/admin/mcp-servers/${SERVER_ID}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -97,12 +81,18 @@ test.describe("real MCP Apps browser acceptance", () => {
       expect(discovery.mcp_apps?.resourceUris?.some((uri) => String(uri).startsWith("ui://"))).toBe(true);
       expect(discovery.tools?.some((tool) => tool.name === "show-map")).toBe(true);
 
-      await authedApi(token, `/api/skills/${skillId}`, {
+      await authedApi(token, tenantPath, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled_mcp_servers: [...new Set([...originalTenant.enabledMcpServers, SERVER_ID])] }),
+      });
+      await authedApi(token, rootPath, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          skillMetadata: { toolConfigs: { mcp: { servers: [SERVER_ID] } } },
-        }),
+        body: JSON.stringify({ override: {
+          ...originalRoot.override,
+          mcpServers: [...new Set([...originalRoot.effective.mcpServers, SERVER_ID])],
+        } }),
       });
 
       context = await browser.newContext();
@@ -184,9 +174,16 @@ test.describe("real MCP Apps browser acceptance", () => {
       expect(fatalDiagnostics, diagnostics.join("\n")).toEqual([]);
     } finally {
       if (context) await context.close();
-      if (skillId) {
-        await authedApi(token, `/api/skills/${skillId}`, { method: "DELETE" }).catch(() => {});
-      }
+      await authedApi(token, rootPath, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ override: originalRoot.override }),
+      });
+      await authedApi(token, tenantPath, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled_mcp_servers: originalTenant.enabledMcpServers }),
+      });
       if (serverCreated) {
         await authedApi(token, `/api/admin/mcp-servers/${SERVER_ID}`, { method: "DELETE" }).catch(() => {});
       }

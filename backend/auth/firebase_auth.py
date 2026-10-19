@@ -89,26 +89,10 @@ async def get_current_user(request: Request) -> User:
         logger.info("auth: rejected token (%s)", type(exc).__name__)
         raise HTTPException(status_code=401, detail="Invalid token") from exc
 
-    user = _apply_derived_group_tags(_user_from_decoded_token(decoded))
+    user = _user_from_decoded_token(decoded)
     request.state.access = build_access_context(user)
     logger.info("auth: authenticated uid=%s tenant=%s", user.uid, user.tenant_id or user.domain)
     return user
-
-
-def _apply_derived_group_tags(user: User) -> User:
-    """Union trusted per-domain derived tags into ``user.group_tags``."""
-    if not user.domain:
-        return user
-    from db.clients import resolve_derived_group_tags
-
-    try:
-        derived = resolve_derived_group_tags(user.domain)
-    except Exception as exc:
-        logger.warning("auth: derived-group-tags lookup failed (%s)", type(exc).__name__)
-        return user
-    if not derived:
-        return user
-    return user.model_copy(update={"group_tags": user.group_tags | derived})
 
 
 # --- authoritative lookup for non-JWT Firebase callers (channels) ----------
@@ -146,15 +130,13 @@ def resolve_user_by_uid(uid: str) -> User | None:
         except TypeError:
             logger.warning("auth: uid=%s has a non-iterable groupTags claim; ignoring", uid)
             group_tags = frozenset()
-        user = _apply_derived_group_tags(
-            User(
-                uid=uid,
-                email=email,
-                domain=domain,
-                tenant_id=_tenant_id_from_claims(claims, domain),
-                group_tags=group_tags,
-                auth_mode="firebase",
-            )
+        user = User(
+            uid=uid,
+            email=email,
+            domain=domain,
+            tenant_id=_tenant_id_from_claims(claims, domain),
+            group_tags=group_tags,
+            auth_mode="firebase",
         )
 
     _user_cache[uid] = (now, user)
