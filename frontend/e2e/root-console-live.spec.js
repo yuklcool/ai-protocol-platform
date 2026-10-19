@@ -151,6 +151,7 @@ test("self-host console persists tenant policies, knowledge, accounts and permis
     // Knowledge upload uses the authenticated administrator's own tenant.
     await page.goto(`${FRONTEND}/agent`);
     await page.getByRole("button", { name: "知识", exact: true }).click();
+    await expect(page.getByRole("button", {name: "添加文件或拖入此处", exact: true})).toBeEnabled();
     await page
       .locator('input[type="file"]')
       .setInputFiles({

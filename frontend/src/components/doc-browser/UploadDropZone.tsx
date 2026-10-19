@@ -159,7 +159,7 @@ export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, a
   return (
     <div className="space-y-2 glass-panel p-3" onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); enqueue(Array.from(event.dataTransfer.files)); }}>
       <button type="button" disabled={!capabilities || disabled} onClick={() => input.current?.click()} className="rounded border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50">{dragging ? "松开文件开始上传" : "添加文件或拖入此处"}</button>
-      <input ref={input} aria-label="上传对话附件" type="file" multiple className="hidden" accept={capabilities?.formats.map((format) => format.extension).join(",")} onChange={(event) => { if (event.target.files) enqueue(Array.from(event.target.files)); event.target.value = ""; }} />
+      <input ref={input} disabled={!capabilities || disabled} aria-label="上传对话附件" type="file" multiple className="hidden" accept={capabilities?.formats.map((format) => format.extension).join(",")} onChange={(event) => { if (event.target.files) enqueue(Array.from(event.target.files)); event.target.value = ""; }} />
       <p className="text-[11px] text-muted-foreground">TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；单文件 25 MB，每轮最多 10 个。图片和扫描件暂不支持识别。</p>
       {capabilityError && <p role="alert" className="text-xs text-destructive">{capabilityError}</p>}
       <ul className="space-y-1" aria-label="文件处理状态">

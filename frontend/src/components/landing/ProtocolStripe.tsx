@@ -54,7 +54,7 @@ export function ProtocolStripe() {
             </Link>
           ) : null}
         </div>
-        <ul className="grid grid-cols-2 gap-px overflow-hidden glass-panel border-border bg-border sm:grid-cols-3 lg:grid-cols-6">
+        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {demo.pillars.map((pillar) => {
             const translated = PILLAR_KEYS[pillar.key];
             const label = translated ? t(translated.label) : pillar.label;

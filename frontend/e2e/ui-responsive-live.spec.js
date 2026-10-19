@@ -34,14 +34,17 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
   await provisionAdminTenant(BACKEND,login);
   const context=await browser.newContext({colorScheme:"light",reducedMotion:"reduce"});
   await context.addInitScript(({login})=>{sessionStorage.setItem("aitana:local_jwt_session",JSON.stringify({token:login.access_token,expiresAt:Date.now()+login.expires_in*1000,user:login.user}));localStorage.setItem("ai-protocol-platform.locale","zh-CN");},{login});
-  const page=await context.newPage(); const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  const page=await context.newPage(); page.setDefaultTimeout(20_000); page.setDefaultNavigationTimeout(20_000); const errors=[];page.on("pageerror",e=>errors.push(e.message));
+  let primaryError;
   try {
     for(const viewport of sizes){
       await page.setViewportSize(viewport);
       for(const route of ROUTES){
+        console.log(`UI_ROUTE:${viewport.width}:${route}`);
         await page.goto(`${FRONTEND}${route}`);
         await expect(page.locator("main").first()).toBeVisible();
-        await page.waitForLoadState("networkidle");
+        if(route === "/chat/root-agent") await expect(page.locator("textarea").first()).toBeVisible();
+        else await expect(page.getByRole("heading", {level:1}).first()).toBeVisible();
         await snapshot(page,info,`${viewport.width}-${route.slice(1).replaceAll("/","-")}`);
       }
     }
@@ -64,7 +67,8 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
     await page.getByRole("button",{name:"关闭文件与历史记录",exact:true}).click();
     await expect(page.locator("textarea").first()).toBeVisible();
     expect(errors).toEqual([]);
-  } finally {await context.close();}
+  } catch(error) { primaryError=error; throw error; }
+  finally { await context.close().catch(error=>{if(!primaryError) throw error;}); }
 });
 
 test("公开首页、登录错误和 OIDC 错误反馈", async ({browser}, info)=>{
@@ -88,7 +92,7 @@ test("公开首页、登录错误和 OIDC 错误反馈", async ({browser}, info)
       await page.keyboard.press("Escape");await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page.getByTestId("sign-in-button")).toBeFocused();
       await page.goto(`${FRONTEND}/auth/oidc/callback?error=access_denied&error_description=登录验收错误`);
-      await expect(page.getByRole("alert")).toContainText("登录验收错误");
+      await expect(page.getByRole("main").getByRole("alert")).toContainText("登录验收错误");
       await snapshot(page,info,`${viewport.width}-oidc-error`);
     }
   } finally {await context.close();}
