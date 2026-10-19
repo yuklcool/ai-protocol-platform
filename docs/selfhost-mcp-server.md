@@ -1,105 +1,66 @@
-# Self-hosted MCP Server management
+# MCP 服务与 MCP Apps 配置
 
-The self-host deployment can manage MCP Servers without editing Firestore or application source. The Admin control plane writes the same persisted `mcp_servers` registry consumed by the agent MCP toolset and the browser MCP proxy.
+通过 `/admin/mcp-servers` 管理持久化服务注册表，无需直接编辑数据库。普通产品路径由 Root Agent 统一绑定和调用，见[完整配置流程](configuration-guide.md#7-skill原生工具与-mcp)。
 
-## 1. Start the optional Compose example
+## 1. 注册服务
 
-The repository contains a pinned wrapper around the upstream `modelcontextprotocol/ext-apps` map-server. It is opt-in so the default self-host stack stays small.
+填写稳定服务 ID、backend 可达 URL、服务要求的传输方式和作用域，启用并保存。私有集成选择 Tenant；明确共享的服务才选择 Platform，后者需要平台管理员权限。租户管理员只能管理自己的作用域。
 
-```bash
-docker compose --profile mcp-example up -d --build
-```
+HTTP/SSE/Streamable HTTP 按实际服务契约选择。容器中的 `localhost` 不能访问另一个容器；Docker 服务名也不是浏览器能直接解析的公共 URL。
 
-The example runs only on the Compose network. It is intentionally not published on a host port.
+## 2. 凭证
 
-Use this MCP endpoint from the backend:
-
-```text
-http://mcp-example-map:8080/mcp
-```
-
-The upstream map example exposes the `show-map` tool and an MCP Apps HTML resource (`ui://cesium-map/mcp-app.html`).
-
-## 2. Register it in Admin
-
-Open **Administration → MCP Servers** and create a server such as:
-
-- Server ID: `example-map`
-- URL: `http://mcp-example-map:8080/mcp`
-- Transport: `Streamable HTTP`
-- Scope: `Tenant` for a private integration, or `Platform` for a deliberately shared integration
-- Enabled: on
-
-Tenant administrators can create or edit MCP Servers only inside their stable tenant scope. Platform-scoped servers require a platform administrator.
-
-## 3. Credentials and secrets
-
-Credential header values are write-only. The Admin API and Admin UI return only header names and a `has_credentials` flag.
-
-Prefer environment references instead of putting a token directly in the registry:
+请求头值只写入，接口/界面仅回显名称和是否已配置。优先环境引用：
 
 ```text
 Authorization=${MCP_TOKEN}
 X-Api-Key=${MCP_API_KEY}
 ```
 
-The runtime resolves `${ENV_VAR}` immediately before building the MCP transport. An unset referenced variable fails closed instead of sending the placeholder upstream.
+若服务要求 Bearer，可将变量值设为带 `Bearer ` 前缀的完整头值，或按服务表单支持格式填写。变量在建立传输前解析，缺失时拒绝调用。
 
-When editing an existing server, leave the credential field empty to keep the current stored headers. Use **Clear all stored headers on save** to remove them.
+自定义变量需要在 backend 的 Compose `environment` 中显式传递，只有 `.env` 中定义并不够，见[变量示例](configuration-guide.md#10-可选配置与环境变量传递)。编辑时留空保留旧头，选择“保存时清除所有请求头”才移除。
 
-## 4. Test the server
+## 3. 健康与能力发现
 
-The **Health** action performs a real MCP `initialize` handshake. It is not a TCP-only ping.
+“健康检查”执行 MCP `initialize`，不是只测 TCP。错误分类：
 
-Failures are classified as:
+| 分类 | 排查方向 |
+| --- | --- |
+| `network` | DNS、连接、超时 |
+| `authentication` | HTTP 401/403、头值与权限 |
+| `protocol` | MCP/传输行为不兼容 |
+| `schema` | 返回结果不符合结构 |
+| `configuration` | 本地设置或密钥引用无效 |
 
-- `network` — DNS, connection, or timeout failures
-- `authentication` — authorization failures such as HTTP 401/403
-- `protocol` — invalid MCP/transport behavior
-- `schema` — malformed MCP result data
-- `configuration` — invalid local configuration or unresolved secret references
+“发现”查询 `tools/list`、`resources/list`、`prompts/list` 和 UI 资源。资源/提示词是可选能力，未提供时可能只返回警告。管理员可测试禁用服务，但 Agent 和浏览器代理均不能正常使用禁用服务。
 
-A disabled MCP Server can still be tested by an administrator. Disabled servers are unavailable to both agent-side MCP resolution and the frontend MCP proxy.
+## 4. Root 绑定和工具权限
 
-## 5. Discover capabilities
+在 `/agent` 的“MCP”勾选服务，保存；在工具规则允许实际发现的工具，并检查租户归属和 Root 权限。使用 `/chat/root-agent` 提出具体任务，观察模型真实选择和执行工具。
 
-Use **Discover** to inspect:
+管理页保留“绑定 Skill”的兼容操作，写入旧 `skillMetadata.toolConfigs.mcp.servers`。它不替代当前 Root 的显式绑定，也不会绕过 Skill 或工具权限。
 
-- `tools/list`
-- `resources/list`
-- `prompts/list`
-- MCP Apps HTML/UI resource URIs
+## 5. MCP Apps 浏览器验证
 
-Resources and prompts are optional MCP capabilities; an optional capability failure is returned as a warning instead of hiding the otherwise healthy server.
+工具返回 UI 资源后，通过平台认证代理 `/mcp/{server_id}` 获取内容，再由独立源沙箱承载。需配置：
 
-## 6. Bind the MCP Server to a Skill
-
-Select the server in the diagnostics panel, choose a visible Skill, and click **Bind**.
-
-The page updates the existing Skill field:
-
-```yaml
-skillMetadata:
-  toolConfigs:
-    mcp:
-      servers:
-        - example-map
+```env
+MCP_SANDBOX_PUBLIC_URL=https://mcp.example.com
+MCP_SANDBOX_ALLOWED_HOST_ORIGINS=https://ai.example.com
+ALLOW_ORIGINS=https://ai.example.com
 ```
 
-The write goes through the normal `/api/skills/{skill_id}` API. Existing Skill ownership and admin rules remain authoritative; MCP administration does not bypass them.
+确认前端调用、代理访问、`ui://` 读取、iframe 渲染均成功。禁用服务后重试，应在运行时和代理两侧拒绝。
 
-## 7. Runtime acceptance
+## 6. 可选地图示例
 
-After binding:
+示例仅存在于**源码 Compose** 的 `mcp-example` profile，发布 Compose 没有该服务。请在隔离测试部署使用：
 
-1. Keep the MCP Server enabled.
-2. Open a conversation using the bound Skill.
-3. Ask for an action that requires the discovered MCP tool (for the example server, the `show-map` capability).
-4. Verify the agent invokes the MCP tool.
-5. If the tool returns an MCP Apps resource, verify it renders through the existing MCP sandbox/proxy path.
+```bash
+docker compose --profile mcp-example up -d --build
+```
 
-For a negative check, disable the server in Admin and retry. Agent registry resolution and `/mcp/{server_id}` proxy access should both fail closed until it is re-enabled.
+注册 URL `http://mcp-example-map:8080/mcp`，传输选 Streamable HTTP。示例暴露 `show-map` 和 `ui://cesium-map/mcp-app.html`，仅在内部网络监听，不发布主机端口。
 
-## Network note
-
-`mcp-example-map` is a Docker service name and is resolvable from containers on the Compose network. It is **not** a URL the host browser can resolve directly. This is intentional: the browser uses the platform MCP proxy while backend/agent traffic reaches the upstream server over the private Compose network.
+绑定 Root、授权后发起地图请求，确认实际 Tool Calling 和 App 渲染。发布部署需要单独部署可达 MCP 服务，不能直接引用不存在的示例主机名。

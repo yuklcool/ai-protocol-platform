@@ -1,431 +1,150 @@
-# Self-hosting guide
+# 自托管部署与运维说明
 
-This document describes the current production-style self-host baseline for `ai-protocol-platform`.
+第一次安装按[完整中文配置流程](docs/configuration-guide.md)操作；镜像用户可直接阅读[版本化镜像部署](docs/selfhost-release-images.md)。
 
-The design principle is simple: **use as few infrastructure components as possible**. PostgreSQL is reused for platform data, stable Tenant metadata, built-in accounts, ADK Session and durable Memory. A backend-mounted Docker Volume stores user objects and ADK Artifacts. Redis, MinIO, Keycloak, a separate Session database and a separate Memory database are not required by the default stack.
+## 1. 默认部署组成
 
-For versioned prebuilt GHCR images, see [docs/selfhost-release-images.md](./docs/selfhost-release-images.md).
+| 服务 | 默认端口 | 职责 |
+| --- | --- | --- |
+| `frontend` | 主机 `3456` → 容器 `8080` | 中文界面、对话/工作台、后端代理 |
+| `backend` | `1956` | FastAPI、ADK、认证、租户与协议运行时 |
+| `postgres` | 容器网络 `5432` | 配置、账号、Session、Memory、账本 |
+| `mcp-sandbox` | 主机 `3457` → 容器 `8080` | 独立浏览器源的 MCP Apps 沙箱 |
 
-For Root Agent setup and the complete model-generated A2UI / AG-UI operation
-sequence, see [protocol operation acceptance](./docs/protocol-operation-acceptance.md).
-Existing installations must also review its tenant namespace migration notes.
+默认不要求 Redis、MinIO、Keycloak、Firebase 或 GCP。自托管使用 `SELF_HOSTED_MODE=1`、`LOCAL_MODE=0`，开发身份替身不能用于对外服务。
 
-## What runs
+## 2. 部署方式
 
-```text
-Browser
-  │
-  ▼
-frontend :3456
-  │  Next.js proxy
-  ▼
-backend :1956
-  │
-  ├── Google ADK
-  ├── Runtime Skills
-  ├── AG-UI / A2UI
-  ├── MCP / MCP Apps
-  ├── built-in JWT auth ───────┐
-  ├── stable Tenant policy ────┤
-  ├── ADK Session ─────────────┤
-  ├── durable Memory ──────────┼──> PostgreSQL :5432
-  ├── platform/tenant data ────┤
-  └── auth_users ──────────────┘
-  │
-  ├── user files ─────────────> /data/objects
-  └── ADK Artifacts ──────────> /data/artifacts
-
-mcp-sandbox :3457
-  └── separate-origin MCP Apps iframe host
-```
-
-Default Docker services:
-
-- frontend
-- backend
-- PostgreSQL
-- MCP Apps sandbox
-
-The production-style Docker path deliberately runs:
-
-```env
-SELF_HOSTED_MODE=1
-LOCAL_MODE=0
-DATA_BACKEND=postgres
-SESSION_BACKEND=postgres
-MEMORY_BACKEND=postgres
-AUTH_BACKEND=local-jwt
-OBJECT_STORAGE_BACKEND=local
-```
-
-`LOCAL_MODE=1` is reserved for the shorter source-development loop and its development substitutes. It is not the normal self-host deployment mode.
-
-## Requirements
-
-A Linux server needs:
-
-- Docker Engine
-- Docker Compose v2 (`docker compose`)
-- outbound HTTPS access to the configured model provider
-- ports 3456, 1956 and 3457 available, or equivalent reverse-proxy mappings
-
-No GCP project, Firebase project, Vertex Agent Engine, Redis, MinIO or Keycloak is required for the baseline.
-
-## Deployment choices
-
-### Versioned GHCR images
-
-This is the preferred operational path after a versioned release is published. Download these assets from the GitHub Release:
-
-```text
-docker-compose.release.yml
-default.env.selfhost.example
-```
-
-Then:
+发布镜像：从 [v1.1.1 Release](https://github.com/yuklcool/ai-protocol-platform/releases/tag/v1.1.1) 下载 `docker-compose.release.yml` 与 `default.env.selfhost.example`，将后者保存为 `.env`，编辑配置后执行：
 
 ```bash
-cp default.env.selfhost.example .env
-# Release assets already pin APP_VERSION to the exact vX.Y.Z tag.
-# Configure required secrets/provider values.
-
+docker compose -f docker-compose.release.yml config --quiet
 docker compose -f docker-compose.release.yml pull
 docker compose -f docker-compose.release.yml up -d
 ```
 
-The release Compose has no source build contexts and no source-code bind mounts. PostgreSQL migrations are bundled in the backend image and applied before backend startup.
+发布镜像不需要源码，支持 `linux/amd64` 和 `linux/arm64`。
 
-### Build from source
-
-Use this path for development or a custom frontend build:
+源码构建：
 
 ```bash
 git clone https://github.com/yuklcool/ai-protocol-platform.git
 cd ai-protocol-platform
 cp .env.selfhost.example .env
-# configure required secrets/provider values
-
+# 配置密钥、管理员、数据库、模型和浏览器源。
+docker compose config --quiet
 docker compose up -d --build
 ```
 
-Check status:
+源码模板带前导点，与 Release 资产名不同。根 Makefile 未提供 `docker-up`、`docker-down` 或 `selfhost-smoke` 目标，使用本文的 Compose 命令和现有脚本。
 
-```bash
-docker compose ps
-```
+## 3. 认证与账号
 
-Default local endpoints:
-
-```text
-Frontend:         http://localhost:3456
-Backend API:      http://localhost:1956/docs
-MCP Apps sandbox: http://localhost:3457/sandbox.html
-```
-
-## Authentication
-
-The self-host identity selector is:
+默认 `AUTH_BACKEND=local-jwt`。使用 `openssl rand -base64 48` 生成密钥，首次启动填写：
 
 ```env
-AUTH_BACKEND=local-jwt   # production-style self-host default
-AUTH_BACKEND=stub        # LOCAL_MODE development only
-AUTH_BACKEND=firebase    # existing cloud adapter
-AUTH_BACKEND=oidc        # optional enterprise OIDC adapter
-```
-
-### First administrator
-
-Generate a JWT signing key:
-
-```bash
-openssl rand -base64 48
-```
-
-Configure:
-
-```env
-JWT_SIGNING_KEY=<generated-secret-at-least-32-bytes>
+JWT_SIGNING_KEY=替换为至少32字节的随机密钥
 SELFHOST_ADMIN_EMAIL=admin@example.com
-SELFHOST_ADMIN_PASSWORD=<strong-password-at-least-12-characters>
+SELFHOST_ADMIN_PASSWORD=替换为至少12字符的密码
 ```
 
-On the first startup, the backend creates that account with platform-admin access. Later restarts do not overwrite its stored password or roles. Once at least one local account exists, bootstrap email/password values may be removed; the signing key must remain stable unless you intentionally rotate it.
+初始管理员仅在 `auth_users` 为空时创建。后续重启不覆盖现有密码或角色；修改环境变量不能重置旧密码，应在用户管理中操作。密码使用加盐 `scrypt` 哈希。
 
-If local-jwt is selected but the signing key is missing/too short, or the first startup has no account and no bootstrap credentials, startup fails loudly.
+JWT 默认有效期 60 分钟，浏览器保存在 `sessionStorage`；关闭标签页后需重新登录，当前没有 refresh-token 流程。服务端从持久化账号重新确认租户/权限；敏感账号变更会撤销旧会话。签名密钥需稳定保存，轮换时可通过 `JWT_PREVIOUS_SIGNING_KEYS` 暂时兼容旧密钥。密钥缺失/过短或首次启动缺少管理员配置会明确失败。
 
-### Local account storage
+OIDC 是可选企业身份适配，见[OIDC 接入](docs/selfhost-oidc.md)。Firebase 保留云端适配；`AUTH_BACKEND=stub` 仅用于开发。
 
-Built-in accounts are stored through the Repository abstraction in PostgreSQL. Passwords are salted `scrypt` hashes. The login API never returns password hashes and uses a generic authentication failure response.
-
-### JWT authorization behavior
-
-Relevant settings:
-
-```env
-JWT_SIGNING_KEY=...
-JWT_PREVIOUS_SIGNING_KEYS=
-JWT_ISSUER=ai-protocol-platform
-JWT_AUDIENCE=ai-protocol-platform
-JWT_EXPIRE_MINUTES=60
-```
-
-The current key signs new HS256 access tokens. Prior valid keys can be temporarily listed in `JWT_PREVIOUS_SIGNING_KEYS` during rotation.
-
-Authorization is **server-authoritative**. After token verification, the backend reloads the current account and trusted Tenant/role state from persistence rather than trusting browser-provided tenant/group/role values. Therefore role removal, account disabling and Tenant policy changes take effect independently of stale browser claims.
-
-The built-in browser session stores the bearer token in `sessionStorage`. Closing the tab drops the browser session. On page reload the frontend calls `/api/auth/whoami` to refresh server-authoritative identity state.
-
-## Stable Tenant boundary
-
-The current self-host baseline uses explicit stable `tenant_id` as the authority boundary. Historical domain/client identity remains only as a compatibility/migration layer.
-
-Tenant-aware enforcement covers, among other paths:
-
-- Session and chat metadata
-- documents/folders/object namespaces
-- MCP server scope
-- Admin Audit
-- Tool Permission
-- Model Policy (`allowedModels/defaultModel`)
-- budget/quota extension points
-
-The codebase includes auditable legacy ownership migration tooling and a real Compose/PostgreSQL/local-jwt Tenant A/B isolation gate. That gate deliberately uses the same UID in two different stable tenants to prove the Tenant boundary is not accidentally reduced to user ID.
-
-## Persistence defaults
+## 4. 持久化与租户
 
 ```env
 DATA_BACKEND=postgres
 SESSION_BACKEND=postgres
 MEMORY_BACKEND=postgres
-DATABASE_URL=postgresql://aip:...@postgres:5432/aip
-```
-
-One PostgreSQL instance carries the default structured/durable state:
-
-```text
-PostgreSQL
-├── platform + tenant documents
-├── auth_users
-├── model/provider + MCP registries
-├── ADK Session + events/state
-└── durable ADK Memory
-```
-
-### Schema migrations
-
-The backend startup path executes:
-
-```text
-scripts/apply_selfhost_migrations.py
-```
-
-before bootstrap seeding and Uvicorn startup. Applied SQL filenames are recorded in:
-
-```text
-platform_schema_migrations
-```
-
-The runner is idempotent. Existing source deployments that originally received `001_postgres_documents.sql` through PostgreSQL initdb are compatible: the `CREATE` statements are idempotent, then the migration is journaled.
-
-### Session
-
-`SESSION_BACKEND=postgres` reuses Google ADK's `DatabaseSessionService`. The platform does not maintain a second custom SQL Session implementation.
-
-Existing alternatives remain available:
-
-```env
-SESSION_BACKEND=memory
-SESSION_BACKEND=vertex
-```
-
-### Memory
-
-`PostgresMemoryService` uses the Repository/PostgreSQL layer and persists ADK memory rows without requiring embeddings, Redis or a vector database. Current recall intentionally mirrors simple ADK in-memory semantics with durable keyword/text search, including substring recall for Chinese text.
-
-`MEMORY_SEARCH_SCAN_LIMIT` caps the number of recent per-user rows scanned by a recall. If semantic vector recall is needed later, PostgreSQL + pgvector should be evaluated before adding a separate vector database.
-
-## File / Artifact storage
-
-Default self-host storage:
-
-```env
 OBJECT_STORAGE_BACKEND=local
 OBJECT_STORAGE_LOCAL_ROOT=/data/objects
 ARTIFACT_BACKEND=local
 ADK_ARTIFACT_ROOT=/data/artifacts
 ```
 
-PostgreSQL stores document metadata while bytes live on the persistent `object-data` volume under trusted Tenant/user namespaces. ADK `FileArtifactService` uses the same persistent volume under `/data/artifacts`.
+PostgreSQL 保存结构化数据，`object-data` 卷保存文件字节和 Artifact。发布卷名为 `ai-protocol-platform-postgres-data` 与 `ai-protocol-platform-object-data`。已有部署必须核实实际挂载，避免切换 Compose 时连接新空卷。
 
-Local filesystem paths are never returned as public URLs. Preview/download stays behind authenticated FastAPI routes that resolve authorization and object ownership before reading bytes.
+Session 使用 ADK `DatabaseSessionService`，按可信租户分区存储 app namespace。Memory 按 tenant/app/UID 分区，支持持久化文本/关键词召回，`MEMORY_SEARCH_SCAN_LIMIT` 限制扫描量。文件下载经认证接口处理，不暴露本地磁盘路径。
 
-Deletion is staged because PostgreSQL and filesystem storage cannot participate in one ACID transaction:
+稳定 `tenant_id` 是授权边界；邮箱域名仅为兼容映射。Session、文件、Skill、MCP、工具、模型、审计和额度均需要租户作用域。
 
-```text
-metadata -> deletionStatus=deleting
-binary   -> delete
-metadata -> delete
-```
+## 5. 初始化与历史迁移
 
-Failures retain durable recovery state for reconciliation.
+后端启动依次执行 SQL migration、持久化种子初始化、初始管理员创建和 Uvicorn。`scripts/apply_selfhost_migrations.py` 幂等执行 SQL，并记录在 `platform_schema_migrations`。
 
-`OBJECT_STORAGE_BACKEND=gcs` remains an optional cloud adapter. S3-compatible storage is also available as an opt-in adapter and is not required by the default stack.
+自动 SQL migration 不代表历史 ownership 或 Session/Memory namespace 已迁移。已有部署按[历史归属迁移](docs/tenant-ownership-migration.md)执行，并单独审核 namespace 搬迁；无归属旧历史不会作为租户请求的自动回退数据源。
 
-Optional S3-compatible configuration:
+## 6. 模型、Root 与交互
 
-```env
-OBJECT_STORAGE_BACKEND=s3
-OBJECT_STORAGE_S3_BUCKET=your-bucket
-OBJECT_STORAGE_S3_ENDPOINT=https://s3.example.com
-OBJECT_STORAGE_S3_REGION=us-east-1
-OBJECT_STORAGE_S3_ACCESS_KEY=
-OBJECT_STORAGE_S3_SECRET_KEY=
-OBJECT_STORAGE_S3_SESSION_TOKEN=
-OBJECT_STORAGE_S3_ADDRESSING_STYLE=auto
-```
+在模型管理注册 Provider、模型和默认映射，再到 `/agent` 选择模型、绑定 Skill/工具/MCP/知识。密钥引用使用 `${OPENAI_API_KEY}` 等后端环境引用。
 
-The adapter keeps every object under `tenants/<tenant_id>/`, supports bounded-memory upload/download, list/exists/delete and time-limited presigned GET/PUT URLs. AWS IAM/workload credentials can be used by leaving the explicit key fields empty. Custom S3 endpoints such as Cloudflare R2, MinIO/AIStor, Ceph RGW and Garage can set `OBJECT_STORAGE_S3_ENDPOINT`; many self-hosted endpoints use `OBJECT_STORAGE_S3_ADDRESSING_STYLE=path`. Enabling this adapter does **not** add an S3/MinIO service to the default Compose stack.
+交互表单需要同时开启 `a2uiEnabled`、`allowSurfaceContextWrites`、`allowActionTriggeredRuns`。普通聊天与表单操作共享 `/api/agent/stream` 和 Root 策略。
 
-## Model providers
+Root 额度管理需要租户额度、模型价格和 `budgetEnabled`。Root 开关启用后直接创建持久化租户执行器，即使 `BUDGET_ENFORCER=off` 也会执行；环境变量用于兼容旧 Skill/外部预算接口，详见[配置流程](docs/configuration-guide.md)。
 
-The self-host runtime is registry-driven. It supports OpenAI official, Gemini Developer API, Anthropic and generic OpenAI-compatible gateways, with provider-specific base URL and secret reference configuration.
+## 7. 域名与反向代理
 
-A simple OpenAI-compatible environment path is:
-
-```env
-PLATFORM_DEFAULT_MODEL=<registered-model-id>
-OPENAI_API_KEY=<provider-key>
-OPENAI_API_BASE=https://your-provider.example/v1
-```
-
-Dynamic Provider/Model CRUD, completion/tool probes, default/tier mappings and Tenant model policies are available through the current platform control plane. Source-build Self-host enables Skill Studio by default (`ENABLE_SKILL_STUDIO=true`), and release frontend images are built with Skill Studio enabled so administrators can select effective dynamic models from the product UI. See [docs/selfhost-openai-compatible.md](./docs/selfhost-openai-compatible.md).
-
-The remaining acceptance boundary is intentionally strict: #10/#11 are not considered finished until a real non-OpenAI OpenAI-compatible endpoint drives an Agent conversation and actual Tool Calling. Mock/fixed ToolCalls do not replace that final provider E2E.
-
-## MCP / MCP Apps
-
-The self-host baseline includes:
-
-- MCP Server Admin CRUD
-- Platform/Tenant scope
-- HTTP/SSE/Streamable HTTP transport
-- real `initialize` Health
-- `tools/list`, `resources/list`, `prompts/list` Discovery
-- Skill Binding
-- authenticated `/mcp/{server_id}` browser/runtime proxy
-- separate-origin MCP Apps sandbox
-
-A real Compose acceptance already covers:
-
-```text
-Admin register
-  -> Health / initialize
-  -> Discovery
-  -> Skill Binding
-  -> platform MCP Proxy
-  -> tools/list + resources/read
-  -> real ui:// HTML
-```
-
-A Chromium/Playwright gate additionally proves the real `ui://` resource is written into an inner iframe through the separate-origin sandbox. Therefore MCP transport and browser iframe rendering are no longer manual-only acceptance items.
-
-The remaining #11 boundary is a **real model choosing and executing the bound MCP Tool**.
-
-See [docs/selfhost-mcp-server.md](./docs/selfhost-mcp-server.md).
-
-## CI / smoke tests
-
-Basic self-host smoke:
-
-```bash
-BACKEND_URL=http://127.0.0.1:1956 \
-FRONTEND_URL=http://127.0.0.1:3456 \
-SANDBOX_URL=http://127.0.0.1:3457 \
-bash scripts/smoke-selfhost.sh
-```
-
-Dedicated CI gates currently cover:
-
-- PostgreSQL Repository / Session / Memory / A2UI reconstruction
-- local ObjectStorage / Artifact persistence
-- local-jwt bootstrap and server-authoritative authorization
-- no-GCP startup boundary
-- real stable Tenant A/B isolation
-- Model Provider registry/routing/policy
-- MCP Admin and real MCP protocol transport
-- Chromium separate-origin MCP Apps rendering
-- source self-host image build and smoke
-- versioned self-host release image build pipeline
-
-A release still requires real Provider-dependent acceptance before the overall protocol project can be called fully accepted:
-
-1. normal Agent/Skill conversation against a real configured Provider;
-2. real Provider Tool Calling;
-3. real model selection/execution of a bound MCP Tool;
-4. final Tenant quota / Tool Permission / Model Policy verification on that live model path.
-
-## Versioned release images
-
-The release pipeline builds:
-
-```text
-ghcr.io/yuklcool/ai-protocol-platform-backend
-ghcr.io/yuklcool/ai-protocol-platform-frontend
-ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox
-```
-
-Stable `vX.Y.Z` release tags produce `linux/amd64` and `linux/arm64` manifests plus semver, `latest`, and exact `sha-*` tags. The current production release workflow intentionally rejects prerelease-style tags. BuildKit SBOM/provenance attestations are enabled, and published images are scanned for fixable HIGH/CRITICAL vulnerabilities before the GitHub Release is created.
-
-Before GitHub Release creation, CI also performs an anonymous no-clone cold start in a fresh directory using only the tagged release Compose/env files and public GHCR images. It verifies backend/frontend/sandbox health and a real local-jwt administrator login. The published env asset is generated with `APP_VERSION` already pinned to the exact release tag.
-
-The release frontend image is relocatable: it is compiled with a dedicated sandbox-origin placeholder and replaces that placeholder at container startup from `MCP_SANDBOX_PUBLIC_URL`.
-
-See [docs/selfhost-release-images.md](./docs/selfhost-release-images.md) for exact deployment and rollback commands.
-
-## Reverse proxy / TLS
-
-For an internet-facing server, place Caddy, Nginx, Traefik or another TLS reverse proxy in front of the frontend and sandbox.
-
-The browser-facing frontend and MCP sandbox must remain different origins. Example:
-
-```text
-https://ai.example.com  -> frontend:8080
-https://mcp.example.com -> mcp-sandbox:8080
-```
-
-Configure:
+| 公共地址 | 上游 |
+| --- | --- |
+| `https://ai.example.com` | 同网络 `frontend:8080`，或主机 `127.0.0.1:3456` |
+| `https://mcp.example.com` | 同网络 `mcp-sandbox:8080`，或主机 `127.0.0.1:3457` |
 
 ```env
 MCP_SANDBOX_PUBLIC_URL=https://mcp.example.com
 MCP_SANDBOX_ALLOWED_HOST_ORIGINS=https://ai.example.com
 ALLOW_ORIGINS=https://ai.example.com
+FRONTEND_PUBLIC_URL=https://ai.example.com
 ```
 
-Use TLS for any internet-facing local-jwt deployment; browser bearer tokens must never traverse an unencrypted public network.
+两者必须不同浏览器源。代理支持持续 SSE 响应，避免缓存、缓冲和过短超时。发布前端在启动时替换沙箱地址和认证模式；源码的语言、品牌等是构建参数，修改后需重建。发布镜像不会读取任意 `NEXT_PUBLIC_*` 运行时变量。
 
-## Backup and rollback
+## 8. 环境变量传递
 
-A complete self-host backup needs both:
+`.env` 用于 Compose 插值，未列入服务 `environment`/`env_file` 的变量不会自动进入容器。默认传递常用模型/OIDC 参数；自定义模型密钥、MCP 密钥或 S3 参数需用额外 Compose 文件显式传递，见[配置流程](docs/configuration-guide.md#10-可选配置与环境变量传递)。
 
-```text
-1. PostgreSQL data
-2. object-data volume (/data/objects + /data/artifacts)
+## 9. 日常检查
+
+```bash
+docker compose -f docker-compose.release.yml ps
+docker compose -f docker-compose.release.yml logs --tail=100 backend
+curl -fsS http://localhost:1956/health
+curl -fsS http://localhost:3456/api/health
+curl -fsS http://localhost:3457/sandbox.html >/dev/null
 ```
 
-Keep the JWT signing key in a separate protected secret backup.
+源码部署省略 `-f docker-compose.release.yml`，源码目录可运行 `bash scripts/smoke-selfhost.sh`。健康检查不代替真实模型、工具、A2UI、刷新恢复和双租户验收，见[协议验收](docs/protocol-operation-acceptance.md)。
 
-For image-based deployment, application rollback is normally performed by restoring the previous `APP_VERSION` and pulling/updating Compose again. Database migrations may be forward-only; image rollback does not replace a database restore when an incompatible schema migration has already been applied.
+## 10. 备份、升级与回滚
 
-## Current optional extensions / limitations
+备份 PostgreSQL 和文件/Artifact 卷，另行保护配置与签名密钥。先在真实数据副本验证恢复、迁移和回滚。需要一致恢复点时，先停止业务写入再备份数据库和对象卷。
 
-- OIDC/Keycloak is implemented as an optional enterprise adapter; production IdPs still require deployment-specific issuer/client configuration and explicit subject mapping.
-- local-jwt currently uses access-token-only browser sessions rather than a refresh-token flow.
-- S3-compatible ObjectStorage is available as an optional adapter and remains outside the default Compose service set.
-- real external Provider Tool Calling acceptance still requires endpoint credentials supplied by the deployment owner.
-- internet-facing installations remain responsible for TLS, secret management, backups and normal operational hardening.
+镜像回退可恢复旧 `APP_VERSION` 后拉取启动；不兼容数据库迁移还需恢复匹配的数据与对象备份。ownership journal 回滚、Session/Memory namespace 回滚和整体恢复分别验收。
 
-The project should not add Redis, MinIO, Keycloak, a dedicated vector database or a queue merely because those components are common in larger deployments. Add optional infrastructure only when a concrete workload requires it.
+v1.1.1 已完成[发布镜像验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)和[同提交真实协议/租户验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)。目标部署的历史迁移与回滚仍见 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9)。
 
-### Root 控制台操作闭环
+## 11. 本地源码开发
 
-稳定租户、无域名账号、租户 Agent 覆盖、知识资料上传与检索、普通 Root 对话额度、模型价格和用量统计的配置顺序见 [Root 控制台操作说明](docs/root-console-completion.md)。预算控制需主动启用；生产历史数据迁移仍按 #9 的备份与回滚验收执行。
+需要 Python `>=3.11,<3.14`、`uv`、Node.js 和 npm；Node 版本与 Dockerfile/CI 对齐。
+
+```bash
+cd backend
+uv sync
+cd ../frontend
+npm ci
+cd ..
+# 在 backend/.env 仅填写开发所需的模型配置，示例见下文。
+make dev-local
+```
+
+开发环境示例（写入 `backend/.env`，不要覆盖已有文件）：
+
+```env
+GEMINI_API_KEY=替换为实际开发密钥
+GOOGLE_GENAI_USE_VERTEXAI=false
+```
+
+或者填写已注册 OpenAI 兼容模型所需的 `OPENAI_API_KEY`、`OPENAI_API_BASE`、`PLATFORM_DEFAULT_MODEL`。不要把生产自托管模板整体复制到开发环境，它包含 PostgreSQL、生产认证和自托管选择器。`LOCAL_MODE=1` 使用开发替身，不等于持久化或生产认证验收。正式自托管使用 Compose。

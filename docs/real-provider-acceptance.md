@@ -1,101 +1,50 @@
-# Real Provider → Agent → MCP acceptance
+# 真实 Provider、MCP 与双租户验收
 
-A separate no-external-model CI gate (`model-provider-studio-live`) continuously proves that a database-backed dynamic model appears in the real Skill Studio UI, can be selected, saved, and survives reload. It deliberately does not call the configured model endpoint.
+真实模型验收不能用 mock、固定 ToolCall、语法检查或预置表单代替。产品配置顺序见[完整配置流程](configuration-guide.md)，协议契约见[协议验收](protocol-operation-acceptance.md)。
 
-This is the remaining real-model boundary for issues #2, #10 and #11. It uses
-an actual external OpenAI-compatible model and a real MCP server through the
-normal browser chat flow. Before chat, the same browser session opens Skill Studio, verifies the dynamic database-backed model is present in the model selector, selects it, saves the Skill, and re-reads the persisted Skill metadata. It does not use a fixed model response or ToolCall.
+## 1. 配置工作流
 
-## Configure and run
+1. 在仓库 Actions secrets 设置 `REAL_PROVIDER_API_KEY`，不放入 workflow inputs、Issue 或提交。
+2. 进入 Actions 的 `Real Provider Agent MCP acceptance`，选择待验提交/分支运行。
+3. 输入 `provider_base_url`（含 API 前缀）、`model_api_name`（真实远端名）、`supports_reasoning`（按端点探测参数要求选择）。
+4. 查看实际 `real-provider-agent-mcp` job，不能只看语法 job。
 
-1. Add repository Actions secret `REAL_PROVIDER_API_KEY` containing the provider
-   credential. Do not put the credential in workflow inputs, issues, or commits.
-2. Open GitHub Actions → **Real Provider Agent MCP acceptance** → **Run workflow**.
-3. Select `main`, then supply:
-   - `provider_base_url`: externally reachable OpenAI-compatible API base URL,
-     including its API prefix (for example `https://api.example.com/v1`).
-   - `model_api_name`: the upstream model name, with tool calling support.
-   - `supports_reasoning`: enable only when the model requires the probe to use
-     `max_completion_tokens` instead of `max_tokens`.
-4. Inspect the **real-provider-agent-mcp** job, not just the syntax job.
+自动 `Protocol operation acceptance` 使用仓库变量 `REAL_PROVIDER_BASE_URL`、`REAL_PROVIDER_MODEL` 及同名 secret。端点需支持 `/models`、`/chat/completions` 和流式工具调用，并对 runner 可达；私网需合适网络的 runner。工作流会产生真实模型费用。
 
-The endpoint must support `/models` and `/chat/completions` and be reachable
-from GitHub-hosted runners. A private endpoint needs a runner with appropriate
-network access. The workflow makes real billable model requests.
+## 2. 浏览器链路
 
-## What runs
+隔离 Compose 启动 PostgreSQL、local JWT、后端、前端、独立源沙箱和真实地图 MCP。`frontend/e2e/provider-agent-mcp-live.spec.js` 注册并探测动态 Provider/模型，通过 Root 设置选择/保存模型，再从正常 Root 对话完成：
 
-The workflow starts an isolated Compose stack with PostgreSQL, local JWT,
-backend, frontend, a separate-origin MCP Apps sandbox and the ext-apps map
-server. It registers an environment-secret reference, probes completion/tool
-calling, creates a private Skill using the dynamic model, and sends a user turn
-through Chromium `/chat/{skillId}`. The real model must select `show-map`, the
-call must succeed, an MCP App iframe must mount, and the assistant must produce
-the final marker after the tool result.
+- 真实模型选择并执行 `show-map`，渲染 MCP App，继续生成工具结果后的回复。
+- 独立 surface-action-run 的 AG-UI 流和状态写入。
+- 模型经校验工具输出 A2UI 表单，浏览器输入/点击、patch、刷新恢复、再次操作及回到普通聊天。
 
-Provider, model, Skill and MCP registry names have a per-run random suffix;
-cleanup does not overwrite or remove the normal `ext-apps-map` registration.
-The GitHub job removes its disposable Compose volumes when it ends.
+表单验收使用受约束的明确指令，不代表任意模型能稳定生成任意布局。仅 iframe 挂载也不能代替完整模型与操作链路。
 
-## Evidence and limits
+每次使用独立随机资源名，并在结束时清理测试栈/卷。不要把这些会清理数据的 CI 启动和清理步骤直接用于生产。
 
-A pull-request syntax check passing is **not** real Provider acceptance. The
-full job is manual-only and fails when the secret or required inputs are absent.
-Record the run URL, tested commit, provider/model and result in HANDOFF and the
-relevant issues after an actual run. Never record the credential.
+## 3. Tenant A/B 真实额度验收
 
-This workflow creates the Skill via the API, so it does not prove the Skill
-Studio model-selection UI. It also does not test Tenant A/B quota accounting,
-permission bypass, or migration against existing deployment data. Keep those
-acceptance items open until separately verified. An iframe mounting alone does
-not add new rendering evidence beyond the existing MCP Apps browser gate.
+运行 `Tenant A/B real Provider acceptance`，输入相同类型服务信息和 secret。工作流配置 `BUDGET_ENFORCER=tenant-repository`，运行 `scripts/smoke-tenant-provider-acceptance.mjs`，并主动开启受测 Root 租户覆盖的 `budgetEnabled`。
 
-## Tenant A/B live acceptance
+夹具允许指定 `TENANT_E2E_MODEL_A/B`、`TENANT_E2E_QUOTA_USD_A/B`。模型需有有效价格，真实响应需有用量；只有预留投影或零费用不能证明实际额度消费。
 
-The provider-independent `scripts/smoke-tenant-isolation.sh` covers identity,
-tenant-scoped Session, document storage, model policy, MCP configuration and
-audit boundaries. It intentionally does not claim a model spend or Tool Call.
+| 验收项 | 必须结果 |
+| --- | --- |
+| 同 UID 身份 | 两个账号 UID 相同、stable tenant 不同 |
+| 实际调用 | 两租户分别成功执行自己的 MCP 工具 |
+| 用量 | 独立账本均有正的真实消费 |
+| 跨租户能力 | 请求其他租户私有 capability 返回 404 |
+| 管理边界 | 租户管理员不能提高/清空平台额度 |
+| A 超额 | 不带 Skill/capability hint 的普通 Root 聊天在工具调用前返回 `BUDGET_EXCEEDED` |
+| B 独立可用 | A 超额后 B 仍成功调用自己的工具 |
 
-For the remaining live-provider boundary, run the tenant acceptance with
-`BUDGET_ENFORCER=tenant-repository`, two real provider model registrations and
-two tenant-scoped MCP bindings. The fixture seeder accepts
-`TENANT_E2E_MODEL_A`, `TENANT_E2E_MODEL_B`, `TENANT_E2E_QUOTA_USD_A` and
-`TENANT_E2E_QUOTA_USD_B`, so the run can select the exact provider-backed model
-ids and non-zero quota policies instead of accidentally using the first YAML
-model. The acceptance must prove both tenants can complete their own Root Agent
-Tool Calling path, cross-tenant capability hints return 404, and a subsequent
-turn receives the typed `BUDGET_EXCEEDED` event. Do not close #9 from a syntax
-check or a provider-only run; attach the live run URL and tenant evidence.
+非模型 `scripts/smoke-tenant-isolation.sh` 另行覆盖 Session、文件、模型、MCP、审计等作用域；它本身不产生模型消费证据。
 
-### Executable tenant runner
+## 4. 已有证据和剩余范围
 
-Use the manual **Tenant A/B real Provider acceptance** workflow for this
-boundary. It accepts the same OpenAI-compatible base URL and model inputs as
-the existing Provider/MCP workflow, and reads the provider credential only from
-the REAL_PROVIDER_API_KEY Actions secret.
+v1.1.1 的[协议操作工作流](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)中，真实浏览器和真实 A/B Provider job 均成功；正式镜像见[发布工作流](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)，同为 `29688543e0b4c1749210a8be90b0c94a207ca87e`。
 
-The workflow starts an isolated PostgreSQL Compose stack with
-BUDGET_ENFORCER=tenant-repository and runs
-scripts/smoke-tenant-provider-acceptance.mjs. The selected upstream model must
-support Tool Calling and match a configured platform pricing entry. The runner
-rejects a zero-price model or a Provider response without recorded token usage:
-a projected hold alone is not sufficient evidence of real quota consumption.
+留存运行 URL、提交 SHA、Provider/模型、job 结果和脱敏证据，及时下载所需 artifact，凭证不进入记录。PR 只做语法检查时不能报告真实验收通过。
 
-It registers two distinct model ids for the real Provider, seeds two tenants
-whose local-JWT users intentionally share a uid, creates one tenant-scoped MCP
-binding and private Skill per tenant, and sends every turn through the Root
-Agent stream. A passing live run proves all of the following:
-
-- Tenant A and Tenant B both complete their own real show-map MCP Tool Call.
-- Each tenant has a positive, recorded budget-ledger charge.
-- Tenant B receives 404 when it requests Tenant A's private capability.
-- After Tenant A's cap is reduced below recorded spend, its next turn emits
-  typed BUDGET_EXCEEDED before any Tool Call.
-- Tenant B can still make another successful Tool Call after Tenant A exhausts
-  its own quota.
-
-The pull-request job only validates runner syntax and never receives the
-credential. Attach the successful manual-run URL, commit, provider/model and
-redacted tenant evidence before closing the live-provider part of #9. The
-separate target-deployment legacy-migration dry-run, review, apply and verify
-remains required.
+这些工作流不证明目标部署旧数据已经迁移，也不自动验证目标代理下的失败/截断/取消路径。目标环境仍执行[迁移手册](tenant-ownership-migration.md)及完整协议复验，[Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9) 保持其现场验收边界。

@@ -1,89 +1,57 @@
-# S3-compatible ObjectStorage
+# S3 兼容对象存储
 
-The platform keeps local filesystem storage as the default self-host backend. S3-compatible storage is an explicit opt-in adapter and does **not** add MinIO, S3, Redis, or any other service to the default Docker Compose stack.
+默认使用本地文件卷。S3 是可选适配，不会自动启动 MinIO 或任何 S3 服务，也不会自动搬迁已有对象。Artifact 存储独立配置，启用对象存储 S3 不代表 Artifact 同时改用 S3。
 
-## Enable S3-compatible storage
+## 1. 配置参数
 
-Set the backend and bucket:
-
-```env
-OBJECT_STORAGE_BACKEND=s3
-OBJECT_STORAGE_S3_BUCKET=platform-objects
-OBJECT_STORAGE_S3_REGION=us-east-1
-```
-
-AWS workloads may omit explicit credentials and use the normal boto3 credential chain (for example IAM roles).
-
-For a custom endpoint such as MinIO/AIStor, Ceph RGW, Garage, LocalStack, or another S3-compatible provider:
+将以下实际值放入 `.env`：
 
 ```env
 OBJECT_STORAGE_BACKEND=s3
 OBJECT_STORAGE_S3_BUCKET=platform-objects
-OBJECT_STORAGE_S3_ENDPOINT=https://s3.example.internal
+OBJECT_STORAGE_S3_ENDPOINT=https://s3.example.com
 OBJECT_STORAGE_S3_REGION=us-east-1
-OBJECT_STORAGE_S3_ACCESS_KEY=change-me
-OBJECT_STORAGE_S3_SECRET_KEY=change-me
+OBJECT_STORAGE_S3_ACCESS_KEY=替换为访问密钥
+OBJECT_STORAGE_S3_SECRET_KEY=替换为私有密钥
+OBJECT_STORAGE_S3_SESSION_TOKEN=
 OBJECT_STORAGE_S3_ADDRESSING_STYLE=path
 ```
 
-Temporary credentials can additionally set `OBJECT_STORAGE_S3_SESSION_TOKEN`.
+AWS S3 可省略自定义 endpoint，使用 boto3 凭证链/IAM 时不填显式密钥。R2 通常用账户 endpoint 与 `REGION=auto`；寻址方式支持 `auto`、`path`、`virtual`，按服务实际配置填写。
 
-Cloudflare R2 commonly uses its account endpoint with `OBJECT_STORAGE_S3_REGION=auto`. Addressing style can be `auto`, `path`, or `virtual`.
+## 2. 显式传入 backend
 
-## Tenant isolation
+默认 Compose 未逐项传递 S3 参数；只编辑 `.env` 不够。创建 `docker-compose.storage.yml`：
 
-Business code continues to address objects as `(tenant_id, key)`. The adapter maps those values to:
-
-```text
-tenants/<tenant_id>/<key>
+```yaml
+services:
+  backend:
+    environment:
+      OBJECT_STORAGE_BACKEND: s3
+      OBJECT_STORAGE_S3_BUCKET: "${OBJECT_STORAGE_S3_BUCKET:?请填写bucket}"
+      OBJECT_STORAGE_S3_ENDPOINT: "${OBJECT_STORAGE_S3_ENDPOINT:-}"
+      OBJECT_STORAGE_S3_REGION: "${OBJECT_STORAGE_S3_REGION:-us-east-1}"
+      OBJECT_STORAGE_S3_ACCESS_KEY: "${OBJECT_STORAGE_S3_ACCESS_KEY:-}"
+      OBJECT_STORAGE_S3_SECRET_KEY: "${OBJECT_STORAGE_S3_SECRET_KEY:-}"
+      OBJECT_STORAGE_S3_SESSION_TOKEN: "${OBJECT_STORAGE_S3_SESSION_TOKEN:-}"
+      OBJECT_STORAGE_S3_ADDRESSING_STYLE: "${OBJECT_STORAGE_S3_ADDRESSING_STYLE:-auto}"
 ```
 
-Tenant IDs and object keys use the same path-safety validation as local and GCS storage. Callers cannot use `..`, absolute paths, backslashes, empty path segments, or tenant IDs containing path separators to escape a tenant namespace.
-
-## Streaming transfers
-
-`put_fileobj()` uses boto3's managed multipart upload and keeps transfer memory bounded. The requested `chunk_size` is promoted to S3's 5 MiB multipart minimum when needed. `iter_bytes()` reads `StreamingBody` chunks incrementally and closes the response body when iteration completes or is aborted.
-
-The existing convenience methods remain available:
-
-- `put_bytes()`
-- `get_bytes()`
-- `exists()`
-- `delete()`
-- `list_objects()`
-
-## Presigned direct transfer URLs
-
-Remote object stores implement the provider-neutral presigned URL methods:
-
-```python
-storage.generate_presigned_download_url(
-    tenant_id,
-    "documents/report.pdf",
-    expires_in=900,
-)
-
-storage.generate_presigned_upload_url(
-    tenant_id,
-    "incoming/report.pdf",
-    expires_in=900,
-    content_type="application/pdf",
-)
+```bash
+docker compose -f docker-compose.release.yml -f docker-compose.storage.yml config --quiet
+docker compose -f docker-compose.release.yml -f docker-compose.storage.yml up -d
 ```
 
-The object key is tenant-prefixed **before** signing, so a URL for one tenant does not sign an object in another tenant namespace. Expiration must be between 1 second and 7 days.
+源码部署将第一个文件改为 `docker-compose.yml`；已有额外配置时带齐所有 `-f`，后续管理保持一致。
 
-If `content_type` is supplied for an upload URL, the uploader must send the same `Content-Type` value because it becomes part of the signed request.
+## 3. 租户与传输
 
-`LocalObjectStorage` intentionally does not generate presigned URLs. Local files continue to use authenticated application upload/download endpoints and never expose filesystem paths as transferable URLs.
+业务接口以 `(tenant_id, key)` 访问，对象实际前缀为 `tenants/<tenant_id>/<key>`。适配层拒绝 `..`、绝对路径、反斜杠、空路径段及带路径分隔符的 tenant ID。
 
-## Default Compose behavior
+`put_fileobj()` 使用托管分片上传，必要时将分片提升到 S3 最小 5 MiB；`iter_bytes()` 增量读取并关闭响应，内存有界。也提供 `put_bytes()`、`get_bytes()`、`exists()`、`delete()`、`list_objects()`。
 
-No S3-compatible service is started by `docker-compose.yml` or `docker-compose.release.yml`. The baseline remains:
+远程存储支持预签名上传/下载，先加租户前缀再签名，有效期 1 秒至 7 天。上传若签入 `content_type`，实际 `Content-Type` 必须相同。本地存储不生成预签名 URL，继续使用认证上传/下载接口。
 
-```env
-OBJECT_STORAGE_BACKEND=local
-OBJECT_STORAGE_LOCAL_ROOT=/data/objects
-```
+## 4. 切换和验收
 
-Switching to S3 only changes the object-storage adapter selected by the backend; business document code continues to use the same `ObjectStorage` contract.
+先备份并逐对象核对旧 metadata、租户和物理路径，制定复制与回滚方案。验证上传、预览、下载、删除、重启持久化、跨租户拒绝及预签名范围。S3 对象备份需与 PostgreSQL 元数据保持可恢复的一致关系。
