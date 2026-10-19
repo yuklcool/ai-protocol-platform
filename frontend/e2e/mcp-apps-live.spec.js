@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { provisionAdminTenant } = require("./selfhost-fixtures");
 
 const FRONTEND_URL = process.env.MCP_BROWSER_FRONTEND_URL || "http://localhost:3456";
 const BACKEND_URL = process.env.MCP_BROWSER_BACKEND_URL || "http://127.0.0.1:1956";
@@ -50,7 +51,7 @@ test.describe("real MCP Apps browser acceptance", () => {
     let context = null;
     const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
     const rootPath = `/api/admin/tenant-root/${encodeURIComponent(login.user.tenantId)}`;
-    const originalTenant = await authedApi(token, tenantPath);
+    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
     const originalRoot = await authedApi(token, rootPath);
 
     try {

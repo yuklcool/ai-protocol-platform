@@ -10,6 +10,7 @@ on:
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
+      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
       - frontend/src/app/admin/tenants/**
@@ -59,6 +60,7 @@ on:
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
+      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
       - frontend/src/app/admin/tenants/**

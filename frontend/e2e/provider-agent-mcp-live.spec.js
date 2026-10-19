@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { provisionAdminTenant } = require("./selfhost-fixtures");
 const { randomUUID } = require("node:crypto");
 
 const FRONTEND_URL = process.env.PROVIDER_E2E_FRONTEND_URL || "http://localhost:3456";
@@ -122,7 +123,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let context = null;
     const originalPlatform = await authedApi(token, "/api/admin/platform-config");
     const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
-    const originalTenant = await authedApi(token, tenantPath);
+    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
     const grantTenant = (skills) => authedApi(token, tenantPath, {
       method: "PATCH",
       headers: { "content-type": "application/json" },

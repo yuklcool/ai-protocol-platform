@@ -9,6 +9,7 @@ on:
       - backend/adk/agui.py
       - backend/protocols/a2ui_surface_action_run_routes.py
       - frontend/e2e/provider-agent-mcp-live.spec.js
+      - frontend/e2e/selfhost-fixtures.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   pull_request:
     paths:
@@ -18,6 +19,7 @@ on:
       - backend/adk/agui.py
       - backend/protocols/a2ui_surface_action_run_routes.py
       - frontend/e2e/provider-agent-mcp-live.spec.js
+      - frontend/e2e/selfhost-fixtures.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   workflow_call:
     inputs:

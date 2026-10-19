@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { provisionAdminTenant } = require("./selfhost-fixtures");
 const { randomUUID } = require("node:crypto");
 
 const FRONTEND =
@@ -57,6 +58,7 @@ test("self-host console persists tenant policies, knowledge, accounts and permis
     password: PASSWORD,
   });
   const token = login.access_token;
+  await provisionAdminTenant(BACKEND, login);
   const original = await api("/api/admin/platform-config", token);
   const context = await signedContext(browser, login);
   const page = await context.newPage();

@@ -1,4 +1,5 @@
 const { test, expect } = require("@playwright/test");
+const { provisionAdminTenant } = require("./selfhost-fixtures");
 const { randomUUID } = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
@@ -82,7 +83,7 @@ test.describe("A2UI persisted surface live acceptance", () => {
     expect(userId, JSON.stringify(login.user)).toBeTruthy();
     const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
     const rootPath = `/api/admin/tenant-root/${encodeURIComponent(login.user.tenantId)}`;
-    const originalTenant = await authedApi(token, tenantPath);
+    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
     const originalRoot = await authedApi(token, rootPath);
 
     let skillId = null;

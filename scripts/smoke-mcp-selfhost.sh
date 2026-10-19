@@ -76,6 +76,14 @@ ok "Platform admin local-jwt login"
 TENANT_KEY="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys,urllib.parse; print(urllib.parse.quote(json.load(sys.stdin)["user"]["tenantId"], safe=""))')"
 TENANT_PATH="$BACKEND_URL/api/admin/tenants/$TENANT_KEY"
 ROOT_PATH="$BACKEND_URL/api/admin/tenant-root/$TENANT_KEY"
+TENANT_PAYLOAD="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys; print(json.dumps({"tenant_id":json.load(sys.stdin)["user"]["tenantId"],"display_name":"自托管验收租户"}))')"
+TENANT_CREATE_CODE="$(curl -sS -o "$TMP_DIR/tenant-create.json" -w '%{http_code}' -X POST \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  --data-binary "$TENANT_PAYLOAD" "$BACKEND_URL/api/admin/tenants")"
+case "$TENANT_CREATE_CODE" in
+  201|409) ;;
+  *) cat "$TMP_DIR/tenant-create.json" >&2; fail "tenant provisioning failed with $TENANT_CREATE_CODE" ;;
+esac
 curl -fsS -H "Authorization: Bearer $TOKEN" "$TENANT_PATH" > "$TMP_DIR/tenant.json"
 curl -fsS -H "Authorization: Bearer $TOKEN" "$ROOT_PATH" > "$TMP_DIR/root.json"
 python3 - "$TMP_DIR" "$SERVER_ID" <<'PY'
