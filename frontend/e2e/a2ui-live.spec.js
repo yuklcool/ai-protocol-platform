@@ -166,7 +166,7 @@ test.describe("A2UI persisted surface live acceptance", () => {
       );
       await actionButton.click();
       const persisted = await actionResponse;
-      expect(persisted.status(), await persisted.text()).toBe(204);
+      expect(persisted.status()).toBe(204);
 
       await expect
         .poll(
