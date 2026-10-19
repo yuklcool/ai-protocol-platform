@@ -502,7 +502,7 @@ describe("useSkillAgent — deterministic document attachment", () => {
     });
   });
 
-  it("omits forwardedProps entirely when no docs and no resume flag", async () => {
+  it("sends an explicit empty selection when no files are passed", async () => {
     // Negative case: a fresh chat with nothing ticked must not send a
     // stray empty-list — the backend treats absence as "no docs", and
     // an empty list would still allocate state["document_ids"] = [].
@@ -512,10 +512,10 @@ describe("useSkillAgent — deterministic document attachment", () => {
       await result.current.sendMessage("hello");
     });
 
-    expect(fake.runAgent).toHaveBeenCalledWith(undefined);
+    expect(fake.runAgent).toHaveBeenCalledWith({ forwardedProps: { document_ids: [] } });
   });
 
-  it("omits forwardedProps when documentIds is an empty array", async () => {
+  it("sends an explicit empty selection when every file is deselected", async () => {
     // The chat page always passes `includedDocIds = openTabs.filter(...)`
     // even when no tabs are open, so it sends `documentIds: []`. The
     // hook must treat that the same as omitting it.
@@ -525,23 +525,22 @@ describe("useSkillAgent — deterministic document attachment", () => {
       await result.current.sendMessage("hello", { documentIds: [] });
     });
 
-    expect(fake.runAgent).toHaveBeenCalledWith(undefined);
+    expect(fake.runAgent).toHaveBeenCalledWith({ forwardedProps: { document_ids: [] } });
   });
 
-  it("carries both documentIds and resumedSession when present", async () => {
+  it("sends the selected document list without a resume flag", async () => {
     const { result } = renderHook(() => useSkillAgent());
 
     await act(async () => {
       await result.current.sendMessage("review the doc", {
         documentIds: ["doc-claim"],
-        resumedSession: true,
+
       });
     });
 
     expect(fake.runAgent).toHaveBeenCalledWith({
       forwardedProps: {
         document_ids: ["doc-claim"],
-        resumed_session: true,
       },
     });
   });
@@ -555,7 +554,7 @@ describe("useSkillAgent — deterministic document attachment", () => {
     await act(async () => {
       await result.current.sendMessage("hi");
     });
-    expect(fake.runAgent).toHaveBeenLastCalledWith(undefined);
+    expect(fake.runAgent).toHaveBeenLastCalledWith({ forwardedProps: { document_ids: [] } });
 
     await act(async () => {
       await result.current.sendMessage("the claim incident one", {
@@ -1154,6 +1153,7 @@ describe("useSkillAgent — A2UI surface context (sprint 2.10)", () => {
     expect(fake.runAgent).toHaveBeenCalledTimes(1);
     expect(fake.runAgent).toHaveBeenCalledWith({
       forwardedProps: {
+        document_ids: [],
         a2ui_surface_state: {
           workspace: {
             catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json",
@@ -1196,7 +1196,7 @@ describe("useSkillAgent — A2UI surface context (sprint 2.10)", () => {
 
     // Empty snapshot → no surface_state key → no forwardedProps at all
     // (the empty-forwardedProps short-circuit produces undefined).
-    expect(fake.runAgent).toHaveBeenCalledWith(undefined);
+    expect(fake.runAgent).toHaveBeenCalledWith({ forwardedProps: { document_ids: [] } });
   });
 
   it("reads the snapshot fresh on EACH sendMessage (no cache)", async () => {
@@ -1206,7 +1206,7 @@ describe("useSkillAgent — A2UI surface context (sprint 2.10)", () => {
     await act(async () => {
       await result.current.sendMessage("turn 1");
     });
-    expect(fake.runAgent).toHaveBeenNthCalledWith(1, undefined);
+    expect(fake.runAgent).toHaveBeenNthCalledWith(1, { forwardedProps: { document_ids: [] } });
 
     // Surface activates between turns
     surfaceSnapshotStub = {
@@ -1219,6 +1219,7 @@ describe("useSkillAgent — A2UI surface context (sprint 2.10)", () => {
     });
     expect(fake.runAgent).toHaveBeenNthCalledWith(2, {
       forwardedProps: {
+        document_ids: [],
         a2ui_surface_state: surfaceSnapshotStub,
       },
     });

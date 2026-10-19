@@ -61,13 +61,16 @@ async def list_documents(
     Returns:
         A formatted list of document names, IDs, and status.
     """
-    user_id = None
-    if tool_context is not None:
-        user_id = tool_context.state.get("user:id") or tool_context.state.get("user_id")
+    from observability.tenant_context import get_tenant_context
 
-    filters: list[tuple[str, str, object]] = []
-    if user_id:
-        filters.append(("userId", "==", user_id))
+    identity = get_tenant_context() or {}
+    selected = set(tool_context.state.get("document_ids") or []) if tool_context is not None else set()
+    if not identity.get("tenant.id") or not identity.get("tenant.uid") or not selected:
+        return "本轮未选择可读取的附件,请先在对话中选择文件。"
+    filters: list[tuple[str, str, object]] = [
+        ("userId", "==", identity["tenant.uid"]),
+        ("tenantId", "==", identity["tenant.id"]),
+    ]
     if skill_id:
         filters.append(("skillId", "==", skill_id))
     filters.append(("status", "==", "parsed"))
@@ -87,8 +90,9 @@ async def list_documents(
         logger.warning("list_documents: persistence query failed: %s", exc)
         return f"Could not retrieve documents: {exc}"
 
+    docs = [row for row in docs if row.get("__id") in selected]
     if not docs:
-        return "No documents found in the workspace."
+        return "本轮没有可读取的附件。"
 
     lines = [
         f"Found {len(docs)} document(s). Refer to them by name (+ upload date to "
@@ -135,6 +139,8 @@ async def get_document_content(
     Returns:
         Document content as markdown, or JSON blocks string when mode="blocks".
     """
+    if tool_context is None or doc_id not in (tool_context.state.get("document_ids") or []):
+        return "此文件未被选为本轮附件,不能读取。"
     try:
         content, blocks = await asyncio.to_thread(build_document_context, doc_id, mode, section)
     except KeyError:

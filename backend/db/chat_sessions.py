@@ -132,6 +132,7 @@ def create_session_index(
         sessionId=session_id,
         tenantId=stable_tenant_id,
         documentIds=list(document_ids) if document_ids else [],
+        documentTabs=[{"id": ref, "included": True} for ref in (document_ids or [])],
         agentId=agent_id,
         appName=app_name,
         skillId=skill_id,
@@ -172,11 +173,21 @@ def set_session_skill(session_id: str, new_skill_id: str, prev_skill_id: str | N
     update_document(_COLLECTION, session_id, {"skillId": new_skill_id})
 
 
-def add_session_documents(session_id: str, doc_ids: list[str]) -> None:
-    if not doc_ids:
-        return
+def set_session_documents(session_id: str, doc_ids: list[str]) -> None:
+    """每轮选择替换,保留仍打开但不参与分析的文件标签。"""
     _assert_mutation_scope(session_id)
-    array_union_field(_COLLECTION, session_id, "documentIds", list(doc_ids))
+    idx = get_session_index(session_id)
+    if idx is None:
+        raise ValueError("Session not found")
+    selected = set(doc_ids)
+    order = list(dict.fromkeys([str(tab["id"]) for tab in idx.document_tabs] + doc_ids))
+    update_session_fields(
+        session_id,
+        {
+            "documentIds": list(doc_ids),
+            "documentTabs": [{"id": ref, "included": ref in selected} for ref in order],
+        },
+    )
 
 
 def soft_delete_session(session_id: str) -> None:
@@ -368,7 +379,6 @@ _from_firestore = _from_document
 
 __all__ = [
     "SessionFilter",
-    "add_session_documents",
     "app_name_for_session",
     "clear_provisional",
     "create_session_index",

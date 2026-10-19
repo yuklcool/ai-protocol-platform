@@ -202,8 +202,21 @@ def list_folder_documents(folder_id: str, user: _CurrentUser) -> _DocumentsListR
     if folder.get("userId") != user.uid:
         raise HTTPException(status_code=403, detail=_ACCESS_DENIED)
     return _DocumentsListResponse(
-        documents=folders_db.list_folder_documents(user_id=user.uid, folder_id=folder_id, tenant_id=tenant_id)
+        documents=[
+            {
+                **{key: value for key, value in row.items() if key not in {"blocks", "editedBlocks", "__id"}},
+                "id": row.get("__id") or row["id"],
+            }
+            for row in folders_db.list_folder_documents(user_id=user.uid, folder_id=folder_id, tenant_id=tenant_id)
+        ]
     )
+
+
+@router.get("/api/documents/capabilities")
+def document_capabilities(user: _CurrentUser) -> dict:
+    from tools.documents.parsing import capabilities
+
+    return capabilities()
 
 
 @router.get("/api/documents/{doc_id}")
@@ -286,8 +299,23 @@ async def reparse_document(doc_id: str, user: _CurrentUser) -> dict:
         "parseError": error if status == "failed" else None,
         "parsedAt": now.isoformat() if status == "parsed" else None,
         "updatedAt": now.isoformat(),
+        "editedBlocks": {},
+        "summary": {
+            "totalBlocks": len(blocks),
+            "headings": sum(b.get("type") == "heading" for b in blocks),
+            "tables": sum(b.get("type") == "table" for b in blocks),
+            "images": sum(b.get("type") == "image" for b in blocks),
+            "changes": sum(b.get("type") == "change" for b in blocks),
+        },
     }
     _set_document_record(_PARSED_DOCS_COLLECTION, doc_id, update, merge=True)
+    if doc.get("folderId") and (status == "parsed") != (doc.get("parseStatus") == "parsed"):
+        folders_db.update_folder_counts(
+            user.uid,
+            doc["folderId"],
+            parsed_delta=1 if status == "parsed" else -1,
+            tenant_id=tenant_id,
+        )
     return {"docId": doc_id, "parseStatus": status, "blockCount": len(blocks), "parseError": error}
 
 

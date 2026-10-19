@@ -149,6 +149,28 @@ def client(app):
 
     repo = MemoryRepository()
     reset_repository_for_testing(repo)
+    for doc_id in [
+        "docA",
+        "docB",
+        "docC",
+        "doc1",
+        "doc2",
+        "doc3",
+        "docX",
+        "docY",
+        "doc-stale-from-turn-2",
+        "doc-fresh-this-turn",
+    ]:
+        repo.set_document(
+            "parsed_documents",
+            doc_id,
+            {
+                "userId": "caller-uid",
+                "tenantId": "test-tenant",
+                "parseStatus": "parsed",
+                "blocks": [{"type": "paragraph", "text": "fixture content"}],
+            },
+        )
     invalidate_cache(clear_last_known_good=True)
     ids = ["test-skill-id", "tool-skill", "door-skill", "specialist-skill", "private-id", "capability-a", "ttft-skill"]
     from skills.skill_config import _cache
@@ -181,11 +203,8 @@ def client(app):
 # --- Tests ---
 
 
-def test_stream_skill_passes_resumed_session_flag_into_state(client):
-    """When the frontend sets forwardedProps.resumed_session the flag
-    must reach the agent's initial state so make_document_injector can
-    eager-inject docs only on resume.
-    """
+def test_stream_skill_attachment_selection_does_not_need_resume_flag(client):
+    """本轮附件直接进入 state,不依赖恢复会话的历史标志。"""
     captured: dict[str, object] = {}
 
     async def _capturing_stream(input_data):
@@ -209,7 +228,7 @@ def test_stream_skill_passes_resumed_session_flag_into_state(client):
             },
         )
     assert resp.status_code == 200, resp.text
-    assert captured["state"].get("app:resumed_session") is True
+    assert "app:resumed_session" not in captured["state"]
 
 
 def test_stream_skill_omits_resumed_flag_for_fresh_chats(client):
@@ -288,7 +307,7 @@ def test_stream_skill_no_documents_when_list_omitted(client):
             json={"message": "hello"},
         )
     assert resp.status_code == 200
-    assert "document_ids" not in captured["state"]
+    assert captured["state"]["document_ids"] == []
 
 
 def test_stream_skill_forwardedprops_wins_over_stale_state_document_ids(client):
@@ -353,12 +372,8 @@ def test_stream_skill_forwardedprops_wins_over_stale_state_document_ids(client):
     )
 
 
-def test_stream_skill_falls_back_to_state_document_ids_when_no_forwardedprops(client):
-    """Legacy fallback locks: if a client somehow sends only
-    ``state.document_ids`` and no forwardedProps (e.g. a future channel
-    adapter), the loader still gets the list. Locks the floor so the
-    Phase 2 priority reorder doesn't accidentally drop this path.
-    """
+def test_stream_skill_ignores_stale_state_document_ids_when_no_selection(client):
+    """没有明确选择时清空附件,不从旧 state 恢复。"""
     captured: dict[str, object] = {}
 
     async def _capturing_stream(input_data):
@@ -380,7 +395,7 @@ def test_stream_skill_falls_back_to_state_document_ids_when_no_forwardedprops(cl
             },
         )
     assert resp.status_code == 200
-    assert captured["state"].get("document_ids") == ["legacy-only"]
+    assert captured["state"].get("document_ids") == []
 
 
 def test_stream_skill_accepts_document_ids_simple_format(client):
@@ -590,42 +605,7 @@ def test_refresh_finds_session_index_after_first_stream_event(client):
 
 
 def test_session_index_document_ids_grow_when_doc_added_after_empty_first_turn(client):
-    """Regression for the "55 turns / lumped-into-one-thread / not visible
-    in the doc panel" bug observed in dev on 2026-04-28.
-
-    Reproduction:
-
-      Turn 1 — user lands on /chat/<skill> with NO ?session= and types a
-        message before any doc tab is open (or after a reload to a
-        404'd session_id where useSessionDocuments cleared openTabs).
-        Backend gets ``forwardedProps.document_ids = None`` →
-        ``_ensure_session_index`` writes a row with ``documentIds=[]``.
-
-      Turn 2 — same threadId, the user now has a doc tab open.
-        Backend gets ``forwardedProps.document_ids = ['docA']``. But
-        ``_ensure_session_index`` short-circuits because the row already
-        exists, so the wire-time signal "this turn attaches docA" is
-        only persisted via the async ``make_document_loader`` →
-        ``add_session_documents`` path. If the loader bails for any
-        reason (artifact load fails, ADK callback skipped, mocked
-        away in tests), the Firestore row stays at ``documentIds=[]``
-        forever.
-
-    Symptom users see:
-      * ``list_sessions_for_skill`` (used by the sidebar "Sessions"
-        panel) returns the row → user sees a session entry, possibly
-        with a high turn_count.
-      * ``list_sessions_for_document(docA)`` (used by the per-doc
-        "Conversations" panel) uses Firestore ``array_contains`` and
-        skips this row because ``documentIds=[]`` → user sees "No
-        conversations yet" even though they're clearly chatting with
-        docA.
-
-    Expected fix: ``_ensure_session_index`` must ArrayUnion the current
-    turn's ``document_ids`` into the session row on **every** turn,
-    not just on first creation. This is a synchronous, wire-time
-    guarantee independent of the async loader's success.
-    """
+    """同步保存每轮选择,附件读取不依赖旧 Artifact loader。"""
     skill = _make_skill(skill_id="test-skill-id", access_type="public")
     state: dict[str, object] = {"row": None}
     add_calls: list[tuple[str, list[str]]] = []
@@ -642,19 +622,15 @@ def test_session_index_document_ids_grow_when_doc_added_after_empty_first_turn(c
 
     def _fake_add_docs(session_id, doc_ids):
         add_calls.append((session_id, list(doc_ids)))
-        if state["row"] is not None and doc_ids:
-            existing_ids = list(state["row"].document_ids)
-            for d in doc_ids:
-                if d not in existing_ids:
-                    existing_ids.append(d)
-            state["row"].document_ids = existing_ids
+        if state["row"] is not None:
+            state["row"].document_ids = list(doc_ids)
 
     with (
         patch("skills.skill_processor.get_skill", return_value=skill),
         patch("ag_ui_adk.ADKAgent.run", side_effect=_fake_event_stream),
         patch("db.chat_sessions.create_session_index", side_effect=_fake_create),
         patch("db.chat_sessions.get_session_index", side_effect=_fake_get),
-        patch("db.chat_sessions.add_session_documents", side_effect=_fake_add_docs),
+        patch("db.chat_sessions.set_session_documents", side_effect=_fake_add_docs),
     ):
         # Turn 1: no docs attached.
         r1 = client.post(
@@ -723,7 +699,7 @@ def test_session_index_skill_follows_a_switch(client):
         patch("ag_ui_adk.ADKAgent.run", side_effect=_fake_event_stream),
         patch("db.chat_sessions.get_session_index", side_effect=lambda _sid: row),
         patch("db.chat_sessions.set_session_skill", side_effect=_fake_set_skill),
-        patch("db.chat_sessions.add_session_documents"),
+        patch("db.chat_sessions.set_session_documents"),
     ):
         # Turn re-issued on the SPECIALIST over the door's existing thread.
         resp = client.post(
@@ -755,7 +731,7 @@ def test_session_index_no_skill_update_when_same_skill(client):
         patch("ag_ui_adk.ADKAgent.run", side_effect=_fake_event_stream),
         patch("db.chat_sessions.get_session_index", side_effect=lambda _sid: row),
         patch("db.chat_sessions.set_session_skill", side_effect=lambda *a, **k: calls.append(a)),
-        patch("db.chat_sessions.add_session_documents"),
+        patch("db.chat_sessions.set_session_documents"),
     ):
         resp = client.post(
             "/api/skill/test-skill-id/stream",
@@ -894,6 +870,7 @@ def test_stream_skill_owner_resume_emits_not_read_only(client):
     skill = _make_skill(skill_id="test-skill-id", access_type="public")
     session = _make_session_index(owner_uid="caller-uid")
     with (
+        patch("db.chat_sessions.set_session_documents"),
         patch("skills.skill_processor.get_skill", return_value=skill),
         patch("db.chat_sessions.get_session_index", return_value=session),
         patch("ag_ui_adk.ADKAgent.run", side_effect=_fake_event_stream),

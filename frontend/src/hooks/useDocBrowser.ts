@@ -1,15 +1,9 @@
 "use client";
 
-import { firestoreTimestampToIso, getFirestoreDb } from "@/lib/firebase";
-import { isAnonymousGroupAuthMode } from "@/lib/anonymousGroupAuth";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { useCallback, useEffect, useRef, useState } from "react";
-
-export type ParseStatus =
-  | "pending"
-  | "pending_ai_extraction"
-  | "parsed"
-  | "failed";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { DOCUMENTS_CHANGED, documentRequest, type ParseStatus } from "@/lib/documents";
+export type { ParseStatus } from "@/lib/documents";
 
 export interface Folder {
   id: string;
@@ -19,7 +13,6 @@ export interface Folder {
   parsedCount: number;
   createdAt?: string;
 }
-
 export interface ParsedDocument {
   id: string;
   originalFilename: string;
@@ -30,117 +23,57 @@ export interface ParsedDocument {
   userId: string;
   blockCount: number | null;
   hasA2ui: boolean;
+  sizeBytes?: number;
   createdAt?: string;
 }
 
-interface DocBrowserState {
-  folders: Folder[];
-  activeFolderId: string | null;
-  documents: ParsedDocument[];
-  searchQuery: string;
-  filteredDocuments: ParsedDocument[];
-  setActiveFolderId: (id: string | null) => void;
-  setSearchQuery: (q: string) => void;
-}
-
-export function useDocBrowser(uid: string): DocBrowserState {
+export function useDocBrowser(uid: string) {
+  const { user } = useAuth();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<ParsedDocument[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Subscribe to the user's folders collection
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
-    const db = getFirestoreDb();
-    // Anonymous-group users have no Firebase Auth user — Firestore rules would
-    // deny the snapshot and produce repeating permission-denied console errors.
-    if (!db || !uid || isAnonymousGroupAuthMode()) return;
-
-    const foldersCol = collection(db, "users", uid, "folders");
-    const unsub = onSnapshot(foldersCol, (snap) => {
-      const loaded: Folder[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          name: data.name ?? "Unnamed",
-          userId: data.userId ?? uid,
-          docCount: data.docCount ?? 0,
-          parsedCount: data.parsedCount ?? 0,
-          createdAt: firestoreTimestampToIso(data.createdAt) ?? undefined,
-        };
-      });
-      loaded.sort((a, b) => (a.createdAt ?? "") > (b.createdAt ?? "") ? -1 : 1);
-      setFolders(loaded);
-      // Auto-select first folder when folders load and nothing is selected
-      setActiveFolderId((prev) => prev ?? (loaded[0]?.id ?? null));
-    });
-
-    return unsub;
-  }, [uid]);
-
-  // Subscribe to parsed_documents for the active folder
-  const prevFolderIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (prevFolderIdRef.current === activeFolderId) return;
-    prevFolderIdRef.current = activeFolderId;
-
-    if (!activeFolderId) {
-      setDocuments([]);
-      return;
-    }
-
-    const db = getFirestoreDb();
-    if (!db || !uid || isAnonymousGroupAuthMode()) return;
-
-    const docsQ = query(
-      collection(db, "parsed_documents"),
-      where("userId", "==", uid),
-      where("folderId", "==", activeFolderId),
-    );
-
-    const unsub = onSnapshot(docsQ, (snap) => {
-      const loaded: ParsedDocument[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          originalFilename: data.originalFilename ?? d.id,
-          sourceFormat: data.sourceFormat ?? "",
-          parseStatus: (data.parseStatus ?? "pending") as ParseStatus,
-          parseError: data.parseError ?? null,
-          folderId: data.folderId ?? activeFolderId,
-          userId: data.userId ?? uid,
-          blockCount: data.blockCount ?? null,
-          hasA2ui: !!data.a2uiComponents,
-          createdAt: firestoreTimestampToIso(data.createdAt) ?? undefined,
-        };
-      });
-      loaded.sort((a, b) => (a.createdAt ?? "") > (b.createdAt ?? "") ? -1 : 1);
-      setDocuments(loaded);
-    });
-
-    return unsub;
-  }, [activeFolderId, uid]);
-
-  const handleSetActiveFolderId = useCallback((id: string | null) => {
-    setActiveFolderId(id);
-    setDocuments([]);
+    const refresh = () => setRevision((value) => value + 1);
+    window.addEventListener(DOCUMENTS_CHANGED, refresh);
+    window.addEventListener("focus", refresh);
+    return () => { window.removeEventListener(DOCUMENTS_CHANGED, refresh); window.removeEventListener("focus", refresh); };
   }, []);
-
-  const lower = searchQuery.toLowerCase();
-  const filteredDocuments =
-    searchQuery.trim() === ""
-      ? documents
-      : documents.filter((d) =>
-          d.originalFilename.toLowerCase().includes(lower),
-        );
-
-  return {
-    folders,
-    activeFolderId,
-    documents,
-    searchQuery,
-    filteredDocuments,
-    setActiveFolderId: handleSetActiveFolderId,
-    setSearchQuery,
-  };
+  useEffect(() => {
+    setFolders([]); setDocuments([]); setActiveFolderId(null); setIsLoading(false); setError(null);
+  }, [uid, user]);
+  useEffect(() => {
+    if (!uid || !user) return;
+    const controller = new AbortController();
+    void documentRequest<{ folders: Folder[] }>("/folders", { signal: controller.signal }).then((data) => {
+      if (controller.signal.aborted) return;
+      setFolders(data.folders);
+      setActiveFolderId((previous) => data.folders.some((folder) => folder.id === previous) ? previous : data.folders[0]?.id ?? null);
+      setError(null);
+    }).catch((failure) => { if (!controller.signal.aborted) setError(failure.message); });
+    return () => controller.abort();
+  }, [uid, user, revision]);
+  useEffect(() => {
+    setDocuments([]);
+    if (!activeFolderId || !user) { setIsLoading(false); return; }
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      try {
+        const data = await documentRequest<{ documents: ParsedDocument[] }>(`/folders/${encodeURIComponent(activeFolderId)}/documents`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setDocuments(data.documents); setError(null);
+        if (data.documents.some((doc) => doc.parseStatus === "pending")) timer = setTimeout(load, 2000);
+      } catch (failure) {
+        if (!controller.signal.aborted) setError((failure as Error).message);
+      } finally { if (!controller.signal.aborted) setIsLoading(false); }
+    };
+    setIsLoading(true); void load();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [uid, user, activeFolderId, revision]);
+  const filteredDocuments = useMemo(() => documents.filter((doc) => doc.originalFilename.toLowerCase().includes(searchQuery.trim().toLowerCase())), [documents, searchQuery]);
+  return { folders, activeFolderId, documents, searchQuery, filteredDocuments, setActiveFolderId, setSearchQuery, isLoading, error };
 }

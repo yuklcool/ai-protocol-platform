@@ -24,7 +24,8 @@ import {
 import { ActivityPanel, type ActivityContext, type ActivityDoc } from "@/components/chat/ActivityPanel";
 import { useSkillMeta } from "@/hooks/useSkillMeta";
 import { useSessionMessages, type A2uiSurfaceReplay } from "@/hooks/useSessionMessages";
-import { useSessionDocuments } from "@/hooks/useSessionDocuments";
+import { useSessionAttachments } from "@/hooks/useSessionAttachments";
+import type { UploadResult } from "@/lib/documents";
 import { useSessionActivity } from "@/hooks/useSessionActivity";
 import { useStableThreadId } from "@/hooks/useStableThreadId";
 import { fetchWithAuth } from "@/lib/apiClient";
@@ -981,7 +982,11 @@ function ChatShellContent({
       return next;
     });
   }, []);
-  const [openTabs, setOpenTabs] = useState<DocTabData[]>([]);
+  const sessionId = searchParams.get("session");
+  const effectiveSessionId = sessionId ?? agentSessionId;
+  const { tabs: openTabs, setTabs: setOpenTabs, ready: attachmentsReady, saving: attachmentsSaving, error: attachmentError, retrySave } = useSessionAttachments(effectiveSessionId, skillId, user);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadBlocked, setUploadBlocked] = useState(false);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // v6.4.0 ITERATION 2026-06-09: Workbench is the right pane that holds
   // the document + workspace surfaces. Default starts on "workspace" so
@@ -1035,17 +1040,12 @@ function ChatShellContent({
   const workbenchVisible = workbenchHasContent && !workbenchCollapsed;
 
   // Session routing: read ?session= from URL, allow programmatic navigation
-  const sessionId = searchParams.get("session");
-
   // Effective thread id — the value threaded to the surface mounts
   // (sessionId ?? agentSessionId). The confirm→switch below keys off it.
-  const effectiveSessionId = sessionId ?? agentSessionId;
-
   const { initialMessages, a2uiSurfaces, historyError, sessionGone, transcriptUnavailable } =
     useSessionMessages(sessionId);
-  const { tabs: sessionDocTabs } = useSessionDocuments(sessionId);
   // Session documents → "document added" entries in the Activity feed.
-  const activityDocuments: ActivityDoc[] = (sessionDocTabs ?? []).map((t) => ({
+  const activityDocuments: ActivityDoc[] = openTabs.map((t) => ({
     id: t.id,
     name: t.filename,
   }));
@@ -1153,14 +1153,7 @@ function ChatShellContent({
   const [sessionSkillFilter, setSessionSkillFilter] = useState<string | null>(null);
   const { sessions, isLoading: sessionsLoading } = useSkillSessions(sessionSkillFilter);
 
-  // Tracks whether the user reached this chat by clicking a conversation
-  // thread (resume) vs starting a fresh chat. Backend uses this flag to
-  // decide whether to eagerly inline document content into the LLM
-  // request (resume → yes, fresh → standard tool-discovery flow).
-  // Initial value: ?session= was already in the URL on mount = resume.
-  // Updated by handleSelectSession (true) and handleNewSession (false);
-  // intentionally NOT set by the URL-writeback effect that runs after a
-  // fresh chat's first message — that's not a resume.
+  // 恢复历史消息和界面时使用；附件选择独立保存。
   const [enteredViaResume, setEnteredViaResume] = useState<boolean>(
     () => sessionId !== null,
   );
@@ -1181,27 +1174,7 @@ function ChatShellContent({
   // Auto-switch Workbench to Document tab when the user opens a doc.
   useEffect(() => {
     if (activeTabId) setWorkbenchTabId("document");
-  }, [activeTabId]);
-
-  // When the URL points at an existing session and we've resolved its
-  // documentIds, mount those tabs (with `included: true`) so the user lands
-  // on the same workspace they had during the original conversation. Only
-  // fires once per session-load — `lastSyncedSessionId` ref guards against
-  // wiping subsequent tab edits the user makes inside the same session.
-  const lastSyncedSessionId = useRef<string | null>(null);
-  useEffect(() => {
-    if (!sessionId) {
-      // Cleared back to a fresh chat — drop the ref so revisiting the same
-      // session later still hydrates its tabs.
-      lastSyncedSessionId.current = null;
-      return;
-    }
-    if (sessionDocTabs === null) return;
-    if (lastSyncedSessionId.current === sessionId) return;
-    lastSyncedSessionId.current = sessionId;
-    setOpenTabs(sessionDocTabs);
-    setActiveTabId(sessionDocTabs[0]?.id ?? null);
-  }, [sessionId, sessionDocTabs]);
+  }, [activeTabId, setOpenTabs]);
 
   const navigateToSession = useCallback(
     (sid: string) => {
@@ -1218,27 +1191,10 @@ function ChatShellContent({
   // and the existing session looks "lost". Skip when the URL already has a
   // session — the resume path is already pointing at the right id.
   useEffect(() => {
-    if (!sessionId && agentSessionId && (messages.length > 0 || hasAnyArtifact)) {
+    if (!sessionId && agentSessionId && (messages.length > 0 || hasAnyArtifact || (openTabs.length > 0 && !uploadBusy && !uploadBlocked && !attachmentsSaving && !attachmentError))) {
       navigateToSession(agentSessionId);
     }
-  }, [sessionId, agentSessionId, messages.length, hasAnyArtifact, navigateToSession]);
-
-  // Fire-and-forget bootstrap: pre-create the ChatSessionIndex + ADK session
-  // before the first agent turn so iframe context pushes (ui/update-model-context)
-  // that arrive immediately after mount don't 404. Idempotent on the backend —
-  // resumed sessions already have an index and the call is a no-op.
-  const bootstrappedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!agentSessionId || bootstrappedRef.current === agentSessionId) return;
-    bootstrappedRef.current = agentSessionId;
-    void fetchWithAuth(`/api/proxy/api/sessions/${agentSessionId}/bootstrap`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ skill_id: skillId, agent_id: "root-agent" }),
-    }).catch(() => {
-      // bootstrap is best-effort; silently swallow errors so the chat isn't broken
-    });
-  }, [agentSessionId, skillId]);
+  }, [sessionId, agentSessionId, messages.length, hasAnyArtifact, navigateToSession, openTabs.length, uploadBusy, uploadBlocked, attachmentsSaving, attachmentError]);
 
   const userInitial = (user.displayName ?? user.email ?? "U").charAt(0).toUpperCase();
   const userDisplayName = user.displayName ?? user.email ?? translateChat(locale, "shell.you");
@@ -1291,18 +1247,18 @@ function ChatShellContent({
     if (!pending.prompt.trim()) return; // switched with nothing to ask — just land here
     void sendMessage(pending.prompt, {
       documentIds: pending.documentIds,
-      resumedSession: true,
+
     });
   }, [effectiveSessionId, skillId, sendMessage]);
 
   async function handleSend() {
     const text = draft.trim();
-    if (!text || isLoading || error) return;
+    if (!text || isLoading || error || !attachmentsReady || attachmentsSaving || attachmentError || uploadBusy || uploadBlocked || openTabs.some((tab) => tab.included && tab.parseStatus !== "parsed")) return;
     lastUserMessageRef.current = text;
     setDraft("");
     await sendMessage(text, {
       documentIds: includedDocIds,
-      resumedSession: enteredViaResume,
+
     });
   }
 
@@ -1312,9 +1268,9 @@ function ChatShellContent({
     clearError();
     void sendMessage(text, {
       documentIds: includedDocIds,
-      resumedSession: enteredViaResume,
+
     });
-  }, [clearError, sendMessage, includedDocIds, enteredViaResume]);
+  }, [clearError, sendMessage, includedDocIds]);
 
   // A `chat:send` surface action (e.g. a diff card's "Explain this difference")
   // posts a chat message so the agent's reply lands in the chat thread — same
@@ -1325,10 +1281,10 @@ function ChatShellContent({
       lastUserMessageRef.current = text;
       void sendMessage(text, {
         documentIds: includedDocIds,
-        resumedSession: enteredViaResume,
+
       });
     },
-    [sendMessage, includedDocIds, enteredViaResume, isLoading],
+    [sendMessage, includedDocIds, isLoading],
   );
 
   // MCP App iframe → notification adapter → synthetic chat turn. Stable
@@ -1339,10 +1295,10 @@ function ChatShellContent({
     (text: string) => {
       void sendMessage(text, {
         documentIds: includedDocIds,
-        resumedSession: enteredViaResume,
+
       });
     },
-    [sendMessage, includedDocIds, enteredViaResume],
+    [sendMessage, includedDocIds],
   );
 
   // Loop/spam guard for A2UI actions. An action (e.g. a form submit) fires an
@@ -1381,10 +1337,10 @@ function ChatShellContent({
       lastActionSendRef.current = { key, at: now };
       void sendMessage(
         `[a2ui:${event.actionName}] ${JSON.stringify(event.context)}`,
-        { documentIds: includedDocIds, resumedSession: enteredViaResume },
+        { documentIds: includedDocIds },
       );
     },
-    [sendMessage, includedDocIds, enteredViaResume],
+    [sendMessage, includedDocIds],
   );
 
   // Wraps navigateToSession with the resume signal so we differentiate
@@ -1461,10 +1417,10 @@ function ChatShellContent({
 
   const handleDocClick = useCallback((doc: ParsedDocument) => {
     setOpenTabs((prev) => {
-      if (prev.find((t) => t.id === doc.id)) return prev;
+      if (prev.find((t) => t.id === doc.id)) return prev.map((tab) => tab.id === doc.id ? { ...tab, parseStatus: doc.parseStatus, parseError: doc.parseError } : tab);
       return [
         ...prev,
-        { id: doc.id, filename: doc.originalFilename, format: doc.sourceFormat, included: true },
+        { id: doc.id, filename: doc.originalFilename, format: doc.sourceFormat, included: true, parseStatus: doc.parseStatus, parseError: doc.parseError, sizeBytes: doc.sizeBytes },
       ];
     });
     setActiveTabId(doc.id);
@@ -1473,7 +1429,7 @@ function ChatShellContent({
     // covers the case where activeTabId is already this doc (no state
     // change → activeTabId-change useEffect doesn't fire).
     setWorkbenchTabId("document");
-  }, []);
+  }, [setOpenTabs]);
 
   // Quick-start upload (landing screen): when a doc is uploaded from the
   // fresh-chat dropzone, mount it as an INCLUDED tab straight away — same path a
@@ -1483,14 +1439,14 @@ function ChatShellContent({
   // confirmation. handleDocClick only reads id/originalFilename/sourceFormat, so
   // a lightweight doc built from the upload result is sufficient here.
   const handleUploadedDocOpen = useCallback(
-    (docId: string, filename: string) => {
+    (docId: string, filename: string, result: UploadResult) => {
       const sourceFormat = filename.includes(".") ? filename.split(".").pop()!.toLowerCase() : "";
       handleDocClick({
         id: docId,
         originalFilename: filename,
         sourceFormat,
-        parseStatus: "pending",
-        parseError: null,
+        parseStatus: result.status,
+        parseError: result.error ?? null,
         folderId: "",
         userId: "",
         blockCount: null,
@@ -1569,15 +1525,18 @@ function ChatShellContent({
       if (activeTabId === id) setActiveTabId(next[next.length - 1]?.id ?? null);
       return next;
     });
-  }, [activeTabId]);
+  }, [activeTabId, setOpenTabs]);
 
   const handleTabToggleInclude = useCallback((id: string) => {
     setOpenTabs((prev) =>
       prev.map((t) => (t.id === id ? { ...t, included: !t.included } : t)),
     );
-  }, []);
+  }, [setOpenTabs]);
 
-  const inputDisabled = isLoading || error !== null || !chatReady;
+  const unreadableAttachments = openTabs.filter((tab) => tab.included && tab.parseStatus !== "parsed");
+  const attachmentBlock = !attachmentsReady || attachmentsSaving || !!attachmentError || uploadBusy || uploadBlocked || unreadableAttachments.length > 0;
+  const inputDisabled = isLoading || error !== null || !chatReady || attachmentBlock;
+  useEffect(() => { if (error) setDraft((current) => current || lastUserMessageRef.current); }, [error]);
 
   // The composer (connecting banner + in-context badge + input row). Extracted
   // so it can render pinned at the bottom during a conversation OR centered on
@@ -1622,6 +1581,10 @@ function ChatShellContent({
           state so the user always knows which files the agent will see next
           turn. Renders nothing when no docs are included. */}
       <InContextBadge openTabs={openTabs} includedDocIds={includedDocIds} />
+      <UploadDropZone skillId={skillId} scopeKey={effectiveSessionId} attachedCount={openTabs.length} disabled={!attachmentsReady} onUploadComplete={handleUploadedDocOpen} onBusyChange={setUploadBusy} onBlockingChange={setUploadBlocked} />
+      {attachmentsSaving && <p role="status" className="text-xs text-muted-foreground">正在保存附件选择…</p>}
+      {attachmentError && <div role="alert" className="text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave}>重试</button></div>}
+      {unreadableAttachments.length > 0 && <p role="alert" className="text-xs text-destructive">{unreadableAttachments.map((tab) => tab.filename).join("、")} 尚不可分析，请等待解析完成、重试或取消选择。</p>}
       <form
         // items-end: as the textarea grows the Send/Stop button stays aligned
         // with the LAST line rather than stretching to the full box height.
@@ -1659,7 +1622,7 @@ function ChatShellContent({
           disabled={inputDisabled}
         />
         {isLoading ? (
-          <button type="button" onClick={stop} className="rounded-md border px-3 py-2 text-sm">
+          <button type="button" onClick={() => { stop(); setDraft(lastUserMessageRef.current); }} className="rounded-md border px-3 py-2 text-sm">
             {translateChat(locale, "shell.stop")}
           </button>
         ) : (
@@ -1776,7 +1739,7 @@ function ChatShellContent({
                 <DocListView uid={user.uid} onDocClick={handleDocClick} />
               </div>
               <div className="border-t">
-                <UploadDropZone skillId={skillId} />
+                <p className="px-3 py-2 text-xs text-muted-foreground">在输入区添加文件，上传后自动加入当前对话。</p>
               </div>
             </SidebarSection>
 
@@ -1839,23 +1802,7 @@ function ChatShellContent({
                   <StreamErrorBanner error={error} onRetry={handleRetry} onDismiss={clearError} />
                 )}
                 {composer}
-                {/* Quick-start upload — the same drag-and-drop that lives in the
-                    sidebar, surfaced right under the landing composer so a user
-                    can drop a document and immediately start working on it. The
-                    upload mounts the doc as included context (handleUploadedDocOpen)
-                    and the composer's InContextBadge confirms it. Fresh-session
-                    only: during a conversation the composer pins to the bottom and
-                    the sidebar upload is enough. */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground/70">
-                    <div className="h-px flex-1 bg-border" />
-                    <span>{translateChat(locale, "shell.startFromDocument")}</span>
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-                  <div className="rounded-lg border bg-muted/20">
-                    <UploadDropZone skillId={skillId} onUploadComplete={handleUploadedDocOpen} />
-                  </div>
-                </div>
+
               </div>
             </div>
           ) : (

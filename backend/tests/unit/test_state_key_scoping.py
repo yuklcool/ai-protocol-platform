@@ -18,7 +18,6 @@ These tests assert the SCOPE of each key, not its value.
 from __future__ import annotations
 
 import adk.callbacks as cb
-from tools import rag_tool
 
 APP_PREFIX = "app:"
 USER_PREFIX = "user:"
@@ -53,24 +52,6 @@ class TestStateKeyScoping:
         """
         assert _scope(cb._STATE_INITIALIZED) == "session"
 
-    def test_resumed_session_is_session_scoped(self):
-        assert _scope(cb._STATE_RESUMED_SESSION) == "session"
-
-    def test_rag_corpus_name_is_user_scoped(self):
-        """SECURITY: the corpus is created per user (get_or_create_user_corpus).
-
-        As `app:` a user who had uploaded nothing inherited another user's
-        corpus name, and `search_documents` would query THEIR private documents
-        — the "no documents uploaded yet" guard fails open because the key is
-        non-empty. Must never be `app:`.
-        """
-        assert _scope(cb._STATE_RAG_CORPUS_NAME) == "user"
-
-    def test_rag_tool_reads_the_same_scoped_key(self):
-        """The tool and the loader must agree, or search silently finds nothing."""
-        assert rag_tool._STATE_RAG_CORPUS_NAME == cb._STATE_RAG_CORPUS_NAME
-        assert _scope(rag_tool._STATE_RAG_CORPUS_NAME) == "user"
-
     def test_doc_tracking_keys_are_user_scoped(self):
         """Loaded/imported doc ids describe one user's corpus + artifacts.
 
@@ -78,9 +59,9 @@ class TestStateKeyScoping:
         while removing the cross-user bleed (one user's ids suppressing
         another user's document load).
         """
-        assert _scope(cb._STATE_DOCS_FILES) == "user"
-        assert _scope(cb._STATE_DOCS_LOADED) == "user"
-        assert _scope(cb._STATE_DOC_LOAD_ERROR) == "user"
+        assert not hasattr(cb, "_STATE_DOCS_FILES")
+        assert not hasattr(cb, "_STATE_DOCS_LOADED")
+        assert not hasattr(cb, "_STATE_DOC_LOAD_ERROR")
 
     def test_no_user_or_session_concept_is_app_scoped(self):
         """Backstop: nothing describing a user/session may be `app:`.

@@ -158,6 +158,15 @@ async def test_bootstrap_passes_document_ids():
     mock_service.create_session = AsyncMock(return_value=MagicMock())
 
     with (
+        patch(
+            "tools.documents.access.get_document",
+            return_value={
+                "userId": "user-123",
+                "tenantId": "test-tenant",
+                "parseStatus": "parsed",
+                "blocks": [{"text": "body"}],
+            },
+        ),
         patch("protocols.session_bootstrap_routes.get_session_index", return_value=None),
         patch("protocols.session_bootstrap_routes.create_session_index") as mock_create,
         patch("protocols.session_bootstrap_routes.get_session_service", return_value=mock_service),

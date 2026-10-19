@@ -147,7 +147,7 @@ class TestPromotionClampSource:
         with (
             patch("db.chat_sessions.get_session_index", return_value=existing),
             patch("db.chat_sessions.clear_provisional") as clear,
-            patch("db.chat_sessions.add_session_documents"),
+            patch("db.chat_sessions.set_session_documents"),
             patch("db.chat_sessions.set_session_skill"),
         ):
             skill_processor._ensure_session_index("s1", "skill-1", "u1", [], "u1@example.com")
