@@ -102,6 +102,10 @@ def openai_compatible_runtime(provider_id: str | None) -> dict[str, str]:
 
 def provider_view(provider_id: str, data: dict[str, Any]) -> dict[str, Any]:
     """Redacted provider representation safe for Admin/API responses."""
+    try:
+        has_key = bool(resolve_api_key_ref(data.get("apiKeyRef")))
+    except RuntimeError:
+        has_key = False
     return {
         "provider_id": provider_id,
         "name": str(data.get("name") or provider_id),
@@ -109,7 +113,7 @@ def provider_view(provider_id: str, data: dict[str, Any]) -> dict[str, Any]:
         "base_url": str(data.get("baseUrl") or ""),
         "enabled": data.get("enabled", True) is not False,
         "api_key_ref": str(data.get("apiKeyRef") or "") or None,
-        "has_api_key": bool(data.get("apiKeyRef")),
+        "has_api_key": has_key,
     }
 
 

@@ -8,6 +8,11 @@ on:
       - frontend/src/app/skills/studio/**
       - frontend/src/components/studio/**
       - frontend/src/lib/i18n/skillStudio.ts
+      - frontend/src/lib/modelSetup.ts
+      - backend/config/model_readiness.py
+      - backend/tests/api_tests/test_model_setup_flow.py
+      - backend/tests/fixtures/model_setup_probe.py
+      - frontend/e2e/model-setup-live.spec.js
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
       - frontend/e2e/selfhost-fixtures.js
@@ -58,6 +63,11 @@ on:
       - frontend/src/app/skills/studio/**
       - frontend/src/components/studio/**
       - frontend/src/lib/i18n/skillStudio.ts
+      - frontend/src/lib/modelSetup.ts
+      - backend/config/model_readiness.py
+      - backend/tests/api_tests/test_model_setup_flow.py
+      - backend/tests/fixtures/model_setup_probe.py
+      - frontend/e2e/model-setup-live.spec.js
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
       - frontend/e2e/selfhost-fixtures.js
@@ -127,6 +137,7 @@ jobs:
               tests/api_tests/test_root_console_completion.py \
               tests/api_tests/test_admin_model_providers.py \
               tests/api_tests/test_admin_model_probe.py \
+              tests/api_tests/test_model_setup_flow.py \
               tests/api_tests/test_admin_model_registry_settings.py \
               tests/api_tests/test_admin_tenant_model_policy.py \
               tests/api_tests/test_tenant_models_route.py \
@@ -188,6 +199,7 @@ jobs:
         run: |
           node --check frontend/e2e/model-provider-studio-live.spec.js
           node --check frontend/e2e/root-console-live.spec.js
+          node --check frontend/e2e/model-setup-live.spec.js
 
       - name: Validate Compose model
         run: docker compose config --quiet
@@ -209,6 +221,18 @@ jobs:
           docker compose logs postgres backend mcp-sandbox frontend
           exit 1
 
+      - name: Start isolated HTTP protocol test provider
+        run: |
+          docker run -d --name model-setup-probe --network ai-protocol-platform \
+            -p 127.0.0.1:7956:8080 -e PROBE_API_KEY="$OPENAI_API_KEY" \
+            -v "$PWD/backend/tests/fixtures/model_setup_probe.py:/probe.py:ro" \
+            python:3.12-alpine python /probe.py
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:7956/evidence >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
       - name: Install Chromium acceptance runner
         working-directory: frontend
         run: |
@@ -222,7 +246,7 @@ jobs:
           MODEL_STUDIO_E2E_RUN_ID: studio-${{ github.run_id }}
           MODEL_STUDIO_FRONTEND_URL: http://localhost:3456
           MODEL_STUDIO_BACKEND_URL: http://127.0.0.1:1956
-        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js --reporter=line --workers=1
+        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/model-setup-live.spec.js --reporter=line --workers=1
 
       - name: Preserve console and Skill screenshots
         if: always()
@@ -239,5 +263,7 @@ jobs:
 
       - name: Stop services and remove acceptance volumes
         if: always()
-        run: docker compose down -v --remove-orphans
+        run: |
+          docker rm -f model-setup-probe || true
+          docker compose down -v --remove-orphans
 
