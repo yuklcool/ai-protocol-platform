@@ -351,7 +351,7 @@ def _populate_signed_urls(
             state[key] = temp[key]
 
 
-# --- before_agent_callback: document loader ---
+# --- before_model_callback: current attachments ---
 
 
 def make_document_injector(user: Any) -> Any:
