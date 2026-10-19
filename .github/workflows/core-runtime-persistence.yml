@@ -139,7 +139,7 @@ jobs:
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             -v "$PWD/backend/tests:/app/tests:ro" \
-            backend uv run pytest -q tests/integration/test_postgres_tenant_budget.py
+            backend uv run pytest -q tests/integration/test_postgres_tenant_budget.py tests/integration/test_postgres_document_metadata.py
 
       - name: Verify migrated runtime domains against PostgreSQL
         run: |

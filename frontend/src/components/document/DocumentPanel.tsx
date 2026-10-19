@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { documentRequest, notifyDocumentsChanged } from "@/lib/documents";
+
 import { useDocument, type DocumentDetail } from "@/hooks/useDocument";
 import type { ParseStatus } from "@/hooks/useDocBrowser";
 import { DocumentHeader } from "./DocumentHeader";
@@ -15,9 +18,9 @@ function isPendingStatus(status: ParseStatus): boolean {
 }
 
 function pickCaption(doc: DocumentDetail | null): string {
-  if (!doc) return "Loading document…";
-  if (isPendingStatus(doc.parseStatus)) return "Parsing document…";
-  return "Loading content…";
+  if (!doc) return "正在读取文件…";
+  if (isPendingStatus(doc.parseStatus)) return "正在解析文件…";
+  return "正在读取内容…";
 }
 
 function Skeleton({ caption }: { caption: string }) {
@@ -45,11 +48,21 @@ function TerminalMessage({
   doc: DocumentDetail;
   message: string;
 }) {
+  const [retrying, setRetrying] = useState(false);
+  const [failure, setFailure] = useState("");
+  async function retry() {
+    setRetrying(true); setFailure("");
+    try {
+      await documentRequest(`/documents/${encodeURIComponent(doc.id)}/reparse`, { method: "POST" });
+      notifyDocumentsChanged();
+    } catch (error) { setFailure((error as Error).message); }
+    finally { setRetrying(false); }
+  }
   return (
     <div className="flex h-full flex-col">
       <DocumentHeader doc={doc} />
       <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
-        {message}
+        <div className="space-y-3 text-center"><p>{message}</p>{failure && <p role="alert">{failure}</p>}<button type="button" disabled={retrying} onClick={() => void retry()} className="rounded border px-3 py-1">{retrying ? "正在解析…" : "重试解析"}</button></div>
       </div>
     </div>
   );
@@ -65,27 +78,27 @@ export function DocumentPanel({ docId }: DocumentPanelProps) {
   if (error || !doc) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-        {error ?? "Document preview unavailable."}
+        {error ?? "无法读取文件预览，请重试。"}
       </div>
     );
   }
 
-  if (doc.parseStatus === "failed") {
+  if (doc.parseStatus === "failed" || doc.parseStatus === "pending_ai_extraction") {
     return (
       <TerminalMessage
         doc={doc}
-        message={doc.parseError ?? "Document parse failed."}
+        message={doc.parseError ?? "文件无法读取，请重试解析或重新上传。"}
       />
     );
   }
 
   if (isPendingStatus(doc.parseStatus)) {
-    return <Skeleton caption="Parsing document…" />;
+    return <Skeleton caption="正在解析文件…" />;
   }
 
   if (!doc.blocks || doc.blocks.length === 0) {
     return (
-      <TerminalMessage doc={doc} message="No preview content for this document." />
+      <TerminalMessage doc={doc} message="没有可读取的内容。" />
     );
   }
 

@@ -40,6 +40,7 @@ class ChatSessionIndex(BaseModel):
     # from history until the first real turn clears it.
     provisional: bool = False
     document_ids: list[str] = Field(default_factory=list, alias="documentIds")
+    document_tabs: list[dict] = Field(default_factory=list, alias="documentTabs")
     # ADK app/session namespace. Legacy rows stay on APP_NAME; Root Agent
     # rows use `root-agent` so their runtime identity is isolated.
     agent_id: str = Field(default="aitana_platform", alias="agentId")

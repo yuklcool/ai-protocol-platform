@@ -152,7 +152,7 @@ export interface UseSkillAgentReturn {
   resolvedModel: string | null;
   sendMessage: (
     text: string,
-    opts?: { documentIds?: string[]; resumedSession?: boolean },
+    opts?: { documentIds?: string[] },
   ) => Promise<void>;
   isLoading: boolean;
   error: StreamError | null;
@@ -187,6 +187,8 @@ function classifyError(err: unknown): StreamError {
       return { kind: "http", status, message: "Session expired — please refresh the page", retryable: false, rawMessage: msg };
     if (status === 404)
       return { kind: "http", status, message: "Skill not found", retryable: false, rawMessage: msg };
+    if (status === 409)
+      return { kind: "http", status, message: "所选附件已不可用，请重新解析、移除或重新选择后重试。", retryable: true, rawMessage: msg };
     if (status === 502)
       return { kind: "http", status, message: "Can't reach the server. Try again.", retryable: true, rawMessage: msg };
     if (status >= 500)
@@ -225,6 +227,9 @@ function classifyRunError(event: unknown): StreamError {
   // about what happened and whether retrying can help.
   if (event && typeof event === "object" && "code" in event) {
     const code = (event as { code: unknown }).code;
+    if (code === "DOCUMENT_UNAVAILABLE") {
+      return { kind: "run_error", message: msg, retryable: true, rawMessage: msg };
+    }
     if (code === "MODEL_RATE_LIMITED") {
       const rawRetry = (event as { retry_after_seconds?: unknown }).retry_after_seconds;
       const retryAfterSeconds = typeof rawRetry === "number" ? Math.ceil(rawRetry) : undefined;
@@ -865,7 +870,7 @@ export function useSkillAgent(options?: {
   const sendMessage = useCallback(
     async (
       text: string,
-      opts?: { documentIds?: string[]; resumedSession?: boolean },
+      opts?: { documentIds?: string[] },
     ) => {
       clearError();
       setRunStarted(false);
@@ -891,12 +896,7 @@ export function useSkillAgent(options?: {
           forwardedProps.agent_id = runtime.agentId;
           if (runtime.capabilityHint) forwardedProps.capability_hint = runtime.capabilityHint;
         }
-        if (opts?.documentIds && opts.documentIds.length > 0) {
-          forwardedProps.document_ids = opts.documentIds;
-        }
-        if (opts?.resumedSession) {
-          forwardedProps.resumed_session = true;
-        }
+        forwardedProps.document_ids = opts?.documentIds ?? [];
         // Sprint 2.10: attach per-turn A2UI surface snapshot when any
         // surface is active. Omit the slot entirely when empty so the
         // wire stays clean and the backend extractor's `if isinstance

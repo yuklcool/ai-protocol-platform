@@ -5,10 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from db.persistence import get_document, query_documents
-
-_PARSED_DOCS_COLLECTION = "parsed_documents"
-
 
 def blocks_to_markdown(blocks: list[dict[str, Any]]) -> str:
     parts: list[str] = []
@@ -73,46 +69,23 @@ def apply_edits(blocks: list[dict[str, Any]], edited_blocks: dict[str, Any]) -> 
     return result
 
 
-def list_documents_for_user(user_id: str, skill_id: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-    filters: list[tuple[str, str, Any]] = [("userId", "==", user_id), ("status", "==", "parsed")]
-    if skill_id:
-        filters.append(("skillId", "==", skill_id))
-    return query_documents(
-        collection=_PARSED_DOCS_COLLECTION,
-        filters=filters,
-        order_by="createdAt",
-        order_direction="DESCENDING",
-        limit=limit,
-    )
-
-
 def build_document_context(
     doc_id: str,
     mode: str = "markdown",
     section: str | None = None,
 ) -> tuple[str, list[dict[str, Any]] | None]:
     """Load parsed content from the configured repository for agent use."""
-    raw = get_document(_PARSED_DOCS_COLLECTION, doc_id)
-    if raw is None:
-        raise KeyError(f"Document '{doc_id}' not found.")
+    from observability.tenant_context import get_tenant_context
+    from tools.documents.access import readable_document
+
+    identity = get_tenant_context() or {}
+    raw = readable_document(
+        doc_id,
+        user_id=identity.get("tenant.uid", ""),
+        tenant_id=identity.get("tenant.id", ""),
+    )
 
     original_filename = raw.get("originalFilename", "Unknown document")
-    parse_status = raw.get("parseStatus", "pending")
-    if parse_status == "failed":
-        parse_error = raw.get("parseError") or "unknown error"
-        return (
-            f"**Document:** {original_filename}\n\n"
-            f"⚠️ This document could not be parsed: {parse_error}\n"
-            "The document was uploaded but its content is unavailable. "
-            "You can tell the user about this error and ask them to re-upload or try a different format."
-        ), None
-    if parse_status in ("pending", "pending_ai_extraction"):
-        return (
-            f"**Document:** {original_filename}\n\n"
-            f"⏳ This document is still being processed (status: {parse_status}). "
-            "Its content is not yet available. Ask the user to try again in a moment."
-        ), None
-
     blocks = apply_edits(raw.get("blocks") or [], raw.get("editedBlocks") or {})
     if section:
         blocks = _filter_by_section(blocks, section)

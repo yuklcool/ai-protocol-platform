@@ -1,6 +1,7 @@
 "use client";
 
 import { DocumentPreview } from "@/components/document/DocumentPreview";
+import type { ParseStatus } from "@/lib/documents";
 
 const FORMAT_COLORS: Record<string, string> = {
   pdf: "bg-red-100 text-red-700",
@@ -17,6 +18,9 @@ export interface DocTabData {
   format: string;
   /** Whether this doc is sent to the agent on the next turn. Defaults to true on open. */
   included: boolean;
+  parseStatus?: ParseStatus;
+  parseError?: string | null;
+  sizeBytes?: number;
 }
 
 interface DocTabProps {
@@ -31,8 +35,8 @@ export function DocTab({ tab, isActive, onSelect, onClose, onToggleInclude }: Do
   const fmtColor =
     FORMAT_COLORS[tab.format.toLowerCase()] ?? "bg-muted text-muted-foreground";
   const includeLabel = tab.included
-    ? `Exclude ${tab.filename} from agent context`
-    : `Include ${tab.filename} in agent context`;
+    ? `取消分析 ${tab.filename}`
+    : `参与分析 ${tab.filename}`;
 
   const tabEl = (
     <div
@@ -83,9 +87,12 @@ export function DocTab({ tab, isActive, onSelect, onClose, onToggleInclude }: Do
         </span>
       )}
       <span className="max-w-[120px] truncate">{tab.filename}</span>
+      <span className={tab.parseStatus === "failed" ? "text-destructive" : "text-muted-foreground"} title={tab.parseError || undefined}>
+        {tab.parseStatus === "parsed" ? "可分析" : tab.parseStatus === "pending" ? "解析中" : "无法读取"}
+      </span>
       <button
         type="button"
-        aria-label={`Close ${tab.filename}`}
+        aria-label={`移除 ${tab.filename}`}
         onClick={(e) => {
           e.stopPropagation();
           onClose(tab.id);

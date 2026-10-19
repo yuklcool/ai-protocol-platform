@@ -57,17 +57,14 @@ describe("DocumentPanel", () => {
     });
     render(<DocumentPanel docId="doc-1" />);
     expect(screen.getByTestId("doc-panel-loading")).toBeInTheDocument();
-    expect(screen.getByText(/parsing document/i)).toBeInTheDocument();
+    expect(screen.getByText(/正在解析文件/)).toBeInTheDocument();
   });
 
-  it("shows 'Parsing document…' caption while parseStatus is pending_ai_extraction", () => {
-    _mockUseDocument.mockReturnValue({
-      doc: { ...FIXTURE_DOC, parseStatus: "pending_ai_extraction", blocks: [] },
-      isLoading: false,
-      error: null,
-    });
-    render(<DocumentPanel docId="doc-1" />);
-    expect(screen.getByText(/parsing document/i)).toBeInTheDocument();
+  it("offers retry for documents without an extraction worker", () => {
+    _mockUseDocument.mockReturnValue({ doc: {...FIXTURE_DOC, parseStatus: "pending_ai_extraction"}, isLoading: false, error: null });
+    render(<DocumentPanel docId="doc1" />);
+    expect(screen.getByText("重试解析")).toBeInTheDocument();
+    expect(screen.queryByTestId("doc-panel-loading")).not.toBeInTheDocument();
   });
 
   it("renders error state when fetch fails", () => {
@@ -93,7 +90,7 @@ describe("DocumentPanel", () => {
       error: null,
     });
     render(<DocumentPanel docId="doc-1" />);
-    expect(screen.getByText(/parse failed/i)).toBeInTheDocument();
+    expect(screen.getByText(/文件无法读取/)).toBeInTheDocument();
   });
 
   it("renders filename and format badge from fixture", () => {
@@ -107,14 +104,14 @@ describe("DocumentPanel", () => {
     _mockUseDocument.mockReturnValue({ doc: FIXTURE_DOC, isLoading: false, error: null });
     render(<DocumentPanel docId="doc-1" />);
     expect(screen.getByText(/42/)).toBeInTheDocument();
-    expect(screen.getByText(/tables/)).toBeInTheDocument();
+    expect(screen.getByText(/表格/)).toBeInTheDocument();
   });
 
   it("suppresses zero-count stats", () => {
     _mockUseDocument.mockReturnValue({ doc: FIXTURE_DOC, isLoading: false, error: null });
     render(<DocumentPanel docId="doc-1" />);
     // changes is 0, should not appear
-    expect(screen.queryByText(/changes/)).toBeNull();
+    expect(screen.queryByText(/修改/)).toBeNull();
   });
 
   it("renders heading text from blocks", () => {
@@ -137,6 +134,6 @@ describe("DocumentPanel", () => {
       error: null,
     });
     render(<DocumentPanel docId="doc-1" />);
-    expect(screen.getByText(/no preview content/i)).toBeInTheDocument();
+    expect(screen.getByText(/没有可读取的内容/)).toBeInTheDocument();
   });
 });

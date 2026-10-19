@@ -211,3 +211,7 @@ describe("ChatShell composer — wrapping (2026-08-06 ONE UAT)", () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 });
+
+vi.mock("@/hooks/useSessionAttachments", () => ({
+  useSessionAttachments: () => ({ tabs: [], setTabs: vi.fn(), ready: true, saving: false, error: null, retrySave: vi.fn() }),
+}));

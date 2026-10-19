@@ -6,6 +6,20 @@ from unittest.mock import patch
 
 import pytest
 
+from auth import User
+from observability.tenant_context import _tenant_context, set_tenant_context
+
+
+@pytest.fixture(autouse=True)
+def document_identity():
+    token = _tenant_context.set(None)
+    set_tenant_context(
+        User(uid="context-user", email="user@example.com", domain="example.com", tenant_id="context-tenant")
+    )
+    yield
+    _tenant_context.reset(token)
+
+
 _SAMPLE_BLOCKS = [
     {"type": "heading", "text": "Introduction", "level": 1},
     {"type": "paragraph", "text": "This is a paragraph."},
@@ -103,6 +117,8 @@ class TestApplyEdits:
 class TestBuildDocumentContext:
     def _fake_firestore_doc(self):
         return {
+            "userId": "context-user",
+            "tenantId": "context-tenant",
             "originalFilename": "report.docx",
             "blocks": _SAMPLE_BLOCKS,
             "editedBlocks": {},
@@ -113,7 +129,7 @@ class TestBuildDocumentContext:
     def test_markdown_mode(self):
         from tools.documents.context import build_document_context
 
-        with patch("tools.documents.context.get_document", return_value=self._fake_firestore_doc()):
+        with patch("tools.documents.access.get_document", return_value=self._fake_firestore_doc()):
             content, blocks = build_document_context("doc123", mode="markdown")
         assert "report.docx" in content
         assert "Introduction" in content
@@ -124,7 +140,7 @@ class TestBuildDocumentContext:
 
         from tools.documents.context import build_document_context
 
-        with patch("tools.documents.context.get_document", return_value=self._fake_firestore_doc()):
+        with patch("tools.documents.access.get_document", return_value=self._fake_firestore_doc()):
             content, blocks = build_document_context("doc123", mode="blocks")
         parsed = json.loads(content)
         assert parsed["docId"] == "doc123"
@@ -134,14 +150,16 @@ class TestBuildDocumentContext:
     def test_not_found(self):
         from tools.documents.context import build_document_context
 
-        with patch("tools.documents.context.get_document", return_value=None):
-            with pytest.raises(KeyError, match="doc999"):
+        with patch("tools.documents.access.get_document", return_value=None):
+            from tools.documents.access import DocumentUnavailable
+
+            with pytest.raises(DocumentUnavailable):
                 build_document_context("doc999")
 
     def test_section_filter(self):
         from tools.documents.context import build_document_context
 
-        with patch("tools.documents.context.get_document", return_value=self._fake_firestore_doc()):
+        with patch("tools.documents.access.get_document", return_value=self._fake_firestore_doc()):
             content, _ = build_document_context("doc123", mode="markdown", section="Introduction")
         assert "Introduction" in content
         # Data section should not appear
@@ -150,7 +168,7 @@ class TestBuildDocumentContext:
     def test_metadata_in_markdown(self):
         from tools.documents.context import build_document_context
 
-        with patch("tools.documents.context.get_document", return_value=self._fake_firestore_doc()):
+        with patch("tools.documents.access.get_document", return_value=self._fake_firestore_doc()):
             content, _ = build_document_context("doc123", mode="markdown")
         assert "Jane" in content
         assert "5" in content  # page count

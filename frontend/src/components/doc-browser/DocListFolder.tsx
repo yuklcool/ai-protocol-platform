@@ -62,7 +62,7 @@ export function DocListFolder({
         <div className="ml-5 mt-0.5 space-y-0.5">
           {documents.length === 0 && (
             <p className="px-2 py-1 text-xs text-muted-foreground">
-              No documents yet
+              暂无文件
             </p>
           )}
           {documents.map((doc) => (

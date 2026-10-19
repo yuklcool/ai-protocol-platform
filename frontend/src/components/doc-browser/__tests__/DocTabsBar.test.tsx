@@ -32,9 +32,9 @@ describe("DocTabsBar", () => {
     expect(screen.getByText("gamma.xlsx")).toBeInTheDocument();
   });
 
-  it("shows 'No open documents' when tabs is empty", () => {
+  it("shows '尚未添加附件' when tabs is empty", () => {
     renderBar({ tabs: [] });
-    expect(screen.getByText(/no open documents/i)).toBeInTheDocument();
+    expect(screen.getByText(/尚未添加附件/)).toBeInTheDocument();
   });
 
   it("clicking a tab calls onSelect with its id", async () => {
@@ -45,7 +45,7 @@ describe("DocTabsBar", () => {
 
   it("calls onToggleBrowser when toggle button clicked", async () => {
     const { props } = renderBar();
-    await userEvent.click(screen.getByLabelText(/sidebar/i));
+    await userEvent.click(screen.getByLabelText(/文件列表/));
     expect(props.onToggleBrowser).toHaveBeenCalled();
   });
 
