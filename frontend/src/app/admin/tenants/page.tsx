@@ -56,7 +56,7 @@ const split = (value: string) => [
 export default function TenantAdminPage() {
   const { user, loading } = useAuth();
   const t = useConsoleCopy();
-  if (loading) return <main className="p-8">{t("加载中…", "Loading…")}</main>;
+  if (loading) return <main className="page-container p-8">{t("加载中…", "Loading…")}</main>;
   if (!user) return <SignInRequired />;
   return <Tenants />;
 }
@@ -169,7 +169,7 @@ function Tenants() {
     }
   };
   return (
-    <main className="mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
+    <main className="page-container mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{t("租户管理", "Tenants")}</h1>
@@ -192,7 +192,7 @@ function Tenants() {
         )}
       </header>
       <Notice>{notice}</Notice>
-      <section className="overflow-x-auto rounded-lg border">
+      <section className="overflow-x-auto glass-panel">
         <table className="w-full text-left text-sm">
           <thead>
             <tr>
@@ -254,7 +254,7 @@ function Tenants() {
       </section>
       {draft && (
         <>
-          <section className="space-y-4 rounded-lg border p-5">
+          <section className="space-y-4 glass-panel p-5">
             <h2 className="font-medium">
               {editing
                 ? t("编辑租户", "Edit tenant")

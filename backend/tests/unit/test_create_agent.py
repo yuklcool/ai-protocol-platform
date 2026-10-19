@@ -235,7 +235,8 @@ def test_create_agent_wires_tools_from_skill_metadata():
     # Defaults from agent.py: load_artifacts_tool + retrieve_artifact +
     # load_memory_tool + preload_memory_tool. Plus 2 registry tools,
     # SendA2uiToClientToolset, and request_confirmation (default-on) = 8 total.
-    assert len(agent.tools) == 8
+    assert len(agent.tools) == 9
+    assert any(getattr(tool, "name", "") == "read_attached_document" for tool in agent.tools)
     tool_names = _tool_ids(agent)
     assert "load_artifacts" in tool_names
     assert "load_memory" in tool_names

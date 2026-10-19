@@ -81,14 +81,14 @@ interface SeriesRoot {
 // Validated as a set: light worst adjacent CVD ΔE 24.2; dark 10.3 (floor band —
 // legal because ≥2 series always ship a legend, and M3 adds the table view).
 const SERIES_VARS =
-  "[--series-1:#2a78d6] dark:[--series-1:#3987e5] " +
-  "[--series-2:#1baf7a] dark:[--series-2:#199e70] " +
-  "[--series-3:#eda100] dark:[--series-3:#c98500] " +
-  "[--series-4:#008300] dark:[--series-4:#008300] " +
-  "[--series-5:#4a3aa7] dark:[--series-5:#9085e9] " +
-  "[--series-6:#e34948] dark:[--series-6:#e66767] " +
-  "[--series-7:#e87ba4] dark:[--series-7:#d55181] " +
-  "[--series-8:#eb6834] dark:[--series-8:#d95926]";
+  "[--series-1:#2a78d6] " +
+  "[--series-2:#1baf7a] " +
+  "[--series-3:#eda100] " +
+  "[--series-4:#008300] " +
+  "[--series-5:#4a3aa7] " +
+  "[--series-6:#e34948] " +
+  "[--series-7:#e87ba4] " +
+  "[--series-8:#eb6834]";
 
 const SLOT_COUNT = 8;
 
@@ -599,11 +599,11 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
             ["High", stats?.max],
           ] as const
         ).map(([label, v]) => (
-          <div key={label} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+          <div key={label} className="glass-panel border-border bg-muted/20 px-3 py-2">
             <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
             <div
               className={`mt-0.5 text-sm font-semibold tabular-nums ${
-                typeof v === "number" && v < 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+                typeof v === "number" && v < 0 ? "text-rose-600" : "text-foreground"
               }`}
             >
               {fmtValue(v, unit, yFormat)}
@@ -833,7 +833,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
         </div>
 
         {capped && (
-          <p data-testid="series-row-count-notice" className="text-xs font-medium text-amber-600 dark:text-amber-400">
+          <p data-testid="series-row-count-notice" className="text-xs font-medium text-amber-600">
             Showing first {rows.length.toLocaleString("en-US")} of {rowCount.toLocaleString("en-US")} rows.
           </p>
         )}
@@ -842,7 +842,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
           data-testid="series-table-scroll"
           ref={scrollRef}
           onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-          className="max-h-80 overflow-auto rounded-lg border border-border"
+          className="max-h-80 overflow-auto glass-panel border-border"
         >
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur">

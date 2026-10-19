@@ -22,7 +22,7 @@ export function ResourceChecklist({
       .map((id) => ({ id, label: `${id}（当前不可用，请移除）` })),
   ];
   return (
-    <fieldset disabled={disabled} className="space-y-2 rounded-lg border p-4">
+    <fieldset disabled={disabled} className="space-y-2 glass-panel p-4">
       <legend className="px-1 text-sm font-medium">{label}</legend>
       {rows.length === 0 && (
         <p className="text-sm text-muted-foreground">

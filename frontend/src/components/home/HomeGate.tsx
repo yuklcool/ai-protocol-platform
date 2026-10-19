@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useLandingTarget } from "@/hooks/useLandingTarget";
 
 /**
@@ -20,6 +21,7 @@ import { useLandingTarget } from "@/hooks/useLandingTarget";
 export function HomeGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { locale } = useI18n();
   const target = useLandingTarget(!loading && !!user);
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export function HomeGate({ children }: { children: ReactNode }) {
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
           <path d="M12 2 a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" fill="none" />
         </svg>
-        Taking you to your workspace…
+        {locale.startsWith("zh") ? "正在进入工作台…" : "Taking you to your workspace…"}
       </span>
     </div>
   );

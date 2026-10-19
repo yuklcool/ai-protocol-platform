@@ -113,7 +113,7 @@ export function SignInButton() {
           }}
           data-testid="sign-in-button"
           className={cn(
-            "rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground",
+            "rounded-md button-primary px-4 py-2 text-sm font-medium ",
             "hover:opacity-90",
           )}
         >
@@ -130,7 +130,7 @@ export function SignInButton() {
               if (event.target === event.currentTarget && !busy) setShowLocalLogin(false);
             }}
           >
-            <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-2xl">
+            <div className="w-full max-w-sm glass-panel border-border bg-background p-6 shadow-2xl">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <h2 id="local-login-title" className="text-lg font-semibold text-foreground">
@@ -192,7 +192,7 @@ export function SignInButton() {
                   type="submit"
                   disabled={busy || !email || password.length < 12}
                   className={cn(
-                    "w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground",
+                    "w-full rounded-md button-primary px-4 py-2.5 text-sm font-medium ",
                     "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
                   )}
                 >
@@ -214,8 +214,8 @@ export function SignInButton() {
         disabled={busy}
         data-testid="sign-in-button"
         className={cn(
-          "inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm",
-          "font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50",
+          "inline-flex items-center gap-2 rounded-md button-primary px-4 py-2 text-sm",
+          "font-medium  hover:opacity-90 disabled:opacity-50",
         )}
       >
         {busy ? t("auth.signingIn") : oidc ? t("auth.signIn") : t("auth.signInWithGoogle")}

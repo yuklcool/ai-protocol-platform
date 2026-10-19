@@ -447,6 +447,7 @@ class TestHappyPath:
             assert "a2ui_action_trigger" in run_input.state
             assert run_input.state["a2ui_action_trigger"]["name"] == "approve"
             assert "a2ui_surface_state" in run_input.state
+            assert run_input.state["document_ids"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -850,3 +851,46 @@ def configured_root_for_protocol_tests():
     )
     yield
     invalidate_cache(clear_last_known_good=True)
+
+
+@pytest.mark.parametrize("readable", [True, False])
+def test_action_turn_reads_current_saved_selection_before_any_model_call(readable):
+    from contextlib import ExitStack
+
+    patches = _patches()
+    with ExitStack() as stack:
+        mocks = [stack.enter_context(item) for item in patches]
+        idx = _make_index()
+        idx.document_ids = ["selected"]
+        mocks[0].return_value = idx
+        skill = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mocks[1].return_value = skill
+        mocks[2].return_value = skill
+        service = _mock_session_service()
+        mocks[3].return_value = service
+        mocks[4].return_value = MagicMock()
+        mocks[5].return_value = MagicMock()
+        stack.enter_context(
+            patch(
+                "tools.documents.access.get_document",
+                return_value={
+                    "userId": "viewer",
+                    "tenantId": "tenant-a",
+                    "originalFilename": "analysis.txt",
+                    "parseStatus": "parsed" if readable else "failed",
+                    "parseError": "文件损坏",
+                    "blocks": [{"type": "paragraph", "text": "current selection"}] if readable else [],
+                },
+            )
+        )
+        response = _make_client("viewer").post(
+            URL, json={**_HAPPY_BODY, "forwardedProps": {"document_ids": ["client-forged-old-document"]}}
+        )
+        if readable:
+            assert response.status_code == 200, response.text
+            assert _captured_run_input(mocks[6]).state["document_ids"] == ["selected"]
+        else:
+            assert response.status_code == 409
+            assert response.json()["detail"]["code"] == "DOCUMENT_UNAVAILABLE"
+            mocks[4].assert_not_called()
+            service.append_event.assert_not_awaited()

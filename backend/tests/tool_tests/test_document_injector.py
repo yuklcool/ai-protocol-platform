@@ -1,193 +1,122 @@
-"""Tests for make_document_injector (adk/callbacks.py).
+"""本轮附件直接进入模型输入;不存在用户级缓存、旧轮次或跨租户回退。"""
 
-The injector is a before_model_callback that eagerly inlines loaded
-document blocks into the LLM request whenever any documents are
-attached — bypassing the agent's choice to call ``load_artifacts``
-(which Gemini sometimes flubs by passing empty arg lists). Scope
-broadened from "only resumed sessions" to "any attached docs" in
-commit 6a1e440 (chat-history-deep-fixes-3 / Bug F): fresh chats with
-attached docs were relying on Gemini's flaky tool-discovery and the
-agent kept missing the doc.
-"""
-
-from __future__ import annotations
-
-import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from google.genai.types import Blob, Content, FunctionResponse, Part
+from google.genai.types import Content, FunctionResponse, Part
 
-from adk.callbacks import _STATE_DOCS_LOADED, _STATE_RESUMED_SESSION, make_document_injector
+from adk.callbacks import make_document_injector
+from auth.models import User
+from db.persistence import reset_repository_for_testing
+from db.repositories.memory import MemoryRepository
+from observability.tenant_context import set_tenant_context
+from tools.documents.access import DocumentUnavailable, read_attached_document
+
+USER = User(uid="same", email="u@local.test", tenant_id="tenant-a")
 
 
-def _make_artifact(blocks: list[dict]) -> Part:
-    return Part(
-        inline_data=Blob(
-            data=json.dumps(blocks).encode("utf-8"),
-            mime_type="application/json",
+@pytest.fixture()
+def repo():
+    store = MemoryRepository()
+    reset_repository_for_testing(store)
+    for ref in ("a", "b"):
+        store.set_document(
+            "parsed_documents",
+            ref,
+            {
+                "tenantId": "tenant-a",
+                "userId": "same",
+                "originalFilename": f"{ref}.txt",
+                "parseStatus": "parsed",
+                "blocks": [{"type": "paragraph", "text": f"UNIQUE-{ref}", "source": "第 1 行"}],
+            },
         )
-    )
+    yield store
+    reset_repository_for_testing(None)
 
 
-def _make_ctx(state: dict | None, artifacts: dict[str, Part] | None = None) -> MagicMock:
-    """Build a CallbackContext mock with an async load_artifact backed by a dict."""
-    ctx = MagicMock()
-    ctx.state = state if state is not None else {}
-    arts = artifacts or {}
-
-    async def _load_artifact(*, filename: str):
-        return arts.get(filename)
-
-    ctx.load_artifact = AsyncMock(side_effect=_load_artifact)
-    return ctx
+def request():
+    return SimpleNamespace(contents=[Content(role="user", parts=[Part.from_text(text="分析所选文件")])])
 
 
-def _make_request(user_text: str = "what's in this?") -> SimpleNamespace:
-    """Build an LlmRequest-shaped object with the user message at the end."""
-    return SimpleNamespace(contents=[Content(role="user", parts=[Part.from_text(text=user_text)])])
+def texts(req):
+    return "\n".join(part.text or "" for content in req.contents for part in (content.parts or []))
 
 
-_BLOCKS_A = [{"type": "paragraph", "text": "Doc A content."}]
-_BLOCKS_B = [{"type": "paragraph", "text": "Doc B content."}]
+@pytest.mark.asyncio
+async def test_current_selection_and_source_locations_reach_the_model(repo):
+    callback = make_document_injector(USER)
+    req = request()
+    await callback(SimpleNamespace(state={"document_ids": ["a", "b"]}), req)
+    assert "UNIQUE-a" in texts(req) and "UNIQUE-b" in texts(req)
+    assert "a.txt" in texts(req) and "第 1 行" in texts(req)
+    assert len(req.contents) == 3
 
 
-class TestMakeDocumentInjector:
-    @pytest.mark.asyncio
-    async def test_fires_on_fresh_chats_with_attached_docs(self):
-        """Bug F (commit 6a1e440): fresh chats with docs in
-        ``_STATE_DOCS_LOADED`` must also get eager injection — the
-        prior "resumed-only" gate left Gemini guessing whether to call
-        ``load_artifacts`` and it sometimes guessed wrong, leaving the
-        agent saying it couldn't find the doc.
-        """
-        injector = make_document_injector()
-        ctx = _make_ctx(
-            state={_STATE_DOCS_LOADED: ["docA"]},
-            artifacts={"doc:docA.json": _make_artifact(_BLOCKS_A)},
-        )
-        req = _make_request()
-        original_count = len(req.contents)
-
-        await injector(ctx, req)
-
-        assert len(req.contents) == original_count + 1, (
-            "fresh chats with attached docs must get eager injection — see Bug F in chat-history-deep-fixes-3"
-        )
-        ctx.load_artifact.assert_awaited_once_with(filename="doc:docA.json")
-
-    @pytest.mark.asyncio
-    async def test_no_op_when_no_loaded_docs(self):
-        injector = make_document_injector()
-        ctx = _make_ctx(state={_STATE_RESUMED_SESSION: True, _STATE_DOCS_LOADED: []})
-        req = _make_request()
-
-        await injector(ctx, req)
-
-        assert len(req.contents) == 1
-        ctx.load_artifact.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_injects_one_doc_before_user_message(self):
-        injector = make_document_injector()
-        ctx = _make_ctx(
-            state={_STATE_RESUMED_SESSION: True, _STATE_DOCS_LOADED: ["docA"]},
-            artifacts={"doc:docA.json": _make_artifact(_BLOCKS_A)},
-        )
-        req = _make_request("question")
-
-        await injector(ctx, req)
-
-        # [doc-A, user-question]
-        assert len(req.contents) == 2
-        injected_text = req.contents[0].parts[0].text
-        assert "doc:docA.json" in injected_text
-        assert "Doc A content" in injected_text
-        assert req.contents[-1].parts[0].text == "question"
-
-    @pytest.mark.asyncio
-    async def test_injects_multiple_docs_in_order(self):
-        injector = make_document_injector()
-        ctx = _make_ctx(
+@pytest.mark.asyncio
+async def test_empty_selection_ignores_loaded_flags_and_other_session_state(repo):
+    req = request()
+    await make_document_injector(USER)(
+        SimpleNamespace(
             state={
-                _STATE_RESUMED_SESSION: True,
-                _STATE_DOCS_LOADED: ["docA", "docB"],
-            },
-            artifacts={
-                "doc:docA.json": _make_artifact(_BLOCKS_A),
-                "doc:docB.json": _make_artifact(_BLOCKS_B),
-            },
-        )
-        req = _make_request("compare")
+                "document_ids": [],
+                "user:docs_loaded": ["a", "b"],
+                "app:docs_loaded": ["a"],
+            }
+        ),
+        req,
+    )
+    assert len(req.contents) == 1
+    assert "UNIQUE" not in texts(req)
 
-        await injector(ctx, req)
 
-        # [doc-A, doc-B, user-compare]
-        assert len(req.contents) == 3
-        assert "Doc A content" in req.contents[0].parts[0].text
-        assert "Doc B content" in req.contents[1].parts[0].text
-        assert req.contents[-1].parts[0].text == "compare"
+@pytest.mark.asyncio
+async def test_reparse_or_edits_do_not_reuse_stale_artifacts(repo):
+    callback = make_document_injector(USER)
+    context = SimpleNamespace(state={"document_ids": ["a"]})
+    first = request()
+    await callback(context, first)
+    repo.set_document("parsed_documents", "a", {"blocks": [{"type": "paragraph", "text": "UPDATED"}]}, merge=True)
+    second = request()
+    await callback(context, second)
+    assert "UPDATED" in texts(second) and "UNIQUE-a" not in texts(second)
 
-    @pytest.mark.asyncio
-    async def test_skips_when_last_content_is_function_response(self):
-        """In-turn tool roundtrips trail a function_response — don't re-inject."""
-        injector = make_document_injector()
-        ctx = _make_ctx(
-            state={_STATE_RESUMED_SESSION: True, _STATE_DOCS_LOADED: ["docA"]},
-            artifacts={"doc:docA.json": _make_artifact(_BLOCKS_A)},
-        )
-        # Last Content carries a function_response from a prior tool call —
-        # this is a mid-turn LLM round, not the user's first message.
-        function_part = Part(function_response=FunctionResponse(name="some_tool", response={"ok": True}))
-        req = SimpleNamespace(
-            contents=[
-                Content(role="user", parts=[Part.from_text(text="prior question")]),
-                Content(role="user", parts=[function_part]),
-            ]
-        )
 
-        await injector(ctx, req)
+@pytest.mark.asyncio
+async def test_same_uid_other_tenant_cannot_read_content(repo):
+    other = USER.model_copy(update={"tenant_id": "tenant-b"})
+    with pytest.raises(DocumentUnavailable):
+        await make_document_injector(other)(SimpleNamespace(state={"document_ids": ["a"]}), request())
 
-        assert len(req.contents) == 2
-        ctx.load_artifact.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_silently_skips_missing_artifact(self):
-        injector = make_document_injector()
-        ctx = _make_ctx(
-            state={_STATE_RESUMED_SESSION: True, _STATE_DOCS_LOADED: ["docMissing"]},
-            artifacts={},  # nothing to load
-        )
-        req = _make_request()
+@pytest.mark.asyncio
+async def test_missing_or_failed_attachment_stops_before_model_call(repo):
+    repo.set_document("parsed_documents", "a", {"parseStatus": "failed"}, merge=True)
+    with pytest.raises(DocumentUnavailable):
+        await make_document_injector(USER)(SimpleNamespace(state={"document_ids": ["a"]}), request())
 
-        await injector(ctx, req)
 
-        # No injection, but no crash either.
-        assert len(req.contents) == 1
+@pytest.mark.asyncio
+async def test_tool_roundtrip_does_not_duplicate_document_input(repo):
+    req = request()
+    req.contents[-1].parts = [
+        Part(function_response=FunctionResponse(name="read_attached_document", response={"ok": True}))
+    ]
+    await make_document_injector(USER)(SimpleNamespace(state={"document_ids": ["a"]}), req)
+    assert len(req.contents) == 1
 
-    @pytest.mark.asyncio
-    async def test_no_op_when_state_is_none(self):
-        injector = make_document_injector()
-        ctx = MagicMock()
-        ctx.state = None
-        ctx.load_artifact = AsyncMock()
-        req = _make_request()
 
-        await injector(ctx, req)
-
-        ctx.load_artifact.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_no_op_when_request_has_no_contents(self):
-        injector = make_document_injector()
-        ctx = _make_ctx(
-            state={_STATE_RESUMED_SESSION: True, _STATE_DOCS_LOADED: ["docA"]},
-            artifacts={"doc:docA.json": _make_artifact(_BLOCKS_A)},
-        )
-        req = SimpleNamespace(contents=[])
-
-        await injector(ctx, req)
-
-        assert req.contents == []
-        ctx.load_artifact.assert_not_called()
+@pytest.mark.asyncio
+async def test_long_content_declares_scope_and_is_readable_by_offset(repo):
+    content = "A" * 80000 + "UNIQUE-END-119"
+    repo.set_document("parsed_documents", "a", {"blocks": [{"type": "paragraph", "text": content}]}, merge=True)
+    req = request()
+    context = SimpleNamespace(state={"document_ids": ["a"]})
+    await make_document_injector(USER)(context, req)
+    assert "当前仅提供前" in texts(req) and "UNIQUE-END-119" not in texts(req)
+    assert len(texts(req)) < 33000
+    set_tenant_context(USER)
+    result = read_attached_document("a", offset=78000, tool_context=context)
+    assert "UNIQUE-END-119" in result["text"] and result["hasMore"] is False
+    with pytest.raises(DocumentUnavailable):
+        read_attached_document("b", tool_context=context)

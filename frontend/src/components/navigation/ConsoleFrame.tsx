@@ -12,7 +12,7 @@ function isPublicPath(pathname: string) {
 
 export function ConsoleFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/";
-  if (isPublicPath(pathname)) return <>{children}</>;
+  if (isPublicPath(pathname)) return <div className="console-public">{children}</div>;
 
   return (
     <div className="console-frame">

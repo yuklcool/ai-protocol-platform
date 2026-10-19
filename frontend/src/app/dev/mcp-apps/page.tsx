@@ -14,7 +14,7 @@ export const metadata = {
 
 export default function McpAppsDevIndex() {
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-8">
+    <main className="page-container mx-auto max-w-2xl space-y-6 p-8">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">MCP Apps — dev smoke routes</h1>
         <p className="text-sm text-muted-foreground">

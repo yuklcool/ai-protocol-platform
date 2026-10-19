@@ -240,7 +240,7 @@ export const MessageBubble = React.memo(function MessageBubble({
         ) : (
           <BrandAvatar />
         )}
-        <div className="flex max-w-[80%] flex-col gap-1">
+        <div className="flex max-w-[88%] flex-col gap-1">
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium text-primary">
               {botLabel || skillId}
@@ -318,14 +318,14 @@ export const MessageBubble = React.memo(function MessageBubble({
   // User bubble
   return (
     <div className="flex items-start justify-end gap-3">
-      <div className="flex max-w-[80%] flex-col items-end gap-1">
+      <div className="flex max-w-[88%] flex-col items-end gap-1">
         <div className="flex items-baseline gap-2">
           <span className="text-xs text-muted-foreground">{time}</span>
           <span className="text-xs font-medium text-foreground">
             {userDisplayName}
           </span>
         </div>
-        <div className="rounded-[2px_8px_8px_8px] border-l-[3px] border-primary bg-muted/50 px-3 py-2 text-sm">
+        <div className="chat-user-bubble px-4 py-3 text-sm">
           {submission ? (
             <div
               className="flex flex-col gap-1.5"

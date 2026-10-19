@@ -28,20 +28,20 @@ describe("DocListItem", () => {
 
   it("shows green dot for parsed status", () => {
     render(<DocListItem doc={makeDoc({ parseStatus: "parsed" })} onClick={vi.fn()} />);
-    const dot = screen.getByLabelText("Parsed");
+    const dot = screen.getByLabelText("可分析");
     expect(dot.className).toContain("bg-emerald-500");
   });
 
   it("shows amber pulsing dot for pending status", () => {
     render(<DocListItem doc={makeDoc({ parseStatus: "pending" })} onClick={vi.fn()} />);
-    const dot = screen.getByLabelText("Pending");
+    const dot = screen.getByLabelText("解析中");
     expect(dot.className).toContain("bg-amber-400");
     expect(dot.className).toContain("animate-pulse");
   });
 
   it("shows red dot for failed status", () => {
     render(<DocListItem doc={makeDoc({ parseStatus: "failed", parseError: null })} onClick={vi.fn()} />);
-    const dot = screen.getByLabelText("Failed");
+    const dot = screen.getByLabelText("处理失败");
     expect(dot.className).toContain("bg-destructive");
   });
 
@@ -52,7 +52,7 @@ describe("DocListItem", () => {
 
   it("shows fallback error text when parse failed with no error message", () => {
     render(<DocListItem doc={makeDoc({ parseStatus: "failed", parseError: null })} onClick={vi.fn()} />);
-    expect(screen.getByText("Parse failed — content unavailable")).toBeInTheDocument();
+    expect(screen.getByText("解析失败，内容不可用")).toBeInTheDocument();
   });
 
   it("does not show retry banner for parsed doc with blocks but no a2uiComponents", () => {
@@ -60,14 +60,14 @@ describe("DocListItem", () => {
     // separate pipeline. Parsed docs with blockCount > 0 have content even
     // when hasA2ui is false — they should not show the retry banner.
     render(<DocListItem doc={makeDoc({ parseStatus: "parsed", blockCount: 12, hasA2ui: false })} onClick={vi.fn()} />);
-    expect(screen.queryByText("No content — re-parse to load")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(screen.queryByText("没有可读内容，请重新解析")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重试解析" })).not.toBeInTheDocument();
   });
 
   it("shows retry banner for parsed doc with no blocks", () => {
     render(<DocListItem doc={makeDoc({ parseStatus: "parsed", blockCount: 0, hasA2ui: false })} onClick={vi.fn()} />);
-    expect(screen.getByText("No content — re-parse to load")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByText("没有可读内容，请重新解析")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试解析" })).toBeInTheDocument();
   });
 
   it("calls onClick with the doc when clicked", async () => {

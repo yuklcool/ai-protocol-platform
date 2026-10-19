@@ -362,6 +362,14 @@ async def post_surface_action_run(
     # Gate 8: per-skill opt-in for action-triggered runs (new)
     _enforce_root_interaction(idx, user, request, "allow_action_triggered_runs")
 
+    # 表单触发的轮次也读取已保存的当前选择,不能继承 ADK 的上一轮附件。
+    from tools.documents.access import DocumentUnavailable, validate_selection
+
+    try:
+        selected_documents = validate_selection(idx.document_ids, user_id=user.uid, tenant_id=ctx.tenant_id)
+    except DocumentUnavailable as exc:
+        raise HTTPException(409, {"code": "DOCUMENT_UNAVAILABLE", "message": str(exc)}) from exc
+
     # Persist the action (same write the fire-and-forget endpoint does). Written
     # under the door's session — the target runs on this same thread.
     session_app_name = app_name_for_session(idx)
@@ -372,6 +380,7 @@ async def post_surface_action_run(
     agent = _resolve_agent(run_skill_id, user, request, idx)
     agui_agent = build_agui_adk_agent(agent, user_id=user.uid, app_name=session_app_name)
     run_input = _build_run_input(session_id, body)
+    run_input.state["document_ids"] = selected_documents
 
     # Resolve the model string so the Activity header reflects the model that
     # actually ran this action turn (a confirm→switch delegate is frequently on a

@@ -41,7 +41,7 @@ const blank = (tenantId: string): Group => ({
 
 export default function GroupsPage() {
   const { user, loading } = useAuth();
-  if (loading) return <main className="p-8">加载中…</main>;
+  if (loading) return <main className="page-container p-8">加载中…</main>;
   if (!user) return <SignInRequired />;
   return <Groups />;
 }
@@ -128,7 +128,7 @@ function Groups() {
     }
   };
   return (
-    <main className="mx-auto max-w-5xl space-y-5 p-5 sm:p-8">
+    <main className="page-container mx-auto max-w-5xl space-y-5 p-5 sm:p-8">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">权限组</h1>
@@ -157,7 +157,7 @@ function Groups() {
             event.preventDefault();
             void save();
           }}
-          className="space-y-4 rounded-xl border p-5"
+          className="space-y-4 glass-panel p-5"
         >
           <h2 className="font-medium">
             {draft.id ? "编辑权限组" : "新建权限组"}
@@ -244,14 +244,14 @@ function Groups() {
       )}
       <div className="space-y-3">
         {groups.length === 0 && (
-          <p className="rounded-lg border p-5 text-sm text-muted-foreground">
+          <p className="glass-panel p-5 text-sm text-muted-foreground">
             还没有权限组。普通用户未分配授权时，无法使用额外 Skills 或 MCP。
           </p>
         )}
         {groups.map((group) => (
           <article
             key={group.id}
-            className="flex flex-wrap justify-between gap-3 rounded-xl border p-4"
+            className="flex flex-wrap justify-between gap-3 glass-panel p-4"
           >
             <div>
               <h2 className="font-medium">{group.label}</h2>

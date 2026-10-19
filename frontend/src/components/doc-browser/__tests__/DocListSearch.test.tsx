@@ -6,7 +6,7 @@ import { DocListSearch } from "../DocListSearch";
 describe("DocListSearch", () => {
   it("renders input with placeholder", () => {
     render(<DocListSearch value="" onChange={vi.fn()} />);
-    expect(screen.getByPlaceholderText(/search documents/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/搜索文件/)).toBeInTheDocument();
   });
 
   it("calls onChange when typing", async () => {

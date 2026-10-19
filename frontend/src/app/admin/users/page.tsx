@@ -38,7 +38,7 @@ type Access = {
 
 export default function UsersPage() {
   const { user, loading } = useAuth();
-  if (loading) return <main className="p-8">加载中…</main>;
+  if (loading) return <main className="page-container p-8">加载中…</main>;
   if (!user) return <SignInRequired />;
   return <Users />;
 }
@@ -139,7 +139,7 @@ function Users() {
     }
   };
   return (
-    <main className="mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
+    <main className="page-container mx-auto max-w-6xl space-y-5 p-5 sm:p-8">
       <header className="flex flex-wrap justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">用户管理</h1>
@@ -182,7 +182,7 @@ function Users() {
             event.preventDefault();
             void save();
           }}
-          className="space-y-4 rounded-xl border p-5"
+          className="space-y-4 glass-panel p-5"
         >
           <h2 className="font-medium">
             {creating ? "新建用户" : `编辑 ${draft.email}`}
@@ -301,7 +301,7 @@ function Users() {
           .filter((row) => row.email.toLowerCase().includes(q.toLowerCase()))
           .map((row) => (
             <article
-              className="flex flex-wrap justify-between gap-3 rounded-xl border p-4"
+              className="flex flex-wrap justify-between gap-3 glass-panel p-4"
               key={row.email}
             >
               <div>
@@ -354,7 +354,7 @@ function Users() {
           ))}
       </div>
       {preview && (
-        <section className="rounded-xl border p-5">
+        <section className="glass-panel p-5">
           <h2 className="font-medium">{preview.email} 的有效权限</h2>
           <p className="my-2 text-sm text-muted-foreground">
             {preview.result.reason}

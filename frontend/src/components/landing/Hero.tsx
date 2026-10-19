@@ -20,7 +20,7 @@ export function Hero({ visual }: HeroProps) {
   const secondary = BRAND_COPY_OVERRIDES.ctaSecondary || t("home.hero.ctaSecondary");
 
   return (
-    <section className="relative mx-auto w-full max-w-7xl px-6 pb-24 pt-16 md:px-10 md:pb-32 md:pt-24">
+    <section className="relative mx-auto w-full max-w-7xl px-4 pb-12 pt-12 sm:px-8 md:pb-20 md:pt-20">
       <div
         className={
           visual
@@ -30,10 +30,10 @@ export function Hero({ visual }: HeroProps) {
       >
         <div className="flex flex-col gap-8">
           <Eyebrow text={eyebrow} />
-          <h1 className="text-5xl font-bold leading-[0.95] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
+          <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl lg:text-5xl">
             {lineA}
             <br />
-            <span className="text-primary">{lineB}</span>
+            <span className="text-gradient">{lineB}</span>
           </h1>
           <p className="max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
             {body}
@@ -41,7 +41,7 @@ export function Hero({ visual }: HeroProps) {
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <Link
               href={demo.chatHref}
-              className="group inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              className="group inline-flex items-center gap-2 button-primary px-5 py-3 text-sm font-semibold transition-colors "
             >
               {primary}
               <ArrowIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

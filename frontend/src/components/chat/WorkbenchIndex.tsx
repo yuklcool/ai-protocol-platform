@@ -55,7 +55,7 @@ export function WorkbenchIndex({
             <button
               type="button"
               onClick={() => onOpen(artifact.surfaceId)}
-              className="group flex w-full items-start gap-3 rounded-lg border border-border bg-muted/10 px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/30"
+              className="group flex w-full items-start gap-3 glass-panel border-border bg-muted/10 px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/30"
             >
               <span className="mt-0.5 shrink-0 rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
                 {artifact.kind || translateChat(locale, "shell.result")}

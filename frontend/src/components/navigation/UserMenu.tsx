@@ -94,7 +94,7 @@ export function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-md border bg-background p-1 shadow-md"
+          className="account-popover absolute right-0 top-full z-50 mt-2 w-56 max-w-[85vw] rounded-xl border bg-popover p-1 shadow-md"
         >
           <div className="border-b px-3 py-2">
             <p className="truncate text-sm font-medium text-foreground">

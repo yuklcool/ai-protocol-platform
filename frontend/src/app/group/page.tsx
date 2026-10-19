@@ -25,7 +25,7 @@ import { isAnonymousGroupAuthMode } from "@/lib/anonymousGroupAuth";
 export default function GroupJoinPage() {
   if (!isAnonymousGroupAuthMode()) {
     return (
-      <main className="mx-auto flex max-w-md flex-col items-center justify-center gap-3 p-8 text-center">
+      <main className="page-container mx-auto flex max-w-md flex-col items-center justify-center gap-3 p-8 text-center">
         <h1 className="text-2xl font-semibold">Group join not available</h1>
         <p className="text-sm text-muted-foreground">
           This deployment doesn&apos;t use anonymous group-ID auth. Try the
@@ -66,7 +66,7 @@ function GroupJoinForm() {
   }
 
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-6 p-8">
+    <main className="page-container mx-auto flex max-w-md flex-col gap-6 p-8">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Join your group</h1>
         <p className="text-sm text-muted-foreground">
@@ -99,7 +99,7 @@ function GroupJoinForm() {
         <button
           type="submit"
           disabled={!code.trim() || isJoining}
-          className="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
+          className="button-primary px-4 py-2 disabled:opacity-50"
         >
           {isJoining ? "Joining…" : "Join"}
         </button>

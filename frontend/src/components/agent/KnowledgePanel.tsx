@@ -131,7 +131,7 @@ export function KnowledgePanel({
           void load();
         }}
       />
-      <section className="space-y-3 rounded-lg border p-4">
+      <section className="space-y-3 glass-panel p-4">
         <h3 className="text-sm font-semibold">
           {t("添加知识来源", "Add a knowledge source")}
         </h3>
@@ -176,7 +176,7 @@ export function KnowledgePanel({
           {busy ? t("处理中…", "Working…") : t("添加并选中", "Add and select")}
         </button>
       </section>
-      <section className="space-y-3 rounded-lg border p-4">
+      <section className="space-y-3 glass-panel p-4">
         <h3 className="text-sm font-semibold">
           {t("生效来源", "Bound sources")}
         </h3>
@@ -305,7 +305,7 @@ export function KnowledgePanel({
           </p>
         )}
       </section>
-      <section className="space-y-3 rounded-lg border p-4">
+      <section className="space-y-3 glass-panel p-4">
         <h3 className="text-sm font-semibold">
           {t("验证已保存的检索配置", "Test saved retrieval settings")}
         </h3>

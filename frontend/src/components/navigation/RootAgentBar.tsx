@@ -21,7 +21,7 @@ export function RootAgentBar({}: {
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   return (
     <header
-      className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/70 px-4"
+      className="app-toolbar flex min-h-14 shrink-0 items-center gap-2 px-3 sm:gap-3 sm:px-5"
       aria-label="Root Agent navigation"
     >
       <Link href="/" className="flex shrink-0 items-center" aria-label="Home">
@@ -29,7 +29,7 @@ export function RootAgentBar({}: {
         <img
           src={BRANDING.logo.chatAvatar}
           alt={BRANDING.appName}
-          className="h-8 w-8 rounded-full"
+          className="h-8 w-8 rounded-xl"
         />
       </Link>
       <div className="flex min-w-0 items-center gap-2">

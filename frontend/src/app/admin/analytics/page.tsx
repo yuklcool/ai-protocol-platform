@@ -210,7 +210,7 @@ export default function AnalyticsPage() {
   const hasFilters = Boolean(ownerFilter || skillFilter || q.trim());
 
   return (
-    <main className="mx-auto max-w-[1500px] p-6">
+    <main className="page-container mx-auto max-w-[1500px] p-6">
       <header className="mb-4">
         <h1 className="text-xl font-semibold">
           {t("用量与运行分析", "Analytics")}
@@ -232,7 +232,7 @@ export default function AnalyticsPage() {
         }}
       >
         <input
-          className="min-w-[16rem] flex-1 rounded-md border px-3 py-2 text-sm"
+          className="min-w-0 w-full sm:w-auto sm:min-w-[16rem] flex-1 rounded-md border px-3 py-2 text-sm"
           placeholder={t(
             "搜索标题、用户或技能…",
             "Search title, owner, or skill…",
@@ -300,7 +300,7 @@ export default function AnalyticsPage() {
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)]">
         {/* Session list */}
-        <section className="rounded-lg border">
+        <section className="glass-panel">
           <div className="border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
             {t("历史会话", "Sessions")}
             {state === "ok" && `(${rows.length})`}
@@ -336,7 +336,7 @@ export default function AnalyticsPage() {
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
                         {r.transcript_lost && (
-                          <span className="rounded-full border border-amber-500/50 px-1.5 text-[10px] uppercase text-amber-600 dark:text-amber-400">
+                          <span className="rounded-full border border-amber-500/50 px-1.5 text-[10px] uppercase text-amber-600">
                             {t("消息记录不可用", "transcript lost")}
                           </span>
                         )}
@@ -391,7 +391,7 @@ export default function AnalyticsPage() {
         </section>
 
         {/* Trace detail */}
-        <section className="rounded-lg border">
+        <section className="glass-panel">
           <div className="border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
             {t("执行轨迹", "Trace")}
           </div>
@@ -542,7 +542,7 @@ function TimelineMessageRow({
   return (
     <li
       className={
-        "rounded-lg border px-3 py-2 text-sm " +
+        "glass-panel px-3 py-2 text-sm " +
         (item.role === "user" ? "bg-muted/30" : "bg-background")
       }
     >
@@ -575,7 +575,7 @@ function TraceView({ trace }: { trace: Trace }) {
       <TraceHeader trace={trace} />
 
       {trace.transcript_available === false && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           Transcript unavailable — this session&rsquo;s stored messages could
           not be read (the canonical session is missing while its index row
           survives). The session metadata is still shown; the message history
@@ -672,7 +672,7 @@ function Note({ children }: { children: React.ReactNode }) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="page-container flex min-h-screen items-center justify-center p-8">
       {children}
     </main>
   );

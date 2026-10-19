@@ -42,7 +42,6 @@ def _common_patches():
     return (
         patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 10, None)),
         patch("tools.documents.upload._store_document"),
-        patch("tools.documents.upload.query_documents", return_value=[]),
         patch("db.folders.ensure_default_folder", return_value="folder1"),
         patch("db.folders.update_folder_counts"),
     )
@@ -59,14 +58,23 @@ class TestUploadStorage:
             common[1],
             common[2],
             common[3],
-            common[4],
             patch("tools.documents.upload.resolve_documents_bucket") as bucket_resolver,
         ):
             resp = client.post("/api/documents/upload", files=_file())
 
         assert resp.status_code == 200
         bucket_resolver.assert_not_called()
-        stored = root / "tenants" / "example.com" / "users" / "user1" / "docs" / "folder1" / "test.docx"
+        stored = (
+            root
+            / "tenants"
+            / "example.com"
+            / "users"
+            / "user1"
+            / "docs"
+            / "folder1"
+            / resp.json()["docId"]
+            / "test.docx"
+        )
         assert stored.read_bytes() == b"fake content"
 
     def test_gcs_backend_uses_fileobj_and_per_client_bucket(self, client: TestClient, monkeypatch):
@@ -89,7 +97,6 @@ class TestUploadStorage:
             common[1],
             common[2],
             common[3],
-            common[4],
             patch("tools.documents.upload.resolve_documents_bucket", return_value="example-documents"),
             patch("tools.documents.upload.GcsObjectStorage", FakeGcsStorage),
         ):
@@ -105,7 +112,7 @@ class TestUploadStorage:
         monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
         monkeypatch.setenv("OBJECT_STORAGE_LOCAL_ROOT", str(tmp_path / "objects"))
         common = _common_patches()
-        with common[0], common[1], common[2], common[3], common[4]:
+        with common[0], common[1], common[2], common[3]:
             resp = client.post("/api/documents/upload", files=_file())
         assert resp.status_code == 200
         assert resp.json()["storagePath"].startswith(f"users/{_USER.uid}/docs/")
@@ -122,7 +129,6 @@ class TestUploadStorage:
         with (
             patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 10, None)),
             patch("tools.documents.upload._store_document", side_effect=fake_store),
-            patch("tools.documents.upload.query_documents", return_value=[]),
             patch("db.folders.ensure_default_folder", return_value="folder1"),
             patch("db.folders.update_folder_counts"),
         ):
@@ -143,7 +149,6 @@ class TestUploadStorage:
         with (
             patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 10, None)),
             patch("tools.documents.upload._store_document"),
-            patch("tools.documents.upload.query_documents", return_value=[]),
             patch("db.folders.ensure_default_folder", side_effect=capture_ensure),
             patch("db.folders.update_folder_counts"),
         ):
@@ -159,13 +164,24 @@ class TestUploadStorage:
         monkeypatch.setenv("OBJECT_STORAGE_LOCAL_ROOT", str(tmp_path / "objects"))
         payload = b"x" * (3 * 1024 * 1024 + 17)
         common = _common_patches()
-        with common[0], common[1], common[2], common[3], common[4]:
+        with common[0], common[1], common[2], common[3]:
             resp = client.post("/api/documents/upload", files=_file(data=payload))
 
         assert resp.status_code == 200
-        stored = tmp_path / "objects" / "tenants" / "example.com" / "users" / "user1" / "docs" / "folder1" / "test.docx"
+        stored = (
+            tmp_path
+            / "objects"
+            / "tenants"
+            / "example.com"
+            / "users"
+            / "user1"
+            / "docs"
+            / "folder1"
+            / resp.json()["docId"]
+            / "test.docx"
+        )
         assert stored.stat().st_size == len(payload)
 
-    def test_unsupported_extension_returns_400(self, client: TestClient):
+    def test_unsupported_extension_returns_415(self, client: TestClient):
         resp = client.post("/api/documents/upload", files=_file("test.exe"))
-        assert resp.status_code == 400
+        assert resp.status_code == 415

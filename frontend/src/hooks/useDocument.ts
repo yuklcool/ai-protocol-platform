@@ -1,15 +1,10 @@
 "use client";
 
-import { firestoreTimestampToIso, getFirestoreDb } from "@/lib/firebase";
-import { isAnonymousGroupAuthMode } from "@/lib/anonymousGroupAuth";
-import {
-  doc as fsDoc,
-  onSnapshot,
-  type DocumentData,
-} from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { DOCUMENTS_CHANGED, documentRequest } from "@/lib/documents";
 import type { Block } from "@/components/document/BlocksRenderer";
-import type { ParseStatus } from "@/hooks/useDocBrowser";
+import type { ParseStatus } from "@/lib/documents";
 
 export interface DocSummary {
   totalBlocks: number;
@@ -18,7 +13,6 @@ export interface DocSummary {
   images: number;
   changes: number;
 }
-
 export interface DocumentDetail {
   id: string;
   originalFilename: string;
@@ -31,84 +25,35 @@ export interface DocumentDetail {
   blocks: Block[];
 }
 
-interface UseDocumentReturn {
-  doc: DocumentDetail | null;
-  isLoading: boolean;
-  error: string | null;
-}
-
-function mapDoc(id: string, data: DocumentData): DocumentDetail {
-  const summary =
-    typeof data.blockCount === "number"
-      ? {
-          totalBlocks: data.blockCount ?? 0,
-          headings:
-            typeof data.headingCount === "number" ? data.headingCount : 0,
-          tables: typeof data.tableCount === "number" ? data.tableCount : 0,
-          images: typeof data.imageCount === "number" ? data.imageCount : 0,
-          changes: typeof data.changeCount === "number" ? data.changeCount : 0,
-        }
-      : null;
-
-  return {
-    id: (data.id as string) ?? id,
-    originalFilename: (data.originalFilename as string) ?? "",
-    sourceFormat: (data.sourceFormat as string) ?? "",
-    parseStatus: (data.parseStatus as ParseStatus) ?? "pending",
-    parseError: (data.parseError as string | null) ?? null,
-    sourceUrl: (data.sourceUrl as string | null) ?? null,
-    parsedAt: firestoreTimestampToIso(data.parsedAt),
-    summary,
-    blocks: Array.isArray(data.blocks) ? (data.blocks as Block[]) : [],
-  };
-}
-
-export function useDocument(docId: string | null): UseDocumentReturn {
+export function useDocument(docId: string | null) {
+  const { user } = useAuth();
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
-    if (!docId) {
-      setDoc(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const db = getFirestoreDb();
-    if (!db || isAnonymousGroupAuthMode()) {
-      setError("Document preview unavailable.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
+    setDoc(null);
     setError(null);
-
-    const ref = fsDoc(db, "parsed_documents", docId);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (!snap.exists()) {
-          setDoc(null);
-          setError("Document not found.");
-          setIsLoading(false);
-          return;
-        }
-        setDoc(mapDoc(snap.id, snap.data()));
+    if (!docId || !user) { setIsLoading(false); return; }
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      try {
+        const value = await documentRequest<DocumentDetail>(`/documents/${encodeURIComponent(docId)}`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setDoc(value);
         setError(null);
-        setIsLoading(false);
-      },
-      (err) => {
-        console.error("[useDocument] snapshot error", err);
-        setError("Document preview unavailable.");
-        setIsLoading(false);
-      },
-    );
-
-    return unsub;
-  }, [docId]);
-
+        if (value.parseStatus === "pending") timer = setTimeout(load, 2000);
+      } catch (failure) {
+        if (!controller.signal.aborted) setError((failure as Error).message);
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
+    };
+    const refresh = () => { clearTimeout(timer); void load(); };
+    setIsLoading(true);
+    void load();
+    window.addEventListener(DOCUMENTS_CHANGED, refresh);
+    return () => { controller.abort(); clearTimeout(timer); window.removeEventListener(DOCUMENTS_CHANGED, refresh); };
+  }, [docId, user]);
   return { doc, isLoading, error };
 }

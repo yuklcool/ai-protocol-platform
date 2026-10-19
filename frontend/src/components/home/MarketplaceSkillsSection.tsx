@@ -38,7 +38,7 @@ export function MarketplaceSkillsSection({
           <li key={skill.skillId}>
             <Link
               href={skillHref(skill)}
-              className="group flex h-full flex-col gap-2 rounded-lg border border-border bg-background p-4 transition-colors hover:border-primary/50 hover:bg-muted/40"
+              className="group flex h-full flex-col gap-2 glass-panel border-border bg-background p-4 transition-colors hover:border-primary/50 hover:bg-muted/40"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <span className="text-sm font-semibold text-foreground group-hover:text-primary">

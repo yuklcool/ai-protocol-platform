@@ -194,7 +194,7 @@ function WorkspaceCanvas({
 
       {/* Selected docs + the compare affordance */}
       {selected.length > 0 && (
-        <div data-testid="doc-compare-selected" className="mb-4 rounded-lg border bg-muted/30 p-3">
+        <div data-testid="doc-compare-selected" className="mb-4 glass-panel bg-muted/30 p-3">
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Selected ({selected.length})
           </p>
@@ -219,7 +219,7 @@ function WorkspaceCanvas({
               data-testid="doc-compare-run"
               onClick={onCompare}
               disabled={comparing}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              className="button-primary px-3 py-1.5 text-sm font-medium disabled:opacity-60"
             >
               {comparing ? "Comparing…" : "Compare these two →"}
             </button>

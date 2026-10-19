@@ -92,7 +92,7 @@ export function TenantRootEditor({
       </p>
     );
   return (
-    <section className="space-y-4 rounded-lg border p-5">
+    <section className="space-y-4 glass-panel p-5">
       <h2 className="font-medium">
         {t("租户 Agent 策略", "Tenant Agent policy")}
       </h2>

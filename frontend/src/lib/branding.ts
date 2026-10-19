@@ -82,9 +82,9 @@ export const BRANDING: Branding = {
       "https://github.com/yuklcool/ai-protocol-platform",
   },
   theme: {
-    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "234 57% 59%",
+    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "253 32% 43%",
     primaryForegroundHsl:
-      process.env.NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL || "210 40% 98%",
+      process.env.NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL || "0 0% 100%",
   },
   demo: {
     // Backwards-compatible values for components not yet migrated to useI18n.

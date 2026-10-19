@@ -367,7 +367,7 @@ export function A2UISurfaceMount({
             <div
               role="status"
               data-testid="a2ui-surface-done"
-              className="mt-2 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+              className="mt-2 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-1.5 text-xs font-medium text-emerald-700"
             >
               <span aria-hidden="true">✓</span>
               <span>{freezeAfterAction ? "Sent — the response appears below, and in the Workspace and Activity." : "Action completed"}</span>

@@ -45,8 +45,8 @@ export default function OidcCallbackPage() {
   }, [t]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <section className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+    <main className="page-container flex min-h-screen items-center justify-center bg-background p-6">
+      <section className="w-full max-w-md glass-panel border-border bg-card p-6 text-center shadow-sm">
         <h1 className="text-lg font-semibold text-foreground">{t("auth.signIn")}</h1>
         {error ? (
           <p className="mt-3 text-sm text-red-600" role="alert">

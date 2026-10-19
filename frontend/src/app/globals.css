@@ -2,265 +2,182 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  /* Hide the native scrollbar while keeping the element scrollable — used by
-     the Workbench tab strip (the native bar was big + ugly with many tabs). */
-  .no-scrollbar {
-    -ms-overflow-style: none; /* IE/Edge */
-    scrollbar-width: none; /* Firefox */
-  }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none; /* Chrome/Safari/WebKit */
-  }
-}
-
 @layer base {
   :root {
-    color-scheme: dark;
-    /* Linear-inspired Enterprise Agent Console: dark-first product chrome. */
-    --background: 230 17% 4%;
-    --foreground: 216 25% 97%;
-    --card: 228 17% 8%;
-    --card-foreground: 216 25% 97%;
-    --popover: 225 19% 13%;
-    --popover-foreground: 216 25% 97%;
-    --muted: 224 20% 10%;
-    --muted-foreground: 218 8% 58%;
-    --border: 228 14% 18%;
-    --input: 228 13% 24%;
-    --ring: 234 57% 59%;
-    --primary: 234 57% 59%;
+    color-scheme: light;
+    --background: 240 14% 97%;
+    --foreground: 200 75% 2%;
+    --card: 0 0% 100%;
+    --card-foreground: 200 75% 2%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 75% 2%;
+    --muted: 240 18% 94%;
+    --muted-foreground: 240 2% 35%;
+    --border: 240 16% 87%;
+    --input: 240 12% 75%;
+    --ring: 253 32% 43%;
+    --primary: 253 32% 43%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 225 19% 13%;
-    --secondary-foreground: 216 25% 97%;
-    --accent: 234 35% 18%;
-    --accent-foreground: 216 25% 97%;
-    --destructive: 3 93% 63%;
+    --secondary: 240 28% 95%;
+    --secondary-foreground: 240 8% 20%;
+    --accent: 237 60% 94%;
+    --accent-foreground: 240 8% 20%;
+    --destructive: 0 67% 43%;
     --destructive-foreground: 0 0% 100%;
-    --radius: 0.5rem;
-    /* A2UI renderer accent — the @a2ui/react basic catalog reads this var for
-       Tabs active indicators, primary Buttons, and selected ChoicePicker chips
-       (its only themable hook; borders/cards stay SDK defaults). Point it at the
-       app's primary so tool-result surfaces match the rest of the app. */
+    --radius: 1rem;
+    --lilac: #bec2ff;
+    --mint: #85e0ce;
+    --glass: rgb(255 255 255 / 0.72);
+    --glass-strong: rgb(255 255 255 / 0.9);
+    --glass-border: rgb(255 255 255 / 0.65);
+    --shadow-panel: 0 4px 24px rgb(41 42 71 / 0.035);
+    --shadow-overlay: 0 16px 48px rgb(41 42 71 / 0.14);
+    --action-gradient: linear-gradient(100deg, #b1a2f4, #85e0ce);
     --a2ui-primary-color: hsl(var(--primary));
   }
-
-  .light {
-    color-scheme: light;
-    --background: 220 20% 97%;
-    --foreground: 220 20% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
-    --muted: 220 15% 94%;
-    --muted-foreground: 218 10% 40%;
-    --border: 220 14% 88%;
-    --input: 220 14% 80%;
-    --secondary: 220 15% 94%;
-    --secondary-foreground: 220 20% 10%;
-    --accent: 234 35% 94%;
-    --accent-foreground: 220 20% 10%;
-  }
-}
-
-@layer base {
-  * {
-    border-color: hsl(var(--border));
-  }
+  * { border-color: hsl(var(--border)); }
+  html, body { max-width: 100%; }
   body {
-    background-color: hsl(var(--background));
+    isolation: isolate;
+    background: linear-gradient(135deg, #f7f7f9, #e8e8f0);
     color: hsl(var(--foreground));
-    font-family: Inter, Geist, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-family: "Google Sans", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
   }
-
-  button, input, textarea, select {
-    font: inherit;
-  }
-
-  input, textarea, select {
-    background-color: hsl(var(--background));
+  button, input, textarea, select { font: inherit; }
+  button, a, summary { -webkit-tap-highlight-color: transparent; }
+  button:not(:disabled), summary { cursor: pointer; }
+  :is(input, textarea, select) {
+    max-width: 100%;
+    background-color: rgb(255 255 255 / 0.85);
     color: hsl(var(--foreground));
     accent-color: hsl(var(--primary));
   }
-
-  ::selection {
-    background: hsl(var(--primary) / 0.28);
-    color: hsl(var(--foreground));
+  :is(input, textarea)::placeholder { color: hsl(var(--muted-foreground)); opacity: 0.85; }
+  :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
   }
+  :is(input, textarea, select):disabled { cursor: not-allowed; }
+  ::selection { background: #bec2ff99; color: #010507; }
+  /* flex/grid children may shrink; long resource IDs must not widen a page. */
+  :is(main, section, article, fieldset) { min-width: 0; }
 }
 
-/* ── Global application shell ─────────────────────────────────────────────── */
-.console-frame {
-  display: flex;
-  min-height: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  overflow: hidden;
-  background: hsl(var(--background));
+.app-backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.app-backdrop span { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.42; animation: ambient-drift 30s ease-in-out infinite alternate; }
+.app-backdrop span:nth-child(1) { width: 600px; height: 600px; right: -180px; top: -180px; background: var(--lilac); }
+.app-backdrop span:nth-child(2) { width: 500px; height: 500px; left: -200px; bottom: -200px; background: var(--mint); animation-duration: 35s; }
+.app-backdrop span:nth-child(3) { width: 400px; height: 400px; top: 35%; left: 30%; background: #cbdadf; opacity: 0.22; animation-duration: 25s; }
+@keyframes ambient-drift { to { transform: translate(24px, -20px) scale(1.06); } }
+
+@layer components {
+  .glass-panel {
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    background: var(--glass);
+    box-shadow: var(--shadow-panel);
+  }
+  .glass-control {
+    border: 1px solid hsl(var(--input));
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.9);
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+  }
+  .glass-control:focus-visible { border-color: hsl(var(--ring)); }
+  .button-primary {
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--action-gradient);
+    color: #222332;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgb(95 81 143 / 0.08);
+    transition: filter 180ms ease, box-shadow 180ms ease;
+  }
+  .button-primary:hover:not(:disabled) { filter: brightness(0.97); box-shadow: 0 4px 14px rgb(95 81 143 / 0.14); }
+  .button-secondary {
+    border: 1px solid hsl(var(--border));
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.68);
+    transition: background-color 180ms ease, border-color 180ms ease;
+  }
+  .button-secondary:hover:not(:disabled) { border-color: var(--lilac); background: white; }
+  .app-toolbar { border-bottom: 1px solid var(--glass-border); background: var(--glass); backdrop-filter: blur(12px); }
+  .page-container { width: 100%; min-width: 0; overflow-wrap: anywhere; }
+  .page-container > header { margin-bottom: 24px; }
+  .page-container > header h1 { font-size: clamp(1.35rem, 2vw, 1.75rem); line-height: 1.35; font-weight: 700; letter-spacing: -0.025em; }
+  .page-container > header p { max-width: 70ch; line-height: 1.7; }
+  .text-gradient { color: #506277; background: linear-gradient(135deg, #756ba7, #187659); background-clip: text; -webkit-text-fill-color: transparent; }
+  .feature-card { overflow: hidden; transition: transform 200ms ease, box-shadow 200ms ease; }
+  .feature-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--action-gradient); opacity: 0; transition: opacity 200ms ease; }
+  .feature-card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgb(41 42 71 / 0.07); }
+  .feature-card:hover::before { opacity: 1; }
 }
 
-.console-sidebar {
-  display: flex;
-  width: 232px;
-  flex: 0 0 232px;
-  flex-direction: column;
-  border-right: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-  padding: 14px 10px 12px;
-}
-
-.console-sidebar-brand {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 8px 18px;
-}
-
-.console-brand-status,
-.console-runtime-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-  border-radius: 999px;
-  background: #2da44e;
-  box-shadow: 0 0 0 3px rgb(45 164 78 / 0.12);
-}
-
-.console-sidebar-nav {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.console-nav-group + .console-nav-group {
-  margin-top: 20px;
-}
-
-.console-nav-label {
-  padding: 0 9px 6px;
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  line-height: 16px;
-  text-transform: uppercase;
-}
-
-.console-nav-item {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 9px;
-  color: hsl(var(--muted-foreground));
-  font-size: 13px;
-  line-height: 18px;
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-
-.console-nav-item:hover {
-  background: hsl(var(--accent));
-  color: hsl(var(--foreground));
-}
-
-.console-nav-item-active {
-  border-color: hsl(var(--primary) / 0.18);
-  background: hsl(var(--primary) / 0.12);
-  color: hsl(var(--foreground));
-}
-
-.console-nav-item-active svg {
-  color: hsl(var(--primary));
-}
-
-.console-sidebar-footer {
-  border-top: 1px solid hsl(var(--border));
-  margin-top: 12px;
-  padding-top: 10px;
-}
-
-.console-runtime-card {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 10px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--background) / 0.55);
-  padding: 9px;
-}
-
-.console-mobile-nav {
-  display: none;
-  min-height: 42px;
-  align-items: center;
-  gap: 6px;
-  overflow-x: auto;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-  padding: 5px 10px;
-}
-
-.console-mobile-link {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 8px;
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.console-mobile-link-active {
-  border-color: hsl(var(--primary) / 0.18);
-  background: hsl(var(--primary) / 0.12);
-  color: hsl(var(--foreground));
-}
-
-.console-main {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.console-content {
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: auto;
-}
-
-.console-content > main {
-  min-height: 100%;
-}
+.console-public { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.console-frame { display: flex; min-height: 0; height: 100%; flex: 1 1 auto; overflow: hidden; }
+.console-sidebar { display: flex; width: 240px; flex: 0 0 240px; flex-direction: column; border-right: 1px solid var(--glass-border); background: var(--glass); backdrop-filter: blur(12px); padding: 20px 14px 14px; }
+.console-sidebar-brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px 24px; }
+.console-brand-status, .console-runtime-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #198665; box-shadow: 0 0 0 3px rgb(25 134 101 / 0.1); }
+.console-sidebar-nav { min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 2px; }
+.console-nav-group + .console-nav-group { margin-top: 24px; }
+.console-nav-label { padding: 0 12px 8px; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 600; line-height: 18px; }
+.console-nav-item { display: flex; min-height: 40px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 12px; padding: 9px 12px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 20px; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
+.console-nav-item:hover { background: rgb(255 255 255 / 0.8); color: hsl(var(--foreground)); }
+.console-nav-item-active { border-color: rgb(190 194 255 / 0.5); background: linear-gradient(100deg, #bec2ff38, #85e0ce24); color: hsl(var(--primary)); font-weight: 600; }
+.console-sidebar-footer { border-top: 1px solid hsl(var(--border)); margin-top: 16px; padding-top: 12px; }
+.console-runtime-card { display: flex; align-items: center; gap: 10px; margin-top: 12px; border: 1px solid var(--glass-border); border-radius: 12px; background: rgb(255 255 255 / 0.55); padding: 12px; }
+.console-mobile-nav { display: none; min-height: 58px; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--glass-border); background: var(--glass-strong); padding: 8px 16px; }
+.console-drawer-overlay { position: fixed; inset: 0; z-index: 60; background: rgb(28 28 45 / 0.22); backdrop-filter: blur(4px); }
+.console-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 61; display: flex; width: min(320px, 90vw); flex-direction: column; overflow: auto; background: #f7f7fc; padding: 20px; box-shadow: var(--shadow-overlay); }
+.console-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
+.console-content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; }
+.console-content > main { min-height: 100%; }
+.chat-shell { background: rgb(255 255 255 / 0.28); }
+.chat-pane { background: rgb(255 255 255 / 0.42); }
+.chat-composer { background: var(--glass); }
+.chat-user-bubble { overflow-wrap: anywhere; border: 1px solid rgb(190 194 255 / 0.35); border-radius: 16px 16px 4px 16px; background: linear-gradient(120deg, #bec2ff35, #85e0ce25); }
+.workbench-pane { background: rgb(255 255 255 / 0.55); }
+/* Syntax colors are light-theme colors, scoped to code only. */
+.hljs-keyword, .hljs-selector-tag { color: #7541a6; }
+.hljs-string, .hljs-attr { color: #16634b; }
+.hljs-number, .hljs-literal { color: #9a4b15; }
+.hljs-comment { color: #626274; }
+.hljs-title, .hljs-function { color: #345a99; }
 
 @media (max-width: 1023px) {
-  .console-sidebar {
-    display: none;
-  }
-
-  .console-mobile-nav {
-    display: flex;
-  }
+  .console-sidebar { display: none; }
+  .console-mobile-nav { display: flex; }
 }
-
-@media (max-width: 640px) {
-  .console-content > main {
-    min-height: 100%;
-  }
+@media (max-width: 767px) {
+  .app-backdrop span:nth-child(1) { width: 300px; height: 300px; filter: blur(50px); }
+  .app-backdrop span:nth-child(2) { width: 250px; height: 250px; filter: blur(50px); }
+  .app-backdrop span:nth-child(3) { display: none; }
+  .workspace-row { flex-direction: column; }
+  .workspace-row > .chat-pane { flex-basis: auto !important; flex-grow: 1 !important; min-height: 180px; }
+  .workspace-row > .workbench-pane-visible { flex-basis: 45% !important; min-height: 140px; border-top: 1px solid hsl(var(--border)); }
+  .workspace-row > [role="separator"] { display: none; }
+  .workspace-row > .chat-files-panel { position: absolute; inset: 0 auto 0 0; z-index: 20; width: min(320px, 90%); background: #fafafe; box-shadow: var(--shadow-overlay); }
+  .page-container { padding-left: 16px; padding-right: 16px; }
+  .page-container :is(button, select) { min-height: 40px; }
+  .page-container :is(input:not([type="checkbox"]):not([type="radio"]), textarea) { font-size: 16px; }
+  .composer-form textarea { font-size: 16px; }
+  .composer-form > button { min-height: 44px; }
 }
-
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+  .app-backdrop span { animation: none; }
+  .feature-card:hover { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: #fff; --glass-strong: #fff; }
+  .app-toolbar, .console-sidebar { backdrop-filter: none; }
+}
+@layer utilities {
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
 /* The basic catalog's inline white cards, buttons and choice chips must share
    the application theme on every surface, including workbench and inline UI.
    Match backgrounds specifically so primary buttons keep their accent fill. */
@@ -326,7 +243,7 @@
 }
 /* Cards: the SDK forces a white bg + shadow. Make them flat, theme-aware
    sections so the Required / Optional groups read as gentle panels — not
-   floating white slabs (and legible in dark mode). Matches React's serialised
+   floating white slabs (and legible on the glass canvas). Matches React's serialised
    inline colour (`#fff` → `rgb(255, 255, 255)`). */
 .chat-a2ui-form [style*="255, 255, 255"] {
   background: hsl(var(--muted) / 0.35) !important;
@@ -375,4 +292,7 @@
   min-width: 7rem !important;
   margin: 0.625rem 0 0 auto !important;
   padding: 0.4375rem 1.125rem !important;
+}
+@media (min-width: 1024px) {
+  .console-sidebar-footer .account-popover { top: auto; bottom: 100%; margin-bottom: 8px; }
 }

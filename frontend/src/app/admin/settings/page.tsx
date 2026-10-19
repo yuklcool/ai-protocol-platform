@@ -147,7 +147,7 @@ export default function PlatformSettingsPage() {
   const overLimit = preamble.length > PREAMBLE_MAX_LEN;
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
+    <main className="page-container mx-auto max-w-3xl p-6">
       <header className="mb-4">
         <h1 className="text-xl font-semibold">
           {t("平台设置", "Platform settings")}
@@ -160,7 +160,7 @@ export default function PlatformSettingsPage() {
         </p>
       </header>
 
-      <section className="rounded-lg border p-4">
+      <section className="glass-panel p-4">
         <label className="mb-2 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -233,7 +233,7 @@ export default function PlatformSettingsPage() {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="page-container flex min-h-screen items-center justify-center p-8">
       {children}
     </main>
   );

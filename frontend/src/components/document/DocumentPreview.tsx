@@ -45,9 +45,10 @@ function PreviewBody({ source }: { source: DocThumbnailSource }) {
 }
 
 function DocPreviewBody({ docId }: { docId: string }) {
-  const { doc } = useDocument(docId);
+  const { doc, error } = useDocument(docId);
   const fmt = (doc?.sourceFormat ?? "").toLowerCase();
 
+  if (error) return <Frame><p className="p-3 text-xs text-destructive">{error}</p></Frame>;
   if (!doc) {
     return (
       <Frame>
@@ -97,7 +98,7 @@ export function DocumentPreview({ source, label, children, side = "right" }: Doc
             side={side}
             sideOffset={8}
             collisionPadding={12}
-            className="z-50 w-56 origin-[var(--radix-tooltip-content-transform-origin)] rounded-lg border border-border bg-popover p-2 shadow-lg duration-150 data-[state=delayed-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95"
+            className="z-50 w-56 origin-[var(--radix-tooltip-content-transform-origin)] glass-panel border-border bg-popover p-2 shadow-lg duration-150 data-[state=delayed-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95"
           >
             <PreviewBody source={source} />
             {label ? <p className="mt-1.5 truncate text-xs text-muted-foreground">{label}</p> : null}

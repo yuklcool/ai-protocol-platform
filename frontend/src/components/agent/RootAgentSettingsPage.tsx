@@ -206,8 +206,8 @@ function RootAgentSettingsInner() {
     );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <div className="root-settings flex h-full min-h-0 flex-col text-foreground">
+      <header className="app-toolbar flex min-h-14 shrink-0 flex-wrap items-center gap-3 px-4 py-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
           <Bot className="h-4 w-4" aria-hidden />
         </div>
@@ -229,7 +229,7 @@ function RootAgentSettingsInner() {
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 button-primary px-3 py-1.5 text-xs font-medium disabled:opacity-50"
         >
           <Save className="h-3.5 w-3.5" aria-hidden />
           {saving ? t("rootAgent.saving") : t("rootAgent.save")}
@@ -278,7 +278,7 @@ function RootAgentSettingsInner() {
             </Link>
           </div>
         </aside>
-        <main className="min-h-0 overflow-y-auto">
+        <main className="page-container min-h-0 overflow-y-auto">
           <div className="mx-auto max-w-3xl p-4 sm:p-6">
             <div className="mb-5">
               <h2 className="text-xl font-semibold tracking-tight">
@@ -306,7 +306,7 @@ function RootAgentSettingsInner() {
           </div>
         </main>
         <aside className="hidden min-h-0 overflow-y-auto border-l bg-card/40 p-4 xl:block">
-          <div className="rounded-lg border bg-background p-4">
+          <div className="glass-panel bg-background p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full border bg-primary/10 text-primary">
                 <Bot className="h-4 w-4" aria-hidden />
@@ -339,7 +339,7 @@ function RootAgentSettingsInner() {
               />
             </div>
           </div>
-          <div className="mt-4 rounded-lg border border-dashed bg-background/50 p-4 text-xs leading-5 text-muted-foreground">
+          <div className="mt-4 glass-panel border-dashed bg-background/50 p-4 text-xs leading-5 text-muted-foreground">
             {t("rootAgent.compatibility")}
           </div>
         </aside>
@@ -689,7 +689,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-4 rounded-lg border bg-card/30 p-4">
+    <section className="space-y-4 glass-panel bg-card/30 p-4">
       <div>
         <h3 className="text-sm font-semibold">{title}</h3>
         {hint && (

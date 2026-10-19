@@ -15,56 +15,32 @@ from pathlib import PurePosixPath
 from typing import Annotated, BinaryIO
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 import db.folders as folders_db
 from auth import User, get_current_user
 from db.clients import UnmappedTenantError, resolve_documents_bucket
-from db.persistence import query_documents, set_document
+from db.persistence import set_document
 from object_storage import get_object_storage, object_storage_backend_name
 from object_storage.gcs import GcsObjectStorage, LegacyGcsObjectStorage
+from tools.documents.parsing import FORMATS, MAX_FILE_BYTES, parse_file
 
 _CurrentUser = Annotated[User, Depends(get_current_user)]
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 _COLLECTION = "parsed_documents"
 
-_ALLOWED_EXTENSIONS = {
-    ".docx",
-    ".pptx",
-    ".xlsx",
-    ".odt",
-    ".odp",
-    ".ods",
-    ".epub",
-    ".eml",
-    ".mbox",
-    ".html",
-    ".htm",
-    ".md",
-    ".csv",
-    ".pdf",
-    ".txt",
-}
+_ALLOWED_EXTENSIONS = set(FORMATS)
 _EXTENSION_CONTENT_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".odt": "application/vnd.oasis.opendocument.text",
-    ".odp": "application/vnd.oasis.opendocument.presentation",
-    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
-    ".epub": "application/epub+zip",
-    ".eml": "message/rfc822",
-    ".mbox": "application/mbox",
-    ".html": "text/html",
-    ".htm": "text/html",
     ".md": "text/markdown",
     ".csv": "text/csv",
     ".pdf": "application/pdf",
     ".txt": "text/plain",
 }
-_PLAIN_TEXT_EXTENSIONS = {".txt", ".log", ".text"}
 
 
 def _resolve_content_type(filename: str, client_content_type: str | None) -> str:
@@ -109,65 +85,21 @@ class ParsedDocumentResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _is_plain_text(filename: str) -> bool:
-    return PurePosixPath(filename).suffix.lower() in _PLAIN_TEXT_EXTENSIONS
-
-
-def _parse_plain_text(data: bytes) -> list[dict]:
-    from io import BytesIO
-
-    return _parse_plain_text_fileobj(BytesIO(data))
-
-
-def _parse_plain_text_fileobj(fileobj: BinaryIO) -> list[dict]:
-    """Build paragraph blocks line-by-line instead of reading the whole text file."""
-    fileobj.seek(0)
-    blocks: list[dict] = []
-    paragraph_lines: list[str] = []
-
-    def flush() -> None:
-        if not paragraph_lines:
-            return
-        text = "".join(paragraph_lines).strip()
-        paragraph_lines.clear()
-        if text:
-            blocks.append({"type": "paragraph", "text": text, "block_id": f"p{len(blocks)}"})
-
-    for raw_line in fileobj:
-        line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else str(raw_line)
-        if line.strip():
-            paragraph_lines.append(line)
-        else:
-            flush()
-    flush()
-    return blocks
-
-
 async def _run_parse_fileobj(
     fileobj: BinaryIO,
     filename: str,
     *,
     source_ref: str,
 ) -> tuple[str, list, int, str | None]:
-    """Parse a seekable upload stream with bounded-memory input handling."""
+    """常用附件全部本地解析,失败返回明确原因,不进入无工作者的等待状态。"""
     import time
 
-    t0 = time.monotonic()
-    if _is_plain_text(filename):
-        blocks = await asyncio.to_thread(_parse_plain_text_fileobj, fileobj)
-        return "parsed", blocks, int((time.monotonic() - t0) * 1000), None
-
-    from tools.documents.parse_input import parse_uploaded_fileobj
-
-    outcome = await parse_uploaded_fileobj(fileobj, filename, output_format="blocks")
-    elapsed_ms = int((time.monotonic() - t0) * 1000)
-    if outcome is None:
-        log.info("AILANG Parse: extension/client unavailable for %s, using AI extraction", source_ref)
-        return "pending_ai_extraction", [], elapsed_ms, None
-    if not outcome.ok:
-        log.error("AILANG Parse failed for %s: [%s] %s", source_ref, outcome.error_code, outcome.error)
-        return "failed", [], elapsed_ms, outcome.error
-    return "parsed", outcome.blocks or [], elapsed_ms, None
+    started = time.monotonic()
+    try:
+        blocks = await asyncio.to_thread(parse_file, fileobj, filename)
+        return "parsed", blocks, int((time.monotonic() - started) * 1000), None
+    except ValueError as exc:
+        return "failed", [], int((time.monotonic() - started) * 1000), str(exc)
 
 
 async def _run_parse(
@@ -176,7 +108,7 @@ async def _run_parse(
     *,
     source_ref: str | None = None,
 ) -> tuple[str, list, int, str | None]:
-    """Compatibility parser for reparse bytes and historical ``gs://`` callers."""
+    """复用本地解析器处理重试和文档库引用读取到的文件。"""
     import time
     from io import BytesIO
 
@@ -291,16 +223,26 @@ def _store_document(
 async def upload_document(
     user: _CurrentUser,
     file: UploadFile,
-    skill_id: str = "",
-    folder_id: str = "",
+    skill_id: Annotated[str, Form()] = "",
+    folder_id: Annotated[str, Form()] = "",
 ) -> ParsedDocumentResponse:
     if not file.filename:
-        raise HTTPException(status_code=400, detail="File must have a name.")
+        raise HTTPException(status_code=400, detail="文件必须有名称。")
     ext = PurePosixPath(file.filename).suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
         raise HTTPException(
-            status_code=400, detail=f"File type {ext!r} is not supported. Allowed: {sorted(_ALLOWED_EXTENSIONS)}"
+            status_code=415,
+            detail="暂不支持此格式。支持 TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX;图片暂不支持识别。",
         )
+
+    await file.seek(0)
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    await file.seek(0)
+    if file_size == 0:
+        raise HTTPException(status_code=400, detail="文件为空,请选择包含内容的文件。")
+    if file_size > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="文件超过 25 MB,请拆分后上传。")
 
     try:
         storage, tenant_id, storage_backend = _storage_for_user(user)
@@ -321,19 +263,9 @@ async def upload_document(
 
     safe_filename = file.filename.replace("/", "_").replace("\\", "_")
     content_type = _resolve_content_type(safe_filename, file.content_type)
-    existing = query_documents(
-        _COLLECTION,
-        filters=[
-            ("tenantId", "==", tenant_id),
-            ("userId", "==", user.uid),
-            ("folderId", "==", effective_folder_id),
-            ("originalFilename", "==", safe_filename),
-        ],
-        limit=1,
-    )
-    is_overwrite = bool(existing)
-    doc_id = existing[0]["__id"] if is_overwrite else str(uuid.uuid4())
-    storage_path = f"users/{user.uid}/docs/{effective_folder_id}/{safe_filename}"
+    # 每次上传都是独立资源;同名文件不能改写其他会话正在使用的内容。
+    doc_id = str(uuid.uuid4())
+    storage_path = f"users/{user.uid}/docs/{effective_folder_id}/{doc_id}/{safe_filename}"
     now = datetime.now(UTC)
     base = {
         "user_id": user.uid,
@@ -365,25 +297,17 @@ async def upload_document(
         doc_id, source_url=source_url, parse_result=_ParseResult(parse_status, blocks, parse_error, parsed_ms), **base
     )
 
-    if not is_overwrite:
-        try:
-            if parse_status == "parsed":
-                folders_db.update_folder_counts(
-                    user.uid,
-                    effective_folder_id,
-                    doc_delta=1,
-                    parsed_delta=1,
-                    tenant_id=tenant_id,
-                )
-            elif parse_status != "failed":
-                folders_db.update_folder_counts(
-                    user.uid,
-                    effective_folder_id,
-                    doc_delta=1,
-                    tenant_id=tenant_id,
-                )
-        except Exception as exc:
-            log.warning("Failed to update folder counts for %s: %s", effective_folder_id, exc)
+    try:
+        folders_db.update_folder_counts(
+            user.uid,
+            effective_folder_id,
+            doc_delta=1,
+            parsed_delta=1 if parse_status == "parsed" else 0,
+            tenant_id=tenant_id,
+        )
+    except Exception as exc:
+        log.warning("Failed to update folder counts for %s: %s", effective_folder_id, exc)
+    set_document(_COLLECTION, doc_id, {"sizeBytes": file_size}, merge=True)
 
     return _to_response(
         {
@@ -393,5 +317,6 @@ async def upload_document(
             "blockCount": len(blocks),
             "storagePath": storage_path,
             "folderId": effective_folder_id,
+            "parseError": parse_error,
         }
     )

@@ -51,7 +51,7 @@ export default function McpAppsPassivePage() {
   }, []);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-8">
+    <main className="page-container mx-auto max-w-3xl space-y-6 p-8">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">MCP Apps passive smoke</h1>
         <p className="text-sm text-muted-foreground">

@@ -23,7 +23,7 @@
 export function OneHeroVisual() {
   return (
     <div className="relative isolate">
-      <div className="relative overflow-hidden rounded-xl border border-border bg-muted/30 p-6 backdrop-blur md:p-7">
+      <div className="relative overflow-hidden glass-panel border-border bg-muted/30 p-6 backdrop-blur md:p-7">
         {/* faint engineering grid — signals "instrument", not "brochure" */}
         <div
           aria-hidden

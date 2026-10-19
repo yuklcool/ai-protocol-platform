@@ -148,7 +148,7 @@ export function SourcesArtefactTab({
                     onClick={() => void open(i, src)}
                     disabled={isPending}
                     aria-label={`Open ${label} in the Document tab`}
-                    className="group flex w-full items-center gap-3 rounded-lg border border-border bg-muted/10 px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/30 disabled:opacity-70"
+                    className="group flex w-full items-center gap-3 glass-panel border-border bg-muted/10 px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/30 disabled:opacity-70"
                   >
                     {badge}
                     <span className="text-muted-foreground/60 group-hover:text-primary">
@@ -248,12 +248,12 @@ export function SourcesArtefactTab({
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group flex items-start gap-3 rounded-lg border border-border bg-muted/10 px-3 py-2.5 transition-colors hover:border-primary/50 hover:bg-muted/30"
+                    className="group flex items-start gap-3 glass-panel border-border bg-muted/10 px-3 py-2.5 transition-colors hover:border-primary/50 hover:bg-muted/30"
                   >
                     {inner}
                   </a>
                 ) : (
-                  <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/10 px-3 py-2.5">
+                  <div className="flex items-start gap-3 glass-panel border-border bg-muted/10 px-3 py-2.5">
                     {inner}
                   </div>
                 )}

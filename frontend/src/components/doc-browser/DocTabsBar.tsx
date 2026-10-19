@@ -26,17 +26,18 @@ export function DocTabsBar({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="flex items-stretch border-b bg-muted/30">
+    <div className="app-toolbar flex min-h-10 items-stretch">
       {/* Browser toggle */}
       <button
         type="button"
         onClick={onToggleBrowser}
+        aria-expanded={showBrowser}
         className={[
           "flex shrink-0 items-center border-r px-2.5 text-muted-foreground hover:bg-accent hover:text-foreground",
           showBrowser ? "bg-accent/50 text-foreground" : "",
         ].join(" ")}
-        title={showBrowser ? "Hide sidebar" : "Show sidebar"}
-        aria-label={showBrowser ? "Hide sidebar" : "Show sidebar"}
+        title={showBrowser ? "隐藏文件列表" : "显示文件列表"}
+        aria-label={showBrowser ? "隐藏文件列表" : "显示文件列表"}
       >
         {showBrowser ? (
           <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
@@ -54,7 +55,7 @@ export function DocTabsBar({
       >
         {tabs.length === 0 && (
           <span className="flex items-center px-3 text-xs text-muted-foreground">
-            No open documents
+            尚未添加附件
           </span>
         )}
         {tabs.map((tab) => (

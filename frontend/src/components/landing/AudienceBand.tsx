@@ -40,7 +40,7 @@ export function AudienceBand() {
           {t("home.audience.heading")}
         </h2>
       </div>
-      <ul className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-px overflow-hidden glass-panel border-border bg-border md:grid-cols-3">
         {AUDIENCES.map((audience, i) => (
           <li
             key={audience.key}
