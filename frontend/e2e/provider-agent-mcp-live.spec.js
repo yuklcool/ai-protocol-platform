@@ -119,10 +119,18 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let modelCreated = false;
     let providerCreated = false;
     let sessionCreated = false;
-    let originalToolPermission = undefined;
-    let toolPermissionTouched = false;
     let context = null;
     const originalPlatform = await authedApi(token, "/api/admin/platform-config");
+    const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
+    const originalTenant = await authedApi(token, tenantPath);
+    const grantTenant = (skills) => authedApi(token, tenantPath, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        enabled_skills: [...new Set([...(originalTenant.enabledSkills || []), ...skills])],
+        enabled_mcp_servers: [...new Set([...originalTenant.enabledMcpServers, SERVER_ID])],
+      }),
+    });
     let rootTouched = false;
     const uiSessionId = `real-e2e-ui-${RUN_ID}`;
 
@@ -189,35 +197,6 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       expect(discovery.ok, JSON.stringify(discovery)).toBe(true);
       expect(discovery.tools?.some((tool) => tool.name === "show-map")).toBe(true);
 
-      // Tool Permission is intentionally fail-closed. The real map workflow may
-      // use geocode before show-map, so explicitly grant only those two tools to
-      // the ephemeral acceptance actor. Preserve and restore any pre-existing
-      // user-specific permission instead of bypassing the authorization plane.
-      const permissionPath = `/api/admin/tool-permissions/${encodeURIComponent(ADMIN_EMAIL)}`;
-      const permissionResponse = await fetch(`${BACKEND_URL}${permissionPath}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (permissionResponse.status === 200) {
-        originalToolPermission = await permissionResponse.json();
-      } else if (permissionResponse.status !== 404) {
-        throw new Error(
-          `GET ${permissionPath} -> ${permissionResponse.status}: ${await permissionResponse.text()}`,
-        );
-      }
-
-      const originalTools = Array.isArray(originalToolPermission?.tools)
-        ? originalToolPermission.tools
-        : [];
-      const originalDenied = Array.isArray(originalToolPermission?.denied)
-        ? originalToolPermission.denied
-        : [];
-      await putJson(token, permissionPath, {
-        type: "user",
-        tools: [...new Set([...originalTools, "geocode", "show-map", "send_a2ui_json_to_client"])],
-        denied: originalDenied.filter((name) => !["geocode", "show-map", "send_a2ui_json_to_client"].includes(name)),
-      });
-      toolPermissionTouched = true;
-
       const skill = await authedApi(token, "/api/skills", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -232,21 +211,12 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
             model: "smart",
             thinking: "off",
             enableConfirmation: false,
-            toolConfigs: {
-              mcp: {
-                servers: [SERVER_ID],
-                // The real map MCP App pushes ui/update-model-context after
-                // rendering. Opt this ephemeral skill into that distinct trust
-                // grant so the release gate covers the full app→host→session
-                // context path instead of logging an expected 403.
-                allow_context_writes: [SERVER_ID],
-              },
-            },
           },
         }),
       });
       skillId = skill.skillId;
       expect(skillId).toBeTruthy();
+      await grantTenant([skillId]);
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: "smart", skills: [skillId], tools: [], mcpServers: [SERVER_ID],
         interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
@@ -375,19 +345,11 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
             enableConfirmation: false,
             tools: [],
             subSkills: [],
-            toolConfigs: {
-              a2ui: {
-                // The current Root interaction policy is authoritative. Its
-                // A2UI grant may allow a UI-only response on this legacy route.
-                enabled: true,
-                allow_surface_context_writes: true,
-                allow_action_triggered_runs: true,
-              },
-            },
           },
         }),
       });
       actionSkillId = actionSkill.skillId;
+      await grantTenant([skillId, actionSkillId]);
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: MODEL_ID, skills: [skillId, actionSkillId], tools: [], mcpServers: [SERVER_ID],
         instructions: actionInstructions,
@@ -565,18 +527,14 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       if (context) await context.close();
       await authedApi(token, `/api/sessions/${uiSessionId}`, { method: "DELETE" }).catch(() => {});
       if (rootTouched) await putJson(token, "/api/admin/platform-config", { agent: originalPlatform.agent });
-      if (toolPermissionTouched) {
-        const permissionPath = `/api/admin/tool-permissions/${encodeURIComponent(ADMIN_EMAIL)}`;
-        if (originalToolPermission) {
-          await putJson(token, permissionPath, {
-            type: originalToolPermission.type,
-            tools: originalToolPermission.tools || [],
-            denied: originalToolPermission.denied || [],
-          }).catch(() => {});
-        } else {
-          await authedApi(token, permissionPath, { method: "DELETE" }).catch(() => {});
-        }
-      }
+      await authedApi(token, tenantPath, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          enabled_skills: originalTenant.enabledSkills || [],
+          enabled_mcp_servers: originalTenant.enabledMcpServers,
+        }),
+      });
       if (actionSessionCreated) {
         await authedApi(token, `/api/sessions/${ACTION_SESSION_ID}`, { method: "DELETE" }).catch(() => {});
       }
