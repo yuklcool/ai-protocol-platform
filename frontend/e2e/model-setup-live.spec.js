@@ -58,6 +58,7 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
   let providerId, modelId;
   const sessionId = `model-setup-${tag}`;
   let sessionCreated = false;
+  let primaryError;
   try {
     // Isolate the existing Root's tools/instructions; the UI operation must preserve these fields.
     const agent = {
@@ -106,6 +107,9 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
       fullPage: true,
     });
     await page.getByRole("button", { name: "保存并测试", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "运行两项测试", exact: true }),
+    ).toBeVisible();
     const service = (await api(API)).find((p) => p.name === name);
     providerId = service.provider_id;
     const model = (await api(`${API}/models`)).find(
@@ -190,6 +194,9 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
     ).toHaveValue("2048");
     await page.getByLabel("最大输出（token）", { exact: true }).fill("2049");
     await page.getByRole("button", { name: "保存并测试", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "运行两项测试", exact: true }),
+    ).toBeVisible();
     expect(
       (await api(`${API}/models`)).find((m) => m.model_id === modelId).readiness
         .ready,
@@ -246,11 +253,29 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
       path: info.outputPath("model-setup-root-chat.png"),
       fullPage: true,
     });
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
     await context.close();
-    await api("/api/admin/platform-config", "PUT", { agent: original.agent });
-    if (sessionCreated) await api(`/api/sessions/${sessionId}`, "DELETE");
-    if (modelId) await api(`${API}/models/${modelId}`, "DELETE");
-    if (providerId) await api(`${API}/${providerId}`, "DELETE");
+    const errors = [];
+    const clean = async (path, method, body) => {
+      try {
+        await api(path, method, body);
+      } catch (error) {
+        errors.push(String(error));
+      }
+    };
+    await clean("/api/admin/platform-config", "PUT", { agent: original.agent });
+    if (sessionCreated) await clean(`/api/sessions/${sessionId}`, "DELETE");
+    if (modelId) await clean(`${API}/models/${modelId}`, "DELETE");
+    if (providerId) await clean(`${API}/${providerId}`, "DELETE");
+    if (errors.length) {
+      await info.attach("cleanup-errors.txt", {
+        body: errors.join("\n"),
+        contentType: "text/plain",
+      });
+      if (!primaryError) throw new Error(errors.join("\n"));
+    }
   }
 });
