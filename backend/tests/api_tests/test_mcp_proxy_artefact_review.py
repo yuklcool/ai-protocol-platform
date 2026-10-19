@@ -24,6 +24,7 @@ Tests verify:
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -33,8 +34,7 @@ from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
 from auth.access_context import AccessContext
-from db.models import SkillConfig
-from db.models.access import AccessControl
+from db.models.root_agent import RootAgentConfig
 from protocols.artefact_review import (
     ArtefactDecision,
     clear_registered_artefact_reviewer,
@@ -44,7 +44,13 @@ from protocols.mcp_proxy import router
 
 
 def _make_client(uid: str = "viewer") -> TestClient:
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
+    user = User(
+        uid=uid,
+        email=f"{uid}@example.com",
+        domain="example.com",
+        tenant_id="tenant-a",
+        permission_group_ids=frozenset({"maps"}),
+    )
     ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=frozenset())
 
     test_app = FastAPI()
@@ -57,18 +63,6 @@ def _make_client(uid: str = "viewer") -> TestClient:
 
     test_app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(test_app)
-
-
-def _make_skill(server_ids: list[str]) -> SkillConfig:
-    return SkillConfig(
-        skillId="skill",
-        name="test-skill",
-        description="d",
-        ownerId="viewer",
-        ownerEmail="viewer@example.com",
-        accessControl=AccessControl(type="public"),
-        skillMetadata={"tools": ["mcp"], "toolConfigs": {"mcp": {"servers": server_ids}}},
-    )
 
 
 _SERVER = {
@@ -112,6 +106,22 @@ def _upstream_opaque_response(body: bytes = b'{"jsonrpc":"2.0","id":1,"result":{
 
 @pytest.fixture(autouse=True)
 def _reset_registry():
+    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
+    from db.persistence import get_repository, reset_repository_for_testing
+    from db.repositories.memory import MemoryRepository
+    from db.tenants import TenantConfig, TenantDirectory
+
+    reset_repository_for_testing(MemoryRepository())
+    repo = get_repository()
+    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledMcpServers=["map-server"]))
+    repo.set_document(
+        GROUP_COLLECTION,
+        "maps",
+        PermissionGroup(id="maps", tenantId="tenant-a", label="maps", mcpServers=["map-server"]).model_dump(
+            by_alias=True
+        ),
+    )
+    repo.set_document("mcp_servers", "map-server", _SERVER)
     clear_registered_artefact_reviewer()
     yield
     clear_registered_artefact_reviewer()
@@ -121,7 +131,7 @@ def _reset_registry():
 
 
 class TestBackCompatNoReviewer:
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_no_reviewer_resources_read_passes_through_unchanged(
@@ -131,7 +141,7 @@ class TestBackCompatNoReviewer:
         byte-identical to upstream — regression for the dumb-forwarder
         contract."""
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         upstream = _upstream_resources_read_response("<html><body>safe</body></html>")
         mock_client = AsyncMock()
@@ -147,13 +157,13 @@ class TestBackCompatNoReviewer:
         # Body identical to upstream — no reviewer = no inspection.
         assert resp.content == upstream.content
 
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_no_reviewer_tools_list_passes_through_unchanged(self, mock_client_cls, mock_get_doc, mock_skill_module):
         """Non-resources/read methods also pass through unchanged."""
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         upstream = _upstream_opaque_response(b'{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}')
         mock_client = AsyncMock()
@@ -173,12 +183,12 @@ class TestBackCompatNoReviewer:
 
 
 class TestApprovePath:
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_approve_forwards_response_unchanged(self, mock_client_cls, mock_get_doc, mock_skill_module):
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         class ApproveReviewer:
             async def review(self, request):
@@ -204,12 +214,12 @@ class TestApprovePath:
 
 
 class TestBlockPath:
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_block_returns_403_with_structured_decision(self, mock_client_cls, mock_get_doc, mock_skill_module):
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         class BlockReviewer:
             async def review(self, request):
@@ -244,14 +254,14 @@ class TestBlockPath:
 
 
 class TestScopeGuard:
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_tools_list_response_is_NOT_inspected(self, mock_client_cls, mock_get_doc, mock_skill_module):
         """Even with a block-everything reviewer registered, tools/list
         passes through — the reviewer is only consulted on resources/read."""
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         review_calls = []
 
@@ -275,14 +285,14 @@ class TestScopeGuard:
         assert resp.status_code == 200, resp.text
         assert review_calls == [], "reviewer must not be consulted for non-resources/read methods"
 
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_non_html_mime_is_NOT_inspected(self, mock_client_cls, mock_get_doc, mock_skill_module):
         """A resources/read response carrying application/json (not HTML)
         passes through — the reviewer is for HTML artefacts only."""
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         review_calls = []
 
@@ -311,14 +321,14 @@ class TestScopeGuard:
 
 
 class TestFailOpen:
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_reviewer_crash_forwards_original_response(self, mock_client_cls, mock_get_doc, mock_skill_module):
         """If reviewer.review() raises, the proxy logs + forwards the
         upstream response — the iframe sandbox is the safety net."""
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         class CrashingReviewer:
             async def review(self, request):
@@ -344,7 +354,7 @@ class TestFailOpen:
 
 
 class TestMalformedBodyHandling:
-    @patch("protocols.mcp_proxy.skill_config")
+    @patch("protocols.mcp_proxy.get_platform_config")
     @patch("protocols.mcp_proxy.get_document")
     @patch("protocols.mcp_proxy.httpx.AsyncClient")
     def test_non_json_request_body_is_rejected_before_forwarding(
@@ -352,7 +362,7 @@ class TestMalformedBodyHandling:
     ):
         """Malformed JSON cannot hide a tool call from permission checks."""
         mock_get_doc.return_value = _SERVER
-        mock_skill_module.list_skills.return_value = [_make_skill(["map-server"])]
+        mock_skill_module.return_value = SimpleNamespace(agent=RootAgentConfig(mcpServers=["map-server"]))
 
         review_calls = []
 

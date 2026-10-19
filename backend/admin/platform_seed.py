@@ -58,8 +58,6 @@ class SeedSummary:
     refreshed: int = 0
     purged: int = 0
     preserved: int = 0
-    mcp_missing: list[str] = field(default_factory=list)
-    mcp_warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -70,8 +68,6 @@ class SeedSummary:
             "refreshed": self.refreshed,
             "purged": self.purged,
             "preserved": self.preserved,
-            "mcp_missing": self.mcp_missing,
-            "mcp_warnings": self.mcp_warnings,
         }
 
 
@@ -299,24 +295,6 @@ def seed(templates_root: Path | None = None, dry_run: bool = False) -> SeedSumma
         except Exception as exc:
             logger.warning("platform_seed: failed to create %s: %s", parsed["name"], exc)
             summary.failed.append(parsed["name"])
-
-    try:
-        from admin.mcp_registry_check import verify_mcp_registry
-
-        check = verify_mcp_registry(root)
-        summary.mcp_missing = check["mcp_missing"]
-        summary.mcp_warnings = check["mcp_warnings"]
-        if summary.mcp_missing:
-            logger.error(
-                "platform_seed: mcp_servers registry cannot satisfy declared servers "
-                "(these skills would hard-500 at agent build): %s",
-                summary.mcp_missing,
-            )
-        for warning in summary.mcp_warnings:
-            logger.warning("platform_seed: mcp registry: %s", warning)
-    except Exception as exc:
-        logger.warning("platform_seed: mcp registry check crashed: %s", exc)
-        summary.mcp_warnings = [f"mcp-registry check crashed (verification skipped): {exc}"]
 
     return summary
 

@@ -15,10 +15,10 @@ import secrets
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from agents.root_runtime import effective_root_config
 from auth import User, admin_roles, get_current_user
+from auth.capability_access import authorized_root_config
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.chat_sessions import list_sessions_for_skill
 from db.clients import resolve_enabled_skills
@@ -50,7 +50,19 @@ def _is_platform_admin(access: Any) -> bool:
 # === Request / Response models ===
 
 
-class CreateSkillRequest(BaseModel):
+class SkillWriteRequest(BaseModel):
+    @field_validator("skill_metadata", check_fields=False)
+    @classmethod
+    def reject_mcp_binding(cls, value: dict | None) -> dict | None:
+        if value:
+            for key in ("toolConfigs", "tool_configs"):
+                configs = value.get(key)
+                if isinstance(configs, dict) and "mcp" in configs:
+                    raise ValueError("Skill 不再配置 MCP;请在 Root Agent 中绑定服务器")
+        return value
+
+
+class CreateSkillRequest(SkillWriteRequest):
     name: str
     slug: str | None = None
     description: str = ""
@@ -72,7 +84,7 @@ class CreateSkillRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class UpdateSkillRequest(BaseModel):
+class UpdateSkillRequest(SkillWriteRequest):
     slug: str | None = None
     description: str | None = None
     instructions: str | None = None
@@ -170,7 +182,6 @@ class EffectiveAccessCapabilities(BaseModel):
     skill_tools: list[str] = Field(alias="skillTools")
     root_tools: list[str] = Field(alias="rootTools")
     effective_tools: list[str] = Field(alias="effectiveTools")
-    skill_mcp_servers: list[str] = Field(alias="skillMcpServers")
     root_mcp_servers: list[str] = Field(alias="rootMcpServers")
     effective_mcp_servers: list[str] = Field(alias="effectiveMcpServers")
     root_knowledge: list[str] = Field(alias="rootKnowledge")
@@ -382,20 +393,15 @@ def get_effective_access(
     except PlatformConfigUnavailable as exc:
         raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
 
-    root = effective_root_config(platform.agent, user.tenant_id or user.domain)
+    root = authorized_root_config(platform.agent, user)
     refs = {str(ref) for ref in root.skills if str(ref).strip()}
-    fail_closed = (root.permissions or {}).get("failClosed") is True
-    root_bound = bool(
-        (config.skill_id in refs) or (config.slug and config.slug in refs) or (not refs and not fail_closed)
-    )
-    strict = bool(root.skills or root.tools or root.mcp_servers or fail_closed)
+    root_bound = config.skill_id in refs
 
     skill_tools = [str(tool) for tool in (config.skill_metadata.tools or [])]
-    skill_mcp = _skill_mcp_servers(config)
     root_tools = [str(tool) for tool in root.tools]
     root_mcp = [str(server) for server in root.mcp_servers]
-    effective_tools = root_tools if strict else skill_tools
-    effective_mcp = root_mcp if strict else skill_mcp
+    effective_tools = root_tools
+    effective_mcp = root_mcp
 
     skill_knowledge = _skill_knowledge_sources(config)
     root_knowledge = [str(source) for source in root.knowledge]
@@ -417,7 +423,6 @@ def get_effective_access(
             skillTools=skill_tools,
             rootTools=root_tools,
             effectiveTools=effective_tools,
-            skillMcpServers=skill_mcp,
             rootMcpServers=root_mcp,
             effectiveMcpServers=effective_mcp,
             rootKnowledge=effective_knowledge,
@@ -429,12 +434,6 @@ def get_effective_access(
             else False,
         },
     )
-
-
-def _skill_mcp_servers(config: SkillConfig) -> list[str]:
-    raw = (config.skill_metadata.tool_configs or {}).get("mcp") or {}
-    servers = raw.get("servers") if isinstance(raw, dict) else []
-    return [str(server) for server in servers] if isinstance(servers, list) else []
 
 
 def _skill_knowledge_sources(config: SkillConfig) -> list[str]:

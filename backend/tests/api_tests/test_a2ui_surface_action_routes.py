@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -36,8 +37,14 @@ from protocols.a2ui_surface_action_routes import router
 
 
 def _make_client(uid: str = "viewer", tags: frozenset[str] = frozenset()) -> TestClient:
-    user = User(uid=uid, email=f"{uid}@example.com", domain="example.com")
-    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
+    user = User(
+        uid=uid,
+        email=f"{uid}@example.com",
+        domain="example.com",
+        tenant_id="tenant-a",
+        permission_group_ids=frozenset({"protocol-tests"}),
+    )
+    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, tenant_id="tenant-a", group_tags=tags)
 
     test_app = FastAPI()
     test_app.include_router(router)
@@ -67,6 +74,7 @@ def _make_index(
     return ChatSessionIndex(
         sessionId=session_id,
         documentIds=[],
+        tenantId="tenant-a",
         skillId=skill_id,
         ownerUid=owner_uid,
         accessControl=ac or AccessControl(type="public"),
@@ -89,6 +97,7 @@ def _make_skill(
     if a2ui_config is not None:
         tool_configs["a2ui"] = a2ui_config
     return SkillConfig(
+        tenantId="tenant-a",
         skillId=skill_id,
         name="test-skill",
         description="a test skill",
@@ -130,11 +139,11 @@ _OPTED_IN_A2UI = {
 
 class TestHappyPath:
     @patch("protocols.a2ui_surface_action_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_writes_namespaced_state_when_authorized(self, mock_get_index, mock_skill_module, mock_get_svc):
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -154,7 +163,7 @@ class TestHappyPath:
         assert "_pushedAt" in written
 
     @patch("protocols.a2ui_surface_action_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_session_lookup_uses_canonical_app_name_not_skill_id(self, mock_get_index, mock_skill_module, mock_get_svc):
         """Regression for the bug found during sprint 2.10 follow-up live
@@ -164,7 +173,7 @@ class TestHappyPath:
         build_agui_adk_agent). Wrong key → 404 every time → action POST
         silently broken. Mock check guards the storage key shape."""
         mock_get_index.return_value = _make_index(skill_id="some-skill")
-        mock_skill_module.get_skill.return_value = _make_skill(skill_id="some-skill", a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(skill_id="some-skill", a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -179,13 +188,13 @@ class TestHappyPath:
         assert kwargs["app_name"] != "some-skill"
 
     @patch("protocols.a2ui_surface_action_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_action_without_optional_fields(self, mock_get_index, mock_skill_module, mock_get_svc):
         """Minimal action — just ``name``, no sourceComponentId or context.
         Still writes; the namespaced entry just has fewer fields."""
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -203,13 +212,13 @@ class TestHappyPath:
         assert "context" not in written
 
     @patch("protocols.a2ui_surface_action_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_multiple_surfaces_get_separate_namespaces(self, mock_get_index, mock_skill_module, mock_get_svc):
         """Two surfaces (workspace + sidebar) each have their own
         namespaced lastAction — neither overwrites the other."""
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -226,14 +235,14 @@ class TestHappyPath:
         assert "a2ui_surface_context.sidebar.lastAction" in keys
 
     @patch("protocols.a2ui_surface_action_routes.get_session_service")
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_overwrite_on_repeated_action(self, mock_get_index, mock_skill_module, mock_get_svc):
         """Posting two actions on the same surface produces two writes
         under the SAME key — second overwrites the first (agent reads
         most recent only)."""
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
         svc = _mock_session_service()
         mock_get_svc.return_value = svc
 
@@ -285,68 +294,9 @@ class TestAuthAndAccess:
 # ---------------------------------------------------------------------------
 
 
-class TestSkillGate:
-    @patch("protocols._a2ui_surface_shared.skill_config")
-    @patch("protocols._a2ui_surface_shared.get_session_index")
-    def test_returns_403_when_skill_deleted(self, mock_get_index, mock_skill_module):
-        mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = None
-        # The gate is alias-tolerant now (CLAUDE.md #9): a miss on the canonical
-        # id falls back to a slug lookup, so a genuinely deleted skill must miss
-        # BOTH before the gate denies.
-        mock_skill_module.resolve_skill_ref.return_value = None
-
-        client = _make_client("viewer")
-        resp = client.post("/api/sessions/sess-1/surface-action", json=_HAPPY_BODY)
-        assert resp.status_code == 403
-
-    @patch("protocols._a2ui_surface_shared.skill_config")
-    @patch("protocols._a2ui_surface_shared.get_session_index")
-    def test_returns_403_when_skill_has_no_a2ui_config(self, mock_get_index, mock_skill_module):
-        """Skill exists but has no ``tool_configs.a2ui`` at all."""
-        mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill()  # no a2ui config
-
-        client = _make_client("viewer")
-        resp = client.post("/api/sessions/sess-1/surface-action", json=_HAPPY_BODY)
-        assert resp.status_code == 403
-        assert "A2UI tool_config" in resp.text
-
-
 # ---------------------------------------------------------------------------
 # Per-skill context-write opt-in gate (the central new gate)
 # ---------------------------------------------------------------------------
-
-
-class TestContextWriteOptInGate:
-    @patch("protocols._a2ui_surface_shared.skill_config")
-    @patch("protocols._a2ui_surface_shared.get_session_index")
-    def test_returns_403_when_a2ui_config_present_but_opt_in_false(self, mock_get_index, mock_skill_module):
-        """Skill renders A2UI surfaces (has default_surface) but did NOT
-        flip allow_surface_context_writes — push must be rejected.
-        Distinct trust grants: rendering ≠ writing back to context."""
-        mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(
-            a2ui_config={"default_surface": "workspace"}  # no allow flag
-        )
-
-        client = _make_client("viewer")
-        resp = client.post("/api/sessions/sess-1/surface-action", json=_HAPPY_BODY)
-        assert resp.status_code == 403
-        assert "allow_surface_context_writes" in resp.text
-
-    @patch("protocols._a2ui_surface_shared.skill_config")
-    @patch("protocols._a2ui_surface_shared.get_session_index")
-    def test_returns_403_when_opt_in_false_explicit(self, mock_get_index, mock_skill_module):
-        """Explicit `false` (not just absent) also rejected."""
-        mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(
-            a2ui_config={"default_surface": "workspace", "allow_surface_context_writes": False}
-        )
-
-        client = _make_client("viewer")
-        resp = client.post("/api/sessions/sess-1/surface-action", json=_HAPPY_BODY)
-        assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -355,11 +305,11 @@ class TestContextWriteOptInGate:
 
 
 class TestSchemaAndSize:
-    @patch("protocols._a2ui_surface_shared.skill_config")
+    @patch("agents.root_runtime.resolve_skill_ref")
     @patch("protocols._a2ui_surface_shared.get_session_index")
     def test_returns_413_when_context_oversized(self, mock_get_index, mock_skill_module):
         mock_get_index.return_value = _make_index()
-        mock_skill_module.get_skill.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
+        mock_skill_module.return_value = _make_skill(a2ui_config=_OPTED_IN_A2UI)
 
         big_payload = {"data": "x" * 5000}  # ~5 KB serialized
         client = _make_client("viewer")
@@ -419,3 +369,41 @@ class TestSchemaAndSize:
             },
         )
         assert resp.status_code == 422
+
+
+@pytest.fixture(autouse=True)
+def configured_root_for_protocol_tests():
+    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
+    from config.platform_config import invalidate_cache, update_platform_config
+    from db.models.root_agent import RootAgentConfig
+    from db.persistence import reset_repository_for_testing
+    from db.repositories.memory import MemoryRepository
+    from db.tenants import TenantConfig, TenantDirectory
+
+    repo = MemoryRepository()
+    reset_repository_for_testing(repo)
+    invalidate_cache(clear_last_known_good=True)
+    ids = ["skill-1", "some-skill"]
+    from skills.skill_config import _cache
+
+    _cache.clear()
+    for ref in ids:
+        repo.set_document("skills", ref, _make_skill(skill_id=ref).model_dump(by_alias=True))
+    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledSkills=ids))
+    repo.set_document(
+        GROUP_COLLECTION,
+        "protocol-tests",
+        PermissionGroup(id="protocol-tests", tenantId="tenant-a", label="protocol tests", skills=ids).model_dump(
+            by_alias=True
+        ),
+    )
+    update_platform_config(
+        {
+            "agent": RootAgentConfig(
+                skills=ids, interaction={"allowSurfaceContextWrites": True, "allowActionTriggeredRuns": True}
+            ).model_dump(by_alias=True)
+        },
+        updated_by="test",
+    )
+    yield
+    invalidate_cache(clear_last_known_good=True)

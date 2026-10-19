@@ -105,11 +105,6 @@ def _record_to_user(record: dict[str, Any]) -> User:
     # those accounts on their existing scope until a migration writes tenantId.
     tenant_id = _normalise_tenant_id(str(record.get("tenantId") or domain))
     raw_tags = set(record.get("groupTags") or [])
-    from db.tenants import get_tenant
-
-    tenant = get_tenant(tenant_id) if tenant_id else None
-    if tenant is not None and not tenant.disabled:
-        raw_tags.update(tenant.derived_group_tags or [])
     return User(
         uid=str(record["uid"]),
         email=email,
@@ -117,6 +112,7 @@ def _record_to_user(record: dict[str, Any]) -> User:
         tenant_id=tenant_id,
         group_tags=frozenset(str(tag) for tag in raw_tags),
         auth_mode=AUTH_MODE,
+        permission_group_ids=frozenset(record.get("permissionGroupIds") or []),
     )
 
 
@@ -132,6 +128,7 @@ def create_local_user(
     email: str,
     password: str,
     group_tags: set[str] | frozenset[str] | list[str] | tuple[str, ...] = (),
+    permission_group_ids: list[str] | tuple[str, ...] = (),
     uid: str | None = None,
     tenant_id: str | None = None,
     disabled: bool = False,
@@ -162,6 +159,7 @@ def create_local_user(
         "tenantId": explicit_tenant_id,
         "passwordHash": hash_password(password),
         "groupTags": sorted({str(tag).strip() for tag in group_tags if str(tag).strip()}),
+        "permissionGroupIds": sorted(set(permission_group_ids)),
         "disabled": bool(disabled),
         "createdAt": existing.get("createdAt", now) if existing else now,
         "updatedAt": now,

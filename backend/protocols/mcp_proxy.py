@@ -9,9 +9,8 @@ instead of talking to MCP servers directly. Two reasons:
      MCP server never sees it. Servers carry their own auth via the
      `headers` config field on `mcp_servers/{server_id}` (e.g. an HMAC
      secret, OAuth bearer issued for the proxy).
-  2. **Per-skill allowlist** — the caller can only reach MCP servers that
-     are referenced by ≥1 SkillConfig they can `can_access_skill(...)` —
-     mirrors the same 5-type evaluator used by sessions/skills CRUD.
+  2. **Root Agent 授权** — 只允许当前租户有效 Root 配置绑定的服务器。
+     空列表表示无 MCP 权限,不再扫描 Skill 或读取旧绑定。
 
 The proxy is intentionally a dumb forwarder: it does not parse JSON-RPC, does
 not introspect methods, does not maintain a session pool. The frontend's MCP
@@ -27,7 +26,7 @@ Two MCP clients to keep straight:
 
 Errors:
   * 401 — missing/invalid Bearer token (handled upstream by `get_current_user`)
-  * 403 — caller has no allowlisted skill for `server_id`
+  * 403 — server is outside the effective Root Agent bindings
   * 404 — `server_id` not registered or not visible to the caller's tenant
   * 502 — upstream returned 5xx
   * 504 — upstream timed out
@@ -43,10 +42,9 @@ import time
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from agents.root_runtime import effective_root_config
 from auth import User, get_current_user
 from auth.access_context import build_access_context
-from auth.permissions import can_use_tool
+from auth.capability_access import authorized_root_config, mcp_call_allowed
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.persistence import get_document
 from protocols.artefact_review import (
@@ -54,7 +52,7 @@ from protocols.artefact_review import (
     BlockedArtefactError,
     get_registered_artefact_reviewer,
 )
-from skills import skill_config
+from tools.mcp.registry import UnresolvedHeaderSecret, _resolve_header_secrets
 from tools.mcp.tenant_scope import mcp_config_visible_to_tenant
 
 log = logging.getLogger(__name__)
@@ -89,37 +87,13 @@ _OUTBOUND_HEADER_BLOCKLIST: frozenset[str] = frozenset(
 )
 
 
-def _user_can_use_server(server_id: str, request: Request) -> bool:
-    """True iff the caller has access to ≥1 SkillConfig whose
-    ``tool_configs.mcp.servers`` includes ``server_id``.
-
-    Uses the same 5-type access evaluator the rest of the platform applies
-    (see ``auth/access_context.py``). Mirrors ``skills/routes.list_skills``:
-    fetch with broad filters, then drop anything the evaluator rejects. If
-    this becomes hot, swap for a `mcp_server_id == X` composite index — for
-    now, every-skill scan is fine because user counts are small and the
-    in-process cache absorbs repeated calls.
-    """
-    access = request.state.access
+def _user_can_use_server(server_id: str, user: User) -> bool:
+    """只读取当前 Root 的 MCP 绑定,禁止旧 Skill 授权回退。"""
     try:
-        root = effective_root_config(get_platform_config().agent, access.tenant_id)
+        root = authorized_root_config(get_platform_config().agent, user)
     except PlatformConfigUnavailable as exc:
         raise HTTPException(status_code=503, detail="Root Agent policy is temporarily unavailable") from exc
-    strict = bool(root.skills or root.tools or root.mcp_servers or root.permissions.get("failClosed") is True)
-    if strict:
-        return server_id in root.mcp_servers
-    # Iterate the caller's accessible-skill set. We cannot pre-filter by
-    # server_id at the Firestore layer (Firestore can't query nested array
-    # fields like tool_configs.mcp.servers efficiently without an index we
-    # haven't built); the in-memory filter is fine until that becomes hot.
-    candidates = skill_config.list_skills(limit=200)
-    for skill in candidates:
-        if not access.can_access_skill(skill):
-            continue
-        servers = (skill.skill_metadata.tool_configs or {}).get("mcp", {}).get("servers", [])
-        if server_id in servers:
-            return True
-    return False
+    return server_id in root.mcp_servers
 
 
 def _filter_inbound_headers(headers) -> dict[str, str]:
@@ -160,9 +134,9 @@ async def _forward(*, server_id: str, request: Request, user: User, method: str)
         log.info("mcp_proxy: unknown server_id=%s caller_uid=%s", server_id, user.uid)
         raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not registered")
 
-    if not _user_can_use_server(server_id, request):
+    if not _user_can_use_server(server_id, user):
         log.info(
-            "mcp_proxy: caller_uid=%s denied access to server_id=%s (no allowlisted skill)",
+            "mcp_proxy: caller_uid=%s denied access to server_id=%s (outside Root Agent bindings)",
             user.uid,
             server_id,
         )
@@ -176,7 +150,12 @@ async def _forward(*, server_id: str, request: Request, user: User, method: str)
     outbound_headers = _filter_inbound_headers(request.headers)
     server_headers = server_config.get("headers") or {}
     if isinstance(server_headers, dict):
-        outbound_headers.update({str(k): str(v) for k, v in server_headers.items()})
+        try:
+            resolved_headers = _resolve_header_secrets(server_id, server_headers)
+        except UnresolvedHeaderSecret as exc:
+            log.warning("mcp_proxy: unresolved server credential server_id=%s", server_id)
+            raise HTTPException(status_code=503, detail="MCP server credentials are unavailable") from exc
+        outbound_headers.update({str(k): str(v) for k, v in resolved_headers.items()})
 
     body = await request.body() if method in {"POST", "DELETE"} else b""
     if body:
@@ -191,7 +170,7 @@ async def _forward(*, server_id: str, request: Request, user: User, method: str)
             tool_name = params.get("name") if isinstance(params, dict) else None
             if not isinstance(tool_name, str) or not tool_name:
                 raise HTTPException(status_code=400, detail="MCP tool name is required")
-            if not can_use_tool(user.email, user.domain, tool_name, tenant_id=tenant_id):
+            if not mcp_call_allowed(user, server_id, tool_name):
                 raise HTTPException(status_code=403, detail="MCP tool is not permitted")
 
     log.info(

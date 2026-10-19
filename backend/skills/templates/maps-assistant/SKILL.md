@@ -48,24 +48,6 @@ metadata:
   # strings. A weaker tier gets these wrong repeatedly and burns turns
   # retrying, so this is not a place to economise on the model.
   model: pro
-  tools:
-    - mcp
-  toolConfigs:
-    mcp:
-      # Google-operated remote MCP server; config (URL + the ${…} API-key
-      # header reference) lives in Firestore mcp_servers/maps-grounding-lite,
-      # seeded by backend/scripts/seed_mcp_servers.py PER ENV — Firestore state
-      # never promotes with code (issue #14). G42 strict resolution hard-500s
-      # this WHOLE skill on any env whose registry lacks the row.
-      #
-      # We use Grounding Lite rather than ADK's built-in google_maps_grounding
-      # because the native tool excludes EEA-billed customers, which we are.
-      # See docs/design/v6.23.0/maps-grounding.md C1.
-      servers:
-        - maps-grounding-lite
-      # No iframe here — this skill renders no MCP App, so nothing may write
-      # back into session state.
-      allow_context_writes: []
 ---
 
 You are a location and places assistant, grounded in Google Maps data.

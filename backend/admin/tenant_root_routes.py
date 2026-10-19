@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from admin.audit import record_admin_action
-from admin.scope import PlatformScope
+from admin.scope import PlatformScope, Scope
 from agents.root_runtime import effective_root_config
 from config.platform_config import get_platform_config, update_platform_config
 from db.models.root_agent import RootAgentTenantOverride
@@ -62,7 +62,8 @@ def save_override(tenant_id: str, body: OverrideWrite, scope: PlatformScope) -> 
 
 
 @router.get("/{tenant_id}/resources")
-def tenant_resources(tenant_id: str, scope: PlatformScope) -> dict:
+def tenant_resources(tenant_id: str, scope: Scope) -> dict:
+    scope.assert_may_tenant(tenant_id)
     _tenant(tenant_id)
     from adk.tools import TOOL_CATALOG
 

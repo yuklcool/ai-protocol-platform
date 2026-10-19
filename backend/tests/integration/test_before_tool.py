@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adk.callbacks import make_permission_enforcer
+from auth import User
 from auth.permissions import COLLECTION, ToolPermissionDenied, clear_cache
 
 
@@ -48,7 +49,12 @@ def _mock_docs(docs: dict[str, dict | None]):
 def test_enforcer_allows_permitted_tool():
     """User has wildcard access → callback returns None (proceed)."""
     docs = {"*": {"type": "wildcard", "tools": ["*"], "denied": []}}
-    enforcer = make_permission_enforcer("owner@yourcompany.com", "yourcompany.com")
+    enforcer = make_permission_enforcer(
+        "owner@yourcompany.com",
+        "yourcompany.com",
+        user=User(uid="test", email="owner@yourcompany.com", domain="yourcompany.com"),
+        root_agent=False,
+    )
     with _mock_docs(docs):
         result = enforcer(_mock_tool("search"), {"query": "hello"}, _mock_tool_context())
     assert result is None
@@ -58,7 +64,12 @@ def test_enforcer_allows_permitted_tool():
 def test_enforcer_blocks_denied_tool():
     """User's wildcard grants everything except admin_tool → raises."""
     docs = {"*": {"type": "wildcard", "tools": ["*"], "denied": ["admin_tool"]}}
-    enforcer = make_permission_enforcer("owner@yourcompany.com", "yourcompany.com")
+    enforcer = make_permission_enforcer(
+        "owner@yourcompany.com",
+        "yourcompany.com",
+        user=User(uid="test", email="owner@yourcompany.com", domain="yourcompany.com"),
+        root_agent=False,
+    )
     with _mock_docs(docs):
         with pytest.raises(ToolPermissionDenied, match="admin_tool"):
             enforcer(_mock_tool("admin_tool"), {}, _mock_tool_context())
@@ -67,7 +78,12 @@ def test_enforcer_blocks_denied_tool():
 @pytest.mark.integration
 def test_enforcer_blocks_when_no_permission():
     """No permission docs at all → raises."""
-    enforcer = make_permission_enforcer("stranger@example.com", "example.com")
+    enforcer = make_permission_enforcer(
+        "stranger@example.com",
+        "example.com",
+        user=User(uid="test", email="stranger@example.com", domain="example.com"),
+        root_agent=False,
+    )
     with _mock_docs({}):
         with pytest.raises(ToolPermissionDenied, match=r"stranger@example\.com"):
             enforcer(_mock_tool("any_tool"), {}, _mock_tool_context())
@@ -80,7 +96,12 @@ def test_enforcer_user_level_wins():
         "owner@yourcompany.com": {"type": "user", "tools": ["special_tool"], "denied": []},
         "yourcompany.com": {"type": "domain", "tools": [], "denied": ["special_tool"]},
     }
-    enforcer = make_permission_enforcer("owner@yourcompany.com", "yourcompany.com")
+    enforcer = make_permission_enforcer(
+        "owner@yourcompany.com",
+        "yourcompany.com",
+        user=User(uid="test", email="owner@yourcompany.com", domain="yourcompany.com"),
+        root_agent=False,
+    )
     with _mock_docs(docs):
         result = enforcer(_mock_tool("special_tool"), {}, _mock_tool_context())
     assert result is None

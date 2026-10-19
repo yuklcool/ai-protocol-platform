@@ -11,17 +11,26 @@ import { translate } from "@/lib/i18n";
 
 import AdminHub from "../page";
 
-const auth: { user: unknown; loading: boolean } = { user: { email: "u@x.com" }, loading: false };
+const auth: { user: unknown; loading: boolean } = {
+  user: { email: "u@x.com" },
+  loading: false,
+};
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 
 const recheck = vi.fn(async () => {});
 const scope: {
   state: string;
-  domains: string[];
+  tenantIds: string[];
   isAdmin: boolean;
   isPlatform: boolean;
   recheck: () => Promise<void>;
-} = { state: "platform", domains: [], isAdmin: true, isPlatform: true, recheck };
+} = {
+  state: "platform",
+  tenantIds: [],
+  isAdmin: true,
+  isPlatform: true,
+  recheck,
+};
 vi.mock("@/hooks/useAdminScope", () => ({ useAdminScope: () => scope }));
 
 vi.mock("@/components/chat/SignInRequired", () => ({
@@ -29,10 +38,20 @@ vi.mock("@/components/chat/SignInRequired", () => ({
 }));
 
 function asPlatform() {
-  Object.assign(scope, { state: "platform", domains: [], isAdmin: true, isPlatform: true });
+  Object.assign(scope, {
+    state: "platform",
+    tenantIds: [],
+    isAdmin: true,
+    isPlatform: true,
+  });
 }
 function asTenant(domain = "one.com") {
-  Object.assign(scope, { state: "tenant", domains: [domain], isAdmin: true, isPlatform: false });
+  Object.assign(scope, {
+    state: "tenant",
+    tenantIds: [domain],
+    isAdmin: true,
+    isPlatform: false,
+  });
 }
 
 describe("AdminHub IA", () => {
@@ -44,7 +63,13 @@ describe("AdminHub IA", () => {
 
   it("renders five task-shaped areas for a platform admin", async () => {
     render(<AdminHub />);
-    for (const title of ["Your tenant", "People & access", "Skills & MCP", "Activity & audit", "Platform"]) {
+    for (const title of [
+      "Your tenant",
+      "People & access",
+      "Skills & MCP",
+      "Activity & audit",
+      "Platform",
+    ]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
   });
@@ -52,7 +77,9 @@ describe("AdminHub IA", () => {
   it("names the question each area answers, not the API it wraps", () => {
     render(<AdminHub />);
     expect(screen.getByText(/what do my users actually see/i)).toBeTruthy();
-    expect(screen.getByText(/who is here, and what may they use/i)).toBeTruthy();
+    expect(
+      screen.getByText(/who is here, and what may they use/i),
+    ).toBeTruthy();
   });
 
   it("surfaces the effective-access entry point", () => {
@@ -75,14 +102,15 @@ describe("AdminHub IA", () => {
     expect(screen.getByText(/scoped to acmeenergy\.com/i)).toBeTruthy();
   });
 
-  it("keeps every existing admin route reachable", () => {
+  it("keeps current admin routes reachable", () => {
     render(<AdminHub />);
-    const hrefs = Array.from(document.querySelectorAll("a")).map((a) => a.getAttribute("href"));
+    const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
+      a.getAttribute("href"),
+    );
     for (const route of [
       "/admin/tenants",
       "/admin/users",
       "/admin/groups",
-      "/admin/tool-permissions",
       "/admin/analytics",
       "/admin/audit",
       "/admin/settings",
@@ -94,25 +122,44 @@ describe("AdminHub IA", () => {
   });
 
   it("shows a distinct error state rather than implying no access", async () => {
-    Object.assign(scope, { state: "error", domains: [], isAdmin: false, isPlatform: false });
+    Object.assign(scope, {
+      state: "error",
+      tenantIds: [],
+      isAdmin: false,
+      isPlatform: false,
+    });
     render(<AdminHub />);
     await waitFor(() =>
-      expect(screen.getByText(translate("en", "admin.accessCheckFailed"))).toBeTruthy(),
+      expect(
+        screen.getByText(translate("en", "admin.accessCheckFailed")),
+      ).toBeTruthy(),
     );
     expect(screen.queryByText("Admins only")).toBeNull();
   });
 
   it("shows 'Admins only' for a genuine non-admin", () => {
-    Object.assign(scope, { state: "none", domains: [], isAdmin: false, isPlatform: false });
+    Object.assign(scope, {
+      state: "none",
+      tenantIds: [],
+      isAdmin: false,
+      isPlatform: false,
+    });
     render(<AdminHub />);
     expect(screen.getByText("Admins only")).toBeTruthy();
   });
 
   it("offers a token re-check after a just-granted role", () => {
-    Object.assign(scope, { state: "none", domains: [], isAdmin: false, isPlatform: false });
+    Object.assign(scope, {
+      state: "none",
+      tenantIds: [],
+      isAdmin: false,
+      isPlatform: false,
+    });
     render(<AdminHub />);
     expect(screen.getByText(/granted access just now/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /re-check my access/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /re-check my access/i }),
+    );
     expect(recheck).toHaveBeenCalled();
   });
 });

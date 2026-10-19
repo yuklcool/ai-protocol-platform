@@ -72,14 +72,11 @@ from observability.timing import (
 )
 from protocols._a2ui_surface_shared import (
     _STATE_KEY_NAMESPACE,
-    _delegate_with_grant,
     _enforce_root_interaction,
     _enforce_size_cap,
-    _enforce_skill_opt_in,
     _require_session,
     _root_runtime_for_session,
 )
-from skills import skill_config
 
 log = logging.getLogger(__name__)
 
@@ -114,70 +111,7 @@ class SurfaceActionRunRequest(BaseModel):
     model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
-def _enforce_action_triggered_opt_in(skill_id: str, user: User) -> None:
-    """Gate 8: ``tool_configs.a2ui.allow_action_triggered_runs: true``.
-
-    Distinct trust grant from ``allow_surface_context_writes``. The
-    earlier gate (#6) says "this skill accepts surface clicks pushing
-    data into context"; this gate says "this skill is *driven* by
-    surface clicks". A skill can opt into one without the other —
-    forks that want surface-context writes for prompt enrichment but
-    keep their agent invocation gated to chat turns leave this off.
-
-    Raises:
-        HTTPException(403): when the skill has not opted in.
-    """
-    # Alias-tolerant (CLAUDE.md #9) — must match the shared gate's resolution
-    # or a slug caller passes the gate and dies here.
-    skill = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
-    # The earlier shared gates already proved skill exists; defensive
-    # repeat-check guards against a delete-between-gates race.
-    if skill is None:
-        log.info(
-            "surface_action_run: skill disappeared between gates uid=%s skill_id=%s",
-            user.uid,
-            skill_id,
-        )
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    a2ui_config = (skill.skill_metadata.tool_configs or {}).get("a2ui") or {}
-    if a2ui_config.get("allow_action_triggered_runs"):
-        return
-
-    # Delegation-aware fallback. Handoffs from a front door are TRANSPARENT
-    # (`transfer_to_agent`), so a DELEGATE's tool can return a `needs_input`
-    # envelope whose form renders in the DOOR's chat — and Submit posts against
-    # the DOOR's skill id. The grant then sits on the delegate that produced the
-    # form, not on the skill this gate checks, so a door with correctly-opted-in
-    # specialists 403'd ("This action isn't permitted for this skill", live
-    # 2026-07-21 on ONE Assistant → one-ppa-expert's entsoe_day_ahead_prices).
-    #
-    # Accept when any ACCESS-FILTERED delegate is opted in, using the same
-    # resolution `create_agent` uses — so the set considered here is exactly the
-    # set the door could actually hand off to for this user (deny-by-default is
-    # preserved: a delegate the user can't reach can't unlock the door).
-    delegate = _delegate_with_grant(skill, user, "allow_action_triggered_runs")
-    if delegate is not None:
-        log.info(
-            "surface_action_run: allowed via opted-in delegate uid=%s skill_id=%s delegate=%s",
-            user.uid,
-            skill_id,
-            delegate.skill_id,
-        )
-        return
-
-    log.info(
-        "surface_action_run: skill not opted into action-triggered runs uid=%s skill_id=%s",
-        user.uid,
-        skill_id,
-    )
-    raise HTTPException(
-        status_code=403,
-        detail="Skill not opted into action-triggered runs",
-    )
-
-
-def _resolve_agent(skill_id: str, user: User, request: Request | None = None, idx: Any | None = None):
+def _resolve_agent(skill_id: str, user: User, request: Request, idx: Any):
     """Build the ADK agent for ``skill_id`` and pick a single agent if
     the skill uses the heuristic-router thinking strategy.
 
@@ -189,17 +123,8 @@ def _resolve_agent(skill_id: str, user: User, request: Request | None = None, id
     Returns:
         A built ``LlmAgent`` ready for ``build_agui_adk_agent`` to wrap.
     """
-    root_runtime = _root_runtime_for_session(idx, user, request) if request is not None and idx is not None else None
-    if root_runtime is not None:
-        _root_config, skill = root_runtime
-    else:
-        # Alias-tolerant (CLAUDE.md #9) — same resolution as the gate above.
-        skill = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
-    if skill is None:
-        # Should be unreachable because the shared opt-in gate proves
-        # existence; defensive 403 keeps the error shape consistent.
-        raise HTTPException(status_code=403, detail="Access denied")
-    access = request.state.access if request is not None else None
+    _root_config, skill = _root_runtime_for_session(idx, user, request)
+    access = request.state.access
     agent_or_router = create_agent_with_thinking(skill, user, access_context=access)
     if isinstance(agent_or_router, _HeuristicRouter):
         return agent_or_router.fast
@@ -429,18 +354,13 @@ async def post_surface_action_run(
     run_skill_id = skill_id
 
     # Gates 4 + 5 + 6: skill exists + has a2ui config + opted into context writes
-    root_skill = _enforce_root_interaction(idx, user, request, "allow_surface_context_writes")
-    if root_skill is None:
-        _enforce_skill_opt_in(run_skill_id, user)
+    _enforce_root_interaction(idx, user, request, "allow_surface_context_writes")
 
     # Gate 7: action context size cap
     size_bytes = _enforce_size_cap(body.action.context)
 
     # Gate 8: per-skill opt-in for action-triggered runs (new)
-    if root_skill is None:
-        _enforce_action_triggered_opt_in(run_skill_id, user)
-    else:
-        _enforce_root_interaction(idx, user, request, "allow_action_triggered_runs")
+    _enforce_root_interaction(idx, user, request, "allow_action_triggered_runs")
 
     # Persist the action (same write the fire-and-forget endpoint does). Written
     # under the door's session — the target runs on this same thread.

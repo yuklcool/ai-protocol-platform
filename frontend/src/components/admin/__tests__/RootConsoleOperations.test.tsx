@@ -1,8 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import ToolPermissionsPage from "@/app/admin/tool-permissions/page";
 import TenantAdminPage from "@/app/admin/tenants/page";
-import { LocalAccountsPanel } from "../LocalAccountsPanel";
 import { UsagePanel } from "../UsagePanel";
 
 const api = vi.hoisted(() => vi.fn());
@@ -18,7 +22,7 @@ vi.mock("@/hooks/useAdminScope", () => ({
     isPlatform: true,
     isAdmin: true,
     state: "platform",
-    domains: [],
+    tenantIds: [],
   }),
 }));
 const response = (body: unknown) => ({
@@ -31,35 +35,6 @@ beforeEach(() => {
 });
 
 describe("Root console operations", () => {
-  it("saves a stable tenant rule using the backend tenant type", async () => {
-    api.mockResolvedValue(response([]));
-    render(<ToolPermissionsPage />);
-    fireEvent.change(await screen.findByLabelText("Stable tenant ID"), {
-      target: { value: "tenant-a" },
-    });
-    fireEvent.change(screen.getByLabelText(/Allowed tools/), {
-      target: { value: "list_documents, get_document_content" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
-    await waitFor(() =>
-      expect(api.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(
-        true,
-      ),
-    );
-    const [path, init] = api.mock.calls.find(
-      ([, options]) => options?.method === "PUT",
-    )!;
-    expect(path).toContain("tenant%3Atenant-a");
-    expect(JSON.parse(init.body)).toEqual({
-      type: "tenant",
-      tools: ["list_documents", "get_document_content"],
-      denied: [],
-    });
-    expect(
-      await screen.findByText("Permissions saved; cache refreshed."),
-    ).toBeVisible();
-  });
-
   it("creates a domainless stable tenant without using the legacy clients API", async () => {
     api.mockImplementation(async (path: string, init?: RequestInit) => {
       if (path.endsWith("/models")) return response({ models: [] });
@@ -105,36 +80,55 @@ describe("Root console operations", () => {
     ).toBe(true);
   });
 
-  it("clears the account password after a successful creation", async () => {
-    api.mockImplementation(async (path: string, init?: RequestInit) =>
-      response(
-        path.endsWith("/tenants")
-          ? [{ tenantId: "tenant-a", displayName: "Tenant A", disabled: false }]
-          : init?.method === "POST"
-            ? {}
-            : [],
+  it("edits tenant resource allowlists without sending retired or immutable fields", async () => {
+    const tenant = {
+      tenantId: "tenant-a",
+      displayName: "Tenant A",
+      domains: [],
+      disabled: false,
+      modelPolicy: {},
+      quota: {},
+      enabledSkills: [],
+      enabledMcpServers: [],
+    };
+    api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path.endsWith("/models")) return response({ models: [] });
+      if (path.includes("/resources"))
+        return response({
+          skills: [{ id: "skill-id", label: "照明分析" }],
+          mcpServers: [{ id: "map-id", label: "地图服务" }],
+          tools: [],
+          knowledge: [],
+        });
+      if (path.includes("/tenant-root/")) return response({ override: {} });
+      if (init?.method === "PATCH") return response(tenant);
+      return response([tenant]);
+    });
+    render(<TenantAdminPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const skills = await screen.findByRole("group", {
+      name: "租户允许的 Skills",
+    });
+    fireEvent.click(await within(skills).findByLabelText("照明分析"));
+    fireEvent.click(
+      within(
+        screen.getByRole("group", { name: "租户允许的 MCP 服务器" }),
+      ).getByLabelText("地图服务"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save tenant" }));
+    await waitFor(() =>
+      expect(api.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(
+        true,
       ),
     );
-    render(<LocalAccountsPanel onSelect={vi.fn()} />);
-    await screen.findByRole("option", { name: "Tenant A" });
-    fireEvent.change(screen.getByLabelText("Email"), {
-      target: { value: "new@local.test" },
-    });
-    fireEvent.change(screen.getByLabelText(/Initial password/), {
-      target: { value: "disposable-test-password" },
-    });
-    fireEvent.change(screen.getByLabelText("Tenant"), {
-      target: { value: "tenant-a" },
-    });
-    fireEvent.submit(
-      screen.getByRole("button", { name: "Create account" }).closest("form")!,
-    );
-    await screen.findByText("Account created.");
-    expect(screen.getByLabelText(/Initial password/)).toHaveValue("");
     const [, init] = api.mock.calls.find(
-      ([, options]) => options?.method === "POST",
+      ([, init]) => init?.method === "PATCH",
     )!;
-    expect(JSON.parse(init.body).tenant_id).toBe("tenant-a");
+    const body = JSON.parse(init.body);
+    expect(body.enabled_skills).toEqual(["skill-id"]);
+    expect(body.enabled_mcp_servers).toEqual(["map-id"]);
+    expect(body).not.toHaveProperty("tenant_id");
+    expect(body).not.toHaveProperty("derived_group_tags");
   });
 
   it("shows persisted tokens and estimates while exposing missing pricing", async () => {

@@ -1,338 +1,291 @@
-// Group tags — the registry admin (v6.9.0 / 9.3). Makes a group tag first-class:
-// label / description / what-it-grants. The registry is the vocabulary that
-// per-user grant validation checks against (an unknown tag → 422). Also answers
-// "who holds tag X" (reverse lookup). Aitana-admin gated by the backend; a 403
-// renders the "admins only" state. Never-silent: loading / error / empty render.
-
 "use client";
-import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { fetchWithAuth } from "@/lib/apiClient";
+import { useAdminScope } from "@/hooks/useAdminScope";
 import { SignInRequired } from "@/components/chat/SignInRequired";
+import {
+  ResourceChecklist,
+  type ResourceOption,
+} from "@/components/admin/ResourceChecklist";
+import {
+  action,
+  consoleApi,
+  control,
+  errorText,
+  Field,
+  jsonBody,
+  Notice,
+} from "@/components/admin/ConsolePrimitives";
 
-type GroupTag = {
+type Group = {
   id: string;
-  label?: string;
-  description?: string;
-  grants?: string[];
-  tenant_scope?: string | null;
+  tenantId: string;
+  label: string;
+  description: string;
+  skills: string[];
+  mcpServers: string[];
+  role: "member" | "tenant-admin";
 };
-type TagMember = { email: string; uid: string };
-type TagMembers = {
-  tag: string;
-  members: TagMember[];
-  scanned: number;
-  truncated: boolean;
-  note: string;
-};
-
-const REGISTRY = "/api/proxy/api/admin/group-tags";
-const MEMBERS = "/api/proxy/api/admin/groups";
-
-type Probe = "loading" | "admin" | "forbidden" | "error";
+type Tenant = { tenantId: string; displayName: string; disabled: boolean };
+type Resources = { skills: ResourceOption[]; mcpServers: ResourceOption[] };
+const blank = (tenantId: string): Group => ({
+  id: "",
+  tenantId,
+  label: "",
+  description: "",
+  skills: [],
+  mcpServers: [],
+  role: "member",
+});
 
 export default function GroupsPage() {
-  const t = useConsoleCopy();
   const { user, loading } = useAuth();
-  const [probe, setProbe] = useState<Probe>("loading");
-  const [tags, setTags] = useState<GroupTag[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  // Upsert form
-  const [id, setId] = useState("");
-  const [label, setLabel] = useState("");
-  const [description, setDescription] = useState("");
-  const [grants, setGrants] = useState("");
+  if (loading) return <main className="p-8">加载中…</main>;
+  if (!user) return <SignInRequired />;
+  return <Groups />;
+}
+function Groups() {
+  const scope = useAdminScope();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [draft, setDraft] = useState<Group | null>(null);
+  const [resources, setResources] = useState<Resources>({
+    skills: [],
+    mcpServers: [],
+  });
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-
-  // Members lookup
-  const [membersOf, setMembersOf] = useState<TagMembers | null>(null);
-  const [membersBusy, setMembersBusy] = useState(false);
-
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
-      const r = await fetchWithAuth(REGISTRY);
-      if (r.status === 403) return setProbe("forbidden");
-      if (!r.ok) return setProbe("error");
-      setTags(await r.json());
-      setProbe("admin");
-    } catch {
-      setProbe("error");
+      const [rows, directory] = await Promise.all([
+        consoleApi<Group[]>("/admin/groups"),
+        consoleApi<Tenant[]>("/admin/tenants"),
+      ]);
+      setGroups(rows);
+      setTenants(directory);
+    } catch (error) {
+      setNotice(errorText(error));
     }
-  };
-
+  }, []);
   useEffect(() => {
-    if (loading || !user) return;
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, user]);
-
-  const upsert = async () => {
-    const tagId = id.trim();
-    if (!tagId) return;
+  }, [load]);
+  const tenantId = draft?.tenantId ?? "";
+  useEffect(() => {
+    setResources({ skills: [], mcpServers: [] });
+    if (!tenantId) return;
+    let active = true;
+    consoleApi<Resources>(
+      `/admin/groups/resources?tenant_id=${encodeURIComponent(tenantId)}`,
+    )
+      .then((value) => {
+        if (active) setResources(value);
+      })
+      .catch((error) => {
+        if (active) setNotice(errorText(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [tenantId]);
+  const patch = (value: Partial<Group>) =>
+    setDraft((current) => (current ? { ...current, ...value } : current));
+  const save = async () => {
+    if (!draft) return;
     setBusy(true);
-    setNotice(null);
+    setNotice("");
     try {
-      const r = await fetchWithAuth(
-        `${REGISTRY}/${encodeURIComponent(tagId)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            label: label.trim(),
-            description: description.trim(),
-            grants: grants
-              .split(",")
-              .map((g) => g.trim())
-              .filter(Boolean),
-          }),
-        },
+      await consoleApi(
+        `/admin/groups${draft.id ? `/${encodeURIComponent(draft.id)}` : ""}`,
+        jsonBody(draft.id ? "PUT" : "POST", draft),
       );
-      if (!r.ok) {
-        const detail = await r.json().catch(() => null);
-        setNotice(detail?.detail || `Could not save "${tagId}".`);
-        return;
-      }
-      setNotice(`Saved "${tagId}".`);
-      setId("");
-      setLabel("");
-      setDescription("");
-      setGrants("");
+      setDraft(null);
       await load();
-    } catch {
-      setNotice(`Could not save "${tagId}".`);
+      setNotice("权限组已保存，后续请求立即使用新授权。");
+    } catch (error) {
+      setNotice(errorText(error));
     } finally {
       setBusy(false);
     }
   };
-
-  const lookupMembers = async (tag: string) => {
-    setMembersBusy(true);
-    setMembersOf(null);
-    setNotice(null);
+  const remove = async (group: Group) => {
+    if (
+      !window.confirm(`删除“${group.label}”？成员将立即失去这个组提供的授权。`)
+    )
+      return;
+    setBusy(true);
     try {
-      const r = await fetchWithAuth(
-        `${MEMBERS}/${encodeURIComponent(tag)}/members`,
-      );
-      if (!r.ok) {
-        setNotice(`Could not look up holders of "${tag}".`);
-        return;
-      }
-      setMembersOf(await r.json());
-    } catch {
-      setNotice(`Could not look up holders of "${tag}".`);
+      await consoleApi(`/admin/groups/${encodeURIComponent(group.id)}`, {
+        method: "DELETE",
+      });
+      await load();
+      setNotice("权限组已删除。");
+    } catch (error) {
+      setNotice(errorText(error));
     } finally {
-      setMembersBusy(false);
+      setBusy(false);
     }
   };
-
-  if (loading) return <Centered>{t("加载中…", "Loading…")}</Centered>;
-  if (!user) return <SignInRequired />;
-  if (probe === "forbidden") {
-    return (
-      <Centered>
-        <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">
-            {t("需要管理员权限", "Admins only")}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {t("分组管理需要", "Group-tag administration requires the")}
-            <code>aitana-admin</code>
-            {t("权限组。", "group.")}
+  return (
+    <main className="mx-auto max-w-5xl space-y-5 p-5 sm:p-8">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">权限组</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            给组选择 Skills 和
+            MCP，再在用户页分配组。多个组的授权合并后，仍受租户和当前 Root
+            的允许范围约束。
           </p>
         </div>
-      </Centered>
-    );
-  }
-  if (probe === "error")
-    return (
-      <Centered>
-        {t(
-          "无法加载分组，请重试。",
-          "Something went wrong loading the registry.",
-        )}
-      </Centered>
-    );
-
-  return (
-    <main className="mx-auto max-w-3xl p-6">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold">{t("分组标签", "Group tags")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "管理分组、授权能力及成员。用户授权请进入",
-            "The tag registry — what each tag grants, and who holds it. Per-user grants are set under",
-          )}{" "}
-          <a className="underline" href="/admin/users">
-            {t("用户管理", "Users")}
-          </a>
-          {t(
-            "；未知分组无法授予。",
-            "; a grant of an unregistered tag is rejected.",
-          )}
-        </p>
+        <button
+          className={action}
+          disabled={busy || !tenants.some((tenant) => !tenant.disabled)}
+          onClick={() =>
+            setDraft(
+              blank(tenants.find((tenant) => !tenant.disabled)?.tenantId ?? ""),
+            )
+          }
+        >
+          新建权限组
+        </button>
       </header>
-
-      {/* Registry table */}
-      <section className="mb-6 rounded-lg border">
-        {tags.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-            {t(
-              "暂无分组，可在下方创建。",
-              "No tags registered yet. Add the first one below.",
-            )}
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                <th className="px-4 py-2">{t("标签", "Tag")}</th>
-                <th className="px-4 py-2">{t("授权能力", "Grants")}</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tags.map((tag) => (
-                <tr key={tag.id} className="border-b last:border-0">
-                  <td className="px-4 py-2 align-top">
-                    <div className="font-mono text-xs">{tag.id}</div>
-                    {tag.label && (
-                      <div className="text-xs text-muted-foreground">
-                        {tag.label}
-                      </div>
-                    )}
-                    {tag.description && (
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {tag.description}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 align-top text-xs text-muted-foreground">
-                    {tag.grants?.length ? (
-                      tag.grants.join(", ")
-                    ) : (
-                      <span className="opacity-50">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 align-top text-right">
-                    <button
-                      onClick={() => lookupMembers(tag.id)}
-                      disabled={membersBusy}
-                      className="rounded-md border px-2 py-1 text-xs hover:bg-muted/40 disabled:opacity-50"
-                    >
-                      {t("成员", "Holders")}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {/* Members panel */}
-      {membersBusy && <Note>{t("正在查询成员…", "Scanning holders…")}</Note>}
-      {membersOf && (
-        <section className="mb-6 rounded-lg border p-4">
-          <h2 className="mb-2 text-sm font-medium">
-            {t("分组成员：", "Holders of")}
-            <code className="font-mono">{membersOf.tag}</code>
+      <Notice>{notice}</Notice>
+      {draft && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+          className="space-y-4 rounded-xl border p-5"
+        >
+          <h2 className="font-medium">
+            {draft.id ? "编辑权限组" : "新建权限组"}
           </h2>
-          {membersOf.members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("暂无直接授权成员。", "No direct holders.")}
-            </p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
-              {membersOf.members.map((m) => (
-                <li
-                  key={m.uid}
-                  className="rounded-full border px-2 py-0.5 text-xs"
-                >
-                  {m.email}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-2 text-xs text-muted-foreground">
-            {membersOf.note}
-            {membersOf.truncated &&
-              " — list truncated; refine or raise the scan cap."}
-          </p>
-        </section>
-      )}
-
-      {/* Upsert form */}
-      <section className="rounded-lg border p-4">
-        <h2 className="mb-3 text-sm font-medium">
-          {t("新增或更新分组", "Add / update a tag")}
-        </h2>
-        <div className="grid gap-2">
-          <input
-            className="rounded-md border px-3 py-2 text-sm"
-            placeholder={t(
-              "标签标识（例如 analyst）",
-              "tag id (e.g. ONE, beta-tester)",
-            )}
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-          />
-          <input
-            className="rounded-md border px-3 py-2 text-sm"
-            placeholder={t("显示名称", "label (human name)")}
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-          />
-          <input
-            className="rounded-md border px-3 py-2 text-sm"
-            placeholder={t(
-              "说明：该分组授予哪些能力",
-              "description — what holding this tag grants",
-            )}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <input
-            className="rounded-md border px-3 py-2 text-sm"
-            placeholder={t(
-              "授权能力标识（逗号分隔）",
-              "grants (comma-separated skill slugs / capabilities)",
-            )}
-            value={grants}
-            onChange={(e) => setGrants(e.target.value)}
-          />
-          <div className="flex justify-end">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="所属租户">
+              <select
+                className={control}
+                value={draft.tenantId}
+                disabled={!!draft.id || busy}
+                onChange={(event) => setDraft(blank(event.target.value))}
+                required
+              >
+                {tenants.map((tenant) => (
+                  <option
+                    key={tenant.tenantId}
+                    value={tenant.tenantId}
+                    disabled={tenant.disabled}
+                  >
+                    {tenant.displayName || tenant.tenantId}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="组名称">
+              <input
+                className={control}
+                value={draft.label}
+                onChange={(event) => patch({ label: event.target.value })}
+                required
+                maxLength={120}
+              />
+            </Field>
+            <Field label="角色">
+              <select
+                className={control}
+                value={draft.role}
+                disabled={!scope.isPlatform}
+                onChange={(event) =>
+                  patch({ role: event.target.value as Group["role"] })
+                }
+              >
+                <option value="member">普通成员</option>
+                <option value="tenant-admin">租户管理员</option>
+              </select>
+            </Field>
+            <Field label="说明">
+              <input
+                className={control}
+                value={draft.description}
+                onChange={(event) => patch({ description: event.target.value })}
+                maxLength={1000}
+              />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ResourceChecklist
+              label="允许的 Skills"
+              options={resources.skills}
+              selected={draft.skills}
+              onChange={(skills) => patch({ skills })}
+            />
+            <ResourceChecklist
+              label="允许的 MCP 服务器"
+              options={resources.mcpServers}
+              selected={draft.mcpServers}
+              onChange={(mcpServers) => patch({ mcpServers })}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button className={action} disabled={busy} type="submit">
+              保存
+            </button>
             <button
-              onClick={upsert}
-              disabled={busy || !id.trim()}
-              className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
+              className={action}
+              disabled={busy}
+              type="button"
+              onClick={() => setDraft(null)}
             >
-              {busy ? t("保存中…", "Saving…") : "Save tag"}
+              取消
             </button>
           </div>
-        </div>
-        {notice && (
-          <p className="mt-2 text-xs text-muted-foreground">{notice}</p>
+        </form>
+      )}
+      <div className="space-y-3">
+        {groups.length === 0 && (
+          <p className="rounded-lg border p-5 text-sm text-muted-foreground">
+            还没有权限组。普通用户未分配授权时，无法使用额外 Skills 或 MCP。
+          </p>
         )}
-      </section>
-    </main>
-  );
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mb-6 rounded-lg border px-3 py-6 text-center text-sm text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      {children}
+        {groups.map((group) => (
+          <article
+            key={group.id}
+            className="flex flex-wrap justify-between gap-3 rounded-xl border p-4"
+          >
+            <div>
+              <h2 className="font-medium">{group.label}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {tenants.find((tenant) => tenant.tenantId === group.tenantId)
+                  ?.displayName || group.tenantId}{" "}
+                · {group.role === "tenant-admin" ? "租户管理员" : "普通成员"} ·{" "}
+                {group.skills.length} 个 Skill · {group.mcpServers.length} 个
+                MCP
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className={action}
+                disabled={
+                  busy || (!scope.isPlatform && group.role === "tenant-admin")
+                }
+                onClick={() => setDraft({ ...group })}
+              >
+                编辑
+              </button>
+              <button
+                className={action}
+                disabled={
+                  busy || (!scope.isPlatform && group.role === "tenant-admin")
+                }
+                onClick={() => void remove(group)}
+              >
+                删除
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
     </main>
   );
 }

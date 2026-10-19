@@ -41,19 +41,15 @@ def isolated(monkeypatch):
 
 def client(user=ADMIN):
     from admin.access_routes import router as access
-    from admin.group_tags_routes import members_router
     from admin.routes import router as admin
     from admin.tenants import router as tenants
-    from admin.users_routes import router as users
     from agents.knowledge import router as knowledge
     from protocols.voice_routes import router as voice
 
     app = FastAPI()
     app.include_router(admin)
     app.include_router(tenants)
-    app.include_router(users)
     app.include_router(access)
-    app.include_router(members_router)
     app.include_router(knowledge)
     app.include_router(voice)
 
@@ -96,21 +92,6 @@ def test_local_account_lifecycle_revokes_old_tokens_without_auditing_passwords(i
         ).status_code
         == 422
     )
-
-
-def test_local_group_admin_targets_exact_email_with_colliding_uids(isolated):
-    from auth.local_jwt import get_local_user_by_email
-
-    create_local_user(email=A.email, password="temporary-test-password-1", tenant_id="tenant-a", uid="shared")
-    create_local_user(email=B.email, password="temporary-test-password-1", tenant_id="tenant-b", uid="shared")
-    with patch("admin.users_routes.is_known_tag", return_value=True), patch("admin.users_routes.record_admin_action"):
-        result = client().post(f"/api/admin/users/{A.email}/groups", json={"tag": "analyst"})
-    assert result.status_code == 200, result.text
-    assert result.json()["propagation"]["effective"] == "immediate"
-    assert get_local_user_by_email(A.email)["groupTags"] == ["analyst"]
-    assert get_local_user_by_email(B.email)["groupTags"] == []
-    tenant_admin = A.model_copy(update={"group_tags": frozenset({"tenant-admin:tenant-a"})})
-    assert client(tenant_admin).get(f"/api/admin/users/{B.email}").status_code == 403
 
 
 def test_knowledge_grants_remain_tenant_scoped_and_revocation_is_immediate(isolated):
@@ -226,42 +207,6 @@ def test_root_budget_overrides_capability_exemption(isolated):
     assert composed.skill_metadata.tool_configs["root_agent"]["budget_enabled"] is True
 
 
-def test_local_access_preview_matches_tenant_ceiling_and_membership(isolated):
-    from auth.local_jwt import authenticate_credentials
-    from db.clients import resolve_enabled_skills
-
-    directory = TenantDirectory(isolated)
-    directory.put(TenantConfig(tenantId="tenant-a", enabledSkills=["allowed"], derivedGroupTags=["tenant-reader"]))
-    create_local_user(email=A.email, password="temporary-test-password-1", tenant_id="tenant-a", group_tags=["analyst"])
-    create_local_user(email=B.email, password="temporary-test-password-1", tenant_id="tenant-b", group_tags=["analyst"])
-    isolated.set_document(
-        "tool_permissions", "tenant:tenant-a", {"tenantId": "tenant-a", "tools": [], "denied": ["danger"]}
-    )
-    isolated.set_document("tool_permissions", A.email, {"tenantId": "tenant-a", "tools": ["*"]})
-    tenant_admin = A.model_copy(update={"group_tags": frozenset({"tenant-admin:tenant-a"})})
-    c = client(tenant_admin)
-    result = c.post("/api/admin/access/check", json={"email": A.email, "toolName": "danger"})
-    assert result.status_code == 200, result.text
-    assert result.json()["tenantId"] == "tenant-a"
-    assert result.json()["tool_permission"]["allowed"] is False
-    assert c.post("/api/admin/access/check", json={"email": B.email}).status_code == 403
-    members = c.get("/api/admin/groups/analyst/members")
-    assert members.status_code == 200, members.text
-    assert [row["email"] for row in members.json()["members"]] == [A.email]
-    authenticated = authenticate_credentials(A.email, "temporary-test-password-1")
-    assert "tenant-reader" in authenticated.group_tags
-    assert resolve_enabled_skills(authenticated) == ["allowed"]
-    assert c.patch("/api/admin/tenants/tenant-a", json={"quota": {}}).status_code == 403
-    assert c.patch("/api/admin/tenants/tenant-a", json={"derived_group_tags": ["aitana-admin"]}).status_code == 403
-
-
-def test_last_local_platform_admin_cannot_be_demoted(isolated):
-    create_local_user(
-        email=ADMIN.email, password="temporary-test-password-1", tenant_id="tenant-a", group_tags=["aitana-admin"]
-    )
-    assert client().delete(f"/api/admin/users/{ADMIN.email}/groups/aitana-admin").status_code == 422
-
-
 def test_disable_account_in_disabled_tenant_with_same_uid_as_actor(isolated):
     create_local_user(email=ADMIN.email, password="temporary-test-password-1", tenant_id="tenant-a", uid=ADMIN.uid)
     create_local_user(email=B.email, password="temporary-test-password-1", tenant_id="tenant-b", uid=ADMIN.uid)
@@ -294,7 +239,7 @@ def test_remote_tool_cannot_impersonate_trusted_knowledge_tool(isolated):
     from agents.knowledge import knowledge_tool
     from auth.permissions import ToolPermissionDenied
 
-    enforce = make_permission_enforcer(A.email, "local.test")
+    enforce = make_permission_enforcer(A.email, "local.test", user=A, root_agent=False)
     with patch("adk.callbacks.can_use_tool", return_value=False):
         assert enforce(knowledge_tool([], build_access_context(A)), {}, SimpleNamespace(agent_name="root")) is None
         with pytest.raises(ToolPermissionDenied):

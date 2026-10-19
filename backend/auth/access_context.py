@@ -76,7 +76,9 @@ class AccessContext:
         return self.is_owner(skill)
 
     def is_skill_admin(self, skill: _HasAccess) -> bool:
-        return self.is_skill_owner(skill) or _is_skill_admin_tags(self.group_tags)
+        return self._tenant_allows(skill) and (
+            self.is_skill_owner(skill) or _is_skill_admin_tags(self.group_tags) or self.is_tenant_admin()
+        )
 
     @property
     def is_platform_admin(self) -> bool:

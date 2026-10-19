@@ -269,7 +269,7 @@ def test_permission_enforcer_exempts_transfer_to_agent():
     # auto-mode delegation breaks for users without explicit permission.
     from adk.callbacks import make_permission_enforcer
 
-    enforcer = make_permission_enforcer("nobody@nowhere.test", "nowhere.test")
+    enforcer = make_permission_enforcer("nobody@nowhere.test", "nowhere.test", user=User(uid="user"), root_agent=False)
 
     class _Tool:
         name = "transfer_to_agent"

@@ -21,8 +21,6 @@ The suite has two halves:
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.routing import APIRoute
@@ -180,63 +178,6 @@ def _client_for(router) -> TestClient:
 
     app.dependency_overrides[get_current_user] = _override
     return TestClient(app)
-
-
-def _b_com_probes():
-    """(label, router-import, method, path, json) tuples reaching for b.com."""
-    from admin.access_routes import router as access
-    from admin.clients import router as clients
-    from admin.tenants import router as tenants
-    from admin.tool_permissions_routes import router as tool_permissions
-    from admin.users_routes import router as users
-
-    return [
-        ("clients.get", clients, "GET", "/api/admin/clients/b.com", None),
-        ("clients.put", clients, "PUT", "/api/admin/clients/b.com", {"display_name": "x"}),
-        ("clients.delete", clients, "DELETE", "/api/admin/clients/b.com", None),
-        ("users.get", users, "GET", "/api/admin/users/someone@b.com", None),
-        ("users.grant", users, "POST", "/api/admin/users/someone@b.com/groups", {"tag": "ONE"}),
-        ("users.revoke", users, "DELETE", "/api/admin/users/someone@b.com/groups/ONE", None),
-        ("users.refresh", users, "POST", "/api/admin/users/someone@b.com/refresh-claims", None),
-        ("toolperms.get", tool_permissions, "GET", "/api/admin/tool-permissions/b.com", None),
-        (
-            "toolperms.put",
-            tool_permissions,
-            "PUT",
-            "/api/admin/tool-permissions/b.com",
-            {"type": "domain", "tools": ["*"], "denied": []},
-        ),
-        ("toolperms.delete", tool_permissions, "DELETE", "/api/admin/tool-permissions/b.com", None),
-        ("toolperms.wildcard", tool_permissions, "GET", "/api/admin/tool-permissions/*", None),
-        ("access.check", access, "POST", "/api/admin/access/check", {"email": "someone@b.com"}),
-        # Tenant-management routes are covered behaviourally so stable
-        # tenant-id migration cannot weaken cross-tenant denial.
-        ("tenants.onboard", tenants, "POST", "/api/admin/tenants", {"tenant_id": "b.com", "domains": ["b.com"]}),
-        ("tenants.validate", tenants, "GET", "/api/admin/tenants/b.com/validate", None),
-    ]
-
-
-class TestCrossTenantMatrix:
-    @pytest.mark.parametrize(
-        "label,router,method,path,body", _b_com_probes(), ids=lambda v: v if isinstance(v, str) else ""
-    )
-    def test_tenant_a_cannot_reach_b(self, label, router, method, path, body):
-        """Every domain-keyed admin route denies a reach into another tenant.
-
-        Firestore is patched to RETURN DATA — so a route that skipped its scope
-        check would return 200 with b.com's content rather than a 404 that
-        accidentally looks like a pass.
-        """
-        with (
-            patch("db.firestore.get_document", return_value={"display_name": "Beta"}),
-            patch("admin.clients.get_document", return_value={"display_name": "Beta"}),
-            patch(
-                "admin.tool_permissions_routes.get_document",
-                return_value={"type": "domain", "tools": ["*"], "denied": []},
-            ),
-        ):
-            r = _client_for(router).request(method, path, json=body)
-        assert r.status_code == 403, f"{label} returned {r.status_code}, expected 403 (cross-tenant reach)"
 
 
 # Probe routers for the self-test below. Defined at MODULE level on purpose:

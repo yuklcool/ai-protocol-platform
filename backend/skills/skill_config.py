@@ -32,12 +32,23 @@ _cache: dict[str, tuple[float, SkillConfig]] = {}
 
 def _to_firestore(config: SkillConfig) -> dict[str, Any]:
     """Serialize a SkillConfig to a document-store-compatible dict."""
+    _validate_skill_content(config)
     return config.model_dump(by_alias=True)
+
+
+def _validate_skill_content(config: SkillConfig) -> None:
+    if "mcp" in config.skill_metadata.tool_configs:
+        raise ValueError("Skill 不再配置 MCP; 请在 Root Agent 中绑定服务器")
 
 
 def _from_firestore(data: dict[str, Any]) -> SkillConfig:
     """Deserialize a persisted skill document to a SkillConfig."""
-    data.pop("__id", None)
+    data = {key: value for key, value in data.items() if key != "__id"}
+    metadata = dict(data.get("skillMetadata") or {})
+    configs = dict(metadata.get("toolConfigs") or {})
+    configs.pop("mcp", None)
+    metadata["toolConfigs"] = configs
+    data["skillMetadata"] = metadata
     return SkillConfig.model_validate(data)
 
 
@@ -189,7 +200,7 @@ def update_skill(skill_id: str, updates: dict[str, Any]) -> SkillConfig | None:
 
     updates["updatedAt"] = time.time()
     merged = {**_to_firestore(existing), **updates}
-    SkillConfig.model_validate(merged)
+    _validate_skill_content(SkillConfig.model_validate(merged))
 
     fs.update_document(COLLECTION, skill_id, updates)
     _cache_invalidate(skill_id)

@@ -35,7 +35,7 @@ class TestTenantAdmin:
 
     def test_domains_parsing_ignores_bare_prefix(self):
         tags = ["tenant-admin:a.com", "tenant-admin:b.com", "ONE", "tenant-admin:"]
-        assert admin_roles.tenant_admin_domains(tags) == frozenset({"a.com", "b.com"})
+        assert admin_roles.tenant_admin_tenant_ids(tags) == frozenset({"a.com", "b.com"})
 
 
 class TestSkillAdmin:

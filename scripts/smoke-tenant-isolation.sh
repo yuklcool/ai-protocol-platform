@@ -202,13 +202,11 @@ if mb:
 PY
 ok "Tenant Model Policy filters authenticated /api/models"
 
-# Stable tenant Tool Permission documents are scoped to the matching tenant admin.
-PERM_A="tenant:$TENANT_A"
-PERM_B="tenant:$TENANT_B"
-expect_code "Tenant A reads own stable tool permission" 200 GET "$BACKEND_URL/api/admin/tool-permissions/$PERM_A" "$TOKEN_A"
-expect_code "Tenant A cannot read Tenant B tool permission" 403 GET "$BACKEND_URL/api/admin/tool-permissions/$PERM_B" "$TOKEN_A"
-expect_code "Tenant B reads own stable tool permission" 200 GET "$BACKEND_URL/api/admin/tool-permissions/$PERM_B" "$TOKEN_B"
-expect_code "Tenant B cannot read Tenant A tool permission" 403 GET "$BACKEND_URL/api/admin/tool-permissions/$PERM_A" "$TOKEN_B"
+# 权限组按稳定租户隔离, 管理角色来自实际组成员关系。
+expect_code "Tenant A reads own permission groups" 200 GET "$BACKEND_URL/api/admin/groups?tenant_id=$TENANT_A" "$TOKEN_A"
+expect_code "Tenant A cannot read Tenant B groups" 403 GET "$BACKEND_URL/api/admin/groups?tenant_id=$TENANT_B" "$TOKEN_A"
+expect_code "Tenant B reads own permission groups" 200 GET "$BACKEND_URL/api/admin/groups?tenant_id=$TENANT_B" "$TOKEN_B"
+expect_code "Tenant B cannot read Tenant A groups" 403 GET "$BACKEND_URL/api/admin/groups?tenant_id=$TENANT_A" "$TOKEN_B"
 
 # MCP Admin: each tenant can create its own server, but another tenant gets a
 # 404 to avoid leaking endpoint existence.

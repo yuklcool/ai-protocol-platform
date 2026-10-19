@@ -34,10 +34,10 @@ from agents.root_runtime import (
     ROOT_AGENT_ID,
     RootCapabilityDenied,
     compose_root_skill,
-    effective_root_config,
     resolve_root_capability,
 )
 from auth.access_context import build_access_context
+from auth.capability_access import authorized_root_config
 from auth.firebase_auth import User
 
 # User-visible text and the error mapping live in `_agui_render` (the
@@ -100,7 +100,7 @@ async def stream_skill_events(
         # Channels are another user-facing ingress. Resolve the selected
         # capability through the same Root Agent policy as the HTTP chat path;
         # the channel's default/command selection is only a hint.
-        root_config = effective_root_config(get_platform_config().agent, access.tenant_id)
+        root_config = authorized_root_config(get_platform_config().agent, user)
         capability = resolve_root_capability(root_config, user, access, skill_id)
         runtime_skill = compose_root_skill(capability, root_config)
         cache_scope = (

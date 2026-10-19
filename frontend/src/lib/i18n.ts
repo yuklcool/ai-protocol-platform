@@ -79,9 +79,9 @@ const en = {
   "rootAgent.interaction.welcome": "Welcome message",
   "rootAgent.permissions.title": "Permission boundary",
   "rootAgent.permissions.description":
-    "The saved bindings are only a ceiling. Effective access is the intersection of platform, tenant, group and user policy.",
+    "The saved bindings are only a ceiling. Skills and MCP access is limited by the effective tenant Root, tenant allowlists and permission groups.",
   "rootAgent.permissions.failClosed":
-    "Resolve Skills, Tools and MCP fail-closed",
+    "Unbound or unauthorized capabilities are always denied",
   "rootAgent.advanced.title": "Advanced",
   "rootAgent.advanced.specialists": "Specialist Agents",
   "rootAgent.advanced.specialistsHint":
@@ -211,8 +211,8 @@ const en = {
   "admin.area.people.question": "Who is here, and what may they use?",
   "admin.area.people.users": "Users",
   "admin.area.people.usersNote": "manage account roles and access",
-  "admin.area.people.groups": "Group tags",
-  "admin.area.people.groupsNote": "the registry and who holds each tag",
+  "admin.area.people.groups": "Permission groups",
+  "admin.area.people.groupsNote": "grant Skills and MCP to groups",
   "admin.area.people.tools": "Tool permissions",
   "admin.area.people.toolsNote": "which tools a user or tenant may call",
   "admin.area.skills.title": "Skills & MCP",
@@ -317,8 +317,9 @@ const zhCN = {
   "rootAgent.interaction.welcome": "欢迎消息",
   "rootAgent.permissions.title": "权限边界",
   "rootAgent.permissions.description":
-    "这里保存的绑定只是上限；最终权限是平台、租户、用户组和用户权限的交集。",
-  "rootAgent.permissions.failClosed": "Skills、Tools、MCP 解析失败时默认拒绝",
+    "绑定后仍需租户允许并由权限组授权，Skill 还受资源访问控制约束。",
+  "rootAgent.permissions.failClosed":
+    "未绑定或未授权的能力始终拒绝，不提供兼容回退",
   "rootAgent.advanced.title": "高级",
   "rootAgent.advanced.specialists": "Specialist Agents",
   "rootAgent.advanced.specialistsHint":
@@ -443,8 +444,8 @@ const zhCN = {
   "admin.area.people.question": "有哪些用户，他们可以使用哪些能力？",
   "admin.area.people.users": "用户",
   "admin.area.people.usersNote": "管理账号角色与访问范围",
-  "admin.area.people.groups": "用户组标签",
-  "admin.area.people.groupsNote": "标签注册表及成员关系",
+  "admin.area.people.groups": "权限组",
+  "admin.area.people.groupsNote": "为组选择 Skills 与 MCP 并分配成员",
   "admin.area.people.tools": "工具权限",
   "admin.area.people.toolsNote": "用户或租户可以调用哪些工具",
   "admin.area.skills.title": "技能与 MCP",

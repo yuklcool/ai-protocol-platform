@@ -11,7 +11,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAdminScope } from "../useAdminScope";
 
-const auth: { user: unknown; loading: boolean } = { user: null, loading: false };
+const auth: { user: unknown; loading: boolean } = {
+  user: null,
+  loading: false,
+};
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => auth,
@@ -23,7 +26,7 @@ vi.mock("@/lib/apiClient", () => ({
 
 import { fetchWithAuth } from "@/lib/apiClient";
 
-function mockWhoAmI(body: { scope: string; domains?: string[] }) {
+function mockWhoAmI(body: { scope: string; tenantIds?: string[] }) {
   vi.mocked(fetchWithAuth).mockResolvedValue({
     ok: true,
     status: 200,
@@ -39,26 +42,26 @@ describe("useAdminScope", () => {
   });
 
   it("resolves platform scope", async () => {
-    mockWhoAmI({ scope: "platform", domains: [] });
+    mockWhoAmI({ scope: "platform", tenantIds: [] });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("platform"));
     expect(result.current.isAdmin).toBe(true);
     expect(result.current.isPlatform).toBe(true);
   });
 
-  it("resolves tenant scope with its domains", async () => {
-    mockWhoAmI({ scope: "tenant", domains: ["a.com"] });
+  it("resolves tenant scope with its tenantIds", async () => {
+    mockWhoAmI({ scope: "tenant", tenantIds: ["a.com"] });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("tenant"));
     expect(result.current.isAdmin).toBe(true);
     // A tenant admin is an admin, but NOT a platform admin — platform-only
     // surfaces gate on this distinction.
     expect(result.current.isPlatform).toBe(false);
-    expect(result.current.domains).toEqual(["a.com"]);
+    expect(result.current.tenantIds).toEqual(["a.com"]);
   });
 
   it("resolves 'none' for a signed-in non-admin", async () => {
-    mockWhoAmI({ scope: "none", domains: [] });
+    mockWhoAmI({ scope: "none", tenantIds: [] });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("none"));
     expect(result.current.isAdmin).toBe(false);
@@ -73,13 +76,16 @@ describe("useAdminScope", () => {
   });
 
   it("reports a non-ok response as 'error' (whoami answers 200 for everyone)", async () => {
-    vi.mocked(fetchWithAuth).mockResolvedValue({ ok: false, status: 500 } as Response);
+    vi.mocked(fetchWithAuth).mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as Response);
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("error"));
   });
 
   it("treats an unrecognised scope value as 'none' rather than trusting it", async () => {
-    mockWhoAmI({ scope: "superuser", domains: [] });
+    mockWhoAmI({ scope: "superuser", tenantIds: [] });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("none"));
     expect(result.current.isAdmin).toBe(false);
@@ -92,7 +98,9 @@ describe("useAdminScope", () => {
     });
     expect(fetchWithAuth).not.toHaveBeenCalled();
     rerender({ on: true });
-    await waitFor(() => expect(fetchWithAuth).toHaveBeenCalledWith("/api/proxy/api/admin/whoami"));
+    await waitFor(() =>
+      expect(fetchWithAuth).toHaveBeenCalledWith("/api/proxy/api/admin/whoami"),
+    );
   });
 
   it("does not probe when signed out", () => {
@@ -110,10 +118,10 @@ describe("useAdminScope", () => {
     expect(fetchWithAuth).toHaveBeenCalledTimes(1);
   });
 
-  it("tolerates a malformed domains field", async () => {
-    mockWhoAmI({ scope: "tenant", domains: undefined });
+  it("tolerates a malformed tenantIds field", async () => {
+    mockWhoAmI({ scope: "tenant", tenantIds: undefined });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("tenant"));
-    expect(result.current.domains).toEqual([]);
+    expect(result.current.tenantIds).toEqual([]);
   });
 });

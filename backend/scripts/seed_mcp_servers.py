@@ -18,12 +18,8 @@ Usage:
     # Dry run
     uv run python scripts/seed_mcp_servers.py --env test --dry-run
 
-The seeded server is then activated per-skill by adding its id to the
-SkillConfig's tool_configs.mcp.servers list (handled by seed_skills.py
-or the skill admin UI; not this script's concern). The set of ids this
-script can seed MUST stay in sync with
-admin.mcp_registry_check.KNOWN_SEEDABLE_SERVER_IDS — the post-seed
-deploy gate and the PR-time unit test both pin against that set.
+注册后在当前 Root 的 mcpServers 中绑定服务, 再设置租户允许资源和权限组。
+Skill 不再配置 MCP 连接, 此脚本只负责注册服务。
 """
 
 from __future__ import annotations

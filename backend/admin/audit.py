@@ -32,8 +32,8 @@ def record_admin_action(
 ) -> None:
     """Append one audit record for an admin mutation."""
     record = {
-        "tenantId": tenant_id.strip().casefold(),
-        "actorTenantId": actor_tenant_id.strip().casefold(),
+        "tenantId": tenant_id.strip(),
+        "actorTenantId": actor_tenant_id.strip(),
         "actorUid": actor_uid,
         "actorEmail": actor_email,
         "action": action,

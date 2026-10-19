@@ -163,11 +163,11 @@ def _resolve(ref: str, user: User | None = None):
     patch ``voice_routes.get_skill`` keep working.
     """
     if ref == "root-agent" and user is not None:
-        from agents.root_runtime import compose_root_skill, effective_root_config, root_agent_skill
-        from auth.access_context import build_access_context
+        from agents.root_runtime import compose_root_skill, root_agent_skill
+        from auth.capability_access import authorized_root_config
         from config.platform_config import get_platform_config
 
-        config = effective_root_config(get_platform_config().agent, build_access_context(user).tenant_id)
+        config = authorized_root_config(get_platform_config().agent, user)
         return compose_root_skill(root_agent_skill(config), config)
     skill = get_skill(ref)
     if skill is not None:

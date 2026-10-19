@@ -19,23 +19,8 @@ for method`` from the host bridge — non-fatal but pollutes the console
 and leaves the agent blind to iframe state, which collapses the
 multi-turn workshop demo ("now zoom to its old town" → confused).
 
-Auth + access boundary (seven gates):
-  1. Firebase JWT required (``get_current_user``).
-  2. Session must exist (``_require_session`` → 404).
-  3. Caller must be able to access the session (the existing 5-type
-     access policy ``request.state.access.can_access``).
-  4. Caller must own or have access to the skill the session belongs to
-     (mirrors ``mcp_proxy._user_can_use_server`` shape).
-  5. ``serverId`` must be in ``skill.tool_configs.mcp.servers`` (you
-     can only push context for a server your skill activates).
-  6. ``serverId`` must additionally be in
-     ``skill.tool_configs.mcp.allow_context_writes`` (NEW — per-server
-     opt-in, defaults to empty = feature off for that server). The
-     extra gate exists so a skill that activates a server for tool use
-     doesn't automatically also let the iframe write into the agent's
-     context — those are distinct trust grants.
-  7. ``structuredContent`` must be a JSON object ≤ 4096 bytes
-     serialized. Larger or wrong-typed: 413/400.
+授权边界:验证身份和会话归属后,按当前租户 Root 的交互开关、MCP
+绑定及服务器启用状态验证。Skill 不再持有 MCP 连接或 context-writes 授权。
 
 Threat model (see design doc Conflict Justifications):
   * The endpoint receives JSON from a trusted host context (the host's
@@ -76,8 +61,9 @@ from adk.session import get_session_service
 from auth import User, get_current_user
 from db.chat_sessions import app_name_for_session, get_session_index
 from db.models.chat_session import ChatSessionIndex
+from db.persistence import get_document
 from protocols._a2ui_surface_shared import _enforce_root_interaction
-from skills import skill_config
+from tools.mcp.tenant_scope import mcp_config_visible_to_tenant
 
 log = logging.getLogger(__name__)
 
@@ -117,58 +103,6 @@ def _require_session(session_id: str) -> ChatSessionIndex:
     if idx is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return idx
-
-
-def _enforce_skill_allowlists(
-    skill_id: str,
-    server_id: str,
-    user: User,
-) -> None:
-    """Enforce gates 5 + 6: the skill must activate the server AND must
-    explicitly opt the server into context-writes. Two distinct checks
-    so that "skill uses this server's tools" doesn't automatically grant
-    "iframe from this server can write to the agent's context".
-    """
-    # Alias-tolerant (CLAUDE.md #9): a caller holding a slug must not read as
-    # "skill deleted".
-    skill = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
-    if skill is None:
-        log.info(
-            "iframe_context: skill not found uid=%s skill_id=%s session deleted?",
-            user.uid,
-            skill_id,
-        )
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    mcp_config = (skill.skill_metadata.tool_configs or {}).get("mcp") or {}
-    activated_servers = mcp_config.get("servers") or []
-    if server_id not in activated_servers:
-        log.info(
-            "iframe_context: server not in skill activation uid=%s skill_id=%s server=%s",
-            user.uid,
-            skill_id,
-            server_id,
-        )
-        raise HTTPException(
-            status_code=403,
-            detail=f"MCP server '{server_id}' is not activated for this skill",
-        )
-
-    context_write_allowed = mcp_config.get("allow_context_writes") or []
-    if server_id not in context_write_allowed:
-        log.info(
-            "iframe_context: server not in allow_context_writes uid=%s skill_id=%s server=%s",
-            user.uid,
-            skill_id,
-            server_id,
-        )
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"MCP server '{server_id}' is not opted into context writes "
-                f"for this skill (set tool_configs.mcp.allow_context_writes)"
-            ),
-        )
 
 
 def _enforce_size_cap(structured_content: dict[str, Any] | None) -> str:
@@ -220,18 +154,12 @@ async def post_iframe_context(
         )
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Gates 5 + 6: server is activated + opted into context-writes
     root_skill = _enforce_root_interaction(idx, user, request, "allow_surface_context_writes")
-    if root_skill is None:
-        _enforce_skill_allowlists(idx.skill_id, body.server_id, user)
-    else:
-        # The composed Root Agent already intersected the configured MCP
-        # server ceiling with the capability's required server list. The
-        # callback still must name one of those effective servers and cannot
-        # invent a server id merely because the Root interaction flag is on.
-        mcp_config = (root_skill.skill_metadata.tool_configs or {}).get("mcp") or {}
-        if body.server_id not in (mcp_config.get("servers") or []):
-            raise HTTPException(status_code=403, detail="MCP server is not bound to the Root Agent")
+    servers = root_skill.skill_metadata.tool_configs["mcp"]["servers"]
+    if body.server_id not in servers:
+        raise HTTPException(403, "MCP server is not bound to the Root Agent")
+    if not mcp_config_visible_to_tenant(get_document("mcp_servers", body.server_id), ctx.tenant_id):
+        raise HTTPException(403, "MCP server is unavailable")
 
     # Gate 7: size cap
     size_bytes = _enforce_size_cap(body.structured_content)

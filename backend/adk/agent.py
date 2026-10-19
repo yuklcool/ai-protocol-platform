@@ -833,7 +833,7 @@ def create_agent(
     - `sub_agents` recursed from `skill_metadata.sub_skills` (skill IDs
       looked up via `skills.skill_config.get_skill`); cycle-detected via
       the private `_seen` set.
-    - `before_tool_callback` = `make_permission_enforcer(user.email, user.domain)`
+    - `before_tool_callback` validates the current caller's effective policy.
 
     Args:
         _seen: internal. Set of skill IDs already on the current call stack,
@@ -1004,6 +1004,22 @@ def create_agent(
     if accessible_rules:
         _taken_names: set[str] = set()
         for sub, rule in accessible_rules:
+            if (md.tool_configs.get("root_agent") or {}).get("enabled"):
+                from agents.root_runtime import compose_root_skill
+                from auth.capability_access import authorized_root_config
+                from config.platform_config import get_platform_config
+
+                root_policy = authorized_root_config(get_platform_config().agent, user)
+                if sub.skill_id not in root_policy.specialist_agents:
+                    continue
+                # Specialist 可使用独立模型, 工具、MCP 和预算仍受当前 Root 约束。
+                child_policy = root_policy.model_copy(
+                    update={
+                        "model": sub.skill_metadata.model,
+                        "specialist_agents": [],
+                    }
+                )
+                sub = compose_root_skill(sub, child_policy)
             name = _delegate_agent_name(sub, _taken_names)
             if rule.floor == "auto":
                 try:
@@ -1165,7 +1181,12 @@ def create_agent(
     # internal control tool) → the handoff floor policy (v6.10.0; only present
     # when this skill has delegates) → MCP tagger. The policy returns the
     # elicitation envelope for a confirm/cwf transfer, short-circuiting it.
-    _perm_enforcer = make_permission_enforcer(user.email, user.domain)
+    _perm_enforcer = make_permission_enforcer(
+        user.email,
+        user.domain,
+        user=user,
+        root_agent=bool((md.tool_configs.get("root_agent") or {}).get("enabled")),
+    )
     if delegate_map:
         _perm_enforcer = compose_before_tool_callbacks(
             _perm_enforcer,

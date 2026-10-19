@@ -14,7 +14,7 @@ on:
       - frontend/src/components/agent/**
       - frontend/src/app/admin/tenants/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/tool-permissions/**
+      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
       - backend/admin/tenant_root_routes.py
@@ -63,7 +63,7 @@ on:
       - frontend/src/components/agent/**
       - frontend/src/app/admin/tenants/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/tool-permissions/**
+      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
       - backend/admin/tenant_root_routes.py

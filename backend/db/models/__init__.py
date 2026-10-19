@@ -19,7 +19,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from db.models.access import AccessControl, AccessType
 from db.models.buckets import BucketConfig, BucketFolderConfig
-from db.models.group_tags import GroupTag
 from db.models.platform_config import (
     CONVERSATION_PLACEHOLDER,
     PLATFORM_CONFIG_DOC_ID,
@@ -617,7 +616,6 @@ __all__ = [
     "DocSummary",
     "DocumentStatus",
     "EditedBlock",
-    "GroupTag",
     "Message",
     "ParsedDocument",
     "PlatformConfig",

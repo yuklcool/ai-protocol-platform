@@ -287,17 +287,7 @@ steps:
           exit 1
         fi
 
-  # --- Platform-skill seed + MCP-registry gate. Populates the default skills
-  # with ownerId=aitana-platform so every tenant has something to run.
-  # Idempotent (skips already-present names) so re-runs are free. A seed
-  # HICCUP (network, 5xx) stays non-fatal — not worth blocking a good deploy.
-  # But a 200 response whose `mcp_missing` is non-empty FAILS THE BUILD:
-  # it means a SKILL.md declares an MCP server this env's mcp_servers/
-  # registry can't satisfy, and every such skill would hard-500 at agent
-  # build (G42) the moment a user opens it — exactly how web-researcher
-  # broke for the ONE team on test (2026-07-21, issue #14). Fix with
-  # scripts/seed_mcp_servers.py --env <env> [--public-url …] or drop the
-  # declaration. Docs: docs/ops/platform-skills.md
+  # 初始化平台 Skill。MCP 连接由 Root Agent 单独管理，不再检查 Skill 绑定。
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: seed-platform-skills
     waitFor: ['smoke-backend']
@@ -321,30 +311,7 @@ steps:
           "$${URL}/api/admin/seed-platform-skills") || code=000
         body=$(head -c 300 /tmp/seed)
         echo "seed-platform-skills -> $${code} body=$${body}"
-        # MCP-registry gate (issue #14): only evaluated on a successful seed
-        # response — transient seed failures remain non-fatal as before.
-        if [ "$${code}" != "200" ]; then
-          exit 0
-        fi
-        if ! python3 - <<'PYGATE'
-        import json, sys
-        d = json.load(open("/tmp/seed"))
-        for w in d.get("mcp_warnings") or []:
-            print(f"MCP-REGISTRY WARNING: {w}")
-        missing = d.get("mcp_missing") or []
-        if missing:
-            print("MCP-REGISTRY GATE FAILED - this env's mcp_servers/ registry cannot")
-            print("satisfy servers declared in seeded skills; each is a hard-500 skill (G42):")
-            for m in missing:
-                print(f"  MISSING: {m}")
-            sys.exit(1)
-        print("mcp-registry gate: OK")
-        PYGATE
-        then
-          echo "Fix: uv run python scripts/seed_mcp_servers.py --env <env> [--public-url <url>]"
-          echo "  or remove the toolConfigs.mcp.servers declaration from the template."
-          exit 1
-        fi
+
         exit 0
 
 timeout: '1800s'
