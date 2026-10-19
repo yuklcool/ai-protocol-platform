@@ -29,6 +29,7 @@ async function saveComplete(page, token, session, expected) {
 }
 
 test("普通新对话上传、格式解析、取消选择、刷新与会话切换", async ({browser}, info)=>{
+  test.setTimeout(90_000);
   const {context,page,token}=await start(browser); const created=[];
   page.on("response",async response=>{if(response.url().endsWith("/api/documents/upload") && response.ok()) {const row=await response.json();created.push(row.docId);}});
   try {
@@ -39,12 +40,16 @@ test("普通新对话上传、格式解析、取消选择、刷新与会话切�
       {name:"budget.txt",mimeType:"text/plain",buffer:Buffer.from("批次 ALPHA119\n原值 1000；现值 620")},
       ...["sample.pdf","sample.docx","sample.xlsx","sample.pptx"].map(name=>({name,mimeType:"application/octet-stream",buffer:readFileSync(path.join(fixtures,name))})),
     ]);
-    await expect(page.getByText("可用于分析",{exact:true})).toHaveCount(5);
+    await expect(page.getByRole("checkbox",{name:/^取消分析 /})).toHaveCount(5,{timeout:30_000});
     await expect(page).toHaveURL(/session=/);
     const first=new URL(page.url()).searchParams.get("session");
     const names=["budget.txt","sample.pdf","sample.docx","sample.xlsx","sample.pptx"];
     await saveComplete(page,token,first,names.map(filename=>({filename,included:true})));
-    for (const id of created) expect((await api(token,`/api/documents/${id}`)).blocks.length).toBeGreaterThan(0);
+    expect(created).toHaveLength(5);
+    for (const id of created) {
+      const document=await api(token,`/api/documents/${id}`);
+      expect(document.parseStatus).toBe("parsed"); expect(document.blocks.length).toBeGreaterThan(0);
+    }
     await page.getByRole("checkbox",{name:"取消分析 sample.xlsx",exact:true}).click();
     const restored=names.map(filename=>({filename,included:filename!=="sample.xlsx"}));
     await saveComplete(page,token,first,restored);
@@ -58,14 +63,18 @@ test("普通新对话上传、格式解析、取消选择、刷新与会话切�
     await page.goto(`${FRONTEND}/chat/root-agent?session=${second}`);
     await expect(page.locator("textarea").first()).toBeEnabled();
     await expect(page.getByRole("checkbox",{name:/分析 budget.txt/})).toHaveCount(0);
+    await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
     await picker.setInputFiles({name:"broken.pdf",mimeType:"application/pdf",buffer:Buffer.from("not a PDF")});
     await expect(page.getByText("处理失败",{exact:true})).toBeVisible();
     await expect(page.locator("textarea").first()).toBeDisabled();
-    expect((await api(token,`/api/sessions/${second}/documents`)).documents[0].parseStatus).toBe("failed");
+    await expect.poll(async()=>(await api(token,`/api/sessions/${second}/documents`)).documents[0]?.parseStatus).toBe("failed");
     await page.screenshot({path:info.outputPath("chat-file-failure.png"),fullPage:true});
     await page.goto(`${FRONTEND}/chat/root-agent?session=${first}`);
     await saveComplete(page,token,first,restored.filter(row=>row.filename!=="sample.pdf"));
     await page.screenshot({path:info.outputPath("chat-file-restored.png"),fullPage:true});
+  } catch(error) {
+    await page.screenshot({path:info.outputPath("chat-file-error.png"),fullPage:true});
+    throw error;
   } finally {
     await context.close();
     for (const id of created) await api(token,`/api/documents/${id}`,"DELETE");
@@ -91,7 +100,7 @@ test("真实 Provider 从新对话附件中读取未知编号、计算差额并�
       {name:"批次.txt",mimeType:"text/plain",buffer:Buffer.from(`批次编号：${marker}`)},
       {name:"数值.csv",mimeType:"text/csv",buffer:Buffer.from("项目,原值,现值\n费用,1297,817\n")},
     ]);
-    await expect(page.getByText("可用于分析",{exact:true})).toHaveCount(2);
+    await expect(page.getByRole("checkbox",{name:/^取消分析 /})).toHaveCount(2,{timeout:30_000});
     const composer=page.locator("textarea").first(); await expect(composer).toBeEnabled();
     const stream=page.waitForResponse(r=>r.url().endsWith("/api/agent/stream")&&r.request().method()==="POST");
     await composer.fill("请给出附件中的批次编号，计算费用从原值到现值减少了多少，并注明两个文件名及对应行号。"); await composer.press("Enter");
