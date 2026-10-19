@@ -208,3 +208,20 @@ def test_eu_only_deployment_rejects_non_eu_root_even_after_protocol_tests_pass(s
     repo.set_document("model_registry", "model", {"residency": "eu"}, merge=True)
     # Region metadata changes do not alter the wire protocol; the policy guard is evaluated on every application.
     assert client.post(f"{API}/models/model/use").status_code == 200
+
+
+@pytest.mark.parametrize("reference", ["root_override", "tenant_default", "tenant_whitelist"])
+def test_deletion_does_not_orphan_tenant_model_references(stack, reference):
+    client, repo, _ = stack
+    if reference == "root_override":
+        update_platform_config(
+            {"agent": {"model": "lite", "tenantOverrides": {"a": {"model": "model"}}}}, updated_by="test"
+        )
+    else:
+        tenant = TenantDirectory(repo).get("a")
+        tenant.model_policy = (
+            {"defaultModel": "model"} if reference == "tenant_default" else {"allowedModels": ["model"]}
+        )
+        TenantDirectory(repo).put(tenant)
+    assert client.delete(f"{API}/models/model").status_code == 409
+    assert repo.get_document("model_registry", "model") is not None
