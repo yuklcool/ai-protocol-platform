@@ -79,6 +79,14 @@ test("公开首页、登录错误和 OIDC 错误反馈", async ({browser}, info)
       await page.getByTestId("sign-in-button").click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await snapshot(page,info,`${viewport.width}-login`);
+      const dialog=page.getByRole("dialog");
+      await dialog.getByLabel("邮箱",{exact:true}).fill("ui-invalid-login@example.test");
+      await dialog.getByLabel("密码",{exact:true}).fill("invalid-ui-password");
+      await dialog.getByRole("button",{name:"登录",exact:true}).click();
+      await expect(dialog.getByRole("alert")).toBeVisible();
+      await snapshot(page,info,`${viewport.width}-login-error`);
+      await page.keyboard.press("Escape");await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByTestId("sign-in-button")).toBeFocused();
       await page.goto(`${FRONTEND}/auth/oidc/callback?error=access_denied&error_description=登录验收错误`);
       await expect(page.getByRole("alert")).toContainText("登录验收错误");
       await snapshot(page,info,`${viewport.width}-oidc-error`);

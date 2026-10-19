@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { isLocalJwtAuthMode } from "@/lib/localJwtAuth";
@@ -104,7 +105,8 @@ export function SignInButton() {
 
   if (localJwt) {
     return (
-      <>
+      <Dialog.Root open={showLocalLogin} onOpenChange={(open) => { if (!busy) setShowLocalLogin(open); }}>
+        <Dialog.Trigger asChild>
         <button
           type="button"
           onClick={() => {
@@ -113,32 +115,25 @@ export function SignInButton() {
           }}
           data-testid="sign-in-button"
           className={cn(
-            "rounded-md button-primary px-4 py-2 text-sm font-medium ",
+            "button-primary px-4 py-2 text-sm font-medium ",
             "hover:opacity-90",
           )}
         >
           {t("auth.signIn")}
         </button>
 
-        {showLocalLogin && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="local-login-title"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget && !busy) setShowLocalLogin(false);
-            }}
-          >
-            <div className="w-full max-w-sm glass-panel border-border bg-background p-6 shadow-2xl">
+        </Dialog.Trigger>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[101] max-h-[90dvh] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-y-auto glass-panel bg-popover p-6 shadow-xl">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
-                  <h2 id="local-login-title" className="text-lg font-semibold text-foreground">
+                  <Dialog.Title className="text-lg font-semibold text-foreground">
                     {t("auth.signIn")}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  </Dialog.Title>
+                  <Dialog.Description className="mt-1 text-sm text-muted-foreground">
                     {t("auth.localDescription")}
-                  </p>
+                  </Dialog.Description>
                 </div>
                 <button
                   type="button"
@@ -192,17 +187,16 @@ export function SignInButton() {
                   type="submit"
                   disabled={busy || !email || password.length < 12}
                   className={cn(
-                    "w-full rounded-md button-primary px-4 py-2.5 text-sm font-medium ",
+                    "w-full button-primary px-4 py-2.5 text-sm font-medium ",
                     "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
                   )}
                 >
                   {busy ? t("auth.signingIn") : t("auth.signIn")}
                 </button>
               </form>
-            </div>
-          </div>
-        )}
-      </>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     );
   }
 
@@ -214,7 +208,7 @@ export function SignInButton() {
         disabled={busy}
         data-testid="sign-in-button"
         className={cn(
-          "inline-flex items-center gap-2 rounded-md button-primary px-4 py-2 text-sm",
+          "inline-flex items-center gap-2 button-primary px-4 py-2 text-sm",
           "font-medium  hover:opacity-90 disabled:opacity-50",
         )}
       >

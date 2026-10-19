@@ -160,7 +160,8 @@
   .workspace-row > [role="separator"] { display: none; }
   .workspace-row > .chat-files-panel { position: absolute; inset: 0 auto 0 0; z-index: 20; width: min(320px, 90%); background: #fafafe; box-shadow: var(--shadow-overlay); }
   .page-container { padding-left: 16px; padding-right: 16px; }
-  .page-container :is(button, select) { min-height: 40px; }
+  .page-container :is(button, select) { min-height: 44px; }
+  [role="dialog"] :is(input, textarea, select) { font-size: 16px; }
   .page-container :is(input:not([type="checkbox"]):not([type="radio"]), textarea) { font-size: 16px; }
   .composer-form textarea { font-size: 16px; }
   .composer-form > button { min-height: 44px; }
