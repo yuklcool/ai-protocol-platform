@@ -1,34 +1,32 @@
-# Optional OIDC identity provider
+# 可选 OIDC 企业身份认证
 
-The default self-host authentication backend remains `local-jwt`. OIDC is an
-optional enterprise identity source for deployments using Keycloak, Authentik,
-Dex, Entra ID, Okta, or another standards-compliant provider.
+默认自托管使用 `local-jwt`。需要 Keycloak、Authentik、Dex、Entra ID、Okta 等企业身份源时，可选择 OIDC。提供商示例见[OIDC 配置示例](oidc-providers.md)。
 
-## Supported flow
+## 1. 支持能力与边界
 
-The platform supports:
+支持 discovery、JWKS 短期缓存、签名/issuer/audience/时间校验、Authorization Code + PKCE、服务端保存并一次性消费 state/nonce/verifier，以及公开客户端或机密客户端认证。
 
-- OIDC discovery through `/.well-known/openid-configuration`
-- JWKS fetch and short-lived in-process caching
-- issuer, audience, expiry, issued-at and signing-algorithm verification
-- browser Authorization Code + PKCE
-- server-generated and server-stored state, nonce and PKCE verifier
-- one-time state consumption to prevent replay
-- nonce validation on the returned ID token
-- public PKCE clients and optional confidential-client authentication
-- explicit external `issuer + sub` to local user mapping
-- server-authoritative tenant/domain/group roles from PostgreSQL `auth_users`
-- frontend sign-in, callback, session restore and sign-out
-- provider capability/status at `GET /api/auth/provider`
-- unified authenticated requests through the existing `get_current_user` seam
+后端执行 code exchange，浏览器不获取 client secret/PKCE verifier，也不需要直接跨域调用 IdP token endpoint。验证后的 ID token 保存在 `sessionStorage`，到期重新登录，当前没有静默 refresh-token 流程。
 
-The backend performs the code exchange. The browser does not need direct CORS
-access to the identity provider's token endpoint and never receives the PKCE
-verifier or client secret.
+IdP 负责认证，平台 PostgreSQL `auth_users` 负责租户和角色。外部邮箱、`tenant_id`、`groupTags` 或 `role` 声明不会自动创建租户/管理员；必须显式关联 `issuer + sub`。
 
-## Configuration
+## 2. 切换前准备本地授权记录
 
-Set:
+先在 `local-jwt` 模式创建平台用户、租户和授权，记录将关联的邮箱/UID。通过 IdP 获取真实 subject 后关联：
+
+```bash
+cd backend
+uv run python scripts/link_oidc_subject.py \
+  --issuer https://id.example.com/realms/platform \
+  --subject 替换为真实外部sub \
+  --email owner@example.com
+```
+
+命令必须连接正确的持久化数据库；镜像部署可在对应 backend 容器内运行。无映射、账号停用或 UID 变化时认证拒绝。不要临时猜测邮箱归属来绕过映射。
+
+OIDC 模式的账号生命周期由外部 IdP 管理，控制台不会伪装为本地密码管理。切换前准备并验证授权记录，避免切换后没有可登录管理员。
+
+## 3. 环境配置
 
 ```env
 AUTH_BACKEND=oidc
@@ -36,138 +34,26 @@ OIDC_ISSUER=https://id.example.com/realms/platform
 OIDC_CLIENT_ID=ai-protocol-platform
 OIDC_AUDIENCE=ai-protocol-platform
 OIDC_ALLOWED_ALGORITHMS=RS256
-OIDC_REDIRECT_URI=https://platform.example.com/auth/oidc/callback
+OIDC_REDIRECT_URI=https://ai.example.com/auth/oidc/callback
 OIDC_SCOPES=openid profile email
 OIDC_TRANSACTION_TTL_SECONDS=300
-```
-
-`OIDC_AUDIENCE` defaults to `OIDC_CLIENT_ID`. The browser PKCE flow requires
-those values to match because the verified ID token is the browser session
-credential. The default accepted signing algorithm is `RS256`; `none` can never
-be enabled. `OIDC_SCOPES` must include `openid`.
-
-For a public client:
-
-```env
 OIDC_CLIENT_AUTH_METHOD=none
 ```
 
-For a confidential client, use the method required by the provider:
+浏览器 PKCE 用 ID token 作为会话凭证，`OIDC_AUDIENCE` 应与 `OIDC_CLIENT_ID` 一致；省略时默认取 client ID。scopes 包含 `openid`，不允许算法 `none`。
 
-```env
-OIDC_CLIENT_AUTH_METHOD=client_secret_basic
-OIDC_CLIENT_SECRET=replace-with-secret
-```
+机密客户端按 IdP 要求改为 `client_secret_basic` 或 `client_secret_post` 并设置 `OIDC_CLIENT_SECRET`，密钥只留在后端。必要时可用 `OIDC_DISCOVERY_URL` 指定 discovery。
 
-or:
+Compose 用 `up -d` 应用变更；源码前端认证模式属于构建参数，切换时重建前端。发布镜像启动时支持认证模式替换。
 
-```env
-OIDC_CLIENT_AUTH_METHOD=client_secret_post
-OIDC_CLIENT_SECRET=replace-with-secret
-```
+## 4. 登录流程
 
-`OIDC_CLIENT_SECRET` stays server-side and is never returned from
-`/api/auth/provider`.
+浏览器调用 `/api/auth/oidc/start`，后端创建一次性事务并跳转 IdP；IdP 回调 `/auth/oidc/callback`，浏览器把 code/state 交后端。后端消费 state、兑换并校验 ID token，然后通过映射加载 `auth_users` 的可信租户与角色。
 
-## Browser flow
+`GET /api/auth/provider` 返回非秘密配置、能力及可达 discovery 的端点，不返回 client secret。浏览器和后端都必须能访问配置的 issuer；不要混用不同主机名导致 issuer 不匹配。
 
-```text
-Browser
-  |
-  | GET /api/auth/oidc/start
-  v
-FastAPI
-  | generate state + nonce + PKCE verifier
-  | persist one-time transaction in platform Repository
-  v
-OIDC authorization endpoint
-  |
-  | redirect code + state
-  v
-/auth/oidc/callback
-  |
-  | POST code + state to FastAPI
-  v
-FastAPI
-  | consume state once
-  | exchange code + verifier at token endpoint
-  | verify ID token signature / issuer / audience / nonce
-  | resolve issuer + sub mapping
-  | reload tenant/roles from auth_users
-  v
-Browser sessionStorage
-  |
-  | Authorization: Bearer <verified ID token>
-  v
-Existing get_current_user boundary
-```
+## 5. 验收
 
-The callback stores the verified ID token in browser `sessionStorage`, matching
-the existing local-jwt browser-session lifetime model. Closing the tab drops the
-browser session. When the ID token expires, the user signs in again.
+测试真实登录/回调、刷新恢复、过期重新登录、未关联 subject 拒绝、禁用账号拒绝、外部伪造管理员声明不能提升权限。还需验证目标租户资源隔离。
 
-## Link an identity
-
-OIDC does not auto-provision tenant or role data. First create the platform user
-using the normal self-host user administration path, then link the IdP subject:
-
-```bash
-cd backend
-uv run python scripts/link_oidc_subject.py \
-  --issuer https://id.example.com/realms/platform \
-  --subject 8f927a6b-1234-5678-90ab-example \
-  --email owner@example.com
-```
-
-The mapping stores the IdP issuer/subject and the local UID/email. Authentication
-fails closed if the mapping is missing, the local account is disabled, or the
-local UID has changed.
-
-## Authorization boundary
-
-Claims such as these are not trusted for authorization:
-
-```json
-{
-  "tenant_id": "tenant-a",
-  "groupTags": ["aitana-admin"],
-  "role": "admin"
-}
-```
-
-After cryptographic token verification the backend uses only `iss + sub` to
-resolve the explicit mapping, reloads the local `auth_users` row, and builds the
-same provider-neutral `User / AccessContext` used by local-jwt and Firebase.
-
-This means the identity provider authenticates the caller, while PostgreSQL
-remains the authorization source of truth.
-
-## Provider status
-
-```http
-GET /api/auth/provider
-```
-
-The response intentionally contains only non-secret configuration/capabilities.
-When discovery is reachable it reports the authorization, token, logout and JWKS
-endpoints advertised by the provider, along with the configured redirect URI,
-scopes and non-secret client-auth method.
-
-## Remaining #17 work
-
-The generic browser flow is provider-neutral. Issue #17 still remains open until
-the repository also contains provider-specific examples and real compatibility
-acceptance, including a Keycloak example and optional Entra ID / Okta setup
-notes.
-
-
-## Provider-specific examples
-
-See [OIDC provider examples](oidc-providers.md) for:
-
-- the optional real Keycloak Compose/realm example
-- Microsoft Entra ID configuration
-- Okta configuration
-- the real Keycloak compatibility CI gate
-
-Keycloak remains opt-in and is not part of the default Self-host Compose.
+仓库包含真实 Keycloak 兼容工作流；它不自动证明每个 Entra ID/Okta 租户配置已经验收。外部 IdP 配置和目标环境网络需要单独验证。

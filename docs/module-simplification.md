@@ -1,56 +1,25 @@
-# Platform module boundaries
+# 平台模块与配置边界
 
-The product has one Root Agent, one chat/workbench and one protocol runtime.
-Configure model, tools, MCP, knowledge bindings and interaction in `/agent`.
-Manage reusable capability content in `/skills`.
+平台使用一个面向用户的 Root Agent、一个对话/工作台和一条协议运行链路。Root 在 `/agent` 配置，内容能力在 `/skills` 管理，实际使用进入 `/chat/root-agent`。逐步说明见[配置手册](configuration-guide.md)。
 
-## Skill content editor
+## 1. Root 与 Skill
 
-Skill Studio edits only name, description, instructions, references, assets and
-access control. It does not start a second chat or authoring Agent. Test saved
-capabilities in the normal Root Agent chat, with the actual Root bindings and
-tenant policy.
+Root 决定模型、指令、工具、MCP、知识和交互。Skill 编辑器只管理名称、描述、指令、参考资料、资源文件及访问控制；不创建独立的第二个 Agent 或测试聊天。
 
-Saving an existing Skill submits only the edited content fields. Legacy model,
-tool, delegation, persona, welcome, shell and protocol fields stay in storage for
-API compatibility; a content edit does not reset them. They are not independent
-Agent settings. Runtime permission ceilings continue to come from Root and the
-authenticated tenant/user policy.
+修改旧 Skill 内容仅提交内容字段。旧模型、工具、委派、persona、welcome、shell 和协议字段保留存储以兼容 API，但不作为独立 Agent 配置。运行权限仍由 Root、可信租户/用户策略及资源 ACL 限制。
 
-Reference and asset contents are returned by authorized individual Skill reads,
-creation and updates. The list/catalog responses omit those files. Duplicate or
-empty file names are rejected by the editor before saving.
+参考/资源文件通过授权单资源接口读取，目录列表不批量返回文件正文。编辑器拒绝重复/空文件名。
 
-## Removed modules
+## 2. 当前保留能力
 
-- The old Skill switcher and Skills bar, unused split-pane shell, unused budget
-  banner, read-only composer and unreferenced helper modules.
-- Skill-owned model/tool/MCP/A2UI/delegation/persona editors, duplicate test-chat
-  renderer and authoring Copilot/proposal runtime.
-- Hard-coded file-browser fixtures, rich-media showcase and the runtime Markdown
-  workshop renderer. The old Knowledge menu pointed to fixture data; knowledge
-  bindings are configured in Root settings. Document upload/view remains in the
-  real chat/workbench.
-- Unused frontend Cloud Firestore/Storage server SDKs, Radix packages and class
-  variant dependency, plus the seed command whose script did not exist.
+保留 A2UI、AG-UI、MCP/MCP Apps、文档、Session/Memory、认证、租户隔离、模型策略、额度、审计和自托管发布检查。协议诊断页面保留为开发验收入口，不进入普通产品导航。
 
-Old `/agents`, `/agents/:id`, `/skills/new`, fixture and workshop URLs are handled
-by one Next.js redirects table. There are no separate redirect page components.
-Local-mode guidance links to `SELFHOST.md`, which covers durable private hosting
-without requiring GCP.
+知识绑定在 Root 设置中配置，文件上传/查看使用真实工作台能力；没有独立假数据知识库。可选消息通道只在对应凭证启用时加载，普通 Web 部署不初始化 Discord、Telegram、Mailgun 或 Twilio。
 
-## Retained modules
+## 3. 已移除和兼容入口
 
-A2UI, AG-UI, MCP/MCP Apps, document handling, sessions/memory, authentication,
-tenant isolation, model policy, quota, audit and self-host release checks remain.
-The A2UI and MCP diagnostic routes remain available for protocol development and
-acceptance, outside the product navigation. Active protocol/error/cancellation
-tests remain part of the test suite; tests for removed UI modules are removed
-with their implementations.
+移除旧 Skill 切换栏、未使用分栏/预算横幅/只读输入框、Skill 独立模型与工具编辑、重复测试聊天及创作 Copilot、硬编码文件/富媒体演示和未使用依赖。
 
-Optional messaging channels import their adapters only when their existing
-credential environment variables enable them. An ordinary web deployment does
-not initialize Discord, Telegram, Mailgun or Twilio adapters.
+旧 `/agents`、`/agents/:id`、`/skills/new` 及演示/workshop URL 通过统一 Next.js redirects 兼容。旧链接重定向不代表恢复被移除模块。
 
-No data migration or production upgrade is performed by this refactor. Existing
-ADK Session/Memory namespace migration acceptance remains tracked in issue #9.
+本轮模块整理不执行生产迁移；旧 ADK Session/Memory namespace 仍按 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9) 验收。

@@ -1,232 +1,151 @@
 # AI Protocol Platform
 
-Open-source Agent Application Platform built on Google ADK with **Skills + AG-UI + A2UI + MCP + MCP Apps + A2A**.
+基于 Google ADK 的开源智能体应用平台，将 **Root Agent、Skills、AG-UI、A2UI、MCP、MCP Apps 与 A2A** 接入统一运行链路，支持中文界面和私有化部署。
 
-This fork is being evolved toward a production-friendly, self-hostable platform while preserving the upstream protocol architecture. The implementation roadmap and architectural decisions are documented in [HANDOFF.md](./HANDOFF.md).
+平台只有一个面向用户的 Root Agent。模型、工具、MCP、知识和交互行为由 Root Agent 统一配置；Skill 用于复用指令、参考资料和资源文件。用户从普通对话进入，智能体可以调用工具、生成交互表单，并在刷新后恢复会话和界面状态。
 
-## Architecture
+**第一次使用请从[完整中文配置流程](docs/configuration-guide.md)开始。**手册按“部署 → 登录 → 模型 → 租户与账号 → Skill/工具/MCP → 知识 → A2UI → 额度 → 验收”的顺序说明在哪里配置、怎样填写以及如何确认生效。
 
-```text
-Web Frontend (Next.js / React)
-        │
-        │ AG-UI
-        ▼
-FastAPI Backend
-        │
-        ▼
-Google ADK Agent Runtime
-        │
-        ├── Runtime Skills / SKILL.md
-        ├── Native Tools
-        ├── MCP / MCP Apps
-        ├── A2UI
-        └── A2A
-```
+## 功能与入口
 
-## Docker Compose quick start
+| 能力 | 使用方式 |
+| --- | --- |
+| 统一智能体 | 在 `/agent` 配置模型、指令、能力绑定、权限与交互，在 `/chat/root-agent` 对话 |
+| 可复用技能 | 在 `/skills` 管理指令、参考资料、资源文件和访问控制 |
+| 模型接入 | 在 `/admin/model-providers` 注册 OpenAI 兼容网关、模型、价格及路由映射 |
+| 交互式界面 | AG-UI 传递运行事件，A2UI 渲染表单、操作和状态更新 |
+| MCP 与 MCP Apps | 服务管理、健康检查、能力发现、工具调用及独立源沙箱渲染 |
+| 知识检索 | 上传并解析资料，在 Root Agent 中创建、绑定和检索知识来源 |
+| 多租户管理 | 稳定租户 ID、账号与分组、模型策略、工具权限、租户 Agent 覆盖和权限预览 |
+| 持久化与统计 | PostgreSQL 保存业务数据、会话、记忆和用量；持久卷保存文件与 Artifact |
 
-The production-style self-host baseline runs four services:
+## 运行架构
 
-```text
-frontend      :3456
-backend       :1956
-postgres      :5432 (internal by default)
-mcp-sandbox   :3457
-```
+| 层次 | 组件与职责 |
+| --- | --- |
+| 浏览器 | Next.js / React、统一对话与工作台、AG-UI 客户端、A2UI 渲染器 |
+| 应用后端 | FastAPI、身份认证、租户授权、模型/MCP 管理和协议接口 |
+| 智能体运行时 | Google ADK、Root Agent、Skill 指令加载、原生工具、MCP 和 A2A |
+| 数据存储 | PostgreSQL：平台配置、租户、账号、Session、Memory 和账本 |
+| 文件与沙箱 | 持久卷：文件和 Artifact；独立浏览器源：MCP Apps 沙箱 |
 
-### Option A — versioned GHCR images (recommended for deployment)
+默认部署包含 `frontend`、`backend`、`postgres`、`mcp-sandbox` 四个服务，不要求 GCP、Firebase、Redis、MinIO 或 Keycloak。
 
-Tagged releases attach `docker-compose.release.yml` and `default.env.selfhost.example`, so a server can deploy without cloning or building the repository. Save the downloaded environment template as `.env`.
+## 快速部署
 
-Download those two files from the GitHub Release, then:
+以下命令用于**全新安装**。已有部署先阅读[升级、迁移与回滚](docs/configuration-guide.md#12-已有部署升级迁移与回滚)，保留现有配置和数据卷。
+
+### 使用 v1.1.1 发布镜像
+
+需要 Docker Engine、Compose v2，以及到 GHCR 和模型服务的网络连接。
 
 ```bash
-cp default.env.selfhost.example .env
-# edit .env:
-# - pin APP_VERSION to the release tag, e.g. v1.2.3
-# - set JWT_SIGNING_KEY
-# - set SELFHOST_ADMIN_EMAIL / SELFHOST_ADMIN_PASSWORD for first startup
-# - change POSTGRES_PASSWORD + matching DATABASE_URL password
-# - configure at least one model provider
-
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d
+mkdir -p ai-protocol-platform-deploy
+cd ai-protocol-platform-deploy
+release_version=v1.1.1
+curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/docker-compose.release.yml" -o docker-compose.release.yml
+curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/default.env.selfhost.example" -o .env
+chmod 600 .env
+openssl rand -base64 48
 ```
 
-The release publishes backend, frontend and MCP sandbox images to GHCR for `linux/amd64` and `linux/arm64`. See [docs/selfhost-release-images.md](./docs/selfhost-release-images.md) for image tags, reverse-proxy origins, upgrade/rollback, SBOM/provenance and vulnerability-scan details.
+编辑 `.env`，至少完成下表；所有占位内容均应替换：
 
-### Option B — build from source
+| 配置项 | 填写要求 |
+| --- | --- |
+| `APP_VERSION` | 确认为 `v1.1.1`，生产环境使用明确版本 |
+| `JWT_SIGNING_KEY` | 上一步生成的随机密钥，后续重启保持稳定 |
+| `SELFHOST_ADMIN_EMAIL` | 首次启动的平台管理员邮箱 |
+| `SELFHOST_ADMIN_PASSWORD` | 首次管理员密码，至少 12 个字符 |
+| `POSTGRES_PASSWORD` | 设置数据库密码 |
+| `DATABASE_URL` | 与数据库用户、密码、库名一致，容器内主机名为 `postgres` |
+| `OPENAI_API_KEY` | 使用 OpenAI 兼容服务时填写实际密钥；其他提供商见配置手册 |
+| 浏览器源配置 | 本机可用默认值；远程访问按实际前端和沙箱地址设置 |
 
-For development or a custom frontend build:
+```bash
+docker compose -f docker-compose.release.yml config --quiet
+docker compose -f docker-compose.release.yml pull
+docker compose -f docker-compose.release.yml up -d
+docker compose -f docker-compose.release.yml ps
+```
+
+本机打开 `http://localhost:3456`，使用首次管理员账号登录。接着在“模型”中注册 Provider 和模型，执行普通生成与工具调用探测，再到“Root Agent”选择该模型并保存。**容器健康和登录成功不代表模型已经配置完成。**
+
+Release 模板名是 `default.env.selfhost.example`；源码模板名是 `.env.selfhost.example`。详见[版本化镜像部署](docs/selfhost-release-images.md)。
+
+### 从源码构建
 
 ```bash
 git clone https://github.com/yuklcool/ai-protocol-platform.git
 cd ai-protocol-platform
 cp .env.selfhost.example .env
-# configure the same required secrets/provider values
-
+# 配置密钥、管理员、数据库、模型和浏览器源，保存 .env。
+docker compose config --quiet
 docker compose up -d --build
 ```
 
-The Makefile wrapper is:
+日常管理使用 `docker compose ps`、`docker compose logs --tail=100 backend` 和 `docker compose down`。停止服务时不要附加删除数据卷的参数。源码开发模式见[自托管与开发说明](SELFHOST.md)。
 
-```bash
-make docker-up
-```
+## 部署后的配置顺序
 
-Then open:
+1. **模型**：注册 Provider、密钥引用和模型，探测普通生成与工具调用，保存默认模型及 `default/smart/fast` 映射。
+2. **租户与账号**：创建稳定租户 ID，配置模型白名单、额度和账号归属；使用权限预览核对结果。
+3. **能力**：创建 Skill 内容，配置工具权限，注册并发现 MCP 服务。
+4. **Root Agent**：选择模型，绑定已授权的 Skills、Tools、MCP 和知识来源，保存配置。
+5. **交互**：需要表单操作时，同时开启 A2UI、界面上下文写入和操作触发运行。
+6. **额度**：配置租户额度和模型价格，主动启用 Root 预算；Root 会直接使用持久化租户执行器。
+7. **验收**：普通聊天、实际工具调用、MCP App、A2UI 提交、刷新恢复和双租户隔离均通过后开放使用。
 
-```text
-http://localhost:3456
-```
+逐字段示例和排错见[完整中文配置流程](docs/configuration-guide.md)。
 
-Useful source-tree self-host commands:
+## 地址、域名与接口
 
-```bash
-make docker-ps
-make docker-logs
-make selfhost-smoke
-make docker-restart
-make docker-down
-```
+| 用途 | 默认地址或接口 |
+| --- | --- |
+| 前端 | `http://localhost:3456` |
+| Root 对话 | `/chat/root-agent` |
+| 管理入口 | `/admin` |
+| 后端接口文档 | `http://localhost:1956/docs` |
+| 后端健康检查 | `GET /health` |
+| 统一 AG-UI 流 | `POST /api/agent/stream` |
+| 兼容 Skill 流 | `POST /api/skill/{skill_id}/stream` |
+| 当前身份 | `GET /api/auth/whoami` |
+| MCP Apps 沙箱 | `http://localhost:3457/sandbox.html` |
 
-`make docker-down` retains the PostgreSQL and object/artifact named volumes.
+远程部署应将前端和沙箱分别映射到两个浏览器源，例如 `https://ai.example.com` 与 `https://mcp.example.com`，并设置 `ALLOW_ORIGINS`、`MCP_SANDBOX_PUBLIC_URL`、`MCP_SANDBOX_ALLOWED_HOST_ORIGINS`。浏览器中的 `localhost` 不是远程服务器地址。
 
-The Docker self-host baseline deliberately runs `SELF_HOSTED_MODE=1` and `LOCAL_MODE=0`. PostgreSQL persists platform/tenant data, built-in accounts, ADK Session and durable Memory; a backend-mounted Docker Volume persists user objects and ADK Artifacts. Built-in `local-jwt` authentication is the default self-host identity provider. No GCP project, Firebase project, Redis, MinIO or Keycloak is required for the baseline.
+## 版本状态与升级边界
 
-See [SELFHOST.md](./SELFHOST.md) for Linux deployment, persistence, reverse-proxy and security notes.
+v1.1.1 发布基线为 `29688543e0b4c1749210a8be90b0c94a207ca87e`：
 
-## Model providers
+- [正式 Release](https://github.com/yuklcool/ai-protocol-platform/releases/tag/v1.1.1)：三个应用镜像支持 `linux/amd64` 和 `linux/arm64`。
+- [镜像发布验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)：构建、扫描、匿名拉取、全新环境启动和管理员登录成功。
+- [真实 Provider 与协议验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)：真实 MCP 调用、A2UI 操作/刷新恢复及 A/B 租户额度隔离成功。
 
-The self-host path supports OpenAI official, Gemini Developer API, Anthropic and generic OpenAI-compatible gateways. Provider routing is registry-driven rather than based on a model-name prefix.
+上述记录证明发布和受测环境能力。**已有部署的历史 ownership、ADK Session、Memory namespace 迁移与回滚仍由 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9) 跟踪，不能用全新安装成功代替。**
 
-For copyable DeepSeek, Qwen, vLLM and LiteLLM/OneAPI/NewAPI examples, see [docs/selfhost-openai-compatible.md](./docs/selfhost-openai-compatible.md).
+当前 A2UI 支持范围为 **v0.9 + SDK basic catalog**；AG-UI 后端桥接锁定 `ag-ui-adk==0.6.5`、`google-adk==1.31.1`。知识检索为解析文本上的关键词检索，用量费用是估算值。
 
-## Source-development LOCAL_MODE baseline
+## 中文文档导航
 
-For the shortest source-development loop, the platform can still run directly from source in `LOCAL_MODE=1` without Firestore, Firebase Auth, Vertex Session/Memory, GCS or Cloud Trace credentials.
+| 文档 | 内容 |
+| --- | --- |
+| [完整配置流程](docs/configuration-guide.md) | 首次部署到业务可用的操作、参数解释与排错 |
+| [自托管说明](SELFHOST.md) | 部署方式、认证、持久化和日常运维 |
+| [版本化镜像部署](docs/selfhost-release-images.md) | 下载、版本、镜像来源、升级与回滚 |
+| [模型接入](docs/selfhost-openai-compatible.md) | 地址、密钥引用、模型 ID、能力与价格 |
+| [MCP 配置](docs/selfhost-mcp-server.md) | 注册、凭证、健康检查、发现、绑定和验证 |
+| [Root 控制台](docs/root-console-completion.md) | 知识、账号、租户策略、预算和用量边界 |
+| [协议验收](docs/protocol-operation-acceptance.md) | A2UI / AG-UI 操作验收 |
+| [真实 Provider 验收](docs/real-provider-acceptance.md) | 真实模型和 A/B 租户工作流 |
+| [历史归属迁移](docs/tenant-ownership-migration.md) | dry-run、审核、apply、verify 和 rollback |
+| [OIDC 接入](docs/selfhost-oidc.md) | 企业认证与显式账号关联 |
+| [OIDC 示例](docs/oidc-providers.md) | Keycloak、Entra ID 和 Okta |
+| [S3 兼容存储](docs/s3-object-storage.md) | 可选对象存储及 Compose 变量传递 |
+| [模块边界](docs/module-simplification.md) | Root、Skill、管理和协议模块职责 |
 
-### 1. Install dependencies
+历史设计、开发交接与上游记录分别保存在 `docs/design/`、[HANDOFF.md](HANDOFF.md) 和 [UPSTREAM.md](UPSTREAM.md)。实际操作以当前配置文档及对应版本代码为准。
 
-Install the repository prerequisites described in [WORKSHOP.md](./WORKSHOP.md), including Python/`uv`, Node.js/npm and the frontend/backend dependencies.
+## 许可证
 
-### 2. Configure one model provider
-
-Copy the example environment and configure a provider supported by the current registry:
-
-```bash
-cp .env.selfhost.example backend/.env
-```
-
-For example, Gemini Developer API:
-
-```env
-GEMINI_API_KEY=your-key
-```
-
-Or an OpenAI-compatible endpoint:
-
-```env
-OPENAI_API_KEY=your-key-or-gateway-token
-OPENAI_API_BASE=https://your-endpoint.example/v1
-PLATFORM_DEFAULT_MODEL=<registered-model-id>
-```
-
-### 3. Start LOCAL_MODE
-
-```bash
-make dev-local
-```
-
-Expected services:
-
-| Service | URL | Purpose |
-| --- | --- | --- |
-| Frontend | http://localhost:3456 | Next.js / AG-UI / A2UI renderer |
-| Backend | http://localhost:1956 | FastAPI + Google ADK runtime |
-| MCP Apps sandbox | http://localhost:3457 | isolated MCP App rendering |
-
-LOCAL_MODE uses development substitutes for cloud infrastructure but keeps the real protocol/runtime path:
-
-```text
-Next.js -> FastAPI -> Google ADK -> Skill -> Tool/MCP -> AG-UI -> A2UI
-```
-
-### 4. Run the reusable smoke test
-
-With the self-host stack running:
-
-```bash
-make selfhost-smoke
-```
-
-The underlying script verifies the backend health/API surface, frontend reachability and MCP Apps sandbox reachability, and is also exercised by the self-host CI gates.
-
-Automated persistence/auth tests additionally cover PostgreSQL repository state, Session/Memory reconstruction, A2UI replay/state, local ObjectStorage/Artifact persistence, local JWT authentication, real Tenant A/B isolation, real MCP protocol transport and Chromium MCP Apps sandbox rendering.
-
-The remaining final model-dependent acceptance is intentionally not replaced by mocks:
-
-- normal Chat / Runtime Skill against a real configured Provider;
-- real Provider Tool Calling;
-- real model selection and execution of a bound MCP Tool;
-- final Tenant quota / Tool Permission / Model Policy checks on that live model path.
-
-Issue #1 remains the final real-protocol acceptance gate until those Provider-dependent paths have been recorded on an actual deployment.
-
-## Cloud/development mode
-
-The upstream cloud-oriented development flow remains available:
-
-### Backend
-
-```bash
-cd backend
-make install
-make dev
-```
-
-Backend API: http://localhost:1956
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-For the integrated repository launcher, see the root `Makefile` and [WORKSHOP.md](./WORKSHOP.md).
-
-## API reference
-
-- Swagger UI: http://localhost:1956/docs
-- OpenAPI JSON: http://localhost:1956/openapi.json
-- Skill invocation (AG-UI streaming): `POST /api/skill/{skill_id}/stream`
-- LOCAL_MODE status: `GET /api/local-mode-status`
-
-The canonical ADK app name is currently `aitana_platform` (`APP_NAME` in `backend/adk/agui.py`). This is an upstream/internal compatibility identifier; fork branding should not infer routing from filesystem names.
-
-## Roadmap
-
-The self-hosting roadmap is tracked in GitHub Issues and summarized in [HANDOFF.md](./HANDOFF.md):
-
-1. real protocol/browser acceptance gate
-2. provider-driven OpenAI-compatible model routing and live Tool Calling acceptance
-3. Docker Compose one-command deployment
-4. PostgreSQL persistence abstraction
-5. persistent Session/Memory abstraction
-6. local ObjectStorage / optional S3-compatible adapter
-7. built-in JWT / optional OIDC authentication
-8. optionalized GCP-only capabilities
-9. explicit tenant isolation and quotas
-10. model provider configuration center
-11. self-hosted MCP server management
-12. Chinese i18n and configurable branding
-13. GHCR/versioned self-host CI/CD
-14. upstream synchronization strategy
-
-The long-term goal is to add self-hosting adapters rather than delete Google Cloud support, keeping the platform usable in both deployment models.
-
-## License
-
-Apache License 2.0. See [LICENSE](./LICENSE).
+采用 Apache License 2.0，详见 [LICENSE](LICENSE)。

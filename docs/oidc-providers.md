@@ -1,120 +1,73 @@
-# OIDC provider examples
+# OIDC 提供商配置示例
 
-The platform's generic OIDC adapter is provider-neutral. These examples show
-how to point it at common identity providers without changing the default
-`AUTH_BACKEND=local-jwt` self-host profile.
+先阅读[OIDC 接入](selfhost-oidc.md)，创建本地授权账号并关联 `issuer + sub`。外部声明不会自动创建租户或授予管理员权限。
 
-Authorization remains local and server-authoritative: external claims do not
-create tenants, platform admins, or tenant-admin roles. Link each external
-`issuer + sub` to an existing local `auth_users` account.
+## 1. Keycloak 配置
 
-## Keycloak
-
-A development-only Keycloak example is included in:
-
-```text
-docker-compose.keycloak.yml
-examples/oidc/keycloak/realm-export.json
-```
-
-The example pins Keycloak 26.7.4 and imports:
-
-- realm: `ai-protocol-platform`
-- public client: `ai-protocol-platform`
-- Authorization Code + PKCE S256
-- redirect URI: `http://localhost:3456/auth/oidc/callback`
-- demo user: `oidc-admin` / `owner@example.com`
-
-Start only the optional IdP:
+仓库提供开发测试用 `docker-compose.keycloak.yml` 和 `examples/oidc/keycloak/realm-export.json`，镜像固定为 Keycloak 26.7.4。示例导入 realm/client `ai-protocol-platform`，使用公开客户端、Authorization Code + PKCE S256，回调为 `http://localhost:3456/auth/oidc/callback`，示例用户为 `oidc-admin` / `owner@example.com`。
 
 ```bash
 docker compose -f docker-compose.keycloak.yml up -d
 ```
 
-The default application Compose is unchanged; Keycloak is never started unless
-this extra Compose file is explicitly selected.
+这条命令只启动可选 IdP，默认应用 Compose 不自动启动 Keycloak。不要将开发示例账号与配置直接作为生产登录环境。
 
-For a real deployment use HTTPS and a DNS name reachable by both browser and
-backend, then configure:
+真实部署使用浏览器和后端均可达的 HTTPS 域名：
 
 ```env
 AUTH_BACKEND=oidc
 OIDC_ISSUER=https://sso.example.com/realms/ai-protocol-platform
 OIDC_CLIENT_ID=ai-protocol-platform
 OIDC_AUDIENCE=ai-protocol-platform
-OIDC_REDIRECT_URI=https://platform.example.com/auth/oidc/callback
+OIDC_REDIRECT_URI=https://ai.example.com/auth/oidc/callback
 OIDC_SCOPES=openid profile email
 OIDC_CLIENT_AUTH_METHOD=none
 ```
 
-For a confidential Keycloak client, configure a client secret and use
-`client_secret_basic` (preferred when supported) or `client_secret_post`.
+机密客户端按配置改用 `client_secret_basic` 或 `client_secret_post` 并传入后端 secret。
 
-## Microsoft Entra ID
+## 2. Microsoft Entra ID 配置
 
-Create an App Registration with a Web redirect URI matching the platform
-callback. For a single-tenant application use the tenant-specific v2 issuer:
+创建应用注册，配置与平台完全一致的 Web 回调。单组织部署使用租户专属 v2 issuer：
 
 ```env
 AUTH_BACKEND=oidc
-OIDC_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
-OIDC_CLIENT_ID=<application-client-id>
-OIDC_AUDIENCE=<application-client-id>
-OIDC_REDIRECT_URI=https://platform.example.com/auth/oidc/callback
+OIDC_ISSUER=https://login.microsoftonline.com/替换为租户ID/v2.0
+OIDC_CLIENT_ID=替换为应用client-id
+OIDC_AUDIENCE=替换为同一client-id
+OIDC_REDIRECT_URI=https://ai.example.com/auth/oidc/callback
 OIDC_SCOPES=openid profile email
 OIDC_CLIENT_AUTH_METHOD=client_secret_post
-OIDC_CLIENT_SECRET=<secret-reference-value>
+OIDC_CLIENT_SECRET=替换为真实secret
 ```
 
-Use a tenant-specific issuer rather than `common` when the deployment expects
-one enterprise tenant. The platform still maps the verified external `sub` to
-its own local user/tenant record.
+不要在预期单一企业租户时直接使用 `common`。平台仍依据已验证 subject 的显式映射决定本地租户/权限。
 
-## Okta
+## 3. Okta 配置
 
-Create an OIDC Web Application and register the platform callback URL. For an
-Okta custom authorization server, a common issuer form is:
+创建 OIDC Web Application，登记回调；自定义授权服务器示例：
 
 ```env
 AUTH_BACKEND=oidc
-OIDC_ISSUER=https://<your-okta-domain>/oauth2/default
-OIDC_CLIENT_ID=<client-id>
-OIDC_AUDIENCE=<client-id>
-OIDC_REDIRECT_URI=https://platform.example.com/auth/oidc/callback
+OIDC_ISSUER=https://your-okta-domain.example/oauth2/default
+OIDC_CLIENT_ID=替换为client-id
+OIDC_AUDIENCE=替换为同一client-id
+OIDC_REDIRECT_URI=https://ai.example.com/auth/oidc/callback
 OIDC_SCOPES=openid profile email
 OIDC_CLIENT_AUTH_METHOD=client_secret_basic
-OIDC_CLIENT_SECRET=<secret-reference-value>
+OIDC_CLIENT_SECRET=替换为真实secret
 ```
 
-If your Okta authorization server uses a different issuer, copy the exact
-`issuer` value from its discovery document; issuer comparison is exact after
-normalizing only the trailing slash.
+若实际 discovery 的 issuer 不同，以真实值为准；比较只规范化末尾斜杠，不会自动适配其他 issuer。
 
-## Linking users
-
-After the user exists in the platform's local identity store, link the verified
-external subject:
+## 4. 关联和兼容验证
 
 ```bash
 cd backend
 uv run python scripts/link_oidc_subject.py \
   --issuer https://sso.example.com/realms/ai-protocol-platform \
-  --subject <external-sub> \
+  --subject 替换为真实外部sub \
   --email owner@example.com
 ```
 
-The external email claim is not used as an authorization shortcut. A subject
-must be explicitly linked before authentication succeeds.
-
-## Compatibility gate
-
-The repository includes a real Keycloak compatibility workflow:
-
-```text
-.github/workflows/oidc-keycloak-compatibility.yml
-```
-
-It starts Keycloak, imports the example realm, obtains a genuinely signed
-Keycloak ID token, and validates the platform's real discovery, JWKS, issuer,
-audience, signature, subject mapping, and server-authoritative tenant/role
-reload path.
+脚本使用当前数据库配置，应先在副本验证。仓库 `.github/workflows/oidc-keycloak-compatibility.yml` 启动真实 Keycloak，验证签名 ID token、discovery、JWKS、issuer/audience、subject 映射和本地权限重载；其他 IdP 与目标租户仍需实际验收。
