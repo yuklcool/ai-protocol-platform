@@ -2,6 +2,7 @@
 const { test, expect } = require("@playwright/test");
 const { randomUUID } = require("node:crypto");
 const path = require("node:path");
+const { readFileSync } = require("node:fs");
 const { provisionAdminTenant } = require("./selfhost-fixtures");
 const FRONTEND = process.env.PROVIDER_E2E_FRONTEND_URL || "http://localhost:3456";
 const BACKEND = process.env.PROVIDER_E2E_BACKEND_URL || "http://127.0.0.1:1956";
@@ -36,7 +37,7 @@ test("普通新对话上传、格式解析、取消选择、刷新与会话切�
     await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
     await picker.setInputFiles([
       {name:"budget.txt",mimeType:"text/plain",buffer:Buffer.from("批次 ALPHA119\n原值 1000；现值 620")},
-      ...["sample.pdf","sample.docx","sample.xlsx","sample.pptx"].map(name=>path.join(fixtures,name)),
+      ...["sample.pdf","sample.docx","sample.xlsx","sample.pptx"].map(name=>({name,mimeType:"application/octet-stream",buffer:readFileSync(path.join(fixtures,name))})),
     ]);
     await expect(page.getByText("可用于分析",{exact:true})).toHaveCount(5);
     await expect(page).toHaveURL(/session=/);

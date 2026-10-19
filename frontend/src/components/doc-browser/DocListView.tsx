@@ -27,7 +27,7 @@ export function DocListView({ uid, onDocClick }: DocListViewProps) {
   // Stats for active folder
   const activeFolder = folders.find((f) => f.id === activeFolderId) ?? null;
   const parsedCount = documents.filter((d) => d.parseStatus === "parsed").length;
-  const failedCount = documents.filter((d) => d.parseStatus === "failed").length;
+  const failedCount = documents.filter((d) => d.parseStatus === "failed" || d.parseStatus === "pending_ai_extraction").length;
   const docCount = documents.length;
 
   function handleDocClick(doc: ParsedDocument) {

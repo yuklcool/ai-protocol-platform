@@ -44,7 +44,7 @@ describe("对话上传", () => {
     const blocked = vi.fn(); render(<UploadDropZone onBlockingChange={blocked} />); await choose();
     requests[0].responseText = JSON.stringify({docId: "bad", status: "failed", error: "没有文本层", blocksCount: 0});
     act(() => requests[0].onload?.());
-    expect(screen.getByText("没有文本层")).toBeInTheDocument(); expect(blocked).toHaveBeenLastCalledWith(true);
+    expect(screen.getByText("没有文本层")).toBeInTheDocument(); expect(blocked).toHaveBeenLastCalledWith(false);
     request.mockResolvedValueOnce({docId: "bad", parseStatus: "parsed", blockCount: 1});
     await userEvent.click(screen.getByText("重试"));
     await screen.findByText("可用于分析"); expect(blocked).toHaveBeenLastCalledWith(false);

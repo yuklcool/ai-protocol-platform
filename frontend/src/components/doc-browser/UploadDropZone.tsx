@@ -36,7 +36,7 @@ export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, a
   const callbacks = useRef({ onUploadComplete, onBusyChange });
   callbacks.current = { onUploadComplete, onBusyChange };
   useEffect(() => {
-    onBlockingChange?.(jobs.some((job) => job.status === "error"));
+    onBlockingChange?.(jobs.some((job) => job.status === "error" && !job.docId));
     onBusyChange?.(jobs.some((job) => ["queued", "uploading", "processing"].includes(job.status)));
   }, [jobs, onBlockingChange, onBusyChange]);
 

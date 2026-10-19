@@ -1583,7 +1583,7 @@ function ChatShellContent({
       <InContextBadge openTabs={openTabs} includedDocIds={includedDocIds} />
       <UploadDropZone skillId={skillId} scopeKey={effectiveSessionId} attachedCount={openTabs.length} disabled={!attachmentsReady} onUploadComplete={handleUploadedDocOpen} onBusyChange={setUploadBusy} onBlockingChange={setUploadBlocked} />
       {attachmentsSaving && <p role="status" className="text-xs text-muted-foreground">正在保存附件选择…</p>}
-      {attachmentError && <div role="alert" className="text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave}>重试保存</button></div>}
+      {attachmentError && <div role="alert" className="text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave}>重试</button></div>}
       {unreadableAttachments.length > 0 && <p role="alert" className="text-xs text-destructive">{unreadableAttachments.map((tab) => tab.filename).join("、")} 尚不可分析，请等待解析完成、重试或取消选择。</p>}
       <form
         // items-end: as the textarea grows the Send/Stop button stays aligned
