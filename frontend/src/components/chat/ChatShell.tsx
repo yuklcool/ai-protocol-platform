@@ -149,7 +149,7 @@ function ModalSurfaceRegion({ sessionId }: { sessionId: string | null }) {
   if (!state?.surface) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-      <div className="max-w-xl rounded-lg border bg-background p-4 shadow-xl">
+      <div className="max-w-xl glass-panel bg-background p-4 shadow-xl">
         <A2UISurfaceMount surfaceId="modal" sessionId={sessionId} />
       </div>
     </div>
@@ -1588,7 +1588,7 @@ function ChatShellContent({
       <form
         // items-end: as the textarea grows the Send/Stop button stays aligned
         // with the LAST line rather than stretching to the full box height.
-        className="flex items-end gap-2"
+        className="composer-form flex items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           void handleSend();
@@ -1618,7 +1618,7 @@ function ChatShellContent({
               ? translateChat(locale, "shell.messagePlaceholder")
               : translateChat(locale, "shell.connectingPlaceholder")
           }
-          className="max-h-48 flex-1 resize-none overflow-y-auto rounded-md border px-3 py-2 text-sm"
+          className="glass-control max-h-48 min-w-0 flex-1 resize-none overflow-y-auto px-3 py-2 text-sm"
           disabled={inputDisabled}
         />
         {isLoading ? (
@@ -1628,7 +1628,7 @@ function ChatShellContent({
         ) : (
           <button
             type="submit"
-            className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
+            className="button-primary px-3 py-2 text-sm "
             disabled={!draft.trim() || inputDisabled}
           >
             {translateChat(locale, "shell.send")}
@@ -1663,7 +1663,7 @@ function ChatShellContent({
     {/* SkillsBar (top nav) lifted to ShellChrome in ShellRouter so every shell
         mode shares it — see components/shells/ShellChrome.tsx. This shell body
         fills the height remaining below that bar. */}
-    <main className="flex min-h-0 flex-1 flex-col">
+    <main className="chat-shell flex min-h-0 flex-1 flex-col">
       <DocTabsBar
         tabs={openTabs}
         // 2026-06-11: explicitly switch the workbench to the Document
@@ -1686,9 +1686,10 @@ function ChatShellContent({
         onToggleBrowser={toggleDocBrowser}
       />
 
-      <div className="flex min-h-0 flex-1" data-workspace-row>
+      <div className="workspace-row relative flex min-h-0 flex-1" data-workspace-row>
         {showDocBrowser && (
-          <aside className="flex w-64 shrink-0 flex-col overflow-hidden border-r bg-muted/30">
+          <aside className="chat-files-panel flex w-64 shrink-0 flex-col overflow-y-auto border-r bg-card/80" aria-label={translateChat(locale, "shell.yourFiles")} >
+            <button type="button" onClick={toggleDocBrowser} className="button-secondary m-3 px-3 py-2 text-sm md:hidden">{locale.startsWith("zh") ? "关闭文件与历史记录" : "Close files and history"}</button>
             {/* v6.6.0: order the sidebar skill-first. The skill's own
                 affordances (its curated Library + anything the agent streams
                 into the A2UI sidebar surface) sit at the top because they're
@@ -1777,7 +1778,7 @@ function ChatShellContent({
             live, with per-skill sessionStorage persistence. */}
         <div
           className={
-            workbenchVisible ? "flex min-w-0 flex-col" : "flex min-w-0 flex-1 flex-col"
+            workbenchVisible ? "chat-pane flex min-w-0 flex-col" : "chat-pane flex min-w-0 flex-1 flex-col"
           }
           style={
             workbenchVisible
@@ -1861,7 +1862,7 @@ function ChatShellContent({
             formSkillId={skillId}
           />
 
-          <footer className="border-t p-3">{composer}</footer>
+          <footer className="chat-composer border-t p-3 sm:p-4">{composer}</footer>
             </>
           )}
         </div>
@@ -1924,7 +1925,7 @@ function ChatShellContent({
             md:w-[520px]…2xl:w-[760px] breakpoint scale inside Workbench
             since width is now parent-driven. */}
         <div
-          className="relative flex min-w-0 flex-col"
+          className={`workbench-pane relative flex min-w-0 flex-col ${workbenchVisible ? "workbench-pane-visible" : ""}`}
           style={
             workbenchVisible
               ? { flexBasis: `${workspaceRatio * 100}%`, flexGrow: 0, flexShrink: 1 }

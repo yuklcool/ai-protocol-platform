@@ -53,7 +53,7 @@ export function SkillExamplesPicker({
                   type="button"
                   onClick={() => onPickPrompt?.(p.prompt)}
                   title={p.prompt}
-                  className="group flex h-full w-full flex-col gap-1 rounded-lg border border-border bg-background p-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-muted/40 hover:shadow-md focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="group flex h-full w-full flex-col gap-1 glass-panel border-border bg-background p-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-muted/40 hover:shadow-md focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   {p.badge && (
                     <span className="w-fit rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-primary">
@@ -107,7 +107,7 @@ export function SkillExamplesPicker({
             <button
               type="button"
               onClick={() => onPickExample(example)}
-              className="group flex h-full w-full flex-col gap-3 rounded-lg border border-border bg-background p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-muted/40 hover:shadow-md focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="group flex h-full w-full flex-col gap-3 glass-panel border-border bg-background p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-muted/40 hover:shadow-md focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <ExampleThumbnail example={example} locale={locale} />
               <div className="space-y-1">

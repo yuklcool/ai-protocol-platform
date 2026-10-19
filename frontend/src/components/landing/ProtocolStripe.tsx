@@ -39,7 +39,7 @@ export function ProtocolStripe() {
   const hasTechRoute = Boolean(demo.techHref);
 
   return (
-    <section className="border-y border-border bg-muted/20">
+    <section className="bg-white/20">
       <div className="mx-auto w-full max-w-7xl px-6 py-10 md:px-10">
         <div className="mb-6 flex items-end justify-between">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
@@ -54,7 +54,7 @@ export function ProtocolStripe() {
             </Link>
           ) : null}
         </div>
-        <ul className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-6">
+        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {demo.pillars.map((pillar) => {
             const translated = PILLAR_KEYS[pillar.key];
             const label = translated ? t(translated.label) : pillar.label;
@@ -64,7 +64,7 @@ export function ProtocolStripe() {
               : pillar.spec ?? "#";
             const external = !hasTechRoute && Boolean(pillar.spec);
             return (
-              <li key={pillar.key} className="relative bg-background">
+              <li key={pillar.key} className="glass-panel feature-card relative">
                 <Link
                   href={tileHref}
                   target={external ? "_blank" : undefined}
@@ -73,7 +73,7 @@ export function ProtocolStripe() {
                 >
                   <ProtocolIcon
                     pillar={pillar.key as ProtocolIconKey}
-                    className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary"
+                    className="h-8 w-8 rounded-xl bg-primary/10 p-1.5 text-primary"
                   />
                   <span className="text-sm font-semibold tracking-tight text-foreground">
                     {label}

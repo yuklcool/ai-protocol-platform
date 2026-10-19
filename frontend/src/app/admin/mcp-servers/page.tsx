@@ -337,7 +337,7 @@ export default function McpServersPage() {
   if (!isAdmin) return <Centered>{t("state.adminRequired")}</Centered>;
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className="page-container mx-auto max-w-6xl p-6">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t("title")}</h1>
@@ -363,7 +363,7 @@ export default function McpServersPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
-        <section className="rounded-lg border">
+        <section className="glass-panel">
           <div className="border-b px-4 py-3">
             <h2 className="font-medium">{t("registry.title")}</h2>
             <p className="text-xs text-muted-foreground">
@@ -453,7 +453,7 @@ export default function McpServersPage() {
           )}
         </section>
 
-        <section className="rounded-lg border p-4">
+        <section className="glass-panel p-4">
           <h2 className="font-medium">
             {editingId
               ? t("form.editTitle", { id: editingId })
@@ -602,7 +602,7 @@ export default function McpServersPage() {
       </div>
 
       {diagnosticId && (
-        <section className="mt-6 rounded-lg border p-4">
+        <section className="mt-6 glass-panel p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-medium">
@@ -771,7 +771,7 @@ function Field({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="page-container flex min-h-screen items-center justify-center p-8">
       {children}
     </main>
   );

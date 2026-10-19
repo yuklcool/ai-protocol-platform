@@ -16,7 +16,7 @@ export default function SkillsResourcePage() {
   ) => translate(locale, key, params);
   if (loading)
     return (
-      <main className="p-8 text-sm text-muted-foreground">
+      <main className="page-container p-8 text-sm text-muted-foreground">
         {translate(locale, "common.loading")}
       </main>
     );
@@ -36,7 +36,7 @@ function SkillsResourceInner({
 }) {
   const { skills, isLoading, error } = useUserSkills(userId);
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="page-container min-h-full text-foreground">
       <header className="border-b px-5 py-5 sm:px-8">
         <p className="text-xs text-muted-foreground">
           {t("resources.skills.title")}
@@ -52,7 +52,7 @@ function SkillsResourceInner({
           </div>
           <Link
             href="/skills/studio/new"
-            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+            className="button-primary px-3 py-2 text-xs font-medium "
           >
             {t("resources.skills.new")}
           </Link>
@@ -69,12 +69,12 @@ function SkillsResourceInner({
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-32 animate-pulse rounded-lg border bg-muted/40"
+                className="h-32 animate-pulse glass-panel bg-muted/40"
               />
             ))}
           </div>
         ) : skills.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+          <div className="glass-panel border-dashed p-10 text-center text-sm text-muted-foreground">
             {t("resources.skills.empty")}
           </div>
         ) : (
@@ -83,7 +83,7 @@ function SkillsResourceInner({
               <Link
                 key={skill.skillId}
                 href={`/skills/studio/${encodeURIComponent(skill.skillId)}`}
-                className="rounded-lg border bg-card p-4 transition hover:border-primary/60 hover:bg-accent/30"
+                className="glass-panel feature-card relative p-4 transition hover:border-primary/60 hover:bg-accent/30"
               >
                 <div className="flex items-start gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-sm font-semibold">

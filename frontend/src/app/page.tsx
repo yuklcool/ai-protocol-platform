@@ -33,8 +33,8 @@ export default async function HomePage() {
 
   return (
     <HomeGate>
-      <main className="min-h-screen">
-        <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 pt-4 md:px-10">
+      <main className="landing-page min-h-full">
+        <header className="mx-auto flex w-full max-w-7xl items-center justify-between flex-wrap gap-4 px-4 pt-5 sm:px-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={BRANDING.logo.heroAnimated}

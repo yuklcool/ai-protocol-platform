@@ -182,7 +182,7 @@ export default function AdminHub() {
   const areas = AREAS.filter((area) => isPlatform || !area.platformOnly);
 
   return (
-    <main className="mx-auto max-w-4xl p-6">
+    <main className="page-container mx-auto max-w-4xl p-6">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{t("admin.title")}</h1>
@@ -197,7 +197,7 @@ export default function AdminHub() {
       </header>
       <div className="grid gap-4 sm:grid-cols-2">
         {areas.map((area) => (
-          <section key={area.title} className="rounded-lg border p-4">
+          <section key={area.title} className="glass-panel p-4">
             <h2 className="font-medium">{t(area.title)}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {t(area.question)}
@@ -228,7 +228,7 @@ export default function AdminHub() {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
+    <main className="page-container flex min-h-screen items-center justify-center p-8">
       {children}
     </main>
   );

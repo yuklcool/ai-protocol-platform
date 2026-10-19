@@ -200,7 +200,7 @@ function Pattern1Section() {
 export default function A2uiDevPage() {
   return (
     <SurfaceRegistryProvider>
-      <main className="mx-auto max-w-3xl space-y-8 p-8">
+      <main className="page-container mx-auto max-w-3xl space-y-8 p-8">
         <header className="space-y-1">
           <h1 className="text-2xl font-semibold">A2UI fixture playground</h1>
           <p className="text-sm text-muted-foreground">

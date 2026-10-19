@@ -91,9 +91,9 @@ describe("MessageBubble — user variant", () => {
     expect(screen.getByText("Mark")).toBeInTheDocument();
   });
 
-  it("applies primary-theme left border (G34: no hardcoded teal)", () => {
+  it("uses the shared user bubble skin", () => {
     const { container } = render(<MessageBubble message={userMsg()} {...baseProps} />);
-    expect(container.querySelector(".border-primary")).toBeInTheDocument();
+    expect(container.querySelector(".chat-user-bubble")).toBeInTheDocument();
     // Pin the regression: no hardcoded teal class should survive.
     expect(container.querySelector(".border-teal-500")).not.toBeInTheDocument();
     expect(container.querySelector(".from-teal-400")).not.toBeInTheDocument();

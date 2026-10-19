@@ -40,7 +40,7 @@ export default function StudioPage({
 
   if (!STUDIO_ENABLED) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
+      <main className="page-container flex min-h-screen items-center justify-center p-8">
         <p className="text-sm text-muted-foreground">
           {translateSkillStudio(locale, "studio.disabled")}
         </p>
@@ -185,7 +185,7 @@ function StudioInner({ skillId }: { skillId: string }) {
   }
   if (loadError) {
     return (
-      <main className="p-6">
+      <main className="page-container p-6">
         <p className="text-sm text-destructive">{t("studio.loadFailed", { error: loadError })}</p>
       </main>
     );

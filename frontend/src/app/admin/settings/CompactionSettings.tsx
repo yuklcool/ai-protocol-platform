@@ -135,7 +135,7 @@ export function CompactionSettingsSection({
   };
 
   return (
-    <section className="mt-6 rounded-lg border p-4">
+    <section className="mt-6 glass-panel p-4">
       <h2 className="text-base font-semibold">
         {t("会话上下文压缩", "Conversation compaction")}
       </h2>

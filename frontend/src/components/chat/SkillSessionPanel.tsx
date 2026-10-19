@@ -132,7 +132,7 @@ export function SkillSessionPanel({
                   {s.transcript_lost ? (
                     <span
                       data-testid="session-transcript-lost"
-                      className="line-clamp-1 text-[10px] text-amber-600 dark:text-amber-500"
+                      className="line-clamp-1 text-[10px] text-amber-600"
                       title={translateChat(locale, "sessions.transcriptLostTitle")}
                     >
                       {translateChat(locale, "sessions.messagesUnavailable")}

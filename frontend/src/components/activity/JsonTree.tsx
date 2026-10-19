@@ -10,11 +10,11 @@ function JsonPrimitive({ value }: { value: unknown }) {
   if (value === null || value === undefined)
     return <span className="text-muted-foreground/50">null</span>;
   if (typeof value === "string")
-    return <span className="break-all text-emerald-700 dark:text-emerald-400">&quot;{value}&quot;</span>;
+    return <span className="break-all text-emerald-700">&quot;{value}&quot;</span>;
   if (typeof value === "number")
-    return <span className="text-sky-700 dark:text-sky-400">{String(value)}</span>;
+    return <span className="text-sky-700">{String(value)}</span>;
   if (typeof value === "boolean")
-    return <span className="text-purple-700 dark:text-purple-400">{String(value)}</span>;
+    return <span className="text-purple-700">{String(value)}</span>;
   return <span>{String(value)}</span>;
 }
 

@@ -93,7 +93,7 @@ export default function AuditPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-6">
+    <main className="page-container mx-auto max-w-5xl p-6">
       <header className="mb-4">
         <h1 className="text-xl font-semibold">Audit trail</h1>
         <p className="text-sm text-muted-foreground">Every admin change: who, what, when.</p>
@@ -178,5 +178,5 @@ export default function AuditPage() {
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <main className="flex min-h-screen items-center justify-center p-8">{children}</main>;
+  return <main className="page-container flex min-h-screen items-center justify-center p-8">{children}</main>;
 }

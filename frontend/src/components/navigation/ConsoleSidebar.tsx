@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { usePathname } from "next/navigation";
 import {
   Activity,
@@ -15,6 +17,8 @@ import {
   Sparkles,
   UsersRound,
   Wrench,
+  Menu,
+  X,
 } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -59,16 +63,16 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "资源",
     en: "Resources",
     items: [
-      { href: "/skills", zh: "Skills", en: "Skills", icon: Sparkles },
+      { href: "/skills", zh: "技能管理", en: "Skills", icon: Sparkles },
       {
         href: "/admin/mcp-servers",
-        zh: "MCP Servers",
+        zh: "MCP 服务",
         en: "MCP Servers",
         icon: Plug,
       },
       {
         href: "/admin/model-providers",
-        zh: "Models",
+        zh: "模型服务",
         en: "Models",
         icon: Boxes,
       },
@@ -86,8 +90,8 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
       },
       { href: "/admin/users", zh: "用户管理", en: "Users", icon: UsersRound },
       { href: "/admin/groups", zh: "权限组", en: "Groups", icon: ShieldCheck },
-      { href: "/admin/analytics", zh: "Usage", en: "Usage", icon: Activity },
-      { href: "/admin/audit", zh: "Audit", en: "Audit", icon: ScrollText },
+      { href: "/admin/analytics", zh: "用量统计", en: "Usage", icon: Activity },
+      { href: "/admin/audit", zh: "审计日志", en: "Audit", icon: ScrollText },
     ],
   },
 ];
@@ -230,34 +234,40 @@ export function ConsoleMobileNav() {
   const pathname = usePathname() || "/";
   const { locale } = useI18n();
   const isChinese = locale.startsWith("zh");
-  const items = visibleNavigation(scope.isAdmin, scope.isPlatform).flatMap(
-    (group) => group.items,
-  );
+  const [open, setOpen] = useState(false);
+  const groups = visibleNavigation(scope.isAdmin, scope.isPlatform);
   return (
-    <div className="console-mobile-nav no-scrollbar">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={
-              active
-                ? "console-mobile-link console-mobile-link-active"
-                : "console-mobile-link"
-            }
-          >
-            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-            {label(item, isChinese)}
-          </Link>
-        );
-      })}
-      {scope.isPlatform && (
-        <Link href="/admin/settings" className="console-mobile-link">
-          {isChinese ? "平台设置" : "Settings"}
-        </Link>
-      )}
+    <div className="console-mobile-nav">
+      <Dialog.Root open={open} onOpenChange={setOpen}>
+        <Dialog.Trigger asChild>
+          <button type="button" className="button-secondary inline-flex h-10 w-10 items-center justify-center" aria-label={isChinese ? "打开主导航" : "Open navigation"}>
+            <Menu className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </Dialog.Trigger>
+        <Dialog.Portal>
+          <Dialog.Overlay className="console-drawer-overlay" />
+          <Dialog.Content className="console-drawer" aria-describedby={undefined}>
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <Dialog.Title className="text-base font-semibold">{isChinese ? "主导航" : "Navigation"}</Dialog.Title>
+              <Dialog.Close asChild>
+                <button type="button" className="button-secondary inline-flex h-10 w-10 items-center justify-center" aria-label={isChinese ? "关闭主导航" : "Close navigation"}><X className="h-5 w-5" aria-hidden="true" /></button>
+              </Dialog.Close>
+            </div>
+            <nav aria-label={isChinese ? "主导航" : "Primary navigation"} onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setOpen(false); }}>
+              {groups.map((group) => (
+                <div key={group.en} className="console-nav-group">
+                  <p className="console-nav-label">{label(group, isChinese)}</p>
+                  {group.items.map((item) => <NavLink key={item.href} item={item} pathname={pathname} isChinese={isChinese} />)}
+                </div>
+              ))}
+              {scope.isPlatform && <Link href="/admin/settings" className="console-nav-item mt-6"><Settings2 className="h-4 w-4" aria-hidden="true" />{isChinese ? "平台设置" : "Settings"}</Link>}
+            </nav>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      <Link href="/" className="min-w-0 flex-1 truncate text-sm font-semibold">{BRANDING.appName}</Link>
+      <LanguageSwitcher compact />
+      <UserMenu />
     </div>
   );
 }

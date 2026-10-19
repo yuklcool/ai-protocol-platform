@@ -15,7 +15,7 @@ export function SkillStudioShell({ draft, isNew, isDirty, isSaving, onSave, onCa
   const t = (key: Parameters<typeof translateSkillStudio>[1]) => translateSkillStudio(locale, key);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b bg-card px-4 py-3">
+      <header className="app-toolbar flex shrink-0 flex-wrap items-center gap-3 px-4 py-3">
         <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
           <Link href="/skills" className="text-xs text-muted-foreground">{t("studio.agentStudio")}</Link>
@@ -23,7 +23,7 @@ export function SkillStudioShell({ draft, isNew, isDirty, isSaving, onSave, onCa
         </div>
         <span className="hidden text-xs text-muted-foreground sm:inline">{isDirty ? t("studio.unsaved") : t("studio.synced")}</span>
         <button type="button" onClick={onCancel} className="rounded-md border px-3 py-1.5 text-xs">{t("studio.cancel")}</button>
-        <button type="button" onClick={onSave} disabled={!isDirty || isSaving} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50">
+        <button type="button" onClick={onSave} disabled={!isDirty || isSaving} className="inline-flex items-center gap-1.5 button-primary px-3 py-1.5 text-xs disabled:opacity-50">
           <Save className="h-3.5 w-3.5" aria-hidden />{isSaving ? t("studio.saving") : t("studio.save")}
         </button>
       </header>

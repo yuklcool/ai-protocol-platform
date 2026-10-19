@@ -39,7 +39,7 @@ export function ChatPlacementForm({
   return (
     <div
       className={
-        "w-full max-w-2xl overflow-hidden rounded-xl border shadow-sm " +
+        "w-full max-w-2xl overflow-hidden glass-panel shadow-sm " +
         (submitted ? "border-dashed bg-muted/10" : "border-l-2 border-l-primary/60 bg-card")
       }
       data-chat-form={surfaceId}

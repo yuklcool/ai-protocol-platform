@@ -5,6 +5,7 @@ import { ConsoleFrame } from "@/components/navigation/ConsoleFrame";
 import { BRANDING } from "@/lib/branding";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { AppProviders } from "@/providers/AppProviders";
+import "./fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,11 +24,12 @@ const brandThemeStyle = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang={DEFAULT_LOCALE} className="dark">
+    <html lang={DEFAULT_LOCALE}>
       <body
-        className="font-sans bg-background text-foreground h-screen flex flex-col antialiased"
+        className="font-sans text-foreground h-dvh flex flex-col antialiased"
         style={brandThemeStyle}
       >
+        <div className="app-backdrop" aria-hidden="true"><span /><span /><span /></div>
         <AppProviders>
           <LocalModeBanner />
           <div className="flex min-h-0 flex-1 flex-col">

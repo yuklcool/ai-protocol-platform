@@ -18,7 +18,7 @@ export function StudioBuilderForm({ draft, setDraft, isNew }: {
   const control = "w-full rounded-md border bg-background px-3 py-2 text-sm";
   return (
     <form className="space-y-6" onSubmit={(event) => event.preventDefault()}>
-      <p className="rounded-lg border bg-card/30 p-4 text-sm leading-6 text-muted-foreground">
+      <p className="glass-panel bg-card/30 p-4 text-sm leading-6 text-muted-foreground">
         {t("studio.capabilityNotice")} <Link href="/agent" className="text-primary underline">{t("studio.rootSettings")}</Link>
       </p>
       <section className="space-y-4">
@@ -27,13 +27,13 @@ export function StudioBuilderForm({ draft, setDraft, isNew }: {
         <Field label={t("builder.description")}><input value={draft.description} onChange={(event) => set({ description: event.target.value })} className={control} /></Field>
         <Field label={t("builder.instructions")}><textarea value={draft.instructions} onChange={(event) => set({ instructions: event.target.value })} rows={14} className={`${control} font-mono`} /></Field>
       </section>
-      <details className="rounded-lg border p-4">
+      <details className="glass-panel p-4">
         <summary className="cursor-pointer text-sm font-medium">{t("builder.files")}</summary>
         <p className="mt-2 text-xs text-muted-foreground">{t("builder.filesHint")}</p>
         <FilesEditor label={t("builder.references")} files={draft.references} onChange={(references) => set({ references })} />
         <FilesEditor label={t("builder.assets")} files={draft.assets} onChange={(assets) => set({ assets })} />
       </details>
-      <section className="rounded-lg border p-4">
+      <section className="glass-panel p-4">
         <AccessControlEditor value={draft.accessControl} onChange={(accessControl) => set({ accessControl })} />
       </section>
     </form>

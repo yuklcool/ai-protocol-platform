@@ -345,7 +345,7 @@ export function ActivityPanel({
             {runError && (
               <li
                 data-testid="activity-error-row"
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-red-600 dark:text-red-400"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-red-600"
               >
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
                 <span className="min-w-0 flex-1 break-words">{runError}</span>

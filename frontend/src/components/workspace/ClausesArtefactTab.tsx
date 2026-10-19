@@ -18,9 +18,9 @@ interface Clause {
 
 function confidenceStyle(c: string): string {
   const v = c.toLowerCase();
-  if (v === "high") return "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300";
-  if (v === "medium" || v === "med") return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
-  if (v === "low") return "bg-rose-500/12 text-rose-700 dark:text-rose-300";
+  if (v === "high") return "bg-emerald-500/12 text-emerald-700";
+  if (v === "medium" || v === "med") return "bg-amber-500/15 text-amber-700";
+  if (v === "low") return "bg-rose-500/12 text-rose-700";
   return "bg-muted text-muted-foreground";
 }
 

@@ -180,7 +180,7 @@ export function DrawerChatPane({
           ) : (
             <button
               type="submit"
-              className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
+              className="button-primary px-3 py-2 text-sm "
               disabled={!draft.trim()}
             >
               Send

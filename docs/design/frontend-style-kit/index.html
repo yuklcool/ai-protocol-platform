@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Generative UI · 页面风格提取</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    h1, h2, h3, p { margin: 0; }
+    a { color: inherit; }
+    .preview-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 33.333%); align-items: start; }
+    .preview-main { min-width: 0; }
+    .preview-header { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+    .preview-title { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 16px; }
+    .preview-label { padding: 5px 12px; color: #383b99; background: rgba(159,143,239,0.2); border-radius: 999px; font-size: 12px; font-weight: 500; }
+    .preview-intro { font-size: 18px; }
+    .preview-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .preview-tab-content { display: inline-flex; align-items: center; gap: 8px; }
+    .preview-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+    .preview-tab-content .preview-icon { width: 16px; height: 16px; }
+    .preview-card { display: flex; flex-direction: column; align-items: start; gap: 12px; min-width: 0; }
+    .preview-card .protocol-card-icon { margin: 0 0 4px; }
+    .preview-card h2 { font-size: 18px; line-height: 1.5; font-weight: 600; }
+    .preview-card p { font-size: 14px; color: var(--color-text-secondary); }
+    .preview-card .style-row { gap: 8px; margin-top: auto; padding-top: 4px; }
+    .preview-card .prompt-pill { padding: 10px 14px; font-size: 12px; text-decoration: none; }
+    .preview-section { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 24px; }
+    .preview-section h2 { font-size: 20px; font-weight: 600; }
+    .preview-palette { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .preview-swatch { overflow: hidden; border-radius: 12px; background: var(--color-glass); border: 1px solid var(--color-border-glass); }
+    .preview-swatch-color { height: 48px; background: var(--swatch); }
+    .preview-swatch-text { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; padding: 10px 12px; font-size: 12px; }
+    .preview-swatch-text code { color: var(--color-text-secondary); }
+    .preview-notes { font-size: 14px; color: var(--color-text-secondary); }
+    .preview-sidebar { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; height: 100vh; background: rgba(255,255,255,0.96); border-left: 1px solid var(--color-border-glass); }
+    .preview-sidebar-header { flex: 0 0 auto; padding: 20px 24px; text-align: center; border-bottom: 1px solid var(--color-border-light); font-size: 16px; font-weight: 500; }
+    .preview-sidebar-body { display: flex; flex-direction: column; gap: 28px; padding: 32px; overflow-y: auto; }
+    .preview-bubble { align-self: end; max-width: 90%; padding: 12px 16px; border-radius: 20px; background: #f5f5f5; color: #3f4a60; font-size: 14px; }
+    .preview-answer { display: flex; flex-direction: column; gap: 16px; color: #3f4a60; font-size: 14px; }
+    .preview-recipe { display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .preview-recipe-title { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); font-weight: 600; }
+    .preview-code { margin: 0; padding: 16px; overflow-x: auto; border-radius: 12px; background: var(--color-surface-light); color: #57575b; font-size: 12px; line-height: 1.8; }
+    .preview-sidebar-footer { margin-top: auto; padding: 20px 32px; border-top: 1px solid var(--color-border-light); font-size: 12px; color: var(--color-text-tertiary); }
+    .preview-sidebar-footer a { display: block; margin-bottom: 12px; text-align: center; text-decoration: none; }
+    .preview-footer { padding-block: 8px 16px; text-align: center; font-size: 12px; color: var(--color-text-secondary); }
+    @media (max-width: 767px) {
+      .preview-layout { grid-template-columns: minmax(0, 1fr); }
+      .preview-sidebar { position: relative; height: auto; border-top: 1px solid var(--color-border-light); border-left: 0; }
+      .preview-sidebar-body, .preview-sidebar-footer { padding: 24px 16px; }
+      .preview-intro { font-size: 16px; }
+      .preview-palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .preview-tabs { gap: 4px; }
+      .preview-tabs .protocol-tab { padding: 10px 12px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="icon-static" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 9h6v6H9z"></path></symbol>
+    <symbol id="icon-mcp" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 16v5"></path></symbol>
+    <symbol id="icon-a2ui" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></symbol>
+    <symbol id="icon-open" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5"></path></symbol>
+  </svg>
+  <div class="style-page">
+    <div class="abstract-bg" aria-hidden="true"><div class="blob-3"></div></div>
+    <div class="preview-layout">
+      <main class="preview-main">
+        <div class="style-container style-stack">
+          <header class="preview-header">
+            <div class="preview-title">
+              <h1 class="style-heading"><span class="text-gradient">Generative UI</span> Style</h1>
+              <span class="preview-label">页面风格提取</span>
+            </div>
+            <p class="style-copy preview-intro">保留原页面的柔和配色、玻璃层次与轻盈交互。</p>
+            <div class="style-row">
+              <a class="style-primary" href="#tokens">查看配色 ↗</a>
+              <a class="style-secondary" href="README.md" target="_blank" rel="noopener">风格说明 ↗</a>
+            </div>
+          </header>
+          <nav class="preview-tabs" aria-label="界面分类示例">
+            <button class="protocol-tab active" type="button" data-mode="static" aria-pressed="true"><span class="preview-tab-content"><svg class="preview-icon" aria-hidden="true"><use href="#icon-static"></use></svg>Static + MCP Apps</span></button>
+            <button class="protocol-tab" type="button" data-mode="a2ui" aria-pressed="false"><span class="preview-tab-content"><svg class="preview-icon" aria-hidden="true"><use href="#icon-a2ui"></use></svg>A2UI</span></button>
+            <button class="protocol-tab" type="button" data-mode="open" aria-pressed="false"><span class="preview-tab-content"><svg class="preview-icon" aria-hidden="true"><use href="#icon-open"></use></svg>Open Generative UI</span></button>
+          </nav>
+          <section class="style-grid" aria-label="原页面卡片样式">
+            <article class="protocol-card preview-card">
+              <div class="protocol-card-icon static"><svg class="preview-icon" aria-hidden="true"><use href="#icon-static"></use></svg></div>
+              <h2>Static GenUI</h2><p>用轻薄的半透明表面承载内容，搭配清晰的标题与灰色说明。</p>
+              <div class="style-row"><a class="prompt-pill" href="#components">Glass Card</a><a class="prompt-pill" href="#tokens">Soft Surface</a></div>
+            </article>
+            <article class="protocol-card preview-card">
+              <div class="protocol-card-icon mcp"><svg class="preview-icon" aria-hidden="true"><use href="#icon-mcp"></use></svg></div>
+              <h2>MCP Apps</h2><p>48px 渐变图标块，配合 16px 圆角，让不同功能有各自的识别色。</p>
+              <div class="style-row"><a class="prompt-pill" href="#tokens">Lilac</a><a class="prompt-pill" href="#tokens">Mint</a></div>
+            </article>
+            <article class="protocol-card preview-card">
+              <div class="protocol-card-icon a2ui"><svg class="preview-icon" aria-hidden="true"><use href="#icon-a2ui"></use></svg></div>
+              <h2>A2UI</h2><p>悬停时卡片上移 4px，顶部浮现一条从淡紫到薄荷绿的细线。</p>
+              <div class="style-row"><a class="prompt-pill" href="#components">Hover</a><a class="prompt-pill" href="#components">Prompt Pill</a></div>
+            </article>
+            <article class="protocol-card preview-card">
+              <div class="protocol-card-icon opengenui"><svg class="preview-icon" aria-hidden="true"><use href="#icon-open"></use></svg></div>
+              <h2>Open Generative UI</h2><p>背景光斑缓慢漂移；文字、留白与内容始终保持稳定。</p>
+              <div class="style-row"><a class="prompt-pill" href="#components">Motion</a><a class="prompt-pill" href="#tokens">Typography</a></div>
+            </article>
+          </section>
+          <section class="preview-section" id="components" aria-labelledby="components-title">
+            <h2 id="components-title">原页面的组件配方</h2>
+            <div class="style-scroll">
+              <table class="comparison-table">
+                <thead><tr><th scope="col">组件</th><th scope="col">视觉参数</th><th scope="col">使用位置</th></tr></thead>
+                <tbody>
+                  <tr><td class="text-gradient">Glass Card</td><td>白色 70% · blur 12px · 圆角 16px</td><td>信息卡片、内容容器</td></tr>
+                  <tr><td class="text-gradient">Prompt Pill</td><td>白色 50% · 圆角 24px · 字号 14px</td><td>快捷操作、示例入口</td></tr>
+                  <tr><td class="text-gradient">Active Tab</td><td>纯白底 · 圆角 12px · 轻阴影</td><td>模式与分类切换</td></tr>
+                  <tr><td class="text-gradient">Primary Action</td><td>#9F8FEF → #7DD3C0 · 胶囊形</td><td>页面主要操作</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="preview-section" id="tokens" aria-labelledby="tokens-title">
+            <h2 id="tokens-title">淡紫与薄荷绿，落在浅灰底上</h2>
+            <div class="preview-palette">
+              <div class="preview-swatch"><div class="preview-swatch-color" style="--swatch:#bec2ff"></div><div class="preview-swatch-text"><span>Lilac</span><code class="style-code">#BEC2FF</code></div></div>
+              <div class="preview-swatch"><div class="preview-swatch-color" style="--swatch:#85e0ce"></div><div class="preview-swatch-text"><span>Mint</span><code class="style-code">#85E0CE</code></div></div>
+              <div class="preview-swatch"><div class="preview-swatch-color" style="--swatch:#f7f7f9"></div><div class="preview-swatch-text"><span>Surface Light</span><code class="style-code">#F7F7F9</code></div></div>
+              <div class="preview-swatch"><div class="preview-swatch-color" style="--swatch:#dedee9"></div><div class="preview-swatch-text"><span>Surface</span><code class="style-code">#DEDEE9</code></div></div>
+              <div class="preview-swatch"><div class="preview-swatch-color" style="--swatch:#010507"></div><div class="preview-swatch-text"><span>Text Primary</span><code class="style-code">#010507</code></div></div>
+              <div class="preview-swatch"><div class="preview-swatch-color" style="--swatch:#57575b"></div><div class="preview-swatch-text"><span>Text Secondary</span><code class="style-code">#57575B</code></div></div>
+            </div>
+            <p class="preview-notes">Google Sans · 正文 16px / 1.6 · 卡片间距 24px · 4px 基础间距。中文使用系统字体回退。</p>
+          </section>
+          <footer class="preview-footer">提取自 CopilotKit Generative UI Playground · 浅色主题 · 离线预览</footer>
+        </div>
+      </main>
+      <aside class="preview-sidebar" aria-label="风格参考侧栏">
+        <div class="preview-sidebar-header">Style reference</div>
+        <div class="preview-sidebar-body">
+          <div class="preview-bubble">我想复用这个前端的页面风格。</div>
+          <div class="preview-answer">
+            <p>先铺一层浅灰，再用淡紫和薄荷绿的柔焦光斑提供氛围。内容落在半透明白色面板上，靠留白、字重与轻阴影建立层级。</p>
+            <div class="preview-recipe">
+              <div class="preview-recipe-title"><svg class="preview-icon" aria-hidden="true"><use href="#icon-a2ui"></use></svg>Soft glass / 柔和玻璃</div>
+              <p id="mode-description" aria-live="polite">Static + MCP：蓝色与紫色图标区分入口，容器保持统一。</p>
+              <pre class="preview-code style-code"><code>background: rgba(255,255,255,.7);
+backdrop-filter: blur(12px);
+border: 1px solid
+  rgba(255,255,255,.3);
+border-radius: 16px;</code></pre>
+            </div>
+            <p>原版标题的渐变色更深：<span class="text-gradient">#9599CC → #1B936F</span>。按钮使用另一组渐变，复用时注意区分。</p>
+          </div>
+        </div>
+        <div class="preview-sidebar-footer">
+          <a class="prompt-pill" href="STYLE_PROMPT.md" target="_blank" rel="noopener">打开可复用的设计提示词 ↗</a>
+          <p>本页展示样式与控件状态，不连接模型或业务服务。</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <script>
+    const descriptions = {
+      static: "Static + MCP：蓝色与紫色图标区分入口，容器保持统一。",
+      a2ui: "A2UI：琥珀色图标标识类别，主要色彩仍来自背景的淡紫与薄荷绿。",
+      open: "Open Generative UI：绿色图标标识类别，卡片、胶囊与排版复用同一套样式。"
+    };
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-mode]").forEach((item) => {
+          const selected = item === button;
+          item.classList.toggle("active", selected);
+          item.setAttribute("aria-pressed", String(selected));
+        });
+        document.getElementById("mode-description").textContent = descriptions[button.dataset.mode];
+      });
+    });
+  </script>
+</body>
+</html>

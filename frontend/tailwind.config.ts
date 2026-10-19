@@ -2,7 +2,6 @@ import type { Config } from "tailwindcss"
 import tailwindcssAnimate from "tailwindcss-animate"
 
 const config = {
-  darkMode: ['class'],
   content: [
     './src/**/*.{ts,tsx}',
   ],
@@ -16,7 +15,7 @@ const config = {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'Geist', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'system-ui', 'sans-serif'],
+        sans: ['Google Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'system-ui', 'sans-serif'],
         serif: ['Crimson Pro', 'Georgia', 'serif'],
       },
       colors: {

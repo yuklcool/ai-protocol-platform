@@ -26,7 +26,7 @@ import {
 } from "@/lib/modelSetup";
 
 const fieldClass =
-  "mt-1 w-full min-w-0 rounded-md border bg-background px-3 py-2 text-sm";
+  "glass-control mt-1 w-full min-w-0 px-3 py-2 text-sm";
 const buttonClass =
   "rounded-md border px-3 py-2 text-sm hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50";
 const serviceDefault = {
@@ -387,7 +387,7 @@ export default function ModelProvidersPage() {
     current?.residency_policy === "eu-strict" &&
     activeModel?.residency !== "eu";
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+    <main className="page-container mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">模型接入</h1>
@@ -412,7 +412,7 @@ export default function ModelProvidersPage() {
         </div>
       </header>
       {loadError ? (
-        <div role="alert" className="rounded-lg border border-destructive p-4">
+        <div role="alert" className="glass-panel border-destructive p-4">
           {loadError}{" "}
           <button
             className={buttonClass}
@@ -427,7 +427,7 @@ export default function ModelProvidersPage() {
         <>
           <section
             aria-label="当前模型"
-            className="break-words rounded-lg border bg-muted/20 p-4 text-sm"
+            className="break-words glass-panel bg-muted/20 p-4 text-sm"
           >
             <p>
               平台 Root 默认模型：
@@ -450,19 +450,19 @@ export default function ModelProvidersPage() {
             </Link>
           </section>
           {!registry?.writable && (
-            <p role="alert" className="rounded-lg border p-4 text-sm">
+            <p role="alert" className="glass-panel p-4 text-sm">
               当前由配置文件管理模型。使用数据库管理模式后才能在此新增、编辑与应用模型。
             </p>
           )}
           {notice && (
-            <p role="status" className="rounded-lg border p-3 text-sm">
+            <p role="status" className="glass-panel p-3 text-sm">
               {notice}
             </p>
           )}
           {failure && (
             <p
               role="alert"
-              className="rounded-lg border border-destructive p-3 text-sm text-destructive"
+              className="glass-panel border-destructive p-3 text-sm text-destructive"
             >
               {failure}
             </p>
@@ -470,7 +470,7 @@ export default function ModelProvidersPage() {
           {view ? (
             <section
               aria-label="模型配置流程"
-              className="mx-auto max-w-3xl rounded-xl border p-4 sm:p-6"
+              className="mx-auto max-w-3xl glass-panel p-4 sm:p-6"
             >
               <div className="mb-5 flex items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">
@@ -568,7 +568,7 @@ export default function ModelProvidersPage() {
                   </details>
                   <button
                     disabled={busy}
-                    className={`${buttonClass} bg-primary text-primary-foreground`}
+                    className={`${buttonClass} button-primary`}
                     type="submit"
                   >
                     {busy
@@ -586,7 +586,7 @@ export default function ModelProvidersPage() {
                   <p className="break-all text-sm text-muted-foreground">
                     所属服务：{activeProvider?.name || providerId}
                   </p>
-                  <div className="rounded-lg border p-3">
+                  <div className="glass-panel p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm">从服务读取模型</p>
                       <button
@@ -809,7 +809,7 @@ export default function ModelProvidersPage() {
                   </details>
                   <button
                     type="submit"
-                    className={`${buttonClass} bg-primary text-primary-foreground`}
+                    className={`${buttonClass} button-primary`}
                     disabled={busy}
                   >
                     {busy ? "正在保存…" : "保存并测试"}
@@ -890,7 +890,7 @@ export default function ModelProvidersPage() {
                     (current.tenant_allowed ? (
                       <Link
                         href="/chat/root-agent"
-                        className="inline-block rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+                        className="inline-block button-primary px-4 py-2 text-sm "
                       >
                         开始对话
                       </Link>
@@ -911,7 +911,7 @@ export default function ModelProvidersPage() {
           ) : (
             <>
               {providers.length === 0 ? (
-                <section className="rounded-xl border border-dashed p-8 text-center">
+                <section className="glass-panel border-dashed p-8 text-center">
                   <h2 className="font-medium">先添加一个模型服务</h2>
                   <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
                     准备 API
@@ -923,7 +923,7 @@ export default function ModelProvidersPage() {
                 providers.map((provider) => (
                   <section
                     key={provider.provider_id}
-                    className="rounded-xl border p-4 sm:p-5"
+                    className="glass-panel p-4 sm:p-5"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1050,7 +1050,7 @@ export default function ModelProvidersPage() {
                   </section>
                 ))
               )}
-              <details className="rounded-lg border p-4">
+              <details className="glass-panel p-4">
                 <summary className="cursor-pointer font-medium">
                   高级：多模型路由
                 </summary>
@@ -1185,7 +1185,7 @@ function ProbeCard({
   running: boolean;
 }) {
   return (
-    <section className="rounded-lg border p-4">
+    <section className="glass-panel p-4">
       <h3 className="font-medium">
         {title}：
         {running

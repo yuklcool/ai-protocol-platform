@@ -26,11 +26,12 @@ export function DocTabsBar({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="flex items-stretch border-b bg-muted/30">
+    <div className="app-toolbar flex min-h-10 items-stretch">
       {/* Browser toggle */}
       <button
         type="button"
         onClick={onToggleBrowser}
+        aria-expanded={showBrowser}
         className={[
           "flex shrink-0 items-center border-r px-2.5 text-muted-foreground hover:bg-accent hover:text-foreground",
           showBrowser ? "bg-accent/50 text-foreground" : "",

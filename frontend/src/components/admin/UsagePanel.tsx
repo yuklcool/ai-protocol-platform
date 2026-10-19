@@ -79,7 +79,7 @@ export function UsagePanel() {
   const cost = (value: number) => `$${value.toFixed(6)}`;
   const totals = data?.totals;
   return (
-    <section className="mb-6 space-y-4 rounded-lg border p-4">
+    <section className="mb-6 space-y-4 glass-panel p-4">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="mr-auto text-base font-semibold">
           {t("用量与额度", "Usage and budgets")}

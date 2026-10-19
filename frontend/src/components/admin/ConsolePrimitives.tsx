@@ -13,9 +13,9 @@ import { useI18n } from "@/contexts/I18nContext";
 import { fetchWithAuth } from "@/lib/apiClient";
 
 export const control =
-  "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring disabled:opacity-50";
+  "glass-control w-full px-3 py-2 text-sm disabled:opacity-50";
 export const action =
-  "rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50";
+  "button-secondary px-3 py-2 text-sm disabled:opacity-50";
 export function useConsoleCopy() {
   const { locale } = useI18n();
   return useCallback(
@@ -68,7 +68,7 @@ export function Notice({ children }: { children: ReactNode }) {
   return children ? (
     <p
       role="status"
-      className="rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap"
+      className="glass-panel bg-muted/30 p-3 text-sm whitespace-pre-wrap"
     >
       {children}
     </p>
