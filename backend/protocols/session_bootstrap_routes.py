@@ -53,6 +53,13 @@ async def bootstrap_session(
             raise HTTPException(status_code=403, detail="Session owned by another user")
         return BootstrapResponse(session_id=session_id, created=False)
 
+    from tools.documents.access import DocumentUnavailable, validate_selection
+
+    try:
+        validate_selection(body.document_ids, user_id=user.uid, tenant_id=ctx.tenant_id)
+    except DocumentUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     try:
         create_session_index(
             session_id=session_id,

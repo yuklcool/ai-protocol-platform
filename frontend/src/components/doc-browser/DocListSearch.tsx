@@ -21,7 +21,7 @@ export function DocListSearch({ value, onChange }: DocListSearchProps) {
       </svg>
       <input
         type="search"
-        placeholder="Search documents…"
+        placeholder="搜索文件…"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-md border bg-background py-1.5 pl-7 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"

@@ -192,3 +192,7 @@ describe("ChatShell — fresh-session landing (6.11)", () => {
     expect(await screen.findByText("hello there")).toBeTruthy();
   });
 });
+
+vi.mock("@/hooks/useSessionAttachments", () => ({
+  useSessionAttachments: () => ({ tabs: [], setTabs: vi.fn(), ready: true, saving: false, error: null, retrySave: vi.fn() }),
+}));

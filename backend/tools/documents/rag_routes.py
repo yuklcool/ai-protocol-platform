@@ -13,13 +13,15 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from adk.callbacks import _RAG_DOCUMENTS_ENABLED
 from auth import User, get_current_user
+
+_RAG_DOCUMENTS_ENABLED = os.environ.get("RAG_DOCUMENTS_ENABLED", "").lower() in ("1", "true")
 
 log = logging.getLogger(__name__)
 

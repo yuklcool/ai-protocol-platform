@@ -18,15 +18,6 @@ _USER = User(uid="user123", email="test@example.com", domain="example.com")
 # --- Plain-text parse path (v6.14.0): .txt no longer strands on "Parsing…" ---
 
 
-def test_is_plain_text_routes_txt_not_pdf():
-    from tools.documents.upload import _is_plain_text
-
-    assert _is_plain_text("gs://b/notes.txt")
-    assert _is_plain_text("gs://b/server.LOG")
-    assert not _is_plain_text("gs://b/contract.pdf")
-    assert not _is_plain_text("gs://b/deck.docx")
-
-
 @pytest.mark.asyncio
 async def test_run_parse_txt_emits_paragraph_blocks_and_parsed_status():
     from tools.documents.upload import _run_parse
@@ -90,8 +81,8 @@ class TestUploadEndpoint:
             "/api/documents/upload",
             files={"file": ("script.exe", io.BytesIO(b"binary"), "application/octet-stream")},
         )
-        assert resp.status_code == 400
-        assert "not supported" in resp.json()["detail"]
+        assert resp.status_code == 415
+        assert "暂不支持" in resp.json()["detail"]
 
     def test_docx_upload_success(self, upload_client):
         fake_blocks = [{"type": "paragraph", "text": "Hello"}]
@@ -121,7 +112,7 @@ class TestUploadEndpoint:
         fake_blocks = [{"type": "heading", "text": "Intro"}, {"type": "paragraph", "text": "Body"}]
         stored: dict = {}
 
-        def capture_set(collection, doc_id, doc):
+        def capture_set(collection, doc_id, doc, **kwargs):
             stored.update(doc)
 
         with (
@@ -144,7 +135,7 @@ class TestUploadEndpoint:
         """Failed parse should store [] not the parsed blocks (there are none)."""
         stored: dict = {}
 
-        def capture_set(collection, doc_id, doc):
+        def capture_set(collection, doc_id, doc, **kwargs):
             stored.update(doc)
 
         with (
@@ -180,7 +171,7 @@ class TestUploadEndpoint:
         assert resp.status_code == 200
         assert resp.json()["status"] == "failed"
 
-    def test_unparseable_format_gets_pending_ai_extraction_status(self, upload_client):
+    def test_corrupt_pdf_returns_terminal_failed_status(self, upload_client):
         """When AILANG can't parse a format at all, the upload returns the
         pending_ai_extraction status so the frontend / agent can surface the
         in-progress state. PDFs USED to take this path because PDF was excluded
@@ -205,7 +196,7 @@ class TestUploadEndpoint:
             )
 
         assert resp.status_code == 200
-        assert resp.json()["status"] == "pending_ai_extraction"
+        assert resp.json()["status"] == "failed"
 
     def test_bucket_comes_from_resolve_documents_bucket(self, upload_client):
         with (
@@ -221,80 +212,17 @@ class TestUploadEndpoint:
         assert response.status_code == 200
         storage.assert_called_once_with("client-specific-bucket")
 
-    def test_reupload_same_filename_reuses_doc_id(self, upload_client):
-        """Re-uploading the same filename in the same folder must reuse the existing doc_id."""
-        existing_doc_id = "existing-doc-abc"
-        stored_ids: list[str] = []
+    def test_same_filename_creates_independent_resources(self, upload_client):
+        from contextlib import ExitStack
 
-        def capture_set(collection, doc_id, doc):
-            stored_ids.append(doc_id)
-
-        with (
-            patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch(
-                "tools.documents.upload.GcsObjectStorage.put_fileobj",
-                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
-            ),
-            patch(
-                "tools.documents.upload._run_parse_fileobj",
-                return_value=("parsed", [{"type": "paragraph", "text": "v2"}], 10, None),
-            ),
-            patch("tools.documents.upload.set_document", side_effect=capture_set),
-            patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
-            patch("tools.documents.upload.folders_db.update_folder_counts"),
-            patch(
-                "tools.documents.upload.query_documents",
-                return_value=[{"__id": existing_doc_id, "originalFilename": "report.docx"}],
-            ),
-        ):
-            resp = upload_client.post("/api/documents/upload", files=_file())
-
-        assert resp.status_code == 200
-        assert all(sid == existing_doc_id for sid in stored_ids), f"Expected {existing_doc_id}, got {stored_ids}"
-
-    def test_reupload_does_not_increment_folder_count(self, upload_client):
-        """Folder counts must not change when overwriting an existing document."""
-        count_calls: list = []
-
-        with (
-            patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch(
-                "tools.documents.upload.GcsObjectStorage.put_fileobj",
-                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
-            ),
-            patch(
-                "tools.documents.upload._run_parse_fileobj",
-                return_value=("parsed", [{"type": "paragraph", "text": "v2"}], 10, None),
-            ),
-            patch("tools.documents.upload.set_document"),
-            patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
-            patch("tools.documents.upload.folders_db.update_folder_counts", side_effect=count_calls.append),
-            patch(
-                "tools.documents.upload.query_documents",
-                return_value=[{"__id": "existing-id", "originalFilename": "report.docx"}],
-            ),
-        ):
-            upload_client.post("/api/documents/upload", files=_file())
-
-        assert count_calls == [], "update_folder_counts must not be called on overwrite"
-
-    def test_new_upload_does_create_fresh_doc_id(self, upload_client):
-        """When no existing doc matches, a new UUID must be generated."""
-        stored_ids: list[str] = []
-
-        with (
-            patch("tools.documents.upload.resolve_documents_bucket", return_value="test-bucket"),
-            patch(
-                "tools.documents.upload.GcsObjectStorage.put_fileobj",
-                return_value=SimpleNamespace(uri="gs://test-bucket/object"),
-            ),
-            patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 0, None)),
-            patch("tools.documents.upload.set_document", side_effect=lambda _c, doc_id, _d: stored_ids.append(doc_id)),
-            patch("tools.documents.upload.folders_db.ensure_default_folder", return_value="f1"),
-            patch("tools.documents.upload.folders_db.update_folder_counts"),
-            patch("tools.documents.upload.query_documents", return_value=[]),
-        ):
-            upload_client.post("/api/documents/upload", files=_file())
-
-        assert len(stored_ids) > 0
-        assert stored_ids[0] != "existing-id"
+        patches = _common_patches()
+        with ExitStack() as stack:
+            mocks = [stack.enter_context(item) for item in patches]
+            first = upload_client.post("/api/documents/upload", files=_file()).json()
+            second = upload_client.post("/api/documents/upload", files=_file()).json()
+        assert first["docId"] != second["docId"]
+        assert first["storagePath"] != second["storagePath"]
+        assert first["docId"] in first["storagePath"]
+        assert second["docId"] in second["storagePath"]
+        assert mocks[-1].call_count == 2
+        assert all(call.kwargs["doc_delta"] == 1 for call in mocks[-1].call_args_list)

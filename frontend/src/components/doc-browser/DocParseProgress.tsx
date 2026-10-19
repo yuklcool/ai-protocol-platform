@@ -18,7 +18,7 @@ export function DocParseProgress({ parsedCount, failedCount, docCount }: DocPars
         <>
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">
-              Parsing: {parsedCount} / {docCount - failedCount} complete
+              解析进度： {parsedCount} / {docCount - failedCount} 已完成
             </span>
             <span className="text-[10px] font-medium text-foreground">{pct}%</span>
           </div>
@@ -32,7 +32,7 @@ export function DocParseProgress({ parsedCount, failedCount, docCount }: DocPars
       )}
       {failedCount > 0 && (
         <p className="text-[10px] text-destructive">
-          {failedCount} file{failedCount !== 1 ? "s" : ""} failed to parse — hover for details
+          {failedCount} 个文件解析失败，请查看错误详情
         </p>
       )}
     </div>

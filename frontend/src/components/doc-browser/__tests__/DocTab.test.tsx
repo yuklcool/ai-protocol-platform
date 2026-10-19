@@ -38,13 +38,13 @@ describe("DocTab", () => {
 
   it("calls onClose with tab id when × button clicked", async () => {
     const { props } = renderTab({ isActive: true });
-    await userEvent.click(screen.getByLabelText(/close report\.docx/i));
+    await userEvent.click(screen.getByLabelText(/移除 report\.docx/i));
     expect(props.onClose).toHaveBeenCalledWith("doc1");
   });
 
   it("close click does not also fire onSelect", async () => {
     const { props } = renderTab({ isActive: true });
-    await userEvent.click(screen.getByLabelText(/close report\.docx/i));
+    await userEvent.click(screen.getByLabelText(/移除 report\.docx/i));
     expect(props.onSelect).not.toHaveBeenCalled();
     expect(props.onClose).toHaveBeenCalledWith("doc1");
   });

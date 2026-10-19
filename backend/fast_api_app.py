@@ -416,6 +416,9 @@ app.include_router(models_router)
 app.include_router(tools_router)
 app.include_router(sessions_router)
 app.include_router(session_bootstrap_router)
+from protocols.session_document_routes import router as session_documents_router  # noqa: E402
+
+app.include_router(session_documents_router)
 app.include_router(mcp_proxy_router)
 app.include_router(iframe_context_router)
 app.include_router(a2ui_surface_action_router)
@@ -576,44 +579,19 @@ class _StreamSkillRequest(BaseModel):
         return ""
 
 
-def _extract_document_ids(body: "_StreamSkillRequest") -> list[str] | None:
-    """Pull the per-turn document_ids list from the wire body.
+def _extract_document_ids(body: "_StreamSkillRequest") -> list[str]:
+    """只读取本轮明确选择;空列表清空附件,不读取客户端回传的历史 state。"""
+    forwarded = body.forwardedProps or {}
+    value = forwarded["document_ids"] if "document_ids" in forwarded else body.documentIds
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(ref, str) or not ref.strip() for ref in value):
+        raise HTTPException(status_code=422, detail="附件列表必须包含有效的文件编号。")
+    from tools.documents.parsing import MAX_DOCUMENTS
 
-    Priority (multi-doc-context-fix.md / 1.22 Phase 2):
-      1. ``forwardedProps.document_ids`` — the AG-UI HttpAgent path the
-         chat page uses; this is the FRESH per-turn signal derived from
-         the user's currently-ticked tabs.
-      2. ``documentIds`` (top-level) — the simple/CLI/test wire format.
-      3. ``state.document_ids`` — legacy fallback. AG-UI's HttpAgent
-         mirrors backend STATE_SNAPSHOT events into ``agent.state`` and
-         round-trips that state on every subsequent ``runAgent`` call;
-         after turn N, the client sends turn N's state back on turn
-         N+1. That makes ``state.document_ids`` ONE TURN BEHIND, so
-         we read it last as a fallback only.
-
-    Earlier order (state ahead of forwardedProps) caused the Bug-2026-04-28
-    multi-doc regression: user opened doc 2 mid-session; backend kept
-    seeing only doc 1's id because state had `[doc1]` from the prior
-    turn's STATE_SNAPSHOT and forwardedProps was never consulted.
-    See backend.log line ``WARNING:adk.callbacks:doc loader: turn start
-    — document_ids=['6ecff3e0...']`` and the corresponding frontend
-    console line showing ``includedDocIds= ["6ecff3e0...", "41ea1884...",
-    "e222aa3d..."]`` — three ids out, one in.
-
-    Returns None when no list is present so the loader treats the turn as
-    "no docs attached" rather than "empty selection".
-    """
-    candidates = (
-        (body.forwardedProps or {}).get("document_ids"),
-        body.documentIds,
-        (body.state or {}).get("document_ids"),
-    )
-    for value in candidates:
-        if isinstance(value, list) and value:
-            cleaned = [str(d) for d in value if d]
-            if cleaned:
-                return cleaned
-    return None
+    if len(value) > MAX_DOCUMENTS:
+        raise HTTPException(status_code=422, detail=f"每轮最多选择 {MAX_DOCUMENTS} 个文件。")
+    return list(dict.fromkeys(value))
 
 
 def _extract_a2ui_surface_state(body: "_StreamSkillRequest") -> dict | None:
@@ -634,21 +612,6 @@ def _extract_a2ui_surface_state(body: "_StreamSkillRequest") -> dict | None:
     if isinstance(raw, dict) and raw:
         return raw
     return None
-
-
-def _extract_resumed_flag(body: "_StreamSkillRequest") -> bool:
-    """True when the frontend signalled this chat was entered by clicking a
-    conversation thread from the per-document Conversations panel.
-
-    Read from forwardedProps.resumed_session (the AG-UI HttpAgent path) or
-    state.resumed_session (custom state path). Triggers eager doc injection
-    in the agent's first LLM request — see make_document_injector.
-    """
-    candidates = (
-        (body.state or {}).get("resumed_session"),
-        (body.forwardedProps or {}).get("resumed_session"),
-    )
-    return any(bool(v) for v in candidates)
 
 
 from observability.timing import (  # noqa: E402
@@ -723,16 +686,22 @@ async def stream_skill(
             is_read_only = not access.is_owner(existing)
 
     extracted_doc_ids = _extract_document_ids(body) if not is_read_only else None
-    extracted_resumed = _extract_resumed_flag(body) if not is_read_only else False
+    if not is_read_only:
+        from tools.documents.access import DocumentUnavailable, validate_selection
+
+        try:
+            extracted_doc_ids = validate_selection(
+                extracted_doc_ids or [], user_id=user.uid, tenant_id=access.tenant_id
+            )
+        except DocumentUnavailable as exc:
+            raise HTTPException(status_code=409, detail={"code": "DOCUMENT_UNAVAILABLE", "message": str(exc)}) from exc
     extracted_surface_state = _extract_a2ui_surface_state(body) if not is_read_only else None
     _log.info(
-        "stream_skill: skill=%s session=%s read_only=%s document_ids=%s resumed=%s "
-        "wire_locations=(top:%s, state:%s, fwd:%s)",
+        "stream_skill: skill=%s session=%s read_only=%s document_ids=%s wire_locations=(top:%s, state:%s, fwd:%s)",
         skill_id,
         session_id,
         is_read_only,
         extracted_doc_ids,
-        extracted_resumed,
         body.documentIds,
         (body.state or {}).get("document_ids"),
         (body.forwardedProps or {}).get("document_ids"),
@@ -751,7 +720,6 @@ async def stream_skill(
         message=body.effective_message if not is_read_only else "",
         attachments=body.attachments if not is_read_only else None,
         document_ids=extracted_doc_ids,
-        resumed_session=extracted_resumed,
         a2ui_surface_state=extracted_surface_state,
         runtime_skill=runtime_skill,
         session_agent_id=session_agent_id,

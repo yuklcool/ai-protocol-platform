@@ -6,10 +6,10 @@ interface DocumentFooterProps {
 
 export function DocumentFooter({ summary }: DocumentFooterProps) {
   const stats = [
-    { label: "blocks", value: summary.totalBlocks },
-    { label: "tables", value: summary.tables },
-    { label: "images", value: summary.images },
-    { label: "changes", value: summary.changes },
+    { label: "内容块", value: summary.totalBlocks },
+    { label: "表格", value: summary.tables },
+    { label: "图片", value: summary.images },
+    { label: "修改", value: summary.changes },
   ].filter((s) => s.value > 0);
 
   if (stats.length === 0) return null;

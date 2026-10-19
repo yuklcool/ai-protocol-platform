@@ -45,9 +45,10 @@ function PreviewBody({ source }: { source: DocThumbnailSource }) {
 }
 
 function DocPreviewBody({ docId }: { docId: string }) {
-  const { doc } = useDocument(docId);
+  const { doc, error } = useDocument(docId);
   const fmt = (doc?.sourceFormat ?? "").toLowerCase();
 
+  if (error) return <Frame><p className="p-3 text-xs text-destructive">{error}</p></Frame>;
   if (!doc) {
     return (
       <Frame>

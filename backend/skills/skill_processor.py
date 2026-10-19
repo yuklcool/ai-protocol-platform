@@ -85,7 +85,6 @@ async def process_skill_request(
     message: str,
     attachments: list[dict[str, Any]] | None = None,
     document_ids: list[str] | None = None,
-    resumed_session: bool = False,
     a2ui_surface_state: dict[str, Any] | None = None,
     runtime_skill: SkillConfig | None = None,
     session_agent_id: str = "aitana_platform",
@@ -160,6 +159,16 @@ async def process_skill_request(
             }
             return
 
+    from observability.tenant_context import set_tenant_context
+    from tools.documents.access import DocumentUnavailable, validate_selection
+
+    set_tenant_context(user)
+    try:
+        document_ids = validate_selection(list(document_ids or []), user_id=user.uid, tenant_id=access.tenant_id)
+    except DocumentUnavailable as exc:
+        yield {"type": "RUN_ERROR", "code": "DOCUMENT_UNAVAILABLE", "message": str(exc)}
+        return
+
     _ensure_session_index(
         thread_id,
         skill_id,
@@ -211,10 +220,7 @@ async def process_skill_request(
         "a2ui_action_trigger": None,
         "a2ui_surface_state": a2ui_surface_state or {},
     }
-    if document_ids:
-        initial_state["document_ids"] = list(document_ids)
-    if resumed_session:
-        initial_state["app:resumed_session"] = True
+    initial_state["document_ids"] = list(document_ids or [])
     run_input = RunAgentInput(
         threadId=thread_id,
         runId=f"run-{uuid.uuid4().hex[:8]}",
@@ -303,11 +309,11 @@ def _ensure_session_index(
     tenant context as defense in depth.
     """
     from db.chat_sessions import (
-        add_session_documents,
         clear_provisional,
         create_session_index,
         get_session_index,
         owner_domain_of,
+        set_session_documents,
         set_session_skill,
     )
 
@@ -367,11 +373,7 @@ def _ensure_session_index(
         except Exception as exc:
             logger.warning("session-index skill-follow update failed for %s: %s", thread_id, exc)
 
-    if docs:
-        try:
-            add_session_documents(thread_id, docs)
-        except Exception as exc:
-            logger.warning("synchronous documentIds union failed for %s: %s", thread_id, exc)
+    set_session_documents(thread_id, docs)
 
 
 def _derive_initial_access_control(document_id: str | None):

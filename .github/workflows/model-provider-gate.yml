@@ -10,6 +10,16 @@ on:
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
+      - frontend/e2e/chat-files-live.spec.js
+      - frontend/src/components/chat/ChatShell.tsx
+      - frontend/src/components/doc-browser/**
+      - frontend/src/components/document/**
+      - frontend/src/hooks/useSessionAttachments.ts
+      - frontend/src/hooks/useDocument.ts
+      - frontend/src/hooks/useDocBrowser.ts
+      - backend/tools/documents/**
+      - backend/protocols/session_document_routes.py
+      - backend/tests/fixtures/documents/**
       - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
@@ -60,6 +70,16 @@ on:
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
+      - frontend/e2e/chat-files-live.spec.js
+      - frontend/src/components/chat/ChatShell.tsx
+      - frontend/src/components/doc-browser/**
+      - frontend/src/components/document/**
+      - frontend/src/hooks/useSessionAttachments.ts
+      - frontend/src/hooks/useDocument.ts
+      - frontend/src/hooks/useDocBrowser.ts
+      - backend/tools/documents/**
+      - backend/protocols/session_document_routes.py
+      - backend/tests/fixtures/documents/**
       - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
@@ -188,6 +208,7 @@ jobs:
         run: |
           node --check frontend/e2e/model-provider-studio-live.spec.js
           node --check frontend/e2e/root-console-live.spec.js
+          node --check frontend/e2e/chat-files-live.spec.js
 
       - name: Validate Compose model
         run: docker compose config --quiet
@@ -222,7 +243,7 @@ jobs:
           MODEL_STUDIO_E2E_RUN_ID: studio-${{ github.run_id }}
           MODEL_STUDIO_FRONTEND_URL: http://localhost:3456
           MODEL_STUDIO_BACKEND_URL: http://127.0.0.1:1956
-        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js --reporter=line --workers=1
+        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/chat-files-live.spec.js --reporter=line --workers=1
 
       - name: Preserve console and Skill screenshots
         if: always()

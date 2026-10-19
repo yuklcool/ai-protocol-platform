@@ -97,17 +97,17 @@ export function DrawerChatPane({
   const handleAction = useCallback(
     (event: { actionName: string; context: Record<string, unknown> }) => {
       void sendMessage(`[a2ui:${event.actionName}] ${JSON.stringify(event.context)}`, {
-        resumedSession: enteredViaResume,
+
       });
     },
-    [sendMessage, enteredViaResume],
+    [sendMessage],
   );
 
   async function handleSend() {
     const text = draft.trim();
     if (!text || isLoading || error) return;
     setDraft("");
-    await sendMessage(text, { resumedSession: enteredViaResume });
+    await sendMessage(text);
   }
 
   return (

@@ -3,13 +3,14 @@
 import { useState } from "react";
 import type { ParsedDocument, ParseStatus } from "@/hooks/useDocBrowser";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { documentRequest, notifyDocumentsChanged } from "@/lib/documents";
 import { DocumentPreview } from "@/components/document/DocumentPreview";
 
 const STATUS_DOT: Record<ParseStatus, { color: string; title: string }> = {
-  parsed: { color: "bg-emerald-500", title: "Parsed" },
-  pending: { color: "bg-amber-400 animate-pulse", title: "Pending" },
-  pending_ai_extraction: { color: "bg-sky-400 animate-pulse", title: "Extracting" },
-  failed: { color: "bg-destructive", title: "Failed" },
+  parsed: { color: "bg-emerald-500", title: "可分析" },
+  pending: { color: "bg-amber-400 animate-pulse", title: "解析中" },
+  pending_ai_extraction: { color: "bg-sky-400 animate-pulse", title: "需重新解析" },
+  failed: { color: "bg-destructive", title: "处理失败" },
 };
 
 const FORMAT_COLORS: Record<string, string> = {
@@ -41,14 +42,14 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
   const errorMsg = doc.parseStatus === "failed" && doc.parseError
     ? doc.parseError
     : doc.parseStatus === "failed"
-    ? "Parse failed — content unavailable"
+    ? "解析失败，内容不可用"
     : null;
 
   // Show retry for failed docs, and for "parsed" docs with no blocks (uploaded
   // before the pipeline stored blocks in Firestore). a2uiComponents is an
   // optional render layer written by a separate pipeline, not a content signal.
   const needsReparse =
-    doc.parseStatus === "failed" ||
+    doc.parseStatus === "failed" || doc.parseStatus === "pending_ai_extraction" ||
     (doc.parseStatus === "parsed" && !doc.blockCount);
 
   async function handleReparse(e: React.MouseEvent) {
@@ -56,16 +57,11 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
     setReparsing(true);
     setReparseError(null);
     try {
-      const res = await fetchWithAuth(`/api/proxy/api/documents/${doc.id}/reparse`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setReparseError((body as { detail?: string }).detail ?? `Error ${res.status}`);
-      }
-      // On success: Firestore real-time listener updates parseStatus automatically.
-    } catch {
-      setReparseError("Network error — try again");
+      const result = await documentRequest<{ parseStatus: string; parseError?: string }>(`/documents/${encodeURIComponent(doc.id)}/reparse`, { method: "POST" });
+      if (result.parseStatus !== "parsed") setReparseError(result.parseError || "文件仍不可读取，请重新导出后上传。");
+      notifyDocumentsChanged();
+    } catch (failure) {
+      setReparseError((failure as Error).message);
     } finally {
       setReparsing(false);
     }
@@ -76,10 +72,11 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
     if (!confirmDelete) { setConfirmDelete(true); return; }
     setDeleting(true);
     try {
-      await fetchWithAuth(`/api/proxy/api/documents/${doc.id}`, { method: "DELETE" });
-      // Firestore real-time listener removes the item automatically.
+      const result = await fetchWithAuth(`/api/proxy/api/documents/${encodeURIComponent(doc.id)}`, { method: "DELETE" });
+      if (!result.ok) throw new Error("删除失败，请重试。");
+      notifyDocumentsChanged();
     } catch {
-      setReparseError("Delete failed — try again");
+      setReparseError("删除失败，请重试");
     } finally {
       setDeleting(false);
       setConfirmDelete(false);
@@ -117,7 +114,7 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
           type="button"
           onClick={handleDelete}
           disabled={deleting}
-          title={confirmDelete ? "Click again to confirm delete" : "Delete document"}
+          title={confirmDelete ? "再次点击确认删除" : "删除文件"}
           className={`shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 transition-opacity disabled:opacity-50 ${
             confirmDelete
               ? "text-destructive hover:bg-destructive/10"
@@ -147,7 +144,7 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
           )}
           {!errorMsg && needsReparse && (
             <p className="flex-1 text-[10px] text-muted-foreground leading-tight">
-              No content — re-parse to load
+              没有可读内容，请重新解析
             </p>
           )}
           {needsReparse && (
@@ -157,7 +154,7 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
               disabled={reparsing}
               className="shrink-0 rounded border border-destructive/40 px-1.5 py-0.5 text-[10px] text-destructive hover:bg-destructive/10 disabled:opacity-50"
             >
-              {reparsing ? "…" : "Retry"}
+              {reparsing ? "…" : "重试解析"}
             </button>
           )}
         </div>
