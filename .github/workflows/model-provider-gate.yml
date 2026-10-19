@@ -248,12 +248,12 @@ jobs:
           MODEL_STUDIO_BACKEND_URL: http://127.0.0.1:1956
         run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/model-setup-live.spec.js --reporter=line --workers=1
 
-      - name: Preserve console and Skill screenshots
+      - name: Preserve model Root and Skill browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: skill-content-editor-${{ github.run_id }}
-          path: frontend/test-results/**/*.png
+          name: model-root-skill-${{ github.run_id }}
+          path: frontend/test-results/
           if-no-files-found: ignore
           retention-days: 7
 

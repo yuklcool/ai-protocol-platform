@@ -28,7 +28,7 @@ import {
 const fieldClass =
   "mt-1 w-full min-w-0 rounded-md border bg-background px-3 py-2 text-sm";
 const buttonClass =
-  "rounded-md border px-3 py-2 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-md border px-3 py-2 text-sm hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50";
 const serviceDefault = {
   name: "",
   base_url: "",
@@ -383,6 +383,9 @@ export default function ModelProvidersPage() {
       </Message>
     );
   const ready = activeModel?.readiness.ready === true;
+  const regionBlocked =
+    current?.residency_policy === "eu-strict" &&
+    activeModel?.residency !== "eu";
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -424,7 +427,7 @@ export default function ModelProvidersPage() {
         <>
           <section
             aria-label="当前模型"
-            className="rounded-lg border bg-muted/20 p-4 text-sm"
+            className="break-words rounded-lg border bg-muted/20 p-4 text-sm"
           >
             <p>
               平台 Root 默认模型：
@@ -815,9 +818,17 @@ export default function ModelProvidersPage() {
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    同一份当前配置通过两项测试后，可用于平台 Root。记录保留 24
-                    小时；修改地址、密钥、模型名称或调用参数后需要重测。
+                    同一份当前配置通过两项测试后，可用于平台 Root。结果在 24
+                    小时内有效；修改地址、密钥、模型名称或调用参数后需要重测。
                   </p>
+                  {regionBlocked && (
+                    <p
+                      role="alert"
+                      className="rounded-md border border-destructive p-3 text-sm"
+                    >
+                      此部署仅允许欧盟区域模型。当前模型区域不符合要求，请核对服务实际处理区域后修改配置；不能仅修改标签绕过。
+                    </p>
+                  )}
                   <ProbeCard
                     title="普通生成"
                     check={checks.completion}
@@ -855,6 +866,7 @@ export default function ModelProvidersPage() {
                         busy ||
                         !!testing ||
                         !ready ||
+                        regionBlocked ||
                         current?.root_model === modelId
                       }
                       onClick={() => void applyModel()}
@@ -873,7 +885,8 @@ export default function ModelProvidersPage() {
                       修改模型配置
                     </button>
                   </div>
-                  {current?.root_model === modelId &&
+                  {ready &&
+                    current?.root_model === modelId &&
                     (current.tenant_allowed ? (
                       <Link
                         href="/chat/root-agent"
@@ -914,7 +927,7 @@ export default function ModelProvidersPage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h2 className="font-medium">
+                        <h2 className="break-all font-medium">
                           {provider.name}{" "}
                           <span className="text-xs font-normal text-muted-foreground">
                             {provider.enabled ? "已启用" : "已停用"}

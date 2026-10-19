@@ -25,6 +25,7 @@ def stack(monkeypatch):
 
     monkeypatch.setenv("SELF_HOSTED_MODE", "1")
     monkeypatch.setenv("MODEL_REGISTRY_BACKEND", "database")
+    monkeypatch.setenv("MODEL_RESIDENCY_POLICY", "unrestricted")
     monkeypatch.setenv("SETUP_KEY", "secret-for-setup")
     repo = MemoryRepository()
     reset_repository_for_testing(repo)
@@ -127,7 +128,7 @@ def test_changed_or_expired_configuration_requires_fresh_tests(stack, monkeypatc
     assert client.post(f"{API}/models/model/use").status_code == 409
 
 
-def test_tenant_model_override_and_whitelist_are_reported_without_being_overwritten(stack):
+def test_tenant_whitelist_is_reported_without_being_overwritten(stack):
     client, repo, _ = stack
     tenant = TenantDirectory(repo).get("a")
     tenant.model_policy = {"allowedModels": [], "defaultModel": None}
@@ -177,3 +178,33 @@ def test_complete_endpoint_url_and_impossible_output_limits_are_rejected(stack):
     )
     assert response.status_code == 422
     assert client.put(f"{API}/models/model", json={**MODEL, "max_output_tokens": 64000}).status_code == 422
+
+
+def test_tenant_override_is_preserved_and_resolved_separately_from_platform_selection(stack):
+    client, repo, _ = stack
+    assert client.put(f"{API}/models/tenant-model", json={**MODEL, "api_name": "tenant-chat"}).status_code == 200
+    tenant = TenantDirectory(repo).get("a")
+    tenant.model_policy = {"allowedModels": ["tenant-model"]}
+    TenantDirectory(repo).put(tenant)
+    update_platform_config(
+        {"agent": {"model": "lite", "tenantOverrides": {"a": {"model": "tenant-model", "instructions": "租户指令"}}}},
+        updated_by="test",
+    )
+    probes_pass(client)
+    assert client.post(f"{API}/models/model/use").status_code == 200
+    current = client.get(f"{API}/models/current").json()
+    assert current["root_model_id"] == "model"
+    assert current["tenant_model_id"] == "tenant-model"
+    assert current["tenant_allowed"]
+    assert get_platform_config().agent.tenant_overrides["a"].instructions == "租户指令"
+
+
+def test_eu_only_deployment_rejects_non_eu_root_even_after_protocol_tests_pass(stack, monkeypatch):
+    client, repo, _ = stack
+    probes_pass(client)
+    monkeypatch.setenv("MODEL_RESIDENCY_POLICY", "eu-strict")
+    assert client.post(f"{API}/models/model/use").status_code == 409
+    assert client.get(f"{API}/models/current").json()["residency_policy"] == "eu-strict"
+    repo.set_document("model_registry", "model", {"residency": "eu"}, merge=True)
+    # Region metadata changes do not alter the wire protocol; the policy guard is evaluated on every application.
+    assert client.post(f"{API}/models/model/use").status_code == 200

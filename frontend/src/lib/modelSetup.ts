@@ -45,6 +45,7 @@ export type Registry = {
   writable: boolean;
 };
 export type Current = {
+  residency_policy: "eu-strict" | "unrestricted";
   root_model: string;
   root_model_id: string | null;
   root_api_name: string | null;
@@ -63,14 +64,21 @@ export async function modelRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetchWithAuth(`/api/proxy/api/admin${path}`, init);
+  let response: Response;
+  try {
+    response = await fetchWithAuth(`/api/proxy/api/admin${path}`, init);
+  } catch (error) {
+    if (error instanceof TypeError)
+      throw new Error("无法连接平台后端，请检查网络后重试。");
+    throw error;
+  }
   if (!response.ok) {
     let message = `请求失败（${response.status}），请重试。`;
     try {
       const { detail } = await response.json();
       if (typeof detail === "string") message = detail;
       else if (Array.isArray(detail))
-        message = detail.map((item) => item.msg).join("；");
+        message = "配置参数不符合要求，请核对必填项、数值范围和模型能力。";
     } catch {
       /* 保留代理返回的状态码。 */
     }

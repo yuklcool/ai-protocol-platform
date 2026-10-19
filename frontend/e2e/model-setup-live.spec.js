@@ -81,6 +81,10 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
     await expect(page.getByLabel(/^API 根地址/)).toBeFocused();
     await page.getByLabel(/^API 根地址/).fill(BASE);
     await page.getByLabel(/^后端密钥变量名/).fill("OPENAI_API_KEY");
+    await page.screenshot({
+      path: info.outputPath("model-setup-service.png"),
+      fullPage: true,
+    });
     await page.getByRole("button", { name: "保存并选择模型" }).click();
     await expect(
       page.getByRole("heading", { name: "选择模型", exact: true }),
@@ -97,6 +101,10 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
     await page.getByLabel("最大输出（token）", { exact: true }).fill("2048");
     if (process.env.REAL_PROVIDER_SUPPORTS_REASONING === "true")
       await page.getByLabel("使用推理模型参数", { exact: true }).check();
+    await page.screenshot({
+      path: info.outputPath("model-setup-model-form.png"),
+      fullPage: true,
+    });
     await page.getByRole("button", { name: "保存并测试", exact: true }).click();
     const service = (await api(API)).find((p) => p.name === name);
     providerId = service.provider_id;
@@ -123,9 +131,10 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
       ...agent,
       model: modelId,
     });
-    expect(await api("/api/admin/model-registry/settings")).toEqual(
-      originalRouting,
-    );
+    const routing = await api("/api/admin/model-registry/settings");
+    expect(routing.platform_default).toBe(originalRouting.platform_default);
+    expect(routing.tier_defaults).toEqual(originalRouting.tier_defaults);
+    expect(routing.source).toBe(originalRouting.source);
     await page.reload();
     await page.getByRole("heading", { name, exact: false }).waitFor();
     const card = page

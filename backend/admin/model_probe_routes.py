@@ -228,12 +228,19 @@ def current_root_model(scope: PlatformScope) -> dict:
     tenant_entry = resolve(policy.default_model if root.model == "default" and policy.default_model else root.model)
     tenant = get_tenant(tenant_id)
     return {
+        "residency_policy": active_residency_policy(),
         "root_model": platform.model,
         "root_model_id": platform_entry.id if platform_entry else None,
         "root_api_name": platform_entry.api_name if platform_entry else None,
         "tenant_model_id": tenant_entry.id if tenant_entry else None,
         "tenant_api_name": tenant_entry.api_name if tenant_entry else None,
-        "tenant_allowed": bool(tenant and not tenant.disabled and tenant_entry and policy.allows(tenant_entry.id)),
+        "tenant_allowed": bool(
+            tenant
+            and not tenant.disabled
+            and tenant_entry
+            and policy.allows(tenant_entry.id)
+            and (active_residency_policy() != "eu-strict" or tenant_entry.residency == "eu")
+        ),
     }
 
 
@@ -255,6 +262,13 @@ async def test_dynamic_model(model_id: str, body: ModelProbeRequest, scope: Plat
 def use_root_model(model_id: str, scope: PlatformScope) -> dict:
     if not database_registry_enabled():
         raise HTTPException(409, "当前使用配置文件管理模型,请先启用数据库模型管理。")
+    from config.models import active_residency_policy
+
+    model = get_document(MODELS_COLLECTION, model_id)
+    if model and active_residency_policy() == "eu-strict" and model.get("residency") != "eu":
+        raise HTTPException(
+            409, "此部署仅允许欧盟区域模型。请选择实际在欧盟处理数据的服务并核对模型区域,不能仅改标签绕过。"
+        )
     if not model_readiness(model_id)["ready"]:
         raise HTTPException(409, "当前配置尚未通过 24 小时内的普通生成和工具调用测试,请重新测试后使用。")
     try:
