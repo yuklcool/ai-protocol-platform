@@ -4,6 +4,6 @@
   "provider_base_url": "https://sub2api.yukl.qzz.io",
   "model_api_name": "gpt-6-luna",
   "supports_reasoning": false,
-  "attempt": 1,
+  "attempt": 2,
   "retry_attempt": 1
 }

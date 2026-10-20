@@ -434,17 +434,21 @@ function RoutedToolCall({
               structuredContent?: Record<string, unknown>;
               content?: unknown[];
             };
+            const body = JSON.stringify({
+              serverId,
+              toolName: unprefixedName,
+              structuredContent: p.structuredContent ?? null,
+              content: p.content ?? null,
+            });
             await fetchWithAuth(
               `/api/proxy/api/sessions/${encodeURIComponent(sessionId)}/iframe-context`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  serverId,
-                  toolName: unprefixedName,
-                  structuredContent: p.structuredContent ?? null,
-                  content: p.content ?? null,
-                }),
+                body,
+                // Finish small context writes when the user leaves the page.
+                // Larger bodies must avoid fetch's 64 KiB keepalive limit.
+                keepalive: new TextEncoder().encode(body).byteLength <= 65_536,
               },
             );
           } catch (err) {

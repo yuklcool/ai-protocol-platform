@@ -99,10 +99,39 @@ describe("MCPAppToolCallRouter — ui/update-model-context (sprint 1.25)", () =>
       "/api/proxy/api/sessions/sess-42/iframe-context",
     );
     expect(init.method).toBe("POST");
+    expect(init.keepalive).toBe(true);
     const body = JSON.parse(String(init.body));
     expect(body.serverId).toBe("ext-apps-map");
     expect(body.toolName).toBe("show-map");
     expect(body.structuredContent).toEqual(SAMPLE_PARAMS.structuredContent);
+  });
+
+  it("uses ordinary fetch for content exceeding the UTF-8 keepalive limit", async () => {
+    capturedOnFallbackRequest = null;
+    fetchWithAuthMock.mockClear();
+
+    render(
+      <MCPAppToolCallRouter
+        toolCalls={[showMapToolCall()]}
+        mcpServerIds={["ext-apps-map"]}
+        sessionId="sess-42"
+      />,
+    );
+    await waitFor(() => expect(capturedOnFallbackRequest).not.toBeNull());
+
+    await capturedOnFallbackRequest!({
+      method: "ui/update-model-context",
+      params: { content: [{ type: "text", text: "中".repeat(22_000) }] },
+    });
+
+    const [, init] = fetchWithAuthMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    // The character count fits; the encoded byte count exceeds 64 KiB.
+    expect(String(init.body).length).toBeLessThan(65_536);
+    expect(new TextEncoder().encode(String(init.body)).byteLength).toBeGreaterThan(65_536);
+    expect(init.keepalive).toBe(false);
   });
 
   it("does NOT POST when sessionId is missing (graceful no-op)", async () => {
