@@ -41,14 +41,14 @@ export function Hero({ visual }: HeroProps) {
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <Link
               href={demo.chatHref}
-              className="group inline-flex items-center gap-2 button-primary px-5 py-3 text-sm font-semibold transition-colors "
+              className="button-primary group inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold"
             >
               {primary}
               <ArrowIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href={demo.chatHrefSecondary}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary/50 hover:text-primary"
+              className="button-secondary inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold"
             >
               {secondary}
               <span aria-hidden className="text-muted-foreground">
@@ -57,7 +57,7 @@ export function Hero({ visual }: HeroProps) {
             </Link>
           </div>
         </div>
-        {visual ? <div>{visual}</div> : null}
+        {visual ? <div className="min-w-0">{visual}</div> : null}
       </div>
     </section>
   );
@@ -65,11 +65,8 @@ export function Hero({ visual }: HeroProps) {
 
 function Eyebrow({ text }: { text: string }) {
   return (
-    <div className="inline-flex items-center gap-2 self-start rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-      </span>
+    <div className="badge inline-flex max-w-full flex-wrap items-center gap-2 self-start px-3 py-1 text-xs font-semibold tracking-wide text-primary">
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
       {text}
     </div>
   );

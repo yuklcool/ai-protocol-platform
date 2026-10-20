@@ -16,6 +16,7 @@ export const control =
   "glass-control w-full px-3 py-2 text-sm disabled:opacity-50";
 export const action =
   "button-secondary px-3 py-2 text-sm disabled:opacity-50";
+
 export function useConsoleCopy() {
   const { locale } = useI18n();
   return useCallback(
@@ -64,11 +65,17 @@ export function Field({
     </div>
   );
 }
-export function Notice({ children }: { children: ReactNode }) {
+export function Notice({
+  children,
+  tone = "info",
+}: {
+  children: ReactNode;
+  tone?: "info" | "success" | "warning" | "danger";
+}) {
   return children ? (
     <p
-      role="status"
-      className="glass-panel bg-muted/30 p-3 text-sm whitespace-pre-wrap"
+      role={tone === "danger" ? "alert" : "status"}
+      className={`notice notice--${tone}`}
     >
       {children}
     </p>

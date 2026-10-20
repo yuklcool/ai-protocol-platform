@@ -187,7 +187,7 @@ function RootAgentSettingsInner() {
   if (forbidden)
     return (
       <Centered>
-        <p className="max-w-md text-center text-sm text-muted-foreground">
+        <p className="notice notice--warning max-w-md text-center">
           {t("rootAgent.adminOnly")}
         </p>
       </Centered>
@@ -201,7 +201,7 @@ function RootAgentSettingsInner() {
   if (loadError)
     return (
       <Centered>
-        <p className="text-sm text-destructive">{t("rootAgent.loadFailed")}</p>
+        <p className="notice notice--danger" role="alert">{t("rootAgent.loadFailed")}</p>
       </Centered>
     );
 
@@ -223,13 +223,13 @@ function RootAgentSettingsInner() {
         </div>
         <div className="flex-1" />
         {notice && (
-          <span className="text-xs text-muted-foreground">{notice}</span>
+          <span className={`notice ${notice === t("rootAgent.saved") ? "notice--success" : "notice--danger"}`} role={notice === t("rootAgent.saved") ? "status" : "alert"}>{notice}</span>
         )}
         <button
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 button-primary px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+          className="button-primary min-h-11 items-center gap-1.5 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
         >
           <Save className="h-3.5 w-3.5" aria-hidden />
           {saving ? t("rootAgent.saving") : t("rootAgent.save")}
@@ -240,7 +240,7 @@ function RootAgentSettingsInner() {
           aria-label={t("rootAgent.title")}
           value={section}
           onChange={(event) => setSection(event.target.value as Section)}
-          className="w-full rounded-md border bg-background p-2 text-sm"
+          className="glass-control min-h-11 w-full border-primary/40 bg-primary/5 p-2 text-sm font-medium text-primary"
         >
           {sections.map((id) => (
             <option key={id} value={id}>
@@ -260,7 +260,8 @@ function RootAgentSettingsInner() {
                 key={id}
                 type="button"
                 onClick={() => setSection(id)}
-                className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm ${section === id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                aria-current={section === id ? "page" : undefined}
+                className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${section === id ? "border-primary/30 bg-primary/10 font-semibold text-primary" : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
                 <span>
                   {t(`rootAgent.nav.${id}` as Parameters<typeof translate>[1])}
@@ -272,23 +273,25 @@ function RootAgentSettingsInner() {
           <div className="mt-8 border-t pt-4">
             <Link
               href="/skills"
-              className="block rounded-md px-2.5 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex min-h-11 items-center rounded-md px-2.5 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               {t("resources.skills.title")}
             </Link>
           </div>
         </aside>
-        <main className="page-container min-h-0 overflow-y-auto">
+        <main className="min-h-0 overflow-y-auto">
           <div className="mx-auto max-w-3xl p-4 sm:p-6">
-            <div className="mb-5">
-              <h2 className="text-xl font-semibold tracking-tight">
+            <div className="page-header">
+              <div className="min-w-0">
+              <h2 className="page-header__title">
                 {t(
                   `rootAgent.nav.${section}` as Parameters<typeof translate>[1],
                 )}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="page-header__desc">
                 {t("rootAgent.subtitle")}
               </p>
+              </div>
             </div>
             {renderSection(section, {
               config,
@@ -306,7 +309,7 @@ function RootAgentSettingsInner() {
           </div>
         </main>
         <aside className="hidden min-h-0 overflow-y-auto border-l bg-card/40 p-4 xl:block">
-          <div className="glass-panel bg-background p-4">
+          <div className="glass-panel p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full border bg-primary/10 text-primary">
                 <Bot className="h-4 w-4" aria-hidden />
@@ -339,7 +342,7 @@ function RootAgentSettingsInner() {
               />
             </div>
           </div>
-          <div className="mt-4 glass-panel border-dashed bg-background/50 p-4 text-xs leading-5 text-muted-foreground">
+          <div className="surface-sunken mt-4 p-4 text-xs leading-5 text-muted-foreground">
             {t("rootAgent.compatibility")}
           </div>
         </aside>
@@ -372,7 +375,7 @@ type RenderContext = {
 function renderSection(section: Section, c: RenderContext) {
   const { config, setPatch, t } = c;
   const control =
-    "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-ring";
+    "glass-control min-h-11 w-full px-3 py-2 text-sm";
   if (section === "overview")
     return (
       <Card
@@ -494,7 +497,7 @@ function renderSection(section: Section, c: RenderContext) {
   if (section === "budget")
     return (
       <Card title={t("rootAgent.nav.budget")} hint={t("rootAgent.budget.hint")}>
-        <label className="flex items-start gap-2 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={config.budgetEnabled}
@@ -506,7 +509,7 @@ function renderSection(section: Section, c: RenderContext) {
         </label>
         <Link
           href="/admin/analytics"
-          className="block text-sm text-primary underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary underline underline-offset-4"
         >
           {t("rootAgent.budget.usage")}
         </Link>
@@ -515,7 +518,7 @@ function renderSection(section: Section, c: RenderContext) {
   if (section === "interaction")
     return (
       <Card title={t("rootAgent.interaction.title")}>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={config.interaction.a2uiEnabled}
@@ -568,7 +571,7 @@ function renderSection(section: Section, c: RenderContext) {
             <option value="patch">{t("rootAgent.interaction.patch")}</option>
           </select>
         </Field>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={config.interaction.allowSurfaceContextWrites}
@@ -583,7 +586,7 @@ function renderSection(section: Section, c: RenderContext) {
           />
           {t("rootAgent.interaction.context")}
         </label>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={config.interaction.allowActionTriggeredRuns}
@@ -598,7 +601,7 @@ function renderSection(section: Section, c: RenderContext) {
           />
           {t("rootAgent.interaction.actions")}
         </label>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={config.interaction.voiceEnabled}
@@ -637,7 +640,7 @@ function renderSection(section: Section, c: RenderContext) {
         hint={t("rootAgent.permissions.description")}
       >
         <p className="text-sm">{t("rootAgent.permissions.failClosed")}</p>
-        <div className="mt-3 flex items-start gap-2 rounded-md bg-primary/5 p-3 text-xs text-muted-foreground">
+        <div className="notice notice--info mt-3">
           <CircleAlert
             className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"
             aria-hidden
@@ -666,7 +669,7 @@ function renderSection(section: Section, c: RenderContext) {
           className={`${control} font-mono`}
         />
       </Field>
-      <div className="mt-4 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+      <div className="surface-sunken mt-4 p-3 text-xs text-muted-foreground">
         {t("rootAgent.advanced.legacy")}
       </div>
     </Card>
@@ -683,7 +686,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-4 glass-panel bg-card/30 p-4">
+    <section className="glass-panel space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold">{title}</h3>
         {hint && (
@@ -731,13 +734,13 @@ function ResourceChecklist({
   return (
     <Card title={title} hint={description}>
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{empty}</p>
+        <p className="empty-state text-xs text-muted-foreground">{empty}</p>
       ) : (
         <div className="space-y-2">
           {items.map((item) => (
             <label
               key={item.id}
-              className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 ${selected.has(item.id) ? "border-primary/50 bg-primary/5" : "hover:bg-muted/40"}`}
+              className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring ${item.disabled ? "cursor-not-allowed opacity-60" : ""} ${selected.has(item.id) ? "border-primary/50 bg-primary/10" : "border-border hover:bg-muted/40"}`}
             >
               <input
                 type="checkbox"

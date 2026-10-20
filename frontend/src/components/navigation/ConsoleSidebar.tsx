@@ -12,10 +12,8 @@ import {
   Plug,
   ScrollText,
   Settings2,
-  ShieldCheck,
   Sparkles,
   UsersRound,
-  Wrench,
   Menu,
   X,
 } from "lucide-react";
@@ -38,10 +36,15 @@ type NavigationGroup = {
   items: NavigationItem[];
 };
 
+/**
+ * Navigation is grouped by what the user is trying to do, not by route
+ * prefix: use the agent → give it resources → administer the platform.
+ * Order inside a group follows expected frequency of use.
+ */
 export const CONSOLE_NAVIGATION: NavigationGroup[] = [
   {
-    zh: "概览",
-    en: "Overview",
+    zh: "工作区",
+    en: "Workspace",
     items: [
       { href: "/", zh: "工作台", en: "Workspace", icon: LayoutDashboard },
     ],
@@ -64,16 +67,16 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     items: [
       { href: "/skills", zh: "技能管理", en: "Skills", icon: Sparkles },
       {
-        href: "/admin/mcp-servers",
-        zh: "MCP 服务",
-        en: "MCP Servers",
-        icon: Plug,
-      },
-      {
         href: "/admin/model-providers",
         zh: "模型服务",
         en: "Models",
         icon: Boxes,
+      },
+      {
+        href: "/admin/mcp-servers",
+        zh: "MCP 服务",
+        en: "MCP Servers",
+        icon: Plug,
       },
     ],
   },
@@ -112,6 +115,29 @@ export function visibleNavigation(isAdmin: boolean, isPlatform: boolean) {
   })).filter((group) => group.items.length > 0);
 }
 
+function Brand({ isChinese }: { isChinese: boolean }) {
+  return (
+    <Link
+      href="/"
+      className="flex min-w-0 flex-1 items-center gap-2.5"
+      aria-label={BRANDING.appName}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--hairline)] bg-white shadow-[var(--shadow-1)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={BRANDING.logo.chatAvatar} alt="" className="h-5 w-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13px] font-semibold leading-tight tracking-tight">
+          {BRANDING.appName}
+        </span>
+        <span className="block truncate text-[11px] leading-tight text-[var(--text-3)]">
+          {isChinese ? "统一智能体运行时" : BRANDING.tagline}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
 function NavLink({
   item,
   pathname,
@@ -123,15 +149,33 @@ function NavLink({
 }) {
   const active = isActive(pathname, item.href);
   const Icon = item.icon;
+  const text = label(item, isChinese);
   return (
     <Link
       href={item.href}
+      title={text}
       aria-current={active ? "page" : undefined}
       className={`console-nav-item ${active ? "console-nav-item-active" : ""}`}
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{label(item, isChinese)}</span>
+      <span className="truncate">{text}</span>
     </Link>
+  );
+}
+
+function RuntimeCard({ isChinese }: { isChinese: boolean }) {
+  return (
+    <div className="console-runtime-card">
+      <Bot className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="truncate text-[12px] font-semibold leading-tight">
+          Root Agent
+        </p>
+        <p className="truncate text-[11px] leading-tight text-[var(--text-3)]">
+          {isChinese ? "模型与能力由平台配置" : "Platform-managed capabilities"}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -140,6 +184,7 @@ export function ConsoleSidebar() {
   const pathname = usePathname() || "/";
   const { locale } = useI18n();
   const isChinese = locale.startsWith("zh");
+  const groups = visibleNavigation(scope.isAdmin, scope.isPlatform);
 
   return (
     <aside
@@ -147,26 +192,11 @@ export function ConsoleSidebar() {
       aria-label={isChinese ? "主导航" : "Primary navigation"}
     >
       <div className="console-sidebar-brand">
-        <Link
-          href="/"
-          className="flex min-w-0 items-center gap-2.5"
-          aria-label={BRANDING.appName}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={BRANDING.logo.chatAvatar}
-            alt=""
-            className="h-7 w-7 rounded-md"
-          />
-          <span className="min-w-0 break-words text-xs font-semibold leading-4 tracking-tight">
-            {BRANDING.appName}
-          </span>
-        </Link>
-        <span className="console-brand-status" aria-hidden="true" />
+        <Brand isChinese={isChinese} />
       </div>
 
       <nav className="console-sidebar-nav">
-        {visibleNavigation(scope.isAdmin, scope.isPlatform).map((group) => (
+        {groups.map((group) => (
           <div key={group.en} className="console-nav-group">
             <p className="console-nav-label">{label(group, isChinese)}</p>
             <div className="space-y-0.5">
@@ -185,37 +215,37 @@ export function ConsoleSidebar() {
 
       <div className="console-sidebar-footer">
         {scope.isPlatform && (
-          <Link href="/admin/settings" className="console-nav-item">
+          <Link
+            href="/admin/settings"
+            aria-current={isActive(pathname, "/admin/settings") ? "page" : undefined}
+            className={`console-nav-item ${
+              isActive(pathname, "/admin/settings")
+                ? "console-nav-item-active"
+                : ""
+            }`}
+          >
             <Settings2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{isChinese ? "平台设置" : "Platform settings"}</span>
+            <span className="truncate">
+              {isChinese ? "平台设置" : "Platform settings"}
+            </span>
           </Link>
         )}
         {scope.state === "error" && (
           <button
             type="button"
             onClick={() => void scope.recheck()}
-            className="px-2 text-xs text-destructive"
+            className="mt-1 px-2 text-left text-[11px] text-[var(--danger)]"
           >
             {isChinese
               ? "权限加载失败，点击重试"
               : "Permissions unavailable. Retry"}
           </button>
         )}
-        <div className="mt-2 flex items-center justify-between px-2">
+        <div className="mt-2 flex items-center justify-between gap-1 px-1">
           <LanguageSwitcher compact />
           <UserMenu />
         </div>
-        <div className="console-runtime-card">
-          <span className="console-runtime-dot" />
-          <div className="min-w-0">
-            <p className="truncate text-xs font-medium">
-              {isChinese ? "Root Agent" : "Root Agent"}
-            </p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {isChinese ? "统一运行时" : "Unified runtime"}
-            </p>
-          </div>
-        </div>
+        <RuntimeCard isChinese={isChinese} />
       </div>
     </aside>
   );
@@ -232,7 +262,11 @@ export function ConsoleMobileNav() {
     <div className="console-mobile-nav">
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Trigger asChild>
-          <button type="button" className="button-secondary inline-flex h-10 w-10 items-center justify-center" aria-label={isChinese ? "打开主导航" : "Open navigation"}>
+          <button
+            type="button"
+            className="button-secondary inline-flex h-10 w-10 items-center justify-center p-0"
+            aria-label={isChinese ? "打开主导航" : "Open navigation"}
+          >
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
         </Dialog.Trigger>
@@ -240,24 +274,53 @@ export function ConsoleMobileNav() {
           <Dialog.Overlay className="console-drawer-overlay" />
           <Dialog.Content className="console-drawer" aria-describedby={undefined}>
             <div className="mb-6 flex items-center justify-between gap-3">
-              <Dialog.Title className="text-base font-semibold">{isChinese ? "主导航" : "Navigation"}</Dialog.Title>
+              <Dialog.Title className="text-[15px] font-semibold">
+                {isChinese ? "主导航" : "Navigation"}
+              </Dialog.Title>
               <Dialog.Close asChild>
-                <button type="button" className="button-secondary inline-flex h-10 w-10 items-center justify-center" aria-label={isChinese ? "关闭主导航" : "Close navigation"}><X className="h-5 w-5" aria-hidden="true" /></button>
+                <button
+                  type="button"
+                  className="button-secondary inline-flex h-10 w-10 items-center justify-center p-0"
+                  aria-label={isChinese ? "关闭主导航" : "Close navigation"}
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
               </Dialog.Close>
             </div>
-            <nav aria-label={isChinese ? "主导航" : "Primary navigation"} onClick={(event) => { if ((event.target as HTMLElement).closest("a")) setOpen(false); }}>
+            <nav
+              aria-label={isChinese ? "主导航" : "Primary navigation"}
+              onClick={(event) => {
+                if ((event.target as HTMLElement).closest("a")) setOpen(false);
+              }}
+            >
               {groups.map((group) => (
                 <div key={group.en} className="console-nav-group">
                   <p className="console-nav-label">{label(group, isChinese)}</p>
-                  {group.items.map((item) => <NavLink key={item.href} item={item} pathname={pathname} isChinese={isChinese} />)}
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.href}
+                        item={item}
+                        pathname={pathname}
+                        isChinese={isChinese}
+                      />
+                    ))}
+                  </div>
                 </div>
               ))}
-              {scope.isPlatform && <Link href="/admin/settings" className="console-nav-item mt-6"><Settings2 className="h-4 w-4" aria-hidden="true" />{isChinese ? "平台设置" : "Settings"}</Link>}
+              {scope.isPlatform && (
+                <Link href="/admin/settings" aria-current={isActive(pathname, "/admin/settings") ? "page" : undefined} className={`console-nav-item mt-6 ${isActive(pathname, "/admin/settings") ? "console-nav-item-active" : ""}`}>
+                  <Settings2 className="h-4 w-4" aria-hidden="true" />
+                  {isChinese ? "平台设置" : "Settings"}
+                </Link>
+              )}
             </nav>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-      <Link href="/" className="min-w-0 flex-1 truncate text-sm font-semibold">{BRANDING.appName}</Link>
+      <div className="min-w-0 flex-1 px-1">
+        <Brand isChinese={isChinese} />
+      </div>
       <LanguageSwitcher compact />
       <UserMenu />
     </div>

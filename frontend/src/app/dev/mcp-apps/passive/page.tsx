@@ -51,10 +51,12 @@ export default function McpAppsPassivePage() {
   }, []);
 
   return (
-    <main className="page-container mx-auto max-w-3xl space-y-6 p-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">MCP Apps passive smoke</h1>
-        <p className="text-sm text-muted-foreground">
+    <main className="page-container">
+      <div className="page-body max-w-3xl space-y-6">
+      <header className="page-header">
+        <div className="min-w-0">
+        <h1 className="page-header__title">MCP Apps passive smoke</h1>
+        <p className="page-header__desc">
           Fixture: <code>map-server-show-map-result.json</code>. Mounts
           MCPAppToolCallRouter with no <code>onChatMessage</code> bridge.
           Connects directly to <code>localhost:3001/mcp</code> (no Firebase
@@ -63,17 +65,19 @@ export default function McpAppsPassivePage() {
           sandbox proxy (:3457) and map-server (:3001) are up.
         </p>
         {!devClient && (
-          <p className="text-xs text-amber-600">Connecting to map-server…</p>
+          <p className="notice notice--warning mt-3" role="status">Connecting to map-server…</p>
         )}
+        </div>
       </header>
 
-      <section className="rounded border p-3">
+      <section className="glass-panel p-5">
         <MCPAppToolCallRouter
           toolCalls={[FIXTURE_TOOL_CALL]}
           mcpServerIds={["ext-apps-map"]}
           devClient={devClient ?? undefined}
         />
       </section>
+      </div>
     </main>
   );
 }

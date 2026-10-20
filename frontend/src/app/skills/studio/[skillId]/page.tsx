@@ -41,7 +41,7 @@ export default function StudioPage({
   if (!STUDIO_ENABLED) {
     return (
       <main className="page-container flex min-h-screen items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">
+        <p className="notice notice--info">
           {translateSkillStudio(locale, "studio.disabled")}
         </p>
       </main>
@@ -181,12 +181,12 @@ function StudioInner({ skillId }: { skillId: string }) {
   const showForkButton = isPlatformOwned || saveBlockedAsReadOnly;
 
   if (loadingSkill) {
-    return <div className="p-6 text-sm text-muted-foreground">{t("studio.loadingSkill")}</div>;
+    return <div className="page-container" role="status"><p className="skeleton p-6 text-sm text-muted-foreground">{t("studio.loadingSkill")}</p></div>;
   }
   if (loadError) {
     return (
       <main className="page-container p-6">
-        <p className="text-sm text-destructive">{t("studio.loadFailed", { error: loadError })}</p>
+        <p className="notice notice--danger" role="alert">{t("studio.loadFailed", { error: loadError })}</p>
       </main>
     );
   }
@@ -201,18 +201,18 @@ function StudioInner({ skillId }: { skillId: string }) {
       onCancel={handleCancel}
     >
       {isPlatformOwned && (
-        <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+        <div className="notice notice--info mb-4 block">
           {t("studio.platformSkillPrefix")} {" "}
           <span className="font-medium text-foreground">{t("studio.platformSkill")}</span>. {" "}
           {t("studio.platformSkillSuffix")}
         </div>
       )}
-      {saveState.status === "ok" && <div className="mb-4 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700">{saveState.message}</div>}
-      {saveState.status === "error" && <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{saveState.message}</div>}
+      {saveState.status === "ok" && <div role="status" className="notice notice--success mb-4">{saveState.message}</div>}
+      {saveState.status === "error" && <div role="alert" className="notice notice--danger mb-4">{saveState.message}</div>}
       {showForkButton && (
-        <div className="mb-4 flex items-center justify-between rounded-md border bg-card px-3 py-2 text-xs">
+        <div className="surface-sunken mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs">
           <span className="text-muted-foreground">{t("studio.platformSkillSuffix")}</span>
-          <button type="button" onClick={() => void handleFork()} disabled={forking} className="rounded-md border px-2.5 py-1.5 font-medium hover:bg-muted disabled:opacity-50">{forking ? t("studio.forking") : t("studio.fork")}</button>
+          <button type="button" onClick={() => void handleFork()} disabled={forking} className="button-secondary px-3 py-1.5 font-medium disabled:opacity-50">{forking ? t("studio.forking") : t("studio.fork")}</button>
         </div>
       )}
       <StudioBuilderForm draft={draft} setDraft={setDraft} isNew={isNew} />

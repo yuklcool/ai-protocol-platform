@@ -28,7 +28,9 @@ import {
 const fieldClass =
   "glass-control mt-1 w-full min-w-0 px-3 py-2 text-sm";
 const buttonClass =
-  "rounded-md border px-3 py-2 text-sm hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50";
+  "button-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50";
+const primaryButtonClass =
+  "button-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50";
 const serviceDefault = {
   name: "",
   base_url: "",
@@ -73,6 +75,7 @@ export default function ModelProvidersPage() {
   const [discovering, setDiscovering] = useState(false);
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeTone, setNoticeTone] = useState<"info" | "success">("info");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState<{
@@ -255,6 +258,7 @@ export default function ModelProvidersPage() {
       await load();
       if (editing) {
         setView(null);
+        setNoticeTone("success");
         setNotice("模型服务已保存；配置变化后需重新测试相关模型。");
       } else editModel(saved.provider_id);
     });
@@ -336,6 +340,7 @@ export default function ModelProvidersPage() {
         method: "POST",
       });
       await load();
+      setNoticeTone("success");
       setNotice("已用于 Root Agent。");
     });
   }
@@ -352,6 +357,7 @@ export default function ModelProvidersPage() {
         { method: "DELETE" },
       );
       await load();
+      setNoticeTone("success");
       setNotice("已删除。");
     });
   }
@@ -367,18 +373,19 @@ export default function ModelProvidersPage() {
         }),
       );
       await load();
+      setNoticeTone("success");
       setNotice("高级路由已保存；平台 Root 的明确模型选择保持不变。");
     });
   }
 
   if (loading || state === "loading")
-    return <Message>正在读取管理权限…</Message>;
+    return <Message tone="loading">正在读取管理权限…</Message>;
   if (!user) return <SignInRequired />;
   if (state === "error")
-    return <Message>无法读取管理权限，请刷新后重试。</Message>;
+    return <Message tone="danger">无法读取管理权限，请刷新后重试。</Message>;
   if (!isAdmin || !isPlatform)
     return (
-      <Message>
+      <Message tone="warning">
         此页面仅限管理员。
       </Message>
     );
@@ -387,22 +394,22 @@ export default function ModelProvidersPage() {
     current?.residency_policy === "eu-strict" &&
     activeModel?.residency !== "eu";
   return (
-    <main className="page-container mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">模型接入</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+    <main className="page-container mx-auto max-w-6xl">
+      <header className="page-header">
+        <div className="min-w-0">
+          <h1 className="page-header__title">模型接入</h1>
+          <p className="page-header__desc">
             添加服务 → 选择模型 → 测试 → 用于 Root
             对话。单模型无需配置层级映射。
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="page-header__actions">
           <Link className={buttonClass} href="/admin">
             管理总览
           </Link>
           {!view && (
             <button
-              className={buttonClass}
+              className={primaryButtonClass}
               disabled={dataLoading || !registry?.writable}
               onClick={() => newService()}
             >
@@ -411,8 +418,9 @@ export default function ModelProvidersPage() {
           )}
         </div>
       </header>
+      <div className="page-body space-y-5">
       {loadError ? (
-        <div role="alert" className="glass-panel border-destructive p-4">
+        <div role="alert" className="notice notice--danger flex-wrap items-center">
           {loadError}{" "}
           <button
             className={buttonClass}
@@ -422,18 +430,25 @@ export default function ModelProvidersPage() {
           </button>
         </div>
       ) : dataLoading ? (
-        <p role="status">正在读取模型配置…</p>
+        <div role="status" className="glass-panel space-y-4 p-5">
+          <p className="text-sm text-muted-foreground">正在读取模型配置…</p>
+          <div aria-hidden="true" className="skeleton h-20 w-full" />
+          <div aria-hidden="true" className="skeleton h-36 w-full" />
+        </div>
       ) : (
         <>
           <section
             aria-label="当前模型"
-            className="break-words glass-panel bg-muted/20 p-4 text-sm"
+            className="glass-panel min-w-0 break-words p-5 text-sm"
           >
             <p>
               平台 Root 默认模型：
               <strong>
                 {current?.root_api_name || current?.root_model || "未选择"}
               </strong>
+              <span className={`badge ml-2 ${current?.allowed ? "badge--success" : "badge--warning"}`}>
+                {current?.allowed ? "可用于对话" : "尚不可用于对话"}
+              </span>
             </p>
             <p className="mt-2 text-muted-foreground">
               当前 Root 模型：{current?.root_api_name || "未解析到可用模型"}
@@ -450,19 +465,19 @@ export default function ModelProvidersPage() {
             </Link>
           </section>
           {!registry?.writable && (
-            <p role="alert" className="glass-panel p-4 text-sm">
+            <p role="alert" className="notice notice--warning">
               当前由配置文件管理模型。使用数据库管理模式后才能在此新增、编辑与应用模型。
             </p>
           )}
           {notice && (
-            <p role="status" className="glass-panel p-3 text-sm">
+            <p role="status" className={`notice notice--${noticeTone}`}>
               {notice}
             </p>
           )}
           {failure && (
             <p
               role="alert"
-              className="glass-panel border-destructive p-3 text-sm text-destructive"
+              className="notice notice--danger"
             >
               {failure}
             </p>
@@ -470,9 +485,9 @@ export default function ModelProvidersPage() {
           {view ? (
             <section
               aria-label="模型配置流程"
-              className="mx-auto max-w-3xl glass-panel p-4 sm:p-6"
+              className="glass-panel mx-auto w-full min-w-0 max-w-3xl p-4 sm:p-6"
             >
-              <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">
                   {view === "service"
                     ? "第 1 步：添加服务"
@@ -568,7 +583,7 @@ export default function ModelProvidersPage() {
                   </details>
                   <button
                     disabled={busy}
-                    className={`${buttonClass} button-primary`}
+                    className={primaryButtonClass}
                     type="submit"
                   >
                     {busy
@@ -586,7 +601,7 @@ export default function ModelProvidersPage() {
                   <p className="break-all text-sm text-muted-foreground">
                     所属服务：{activeProvider?.name || providerId}
                   </p>
-                  <div className="glass-panel p-3">
+                  <div className="min-w-0 rounded-xl border bg-muted/20 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm">从服务读取模型</p>
                       <button
@@ -599,7 +614,7 @@ export default function ModelProvidersPage() {
                       </button>
                     </div>
                     {discovering ? (
-                      <p role="status" className="mt-2 text-sm">
+                      <p role="status" className="skeleton mt-3 p-3 text-sm text-muted-foreground">
                         正在读取；也可以直接手动填写下方模型名称。
                       </p>
                     ) : discovery?.ok ? (
@@ -640,7 +655,7 @@ export default function ModelProvidersPage() {
                       </>
                     ) : (
                       discovery && (
-                        <p role="status" className="mt-2 text-sm">
+                        <p role="status" className="notice notice--warning mt-3 block">
                           {discovery.message ||
                             "服务没有提供可读取的模型列表。"}{" "}
                           可手动填写模型名称继续。
@@ -809,7 +824,7 @@ export default function ModelProvidersPage() {
                   </details>
                   <button
                     type="submit"
-                    className={`${buttonClass} button-primary`}
+                    className={primaryButtonClass}
                     disabled={busy}
                   >
                     {busy ? "正在保存…" : "保存并测试"}
@@ -824,7 +839,7 @@ export default function ModelProvidersPage() {
                   {regionBlocked && (
                     <p
                       role="alert"
-                      className="rounded-md border border-destructive p-3 text-sm"
+                      className="notice notice--danger"
                     >
                       此部署仅允许欧盟区域模型。当前模型区域不符合要求，请核对服务实际处理区域后修改配置；不能仅修改标签绕过。
                     </p>
@@ -846,6 +861,7 @@ export default function ModelProvidersPage() {
                         onClick={() => {
                           testController.current?.abort();
                           setTesting(null);
+                          setNoticeTone("info");
                           setNotice("测试已停止；未完成的项目不算通过。");
                         }}
                       >
@@ -861,7 +877,7 @@ export default function ModelProvidersPage() {
                       </button>
                     )}
                     <button
-                      className={buttonClass}
+                      className={primaryButtonClass}
                       disabled={
                         busy ||
                         !!testing ||
@@ -905,9 +921,9 @@ export default function ModelProvidersPage() {
           ) : (
             <>
               {providers.length === 0 ? (
-                <section className="glass-panel border-dashed p-8 text-center">
-                  <h2 className="font-medium">先添加一个模型服务</h2>
-                  <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
+                <section className="glass-panel empty-state">
+                  <h2 className="empty-state__title">先添加一个模型服务</h2>
+                  <p className="empty-state__desc">
                     准备 API
                     地址、部署密钥变量和模型名称。点击上方“添加模型服务”，按步骤完成测试即可用于
                     Root。
@@ -917,13 +933,13 @@ export default function ModelProvidersPage() {
                 providers.map((provider) => (
                   <section
                     key={provider.provider_id}
-                    className="glass-panel p-4 sm:p-5"
+                    className="glass-panel min-w-0 p-4 sm:p-5"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h2 className="break-all font-medium">
                           {provider.name}{" "}
-                          <span className="text-xs font-normal text-muted-foreground">
+                          <span className={`badge ${provider.enabled ? "badge--success" : "badge--warning"}`}>
                             {provider.enabled ? "已启用" : "已停用"}
                           </span>
                         </h2>
@@ -931,11 +947,13 @@ export default function ModelProvidersPage() {
                           {provider.base_url}
                         </p>
                         <p className="mt-2 text-xs">
+                          <span className={`badge max-w-full whitespace-normal break-all ${!provider.api_key_ref ? "" : provider.has_api_key ? "badge--success" : "badge--danger"}`}>
                           {!provider.api_key_ref
                             ? "服务未要求密钥"
                             : provider.has_api_key
                               ? "后端密钥已就绪"
                               : `缺少后端密钥变量 ${provider.api_key_ref.replace(/^\$\{(.+)\}$/, "$1")}`}
+                          </span>
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -956,7 +974,7 @@ export default function ModelProvidersPage() {
                           编辑服务
                         </button>
                         <button
-                          className={buttonClass}
+                          className="button-danger px-3 py-2 text-sm disabled:opacity-50"
                           disabled={busy || !registry?.writable}
                           onClick={() =>
                             void remove(
@@ -984,15 +1002,17 @@ export default function ModelProvidersPage() {
                               <h3 className="break-all text-sm font-medium">
                                 {model.api_name}
                               </h3>
-                              <p className="mt-1 text-xs text-muted-foreground">
+                              <p className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                <span className={`badge ${!model.enabled ? "" : model.readiness.ready ? "badge--success" : "badge--warning"}`}>
                                 {!model.enabled
                                   ? "已停用"
                                   : model.readiness.ready
                                     ? "测试通过，配置可供 Root 使用"
                                     : "尚未通过当前配置测试"}
-                                {current?.root_model === model.model_id
-                                  ? " · 平台 Root 当前模型"
-                                  : ""}
+                                </span>
+                                {current?.root_model === model.model_id && (
+                                  <span className="badge badge--brand">平台 Root 当前模型</span>
+                                )}
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -1018,7 +1038,7 @@ export default function ModelProvidersPage() {
                                 编辑模型
                               </button>
                               <button
-                                className={buttonClass}
+                                className="button-danger px-3 py-2 text-sm disabled:opacity-50"
                                 disabled={busy || !registry?.writable}
                                 onClick={() =>
                                   void remove(
@@ -1037,7 +1057,7 @@ export default function ModelProvidersPage() {
                     {!models.some(
                       (model) => model.provider_id === provider.provider_id,
                     ) && (
-                      <p className="mt-3 text-sm text-muted-foreground">
+                      <p className="empty-state mt-3 rounded-xl bg-muted/20 text-sm text-muted-foreground">
                         尚未添加模型，请先从此服务选择或手动填写一个模型。
                       </p>
                     )}
@@ -1122,11 +1142,18 @@ export default function ModelProvidersPage() {
           )}
         </>
       )}
+      </div>
     </main>
   );
 }
-function Message({ children }: { children: ReactNode }) {
-  return <div className="p-10 text-center text-sm">{children}</div>;
+function Message({ children, tone }: { children: ReactNode; tone: "loading" | "danger" | "warning" }) {
+  return (
+    <main className="page-container flex min-h-screen items-center justify-center p-8">
+      <div role={tone === "danger" ? "alert" : "status"} className={tone === "loading" ? "skeleton w-full max-w-md p-6 text-center text-sm" : `notice notice--${tone}`}>
+        {children}
+      </div>
+    </main>
+  );
 }
 function Field({
   label,
@@ -1180,15 +1207,17 @@ function ProbeCard({
 }) {
   return (
     <section className="glass-panel p-4">
-      <h3 className="font-medium">
-        {title}：
-        {running
-          ? "正在测试…"
-          : !check
-            ? "未测试"
-            : check.ok
-              ? "已通过"
-              : "未通过"}
+      <h3 className="flex flex-wrap items-center gap-2 font-medium">
+        {title}
+        <span role={running ? "status" : undefined} className={`badge ${running ? "badge--brand" : !check ? "" : check.ok ? "badge--success" : "badge--danger"}`}>
+          {running
+            ? "正在测试…"
+            : !check
+              ? "未测试"
+              : check.ok
+                ? "已通过"
+                : "未通过"}
+        </span>
       </h3>
       {check?.latency_ms != null && (
         <p className="mt-1 text-xs text-muted-foreground">
@@ -1201,7 +1230,7 @@ function ProbeCard({
         </p>
       )}
       {check && !check.ok && (
-        <p role="alert" className="mt-2 text-sm text-destructive">
+        <p role="alert" className="notice notice--danger mt-3">
           {check.message} {categoryHelp[check.category || ""]}
         </p>
       )}

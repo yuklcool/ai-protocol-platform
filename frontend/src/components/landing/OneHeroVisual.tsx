@@ -22,8 +22,8 @@
 
 export function OneHeroVisual() {
   return (
-    <div className="relative isolate">
-      <div className="relative overflow-hidden glass-panel border-border bg-muted/30 p-6 backdrop-blur md:p-7">
+    <div className="relative min-w-0">
+      <div className="glass-panel relative overflow-hidden p-5 sm:p-6 md:p-7">
         {/* faint engineering grid — signals "instrument", not "brochure" */}
         <div
           aria-hidden
@@ -35,27 +35,23 @@ export function OneHeroVisual() {
           }}
         />
 
-        <div className="relative mb-4 flex items-center justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="relative mb-5 flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
             Obligation trace
           </span>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-            </span>
-            live
+          <span className="badge px-2.5 py-1 text-xs font-medium text-primary">
+            示例 · Static demo
           </span>
         </div>
 
         {/* Step 1 — the source clause, as it reads in the contract */}
         <TraceStep index="01" label="Clause · as written">
-          <div className="rounded-md border border-border bg-background p-3">
-            <div className="mb-1.5 flex items-center justify-between">
+          <div className="surface-sunken rounded-xl p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 § 7.3 Delay Liquidated Damages
               </span>
-              <span className="font-mono text-[9px] text-muted-foreground">
+              <span className="break-all font-mono text-[10px] text-muted-foreground">
                 acme-supply-agreement.pdf · p.14
               </span>
             </div>
@@ -78,8 +74,8 @@ export function OneHeroVisual() {
 
         {/* Step 2 — typed terms the extractor pulled, each cited */}
         <TraceStep index="02" label="Extracted · typed & cited">
-          <div className="rounded-md border border-border bg-background p-3">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div className="surface-sunken rounded-xl p-4">
+            <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-xs sm:grid-cols-2">
               <Term k="trigger" v="Delivery missed" />
               <Term k="rate" v="€1,500 / day" />
               <Term k="cap" v="5% · €900,000" />
@@ -92,8 +88,8 @@ export function OneHeroVisual() {
 
         {/* Step 3 — the computed answer, verified + model-free */}
         <TraceStep index="03" label="Computed · what-if">
-          <div className="rounded-md border border-primary/40 bg-primary/[0.05] p-3">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-xs text-muted-foreground">
                 Delivery slips{" "}
                 <span className="font-mono tabular-nums text-foreground">
@@ -104,13 +100,13 @@ export function OneHeroVisual() {
                 €31,500
               </span>
             </div>
-            <div className="flex items-center justify-between font-mono text-[10px]">
+            <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
               <span className="inline-flex items-center gap-1.5 text-primary">
-                <CheckIcon className="h-3 w-3" />
-                verified · within cap
+                <CheckIcon className="h-3 w-3 shrink-0" />
+                示例结果 · within cap
               </span>
-              <span className="tabular-nums text-muted-foreground">
-                recomputed in 9&nbsp;ms · 0 tokens
+              <span className="text-muted-foreground">
+                示例演示 · 非实时计算或性能测量
               </span>
             </div>
           </div>

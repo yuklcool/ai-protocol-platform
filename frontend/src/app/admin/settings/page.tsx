@@ -6,7 +6,7 @@
 // Mirrors the group-tags admin page: probe on load, edit + PUT, re-read on save.
 
 "use client";
-import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
+import { Notice, useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,6 +44,7 @@ export default function PlatformSettingsPage() {
   const [defaultPrompt, setDefaultPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"success" | "danger">("danger");
 
   const load = async () => {
     try {
@@ -80,6 +81,7 @@ export default function PlatformSettingsPage() {
   const save = async () => {
     setBusy(true);
     setNotice(null);
+    setNoticeTone("danger");
     try {
       const r = await fetchWithAuth(ENDPOINT, {
         method: "PUT",
@@ -99,6 +101,7 @@ export default function PlatformSettingsPage() {
       }
       const cfg: PlatformConfig = await r.json();
       setMeta({ updatedBy: cfg.updatedBy, updatedAt: cfg.updatedAt });
+      setNoticeTone("success");
       setNotice(
         t(
           "已保存，新对话将使用更新后的公共指令。",
@@ -114,12 +117,12 @@ export default function PlatformSettingsPage() {
     }
   };
 
-  if (loading) return <Centered>{t("加载中…", "Loading…")}</Centered>;
+  if (loading) return <Centered><p role="status" className="skeleton w-full max-w-md p-6 text-center text-sm">{t("加载中…", "Loading…")}</p></Centered>;
   if (!user) return <SignInRequired />;
   if (probe === "forbidden") {
     return (
       <Centered>
-        <div className="max-w-md text-center">
+        <div className="glass-panel max-w-md p-6 text-center">
           <h1 className="mb-2 text-lg font-semibold">
             {t("需要管理员权限", "Admins only")}
           </h1>
@@ -133,34 +136,41 @@ export default function PlatformSettingsPage() {
     );
   }
   if (probe === "loading")
-    return <Centered>{t("加载中…", "Loading…")}</Centered>;
+    return <Centered><p role="status" className="skeleton w-full max-w-md p-6 text-center text-sm">{t("加载中…", "Loading…")}</p></Centered>;
   if (probe === "error")
     return (
       <Centered>
-        {t(
+        <Notice tone="danger">{t(
           "无法加载平台设置，请重试。",
           "Something went wrong loading platform settings.",
-        )}
+        )}</Notice>
       </Centered>
     );
 
   const overLimit = preamble.length > PREAMBLE_MAX_LEN;
 
   return (
-    <main className="page-container mx-auto max-w-3xl p-6">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold">
-          {t("平台设置", "Platform settings")}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "平台公共指令会加入每次对话，统一身份、表达风格和边界；Root Agent 和能力包在此基础上补充各自指令。修改约一分钟内对新对话生效。",
-            "The platform preamble adds shared identity, style and guardrails to every conversation. Root and capability instructions follow it. Changes apply to new chats within about a minute.",
-          )}
-        </p>
+    <main className="page-container mx-auto max-w-3xl">
+      <header className="page-header">
+        <div className="min-w-0">
+          <h1 className="page-header__title">
+            {t("平台设置", "Platform settings")}
+          </h1>
+          <p className="page-header__desc">
+            {t(
+              "平台公共指令会加入每次对话，统一身份、表达风格和边界；Root Agent 和能力包在此基础上补充各自指令。修改约一分钟内对新对话生效。",
+              "The platform preamble adds shared identity, style and guardrails to every conversation. Root and capability instructions follow it. Changes apply to new chats within about a minute.",
+            )}
+          </p>
+        </div>
       </header>
 
-      <section className="glass-panel p-4">
+      <div className="page-body space-y-5">
+      <section className="glass-panel min-w-0 p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <h2 className="text-base font-semibold">{t("全局公共指令", "Platform preamble")}</h2>
+          <span className={`badge ${enabled ? "badge--success" : "badge--warning"}`}>{enabled ? t("当前草稿：启用", "Draft: enabled") : t("当前草稿：停用", "Draft: disabled")}</span>
+        </div>
         <label className="mb-2 flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -176,14 +186,15 @@ export default function PlatformSettingsPage() {
         </label>
 
         <textarea
-          className="mt-2 h-72 w-full rounded-md border px-3 py-2 font-mono text-sm"
+          aria-label={t("平台公共指令", "Platform preamble")}
+          className="glass-control mt-2 h-72 w-full px-3 py-2 font-mono text-sm"
           placeholder={t("输入平台公共指令…", "Enter the platform preamble…")}
           value={preamble}
           onChange={(e) => setPreamble(e.target.value)}
           disabled={!enabled}
         />
-        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-          <span className={overLimit ? "text-red-600" : undefined}>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 break-words text-xs text-muted-foreground">
+          <span className={overLimit ? "text-destructive" : undefined}>
             {preamble.length.toLocaleString()} /{" "}
             {PREAMBLE_MAX_LEN.toLocaleString()}
             {t("字符", "characters")}
@@ -199,23 +210,21 @@ export default function PlatformSettingsPage() {
           )}
         </div>
 
-        <div className="mt-3 flex items-center justify-end gap-3">
-          {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
+        <div className="mt-4"><Notice tone={noticeTone}>{notice}</Notice></div>
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
           <button
             onClick={save}
             disabled={busy || overLimit}
-            className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
+            className="button-primary px-4 py-2 text-sm disabled:opacity-50"
           >
-            {busy ? t("保存中…", "Saving…") : "Save"}
+            {busy ? t("保存中…", "Saving…") : t("保存公共指令", "Save preamble")}
           </button>
         </div>
       </section>
 
-      <p className="mt-4 text-xs text-muted-foreground">
-        This text is sent to every model provider on every turn, for every skill
-        and user. Keep it generic — anything customer- or skill-specific
-        belongs in that skill instead.
-      </p>
+      <Notice>
+        {t("此指令会在每轮对话中发送给模型服务，适用于所有技能和用户。请仅保留通用内容，客户或技能专属信息应放入对应技能。", "This text is sent to every model provider on every turn, for every skill and user. Keep it generic — anything customer- or skill-specific belongs in that skill instead.")}
+      </Notice>
 
       {compaction && (
         <CompactionSettingsSection
@@ -227,6 +236,7 @@ export default function PlatformSettingsPage() {
           onSaved={(updatedBy, updatedAt) => setMeta({ updatedBy, updatedAt })}
         />
       )}
+      </div>
     </main>
   );
 }

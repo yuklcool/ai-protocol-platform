@@ -6,7 +6,8 @@
 | --- | --- |
 | Root、Skill 和模块边界 | [模块说明](../module-simplification.md) |
 | 当前产品设计 | [平台改版](agent-platform-redesign.md) |
-| 全站样式及验收 | [界面检查清单](ui-redesign-acceptance.md)、[样式参考](frontend-style-kit/README.md) |
+| 全站样式及验收 | [当前设计系统](../../DESIGN.md)、[交互示意稿](../../outputs/glass-workspace-design.html)、[界面检查清单](ui-redesign-acceptance.md) |
+| 初始视觉来源与字体许可 | [样式参考](frontend-style-kit/README.md) |
 | 上游同步约束 | [模板拓扑](template/template-repo-topology.md) |
 | 历史版本设计 | [归档索引](../archive/design/README.md) |
 

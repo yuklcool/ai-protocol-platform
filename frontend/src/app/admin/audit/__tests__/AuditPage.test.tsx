@@ -66,6 +66,7 @@ describe("AuditPage", () => {
     await waitFor(() => expect(screen.getByText("update_account")).toBeTruthy());
     expect(screen.getByText("owner@yourcompany.com")).toBeTruthy();
     expect(screen.getByText("a.com")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Change details" })).toBeTruthy();
   });
 
   it("says plainly when nothing has been recorded at all", async () => {

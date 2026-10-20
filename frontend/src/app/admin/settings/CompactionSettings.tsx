@@ -11,7 +11,7 @@
 // null; the backend stores the block whole for the same reason.
 
 "use client";
-import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
+import { Notice, useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 import { useState } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
@@ -71,6 +71,7 @@ export function CompactionSettingsSection({
   );
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"success" | "danger">("danger");
 
   // Client-side mirrors of the backend's write-time validation. The server is
   // still the gate (a stale tab, a curl, a script) — this only shortens the loop.
@@ -90,6 +91,7 @@ export function CompactionSettingsSection({
   const save = async () => {
     setBusy(true);
     setNotice(null);
+    setNoticeTone("danger");
     try {
       const idle = toNumberOrNull(idleMinutes);
       const compaction: CompactionSettings = {
@@ -119,6 +121,7 @@ export function CompactionSettingsSection({
       }
       const cfg = await r.json();
       onSaved?.(cfg.updatedBy, cfg.updatedAt);
+      setNoticeTone("success");
       setNotice(
         t(
           "已保存，约一分钟内对新轮次生效，无需部署。",
@@ -135,11 +138,14 @@ export function CompactionSettingsSection({
   };
 
   return (
-    <section className="mt-6 glass-panel p-4">
-      <h2 className="text-base font-semibold">
-        {t("会话上下文压缩", "Conversation compaction")}
-      </h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <section className="glass-panel min-w-0 p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+        <h2 className="text-base font-semibold">
+          {t("会话上下文压缩", "Conversation compaction")}
+        </h2>
+        <span className={`badge ${enabled ? "badge--success" : "badge--warning"}`}>{enabled ? t("当前草稿：启用", "Draft: enabled") : t("当前草稿：停用", "Draft: disabled")}</span>
+      </div>
+      <p className="notice notice--warning block">
         {t(
           "会话超过 Token 阈值时，模型上下文中的较早消息会替换为摘要。",
           "When a conversation grows past the token threshold, older turns are replaced by an AI summary before the model sees them.",
@@ -193,7 +199,7 @@ export function CompactionSettingsSection({
             type="text"
             inputMode="numeric"
             aria-label={t("Token 阈值", "Token threshold")}
-            className="w-full rounded-md border px-3 py-2 text-sm"
+            className="glass-control mt-1 w-full min-w-0 px-3 py-2 text-sm"
             placeholder="250000"
             value={tokenThreshold}
             onChange={(e) => setTokenThreshold(e.target.value)}
@@ -218,7 +224,7 @@ export function CompactionSettingsSection({
             type="text"
             inputMode="numeric"
             aria-label={t("保留原始事件数", "Raw events retained")}
-            className="w-full rounded-md border px-3 py-2 text-sm"
+            className="glass-control mt-1 w-full min-w-0 px-3 py-2 text-sm"
             placeholder="60"
             value={retention}
             onChange={(e) => setRetention(e.target.value)}
@@ -235,7 +241,7 @@ export function CompactionSettingsSection({
         >
           <select
             aria-label={t("摘要模型", "Summariser model")}
-            className="w-full rounded-md border px-3 py-2 text-sm"
+            className="glass-control mt-1 w-full min-w-0 px-3 py-2 text-sm"
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={!enabled}
@@ -253,7 +259,7 @@ export function CompactionSettingsSection({
       </div>
 
       <div className="mt-4">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <label className="block text-sm font-medium">
             {t("摘要指令", "Summariser prompt")}
           </label>
@@ -261,7 +267,7 @@ export function CompactionSettingsSection({
             <button
               type="button"
               onClick={() => setPrompt(defaultPrompt)}
-              className="text-xs underline hover:no-underline"
+              className="button-secondary px-2 py-1 text-xs"
             >
               {t("恢复默认指令", "Reset to shipped prompt")}
             </button>
@@ -269,14 +275,14 @@ export function CompactionSettingsSection({
         </div>
         <textarea
           aria-label={t("摘要指令", "Summariser prompt")}
-          className="h-56 w-full rounded-md border px-3 py-2 font-mono text-xs"
+          className="glass-control mt-2 h-56 w-full px-3 py-2 font-mono text-xs"
           placeholder={`Must contain ${PLACEHOLDER}.`}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           disabled={!enabled}
         />
         {promptInvalid ? (
-          <p className="mt-1 text-xs text-red-600">
+          <p role="alert" className="mt-1 text-xs text-destructive">
             {t(
               `必须包含 ${PLACEHOLDER}，用于填入原始会话内容。`,
               `Must contain ${PLACEHOLDER} — it is where the conversation is substituted in.`,
@@ -301,7 +307,7 @@ export function CompactionSettingsSection({
         )}
       </div>
 
-      <div className="mt-6 rounded-md border border-dashed p-3">
+      <div className="mt-6 rounded-xl border bg-muted/20 p-4">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -341,7 +347,7 @@ export function CompactionSettingsSection({
               type="text"
               inputMode="numeric"
               aria-label={t("空闲等待（分钟）", "Idle wait (minutes)")}
-              className="w-full rounded-md border px-3 py-2 text-sm"
+              className="glass-control mt-1 w-full min-w-0 px-3 py-2 text-sm"
               placeholder="45"
               value={idleMinutes}
               onChange={(e) => setIdleMinutes(e.target.value)}
@@ -351,12 +357,12 @@ export function CompactionSettingsSection({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-end gap-3">
-        {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
+      <div className="mt-4"><Notice tone={noticeTone}>{notice}</Notice></div>
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         <button
           onClick={save}
           disabled={busy || blocked}
-          className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
+          className="button-primary px-4 py-2 text-sm disabled:opacity-50"
         >
           {busy
             ? t("保存中…", "Saving…")
@@ -383,7 +389,7 @@ function Field({
       <label className="block text-sm font-medium">{label}</label>
       {children}
       {error ? (
-        <p className="mt-1 text-xs text-red-600">{error}</p>
+        <p role="alert" className="mt-1 text-xs text-destructive">{error}</p>
       ) : (
         <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
       )}

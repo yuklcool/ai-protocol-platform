@@ -13,6 +13,7 @@ import { SignInRequired } from "@/components/chat/SignInRequired";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminScope } from "@/hooks/useAdminScope";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 
 interface AuditEntry {
   id: string;
@@ -43,6 +44,7 @@ function fmt(ts: string): string {
 }
 
 export default function AuditPage() {
+  const t = useConsoleCopy();
   const { user, loading } = useAuth();
   const { state: scopeState, isAdmin } = useAdminScope(!loading && !!user);
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -57,28 +59,28 @@ export default function AuditPage() {
           kind: "error",
           message:
             r.status === 403
-              ? "You don't have access to the audit trail."
-              : `Couldn't load the audit trail (HTTP ${r.status}).`,
+              ? t("你没有查看审计记录的权限。", "You don't have access to the audit trail.")
+              : t(`无法加载审计记录（HTTP ${r.status}）。`, `Couldn't load the audit trail (HTTP ${r.status}).`),
         });
         return;
       }
       setState({ kind: "ready", data: (await r.json()) as AuditResponse });
     } catch {
-      setState({ kind: "error", message: "Couldn't reach the admin service — this is a connection problem." });
+      setState({ kind: "error", message: t("无法连接管理服务，请检查网络连接。", "Couldn't reach the admin service — this is a connection problem.") });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (isAdmin) void load();
   }, [isAdmin, load]);
 
-  if (loading || scopeState === "loading") return <Centered>Loading…</Centered>;
+  if (loading || scopeState === "loading") return <Centered><p role="status" className="skeleton w-full max-w-md p-6 text-center text-sm">{t("正在读取管理权限…", "Loading…")}</p></Centered>;
   if (!user) return <SignInRequired />;
   if (scopeState === "error") {
     return (
       <Centered>
-        <p className="text-sm text-muted-foreground">
-          Couldn&apos;t check your access. This is a connection problem, not a permissions one.
+        <p role="alert" className="notice notice--danger">
+          {t("无法检查访问权限。这是连接问题，并非权限不足。", "Couldn't check your access. This is a connection problem, not a permissions one.")}
         </p>
       </Centered>
     );
@@ -86,84 +88,91 @@ export default function AuditPage() {
   if (!isAdmin) {
     return (
       <Centered>
-        <p className="text-sm text-muted-foreground">The audit trail requires an admin group.</p>
+        <p className="notice notice--warning">{t("查看审计记录需要管理员权限。", "The audit trail requires an admin group.")}</p>
       </Centered>
     );
   }
 
   return (
-    <main className="page-container mx-auto max-w-5xl p-6">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold">Audit trail</h1>
-        <p className="text-sm text-muted-foreground">Every admin change: who, what, when.</p>
+    <main className="page-container mx-auto max-w-5xl">
+      <header className="page-header">
+        <div className="min-w-0">
+          <h1 className="page-header__title">{t("审计记录", "Audit trail")}</h1>
+          <p className="page-header__desc">{t("追溯管理变更的操作人、操作内容与发生时间。", "Every admin change: who, what, when.")}</p>
+        </div>
       </header>
 
-      {state.kind === "loading" && <p className="text-sm text-muted-foreground">Loading…</p>}
+      <div className="page-body space-y-4">
+        {state.kind === "loading" && <p role="status" className="skeleton p-6 text-sm text-muted-foreground">{t("正在加载审计记录…", "Loading…")}</p>}
 
-      {state.kind === "error" && (
-        <div className="rounded border border-destructive/40 bg-destructive/5 px-3 py-2">
-          <p className="text-sm text-destructive">{state.message}</p>
-          <button className="mt-2 rounded border px-2 py-1 text-xs" onClick={() => void load()}>
-            Retry
-          </button>
-        </div>
-      )}
+        {state.kind === "error" && (
+          <div role="alert" className="notice notice--danger flex-col">
+            <p>{state.message}</p>
+            <button className="button-secondary px-3 py-1.5 text-sm" onClick={() => void load()}>
+              {t("重试", "Retry")}
+            </button>
+          </div>
+        )}
 
-      {state.kind === "ready" && (
-        <>
-          {state.data.entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No admin changes have been recorded yet.
-            </p>
-          ) : (
-            <>
-              <p className="mb-2 text-xs text-muted-foreground">
-                Showing {state.data.entries.length}
-              </p>
-              <div className="overflow-x-auto rounded border">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2">When</th>
-                      <th className="px-3 py-2">Who</th>
-                      <th className="px-3 py-2">Action</th>
-                      <th className="px-3 py-2">Target</th>
-                      <th className="px-3 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {state.data.entries.map((e) => (
-                      <tr key={e.id} className="border-t align-top">
-                        <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fmt(e.ts)}</td>
-                        <td className="px-3 py-2 text-xs">{e.actorEmail || e.actorUid || "—"}</td>
-                        <td className="px-3 py-2">
-                          <code className="text-xs">{e.action}</code>
-                        </td>
-                        <td className="px-3 py-2 text-xs">{e.target || "—"}</td>
-                        <td className="px-3 py-2 text-right">
-                          {(e.before !== null || e.after !== null) && (
-                            <button
-                              className="text-xs underline"
-                              onClick={() => setExpanded(expanded === e.id ? null : e.id)}
-                            >
-                              {expanded === e.id ? "Hide" : "Diff"}
-                            </button>
-                          )}
-                          {expanded === e.id && (
-                            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-left text-[11px]">
-                              {JSON.stringify({ before: e.before, after: e.after }, null, 2)}
-                            </pre>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {state.kind === "ready" && (
+          <section className="glass-panel min-w-0 overflow-hidden">
+            {state.data.entries.length === 0 ? (
+              <div className="empty-state">
+                <h2 className="empty-state__title">{t("暂无审计记录", "No audit entries")}</h2>
+                <p className="empty-state__desc">{t("尚未记录任何管理变更。", "No admin changes have been recorded yet.")}</p>
               </div>
-            </>
-          )}
-        </>
-      )}
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+                  <h2 className="text-sm font-semibold">{t("管理变更", "Admin changes")}</h2>
+                  <span className="badge badge--brand">{t(`共 ${state.data.entries.length} 条`, `Showing ${state.data.entries.length}`)}</span>
+                </div>
+                <div className="max-h-[75vh] overflow-auto">
+                  <table className="data-table min-w-[760px]">
+                    <thead>
+                      <tr>
+                        <th scope="col">{t("时间", "When")}</th>
+                        <th scope="col">{t("操作人", "Who")}</th>
+                        <th scope="col">{t("操作", "Action")}</th>
+                        <th scope="col">{t("目标", "Target")}</th>
+                        <th scope="col" aria-label={t("变更详情", "Change details")}><span className="sr-only">{t("变更详情", "Change details")}</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.data.entries.map((e) => (
+                        <tr key={e.id}>
+                          <td className="whitespace-nowrap text-xs text-muted-foreground">{fmt(e.ts)}</td>
+                          <td className="max-w-64 break-words text-xs">{e.actorEmail || e.actorUid || "—"}</td>
+                          <td>
+                            <code className="badge badge--brand">{e.action}</code>
+                          </td>
+                          <td className="max-w-64 break-words text-xs">{e.target || "—"}</td>
+                          <td className="text-right">
+                            {(e.before !== null || e.after !== null) && (
+                              <button
+                                className="button-secondary whitespace-nowrap px-2 py-1 text-xs"
+                                aria-expanded={expanded === e.id}
+                                onClick={() => setExpanded(expanded === e.id ? null : e.id)}
+                              >
+                                {expanded === e.id ? t("收起", "Hide") : t("查看变更", "Diff")}
+                              </button>
+                            )}
+                            {expanded === e.id && (
+                              <pre className="mt-2 max-h-64 w-80 max-w-full overflow-auto whitespace-pre rounded-md border bg-muted/20 p-3 text-left text-[11px]">
+                                {JSON.stringify({ before: e.before, after: e.after }, null, 2)}
+                              </pre>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+        )}
+      </div>
     </main>
   );
 }
