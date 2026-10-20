@@ -5,7 +5,7 @@ verify, group lifecycle, the seven-gate join contract, the no-PII
 invariant on the `User` shape, and the fail-loud module-import
 behaviour when the signing secret is missing.
 
-Threat model + design: docs/design/v6.2.0/anonymous-group-id-auth.md
+Threat model + design: docs/archive/design/v6.2.0/anonymous-group-id-auth.md
 
 The seven gates on ``join_group`` are tested explicitly. Each gate
 has its own ``test_gate_N_<name>`` so a future maintainer can see at

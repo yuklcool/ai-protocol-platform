@@ -4,7 +4,7 @@ Sprint 2.12 (v6.2.0) — the platform-level budget interface. Forks
 plug a ``BudgetEnforcer`` implementation; the platform consults it
 before every LLM call and records the realised cost afterwards.
 
-Design contract: ``docs/design/v6.2.0/budget-enforcement.md``.
+Design contract: ``docs/archive/design/v6.2.0/budget-enforcement.md``.
 
 The Protocol is ``@runtime_checkable`` so fork impls don't need to
 inherit — duck typing with the two ``async`` methods is enough.

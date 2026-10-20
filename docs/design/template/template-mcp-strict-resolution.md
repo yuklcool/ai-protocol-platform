@@ -191,8 +191,8 @@ Test infra: patches `tools.mcp.registry.get_document` for the registry tests (Fi
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — G42 row
-- [template-protocol-defaults.md G24](./template-protocol-defaults.md) — Friction 7 ("SKILL.md tool drift") — G42 also prevents this class of bug by making the SKILL.md → agent-build contract strict.
-- [template-agui-terminal-dedup.md](./template-agui-terminal-dedup.md) — sibling "universal trap that every fork hits" doc (G41). Both are template-shipped backend code where the failure is silent until a real demo surfaces it.
+- [template-protocol-defaults.md G24](template-protocol-defaults.md) — Friction 7 ("SKILL.md tool drift") — G42 also prevents this class of bug by making the SKILL.md → agent-build contract strict.
+- [template-agui-terminal-dedup.md](template-agui-terminal-dedup.md) — sibling "universal trap that every fork hits" doc (G41). Both are template-shipped backend code where the failure is silent until a real demo surfaces it.
 - [adk/tools.py](../../../backend/adk/tools.py) and [tools/mcp/registry.py](../../../backend/tools/mcp/registry.py) — the files under test.
 
 ## Cloud Run failure-path interaction with G41
@@ -200,7 +200,7 @@ Test infra: patches `tools.mcp.registry.get_document` for the registry tests (Fi
 On a Cloud Run deployment, the strict check at agent-build time raises
 `McpServerResolutionError`, which propagates up through `ag_ui_adk`'s
 background task and gets emitted as `RUN_ERROR` via the queue path.
-Without [G41](./template-agui-terminal-dedup.md) the subsequent spurious
+Without [G41](template-agui-terminal-dedup.md) the subsequent spurious
 `RUN_FINISHED` from `ag_ui_adk`'s outer try-block would trip the
 `@ag-ui/client` state machine with *"Cannot send event type 'RUN_FINISHED'"*.
 G41 suppresses that duplicate terminal, so the user sees a SINGLE

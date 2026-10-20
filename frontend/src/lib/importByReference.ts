@@ -4,7 +4,7 @@
 // handleDocClick to mount in the workbench. Replaces the 4.5 synthetic-
 // chat-message hack that bypassed AILANG Parse.
 //
-// See docs/design/v6.4.0/document-import-by-reference.md for the cache
+// See docs/archive/design/v6.4.0/document-import-by-reference.md for the cache
 // cascade (L2 self-dedup → L4 sentinel-clone → L3 fresh parse).
 
 import { fetchWithAuth } from "@/lib/apiClient";

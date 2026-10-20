@@ -96,16 +96,6 @@ class GroupMetadataResponse(BaseModel):
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
 
-def _firebase_user() -> User:
-    """Resolver for endpoints that require Firebase auth (teacher path).
-
-    Imported lazily so this module can be loaded before the rest of the
-    auth dispatcher wiring; the actual ``get_current_user`` is set on
-    the route as a Depends below.
-    """
-    raise RuntimeError("placeholder — replaced at route registration time")
-
-
 def _build_join_url(group_id: str, request: Request) -> str:
     """Produce a teacher-shareable join link. Trusts the X-Forwarded-Host
     if present (Cloud Run); falls back to the request URL's base."""

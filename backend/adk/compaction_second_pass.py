@@ -24,7 +24,7 @@ This module is the CORE shared by both HTTP surfaces (the admin route the CLI
 calls, and the OIDC-gated internal task route). It performs no auth and maps
 nothing to HTTP; routes do that.
 
-See docs/design/v6.23.0/compaction-second-pass.md and
+See docs/archive/design/v6.23.0/compaction-second-pass.md and
 docs/projects/compaction/README.md.
 """
 

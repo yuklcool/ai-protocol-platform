@@ -100,6 +100,6 @@ uv run python scripts/seed_tool_permissions.py --domain yourcompany.com --wildca
 
 ## Related
 
-- Auth design: [auth-and-permissions.md](../design/v6.0.0/auth-and-permissions.md)
-- Resource access: [resource-access-control.md](../design/v6.0.0/resource-access-control.md)
-- Sprint: [auth-and-permissions-sprint.md](../design/v6.0.0/auth-and-permissions-sprint.md)
+- Auth design: [auth-and-permissions.md](../archive/design/v6.0.0/implemented/auth-and-permissions.md)
+- Resource access: [resource-access-control.md](../archive/design/v6.0.0/implemented/resource-access-control.md)
+- Sprint: auth-and-permissions-sprint.md (`../design/v6.0.0/auth-and-permissions-sprint.md`)

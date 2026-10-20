@@ -9,7 +9,7 @@
 // not replacement. A reviewer that crashes or is bypassed leaves the
 // sandbox + CSP boundary intact.
 //
-// Design contract: docs/design/v6.2.0/artefact-render-hook.md.
+// Design contract: docs/archive/design/v6.2.0/artefact-render-hook.md.
 //
 // The TypeScript interface MUST mirror the Python Protocol at
 // backend/protocols/artefact_review.py exactly. Forks may implement

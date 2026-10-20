@@ -5,7 +5,7 @@ The task-shaped counterpart to ``aiplatform toolbox probe``. Probe speaks MCP
 BigQuery ("what tables are in market_prices?"), which is what you actually want when
 reproducing a data question or checking the security boundary by hand.
 
-Design: docs/design/v6.23.0/one-bigquery.md
+Design: docs/archive/design/v6.23.0/one-bigquery.md
 
 ## Why `bq sql`, not `bq query`
 

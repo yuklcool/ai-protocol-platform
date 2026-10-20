@@ -5,7 +5,7 @@
 # images (no rebuild — bit-identical to what passed the source env's CI gate)
 # and rebuilding ONLY the frontend from the same tagged source with the
 # TARGET env's config. See
-# docs/design/v6.20.0/build-once-artifact-promotion.md.
+# docs/archive/design/v6.20.0/build-once-artifact-promotion.md.
 #
 # Invoked by `scripts/promote-env.sh` -> `gcloud builds triggers run
 # <target>-promote --tag=vX.Y.Z`. Running it as a TRIGGER (never

@@ -92,4 +92,4 @@ access_control:
 ```
 
 Users receive tags via Firebase JWT custom claims; see
-[docs/ops/dev-accounts.md](../../../docs/ops/dev-accounts.md).
+[docs/ops/dev-accounts.md](../../../../docs/ops/dev-accounts.md).

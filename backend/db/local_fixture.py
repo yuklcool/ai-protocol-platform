@@ -522,7 +522,7 @@ def _demo_skills(now: float) -> list[dict]:
                 "via /surface-action-run that re-emits the surface with an "
                 "incremented counter. No chat composer involved — the "
                 "click ALONE drives the agent. See "
-                "docs/design/v6.1.0/action-triggered-agent-turn.md."
+                "docs/archive/design/v6.1.0/action-triggered-agent-turn.md."
             ),
             "instructions": (
                 "You are the CLICK COUNTER demo agent for the AI Protocol "
@@ -609,7 +609,7 @@ def _demo_skills(now: float) -> list[dict]:
         # WORKSHOP-HELPER (Path B) — the meta-demo. Answers questions about
         # the platform from the actual docs corpus. RAG via search_workshop_docs
         # which indexes docs/workshop/, docs/integrations/,
-        # docs/design/v6.X.Y/implemented/, and docs/talks/ai-ui-protocol-stack.md.
+        # docs/archive/design/v6.X.Y/implemented/, and docs/talks/ai-ui-protocol-stack.md.
         # Path D (sprint 2.15) will extend this with show-and-tell + cohort
         # bootstrap. v1 is just the RAG skill.
         # ────────────────────────────────────────────────────────────────────
@@ -662,7 +662,7 @@ def _demo_skills(now: float) -> list[dict]:
                 "  - 'workshop block 4 sandbox'\n\n"
                 "## How to answer\n\n"
                 "1. **Cite the file path** from the tool result (e.g. "
-                "`docs/design/v6.2.0/implemented/a2ui-surface-context.md`). The "
+                "`docs/archive/design/v6.2.0/implemented/a2ui-surface-context.md`). The "
                 "user can click it to read the source.\n"
                 "2. **Quote or summarise** the relevant snippet — keep your "
                 "answer grounded in what the docs actually say.\n"

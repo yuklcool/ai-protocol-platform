@@ -4,7 +4,7 @@
 - **Severity:** High — unauthenticated read of customer conversation content, plus unauthenticated destructive and billable operations.
 - **Scope:** dev, test (including the public `test.yourcompany.com` domain). Prod v6 was not serving and would have inherited it at the 1 Sept cutover.
 - **Known exploitation:** none observed. No access-log review has been done — see *Open follow-ups*.
-- **Found:** while mapping the three trace stores for [trace-completeness-and-access](../../design/v6.23.0/trace-completeness-and-access.md) Phase 1. Not found by a security review.
+- **Found:** while mapping the three trace stores for [trace-completeness-and-access](../../archive/design/v6.23.0/trace-completeness-and-access.md) Phase 1. Not found by a security review.
 
 ## TL;DR
 
@@ -114,6 +114,6 @@ not asserted.* The new test checks the property over the whole route table.
 
 ## Related
 
-- [trace-completeness-and-access](../../design/v6.23.0/trace-completeness-and-access.md) — the work that surfaced this
-- [`.claude/skills/aitana-adk-testing/SKILL.md`](../../../.claude/skills/aitana-adk-testing/SKILL.md) — the only consumer of these routes; now needs an admin token
+- [trace-completeness-and-access](../../archive/design/v6.23.0/trace-completeness-and-access.md) — the work that surfaced this
+- `.claude/skills/aitana-adk-testing/SKILL.md` (`../../../.claude/skills/aitana-adk-testing/SKILL.md`) — the only consumer of these routes; now needs an admin token
 - [fe-bringup-1-proxy-404](fe-bringup-1-proxy-404.md) — the proxy's original design and why it forwards everything

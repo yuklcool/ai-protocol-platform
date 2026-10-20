@@ -72,7 +72,7 @@ happens downstream."*
 
 ## Worked example — MODEL-RELIABILITY (7.7, assessed 2026-07-10)
 
-Design doc: `docs/design/v6.7.0/model-reliability.md`. Assessment rationale:
+Design doc: `docs/archive/design/v6.7.0/model-reliability.md`. Assessment rationale:
 the riskiest artifact is `ResilientLlm` — an async-generator wrapper on ADK's
 `BaseLlm` streaming seam with a mid-stream visible-output gate and a
 three-provider error classifier: maximum subtlety, long-horizon, fully

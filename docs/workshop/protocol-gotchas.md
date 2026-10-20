@@ -79,7 +79,7 @@ talk to its backend adapters — but the React side is its own thing.
 
 **Fix:** Use `@ag-ui/client.HttpAgent` directly. v6 has 0 lines of
 CopilotKit code; the entire chat UI is `agent.subscribe({...})` in
-[`useSkillAgent.ts`](useSkillAgent.ts) (see [`code-tour.md`](code-tour.md)).
+[`useSkillAgent.ts`](../../frontend/src/hooks/useSkillAgent.ts) (see [`code-tour.md`](code-tour.md)).
 
 If you want the polished CopilotKit chrome (sidebar, popup, themes),
 you can still do that — but adopt the full CopilotKit stack
@@ -307,7 +307,7 @@ Test through the same path the browser uses.
 - [`docs/talks/ai-ui-protocol-stack.md`](https://github.com/sunholo-data/ai-protocol-platform/blob/main/docs/talks/ai-ui-protocol-stack.md) — the living
   verification log + anti-patterns list. Every entry here is dated and
   cites the commit / smoke test that proved the fix.
-- The platform's [`docs/design/v6.X.Y/implemented/`](https://github.com/sunholo-data/ai-protocol-platform/tree/main/docs/design) sprint docs — each fix
+- The platform's [`docs/archive/design/v6.X.Y/implemented/`](https://github.com/sunholo-data/ai-protocol-platform/tree/main/docs/design) sprint docs — each fix
   has a design doc with the worked example.
 
 The talk doc is the **source of truth**. This page is the workshop

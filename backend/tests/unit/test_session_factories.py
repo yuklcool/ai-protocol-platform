@@ -118,7 +118,7 @@ class TestGetCompactionConfig:
     of the model's request while the UI keeps showing them, so an over-eager
     setting degrades answers with no visible symptom. That failure mode is why
     these assertions are specific rather than "returns something sensible".
-    See docs/design/v6.23.0/conversation-context-fidelity.md.
+    See docs/archive/design/v6.23.0/conversation-context-fidelity.md.
     """
 
     def test_gemini_3_flash_gets_large_window_config(self):

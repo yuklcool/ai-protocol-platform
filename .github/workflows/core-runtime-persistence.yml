@@ -167,8 +167,8 @@ jobs:
           )
           from channels._default_skill import get_user_default_skill, set_user_default_skill
           from channels.identity import IdentityResolver
-          from db.persistence import get_repository, get_tenant_repository
-          from db.tenant_repository import TenantIsolationError
+          from db.persistence import get_repository
+          from db.tenant_repository import TenantIsolationError, TenantRepository
           import rag.corpus as corpus_mod
 
           repo = get_repository()
@@ -179,8 +179,8 @@ jobs:
           assert repo.get_document("ci_acceptance", "root")["kind"] == "root"
 
           # TenantRepository must fail closed on real PostgreSQL, not only Memory.
-          tenant_a = get_tenant_repository("tenant-a")
-          tenant_b = get_tenant_repository("tenant-b")
+          tenant_a = TenantRepository(repo, "tenant-a")
+          tenant_b = TenantRepository(repo, "tenant-b")
           tenant_a.set_document("ci_tenant_docs", "a-1", {"value": 1}, merge=False)
           tenant_b.set_document("ci_tenant_docs", "b-1", {"value": 2}, merge=False)
           assert tenant_a.get_document("ci_tenant_docs", "a-1")["value"] == 1

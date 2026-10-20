@@ -10,7 +10,7 @@ Two endpoints share these helpers:
 
 Pulling the gate primitives here keeps both endpoints honouring exactly
 the same access policy. Behaviour-preserving refactor — see
-docs/design/v6.1.0/action-triggered-agent-turn.md.
+docs/archive/design/v6.1.0/action-triggered-agent-turn.md.
 """
 
 from __future__ import annotations

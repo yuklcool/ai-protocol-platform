@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # That is not hypothetical: at the 2026-08-06 ONE UAT a ~12-turn expert
 # conversation compacted once at turn 10, and the "summarise everything we just
 # worked out" payoff request produced the wrong material. See
-# docs/design/v6.23.0/conversation-context-fidelity.md.
+# docs/archive/design/v6.23.0/conversation-context-fidelity.md.
 #
 # TWO TRIGGERS, AND THEY ARE NOT INTERCHANGEABLE (verified on google-adk 1.31.1):
 #

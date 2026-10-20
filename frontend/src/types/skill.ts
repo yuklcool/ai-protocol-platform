@@ -118,14 +118,14 @@ export interface Skill {
   // v6.4.0 4.5 SKILL-ONBOARDING — per-skill onboarding affordances
   // (intro_message, example_documents, sidebar bucket browser).
   // Optional / nullable; legacy skills omit this. See
-  // docs/design/v6.4.0/skill-onboarding.md.
+  // docs/archive/design/v6.4.0/skill-onboarding.md.
   welcome?: WelcomeConfig | null;
   // v6.4.0 SHELL-MODES — per-skill page-level shell shape. Optional /
   // nullable; null/missing → chat-primary (ChatShell). See
-  // docs/design/v6.4.0/skill-driven-shell-modes.md.
+  // docs/archive/design/v6.4.0/skill-driven-shell-modes.md.
   shell?: SkillShell | null;
   // v6.6.0 ONE-FORK-CONVERGENCE — per-skill persona (avatar + style + voice).
-  // Optional / nullable / additive. See docs/design/v6.6.0/…
+  // Optional / nullable / additive. See docs/archive/design/v6.6.0/…
   persona?: SkillPersona | null;
 }
 

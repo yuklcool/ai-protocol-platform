@@ -24,7 +24,7 @@ channels with and without out-of-band affordances:
   - return None → the sink rendered it natively and the reply text is
     left alone (a Slack `task_card`, a terminal status line, an embed)
 
-See `docs/design/v6.21.0/channels-agui-convergence.md`.
+See `docs/archive/design/v6.21.0/channels-agui-convergence.md`.
 """
 
 from __future__ import annotations

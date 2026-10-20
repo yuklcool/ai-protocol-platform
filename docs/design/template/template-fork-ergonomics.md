@@ -89,7 +89,7 @@ signal we get.
 | G19 sub-agent name resolution | ✅ Pre-existing | `get_skill(sub_id)` already resolves by name |
 | **G20 `process.env.X ?? "default"` → `\|\|`** | ✅ Shipped 2026-06-05 | 7 callsites converted: `app/page.tsx`, `api/proxy/[...path]/route.ts`, `.well-known/agent.json/route.ts`, `api/health/route.ts`, `api/proxy/health/route.ts`, `lib/anonymousGroupAuth.ts`, `lib/branding.ts`, `lib/localMode.ts`. Each carries an inline G20 comment explaining why |
 | G21 `role: hub\|specialist` discriminator | ⏳ Deferred to FORK-ERGO-B | Touches sub-agent UX + routing — needs a real design pass |
-| **G23 sanitize/docs asymmetry (Part B)** | ✅ Shipped 2026-06-05 | [`sanitize-for-template.sh`](../../../scripts/sanitize-for-template.sh) now deletes the 4 dead-link docs (`auth-smoke-testing.md`, `dev-accounts.md`, `agent-factory-smoke.md`, `env-promotion-audit.md`) and patches `smoke-deployed.sh::smoke_auth()` to no-op with a clear "not available in template fork" message. **Part A shipped 2026-07-29**: new [`backend/scripts/_smoke_config.py`](../../../backend/scripts/_smoke_config.py) makes `_env.py` optional — config resolves from flags → named env (when `_env.py` exists) → `NEXT_PUBLIC_FIREBASE_*` env vars → `frontend/.env.local`, and the throwaway principal is parametrized (`SMOKE_TEST_EMAIL` / `SMOKE_GROUP_TAGS`, with this deployment's values moved into the private `_env.py` as `SMOKE_IDENTITY`). `whoami_smoke.py`, `verify_rules.py`, `test_whoami_deployed.py` and the three ops docs (`auth-smoke-testing.md`, `dev-accounts.md`, `agent-factory-smoke.md`) now SHIP; the sanitize-time `smoke_auth()` neutering was deleted in favour of the shipped script detecting `_env.py`'s absence itself. +14 tests in [`test_smoke_config.py`](../../../backend/tests/unit/test_smoke_config.py) covering both modes. Only `env-promotion-audit.md` stays excluded (internal sitrep, not script docs) |
+| **G23 sanitize/docs asymmetry (Part B)** | ✅ Shipped 2026-06-05 | `sanitize-for-template.sh` (`../../../scripts/sanitize-for-template.sh`) now deletes the 4 dead-link docs (`auth-smoke-testing.md`, `dev-accounts.md`, `agent-factory-smoke.md`, `env-promotion-audit.md`) and patches `smoke-deployed.sh::smoke_auth()` to no-op with a clear "not available in template fork" message. **Part A shipped 2026-07-29**: new [`backend/scripts/_smoke_config.py`](../../../backend/scripts/_smoke_config.py) makes `_env.py` optional — config resolves from flags → named env (when `_env.py` exists) → `NEXT_PUBLIC_FIREBASE_*` env vars → `frontend/.env.local`, and the throwaway principal is parametrized (`SMOKE_TEST_EMAIL` / `SMOKE_GROUP_TAGS`, with this deployment's values moved into the private `_env.py` as `SMOKE_IDENTITY`). `whoami_smoke.py`, `verify_rules.py`, `test_whoami_deployed.py` and the three ops docs (`auth-smoke-testing.md`, `dev-accounts.md`, `agent-factory-smoke.md`) now SHIP; the sanitize-time `smoke_auth()` neutering was deleted in favour of the shipped script detecting `_env.py`'s absence itself. +14 tests in [`test_smoke_config.py`](../../../backend/tests/unit/test_smoke_config.py) covering both modes. Only `env-promotion-audit.md` stays excluded (internal sitrep, not script docs) |
 | **G39 `/.well-known/agent.json` Next-ingress proxy** | ✅ Pre-existing (shipped Sprint A) | [`frontend/src/app/.well-known/agent.json/route.ts`](../../../frontend/src/app/.well-known/agent.json/route.ts) |
 | **G44 dual-cloudbuild deployment-model discoverability** | ✅ Shipped 2026-06-07 (docs-only) | Preamble rewrite in [`backend/cloudbuild.yaml`](../../../backend/cloudbuild.yaml) (25-line "DELETE IF…" block listing the four use cases the standalone service exists for) + new [`docs/ops/deployment-models.md`](../../ops/deployment-models.md) (TL;DR table, model A vs B, full removal recipe, symptoms-of-wrong-choice table). No code change, zero test impact. Sanitize pipeline doesn't need changes — both files ship as-is to forks |
 
@@ -468,7 +468,7 @@ fork hit this three times:
 
 **Rule for the template:** always use `^|^` delimiter syntax in `cloudbuild.yaml`, even
 when current values don't need it. A future single-value-with-comma silently breaks
-otherwise. Roll into [template-cloudbuild-hardening.md](./template-cloudbuild-hardening.md).
+otherwise. Roll into [template-cloudbuild-hardening.md](template-cloudbuild-hardening.md).
 
 **Related deploy fixes in the same cluster:**
 - Explicit `--service-account` on `gcloud run deploy` (commit `48a04a4`)
@@ -675,12 +675,12 @@ forks, but referenced in the documentation — it's confusing downstreamers."*
 | `docs/ops/dev-accounts.md` | `make smoke-auth`, link to `backend/scripts/whoami_smoke.py`, link to `test_whoami_deployed.py`, hardcoded `whoami-test@yourcompany.test` user |
 | `docs/ops/agent-factory-smoke.md` | `from scripts.whoami_smoke import _ensure_user, _sign_in` recipe |
 | `docs/ops/env-promotion-audit.md` | Pre-promotion checklist row + smoke commands reference `whoami_smoke.py` and `verify_rules` |
-| `docs/design/v6.1.0/implemented/aiplatform-cli-selftest-sprint.md` | Sprint history references |
-| `docs/design/v6.0.0/template-split-strategy.md` | Strategy doc references the smoke as fork-side infra |
+| `docs/archive/design/v6.1.0/implemented/aiplatform-cli-selftest-sprint.md` | Sprint history references |
+| `docs/archive/design/v6.0.0/template-split-strategy.md` | Strategy doc references the smoke as fork-side infra |
 | `scripts/smoke-deployed.sh:356` | Calls `uv run python scripts/whoami_smoke.py --env "$ENV"` — fails at runtime in any fork |
 
 **Why the asymmetry:** the smoke scripts import `_env.py` which carries hardcoded
-Firebase web keys (per [gotcha_firebase_auth_traps](../../../.claude/projects/-Users-mark-dev-aitana-labs-platform/memory/gotcha_firebase_auth_traps.md)
+Firebase web keys (per gotcha_firebase_auth_traps (`../../../.claude/projects/-Users-mark-dev-aitana-labs-platform/memory/gotcha_firebase_auth_traps.md`)
 — "public" web keys still get abused for unauthorized API calls when Google APIs are
 enabled in the same project). The sanitize pipeline excludes the *code* to keep secret
 scanner clean, but the prose stayed.
@@ -775,9 +775,9 @@ No new commands. The config.yaml approach lets `aiplatform --env` work unchanged
 
 ## Related Documents
 
-- [local-dev-cli.md](../../v6.1.0/local-dev-cli.md)
-- [aitana-template-publish skill](../../../.claude/skills/aitana-template-publish/SKILL.md)
-- [template-cloudbuild-hardening.md](./template-cloudbuild-hardening.md) — pairs with G18 (delimiter syntax, cold-start sleep)
+- [local-dev-cli.md](../../archive/design/v6.1.0/local-dev-cli.md)
+- aitana-template-publish skill (`../../../.claude/skills/aitana-template-publish/SKILL.md`)
+- [template-cloudbuild-hardening.md](template-cloudbuild-hardening.md) — pairs with G18 (delimiter syntax, cold-start sleep)
 - [SEQUENCE.md](SEQUENCE.md)
 - gde-ap-agent fork doc: `sunholo/gde-ap-agent` → `docs/design/template/template-fork-ergonomics.md` (source of G13–G22)
 - ailang message `8e82510d` (2026-06-02) — original notification from the fork

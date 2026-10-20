@@ -30,13 +30,13 @@ def test_index_loads_known_workshop_docs():
     assert "docs/workshop/protocol-gotchas.md" in paths
 
 
-def test_index_includes_v6_2_implemented_design_docs():
-    """Shipped sprint designs from v6.2.0 should be in the corpus."""
+def test_index_uses_current_guides_and_excludes_archived_designs():
+    """The helper must not present historical setup instructions as current."""
     docs = workshop_docs._load_index()
     paths = {d["path"] for d in docs}
-    assert "docs/design/v6.2.0/implemented/a2ui-surface-context.md" in paths
-    assert "docs/design/v6.2.0/implemented/budget-enforcement.md" in paths
-    assert "docs/design/v6.2.0/implemented/anonymous-group-id-auth.md" in paths
+    assert "docs/configuration-guide.md" in paths
+    assert "docs/chat-file-analysis.md" in paths
+    assert not any(path.startswith("docs/archive/") for path in paths)
 
 
 def test_index_includes_integration_howtos():

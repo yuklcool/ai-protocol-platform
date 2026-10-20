@@ -48,7 +48,7 @@ class DelegationMode(StrEnum):
     - ``auto``    : the parent LLM transfers autonomously (ADK ``transfer_to_agent``).
     - ``suggest`` : the parent proposes a handoff; the user confirms before it happens.
 
-    See docs/design/v6.7.0/skill-delegation.md.
+    See docs/archive/design/v6.7.0/skill-delegation.md.
     """
 
     AUTO = "auto"
@@ -238,7 +238,7 @@ class Protocols(BaseModel):
 class ExampleDocument(BaseModel):
     """One pre-loaded example document a skill offers in its WorkbenchPane
     Workspace tab when a chat is fresh. Click → existing doc-import-by-reference
-    path (no upload). See docs/design/v6.4.0/skill-onboarding.md.
+    path (no upload). See docs/archive/design/v6.4.0/skill-onboarding.md.
 
     ``bucket`` is OPTIONAL: when empty, the skills API fills it per-request from
     the caller's tenant ``documents_bucket`` (``resolve_documents_bucket``), so a
@@ -299,7 +299,7 @@ class WelcomeConfig(BaseModel):
     """Per-skill onboarding config — intro greeting, example documents, example
     prompts, sidebar bucket browser. All fields optional and nullable; older
     skills without `welcome` round-trip unchanged. See
-    docs/design/v6.4.0/skill-onboarding.md for the full schema and rationale."""
+    docs/archive/design/v6.4.0/skill-onboarding.md for the full schema and rationale."""
 
     intro_message: str | None = Field(default=None, alias="introMessage")
     example_documents: list[ExampleDocument] = Field(default_factory=list, alias="exampleDocuments")
@@ -372,7 +372,7 @@ class SkillShell(BaseModel):
     skill leaves `shell` null, the platform renders the chat-primary ChatShell
     (the post-4.3 layout). `custom` is accepted but resolves to ChatShell in
     v1; a registry hook is a v6.5 follow-up. See
-    docs/design/v6.4.0/skill-driven-shell-modes.md."""
+    docs/archive/design/v6.4.0/skill-driven-shell-modes.md."""
 
     mode: str = "chat-primary"  # chat-primary | doc-compare | workbench-primary | custom
     chat: ShellChat = Field(default_factory=ShellChat)
@@ -423,7 +423,7 @@ class SkillPersona(BaseModel):
     voice. Promotes the legacy top-level `avatar` into a first-class object so
     the Skill Studio can edit identity + voice in one place. `interaction_style`
     is appended as a short directive to the skill instruction at agent build
-    time. See docs/design/v6.6.0/one-app-fork-convergence.md (Workstream C)."""
+    time. See docs/archive/design/v6.6.0/one-app-fork-convergence.md (Workstream C)."""
 
     display_name: str = Field(default="", alias="displayName")  # overrides displayName in chat
     avatar: str = ""  # URL to the chat-bubble avatar

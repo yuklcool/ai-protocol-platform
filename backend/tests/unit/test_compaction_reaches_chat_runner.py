@@ -34,10 +34,10 @@ the config in isolation proves nothing about whether it is WIRED. This test
 therefore asserts against the Runner the production factory actually produces,
 which is the only place the question can be answered.
 
-This is the custom<->ADK seam class of bug that `docs/design/v6.17.0/adk-contract-checklist.md`
+This is the custom<->ADK seam class of bug that `docs/archive/design/v6.17.0/adk-contract-checklist.md`
 exists for, so it runs under `make adk-conformance`.
 
-See docs/design/v6.23.0/compaction-wiring-and-observability.md.
+See docs/archive/design/v6.23.0/compaction-wiring-and-observability.md.
 """
 
 from __future__ import annotations

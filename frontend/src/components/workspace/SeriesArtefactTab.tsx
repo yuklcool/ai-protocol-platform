@@ -1,5 +1,5 @@
 // SeriesArtefactTab — the workbench Result tab for a DECLARED SERIES surface
-// (PRICES-WORKSPACE M2, docs/design/v6.12.0/market-prices-workspace.md).
+// (PRICES-WORKSPACE M2, docs/archive/design/v6.12.0/market-prices-workspace.md).
 //
 // The backend result→A2UI transform (adk/a2ui_entsoe_render.py) renders a Basic
 // v0.9 SUMMARY card as the component tree (Basic has no chart), and stashes the

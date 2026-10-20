@@ -39,7 +39,7 @@ params give it a third, better one — call the tool with what it has and let th
 tool raise the form (`needs_input` elicitation envelope, the same shape
 `map_ppa_obligations` returns for `needs_assumptions`). The submitted values are
 read back AUTHORITATIVELY from the surface data model (`read_submitted_values`),
-never transcribed by the model. See docs/design/v6.12.0/market-prices-workspace.md.
+never transcribed by the model. See docs/archive/design/v6.12.0/market-prices-workspace.md.
 """
 
 from __future__ import annotations

@@ -33,12 +33,6 @@ def database_registry_enabled() -> bool:
     return _truthy(os.environ.get("SELF_HOSTED_MODE"))
 
 
-def list_provider_documents() -> list[dict[str, Any]]:
-    if not database_registry_enabled():
-        return []
-    return query_documents(PROVIDERS_COLLECTION)
-
-
 def list_model_documents() -> list[dict[str, Any]]:
     if not database_registry_enabled():
         return []
@@ -124,7 +118,6 @@ __all__ = [
     "database_registry_enabled",
     "get_provider",
     "list_model_documents",
-    "list_provider_documents",
     "openai_compatible_runtime",
     "provider_view",
     "registry_settings",

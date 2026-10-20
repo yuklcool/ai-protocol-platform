@@ -99,7 +99,7 @@ lint = [
 # 1.31.1 currently requires starlette<1; the two remaining Starlette findings
 # are handled by scoped, expiring Trivy exceptions with reachability rationale.
 constraint-dependencies = [
-    "aiohttp>=3.14.3",
+    "aiohttp>=3.14.4",
     "cryptography>=50.0.0",
     "httplib2>=0.32.0",
     "joserfc>=1.6.8",
@@ -132,7 +132,7 @@ testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow",
     "integration: marks tests requiring external services",
-    "adk_contract: hermetic 'real ADK flow' guard for a custom<->ADK contract (make adk-conformance); see docs/design/v6.17.0/adk-contract-checklist.md",
+    "adk_contract: hermetic 'real ADK flow' guard for a custom<->ADK contract (make adk-conformance); see docs/archive/design/v6.17.0/adk-contract-checklist.md",
 ]
 
 [tool.codespell]

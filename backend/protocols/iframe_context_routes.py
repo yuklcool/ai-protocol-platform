@@ -1,7 +1,7 @@
 """Host endpoint for MCP App ``ui/update-model-context`` pushes.
 
 Architecture (sprint 1.25, design doc
-docs/design/v6.1.0/mcp-app-update-model-context.md):
+docs/archive/design/v6.1.0/mcp-app-update-model-context.md):
 
 The MCP Apps spec defines TWO iframe→host RPC channels — sprint 1.7 wired
 the first (``ui/message`` → synthetic chat turns); this module wires the

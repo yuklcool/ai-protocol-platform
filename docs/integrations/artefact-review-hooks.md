@@ -1,6 +1,6 @@
 # Artefact review hooks — fork adoption howto
 
-**Sprint reference:** [v6.2.0 sprint 2.13 design doc](../design/v6.2.0/implemented/artefact-render-hook.md)
+**Sprint reference:** [v6.2.0 sprint 2.13 design doc](../archive/design/v6.2.0/implemented/artefact-render-hook.md)
 **For:** Forks rendering MCP-app artefacts in contexts that need policy-level content review on top of the iframe sandbox — classroom builders (AIPLA), compliance-regulated demos, customer-brand-protected deployments, kiosk-mode safety.
 
 This howto walks a fork operator from "I want to inspect HTML before it renders in an iframe" to a registered reviewer that blocks bad content with a typed refusal panel. The platform ships the Protocol + permissive default; the actual policy is fork-side.
@@ -323,7 +323,7 @@ The old hand-rolled UX (custom error component? generic 500?) is replaced by `Ar
 
 ## Related docs
 
-- [Sprint 2.13 design doc](../design/v6.2.0/implemented/artefact-render-hook.md) — full Protocol contract, axiom alignment, security considerations.
-- [mcp-app-integrations](../design/v6.1.0/implemented/mcp-app-integrations.md) — the sandbox + render pipeline this extends.
+- [Sprint 2.13 design doc](../archive/design/v6.2.0/implemented/artefact-render-hook.md) — full Protocol contract, axiom alignment, security considerations.
+- [mcp-app-integrations](../archive/design/v6.1.0/implemented/mcp-app-integrations.md) — the sandbox + render pipeline this extends.
 - [Sprint 2.12 budget-enforcement howto](budget-enforcement.md) — sibling AIPLA-extension sprint with a similar Protocol shape.
 - [AIPLA ADR-013](https://www.sunholo.com/aipla/architecture.html#adr-013-artefact-safety-content-review-pipeline) — the request that surfaced this.

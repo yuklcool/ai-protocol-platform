@@ -4,19 +4,19 @@
 **Priority**: P1 (this is the G22 follow-up the SEQUENCE has been waiting for)
 **Estimated**: 4.5d planned; ~3h actual (most items were 1-component ports from gde-ap-agent fork; G32/G33 scope-cut as N/A or paired-with-deferred)
 **Scope**: Frontend (components/chat, components/audit, components/shared, providers/AGUIProvider, lib/branding)
-**Dependencies**: [template-protocol-defaults.md](./template-protocol-defaults.md) (G24 emit pattern is the source of truth for Friction 7's audit-pane fix)
+**Dependencies**: [template-protocol-defaults.md](template-protocol-defaults.md) (G24 emit pattern is the source of truth for Friction 7's audit-pane fix)
 **Created**: 2026-06-05
 **Last Updated**: 2026-06-05
-**Source items**: G28–G34 — captured by gde-ap-agent fork 2026-06-03 during AP demo polish. Resolves [SEQUENCE.md G22](./SEQUENCE.md) follow-up. G38 — captured by CPH Uni AIPLA fork (cphu/aipla-app) v1.1.0 feedback round: AGUIProvider unmounts entire subtree on every Firebase ID-token refresh; visible only to forks with cross-region backend latency.
+**Source items**: G28–G34 — captured by gde-ap-agent fork 2026-06-03 during AP demo polish. Resolves [SEQUENCE.md G22](SEQUENCE.md) follow-up. G38 — captured by CPH Uni AIPLA fork (cphu/aipla-app) v1.1.0 feedback round: AGUIProvider unmounts entire subtree on every Firebase ID-token refresh; visible only to forks with cross-region backend latency.
 
 ## Implementation Status (Sprint CHAT-SURFACE-A, 2026-06-05)
 
 | Item | Status | Files (platform) |
 |------|--------|------------------|
 | G28 DocumentHistoryPanel cap + collapse | ✅ Shipped (16/16 tests, 4 new G28 cases) | [DocumentHistoryPanel.tsx](../../../frontend/src/components/chat/DocumentHistoryPanel.tsx) — default-closed + `max-h-[25vh]` overflow-y-auto + count badge |
-| G29 DefinitionList primitive | ✅ Shipped (9 tests) | [DefinitionList.tsx](../../../frontend/src/components/shared/DefinitionList.tsx) + [DefinitionList.test.tsx](../../../frontend/src/components/shared/__tests__/DefinitionList.test.tsx) |
+| G29 DefinitionList primitive | ✅ Shipped (9 tests) | DefinitionList.tsx (`../../../frontend/src/components/shared/DefinitionList.tsx`) + DefinitionList.test.tsx (`../../../frontend/src/components/shared/__tests__/DefinitionList.test.tsx`) |
 | G29 JsonAsStructuredCard routing | ⏳ Deferred to Sprint B | gde-ap-agent's JsonCardBuilder is densely AP-specific (vendor_name/line_items/verdict baked in as title heuristics); a clean template port requires stripping the AP knowledge. Pairs naturally with the audit-view port |
-| G31 Tabbed Workbench | ✅ Shipped (11 tests, mount-preservation contract pinned) | [Workbench.tsx](../../../frontend/src/components/chat/Workbench.tsx) + [Workbench.test.tsx](../../../frontend/src/components/chat/__tests__/Workbench.test.tsx) — `useTabBadges()` helper included |
+| G31 Tabbed Workbench | ✅ Shipped (mount preservation, keyboard navigation and close interactions covered) | [Workbench.tsx](../../../frontend/src/components/chat/Workbench.tsx) + [Workbench.test.tsx](../../../frontend/src/components/chat/__tests__/Workbench.test.tsx) |
 | G32 DocTab hideViewModeButtons | ❌ NOT APPLICABLE | Platform's [DocTab.tsx](../../../frontend/src/components/doc-browser/DocTab.tsx) has no viewMode buttons; G32 is a fork-side cleanup item (gde-ap-agent added them and they conflicted with the Workbench layout) |
 | G33 Inline-emit-card suppression | ⏳ Deferred to Sprint B | Pairs with JsonAsStructuredCard; without that, no inline JSON-card exists to suppress |
 | G34 BrandAvatar theme + userPhotoURL | ✅ Shipped (20 tests in MessageBubble, +3 G34 cases) | [BrandAvatar.tsx](../../../frontend/src/components/chat/BrandAvatar.tsx) (theme tokens) + [MessageBubble.tsx](../../../frontend/src/components/chat/MessageBubble.tsx) (`userPhotoURL?` prop) + [ChatMessageList.tsx](../../../frontend/src/components/chat/ChatMessageList.tsx) (threading) + [chat/[...path]/page.tsx](../../../frontend/src/app/chat/[...path]/page.tsx) (passes `user.photoURL` from `useAuth`) |
@@ -47,10 +47,10 @@ a protocol bug; all are template-componentry defaults the template seeded poorly
 **Current State:**
 
 - **G28** [`DocumentHistoryPanel.tsx`](../../../frontend/src/components/chat/DocumentHistoryPanel.tsx) defaults `isOpen={true}` and renders its body with no `max-h` / internal scroll. A doc with 50+ sessions pushes the actual `DocumentPanel` off-screen.
-- **G29** [`JsonCardBuilder.ts`](../../../frontend/src/components/chat/JsonCardBuilder.ts) renders scalar key/value pairs as `Row([Text, Text])`. A2UI v0.9's `Row` is a `flex` container with no label-column convention, so labels wrap onto two lines as the container narrows; numeric values land below their labels, breaking ledger reading.
-- **G30** [`InspectorPanel.tsx`](../../../frontend/src/components/audit/InspectorPanel.tsx) `InputOutputCard` shows the tool's `result_content` on the OUTPUT side. For function-as-schema `emit_*` tools the result is a STOP-after-emit sentinel string, not the payload — judges open the audit and see *"Your structured output has been recorded. STOP. Do NOT call this tool again…"* instead of the data.
+- **G29** `JsonCardBuilder.ts` (`../../../frontend/src/components/chat/JsonCardBuilder.ts`) renders scalar key/value pairs as `Row([Text, Text])`. A2UI v0.9's `Row` is a `flex` container with no label-column convention, so labels wrap onto two lines as the container narrows; numeric values land below their labels, breaking ledger reading.
+- **G30** `InspectorPanel.tsx` (`../../../frontend/src/components/audit/InspectorPanel.tsx`) `InputOutputCard` shows the tool's `result_content` on the OUTPUT side. For function-as-schema `emit_*` tools the result is a STOP-after-emit sentinel string, not the payload — judges open the audit and see *"Your structured output has been recorded. STOP. Do NOT call this tool again…"* instead of the data.
 - **G31** Right-pane render uses a mutually-exclusive conditional ladder (`{expandedTab && <DocumentPanel/>}{!expandedTab && !globeContext && <WorkspaceSurfaceRegion/>}…`). Opening an MCP App unmounts the workspace card; opening a doc unmounts both. MCP App iframes remount on every switch (~200ms flash + postMessage re-init).
-- **G32** [`DocTab`](../../../frontend/src/components/chat/DocTab.tsx) viewMode buttons (side / focus / minimize) were designed for the single-slot pane; after the Workbench lands they're decorative but still visible. Coupled bug: the Workbench Document tab gates on `tab.viewMode !== "minimized"` so a freshly-clicked tab (default `viewMode="minimized"`) never appears.
+- **G32** [`DocTab`](../../../frontend/src/components/doc-browser/DocTab.tsx) viewMode buttons (side / focus / minimize) were designed for the single-slot pane; after the Workbench lands they're decorative but still visible. Coupled bug: the Workbench Document tab gates on `tab.viewMode !== "minimized"` so a freshly-clicked tab (default `viewMode="minimized"`) never appears.
 - **G33** [`MessageBubble.tsx`](../../../frontend/src/components/chat/MessageBubble.tsx) emits both an inline `JsonAsA2UICard` AND a workspace `A2UISurfaceMount` from a single `emit_*` tool call. Two visually-different renderings of the same payload appear — reads as a styling bug even when intentional.
 - **G34** [`BrandAvatar.tsx`](../../../frontend/src/components/chat/BrandAvatar.tsx) + `MessageBubble.tsx` hardcode Tailwind colour literals (`from-teal-400 to-teal-600`, `from-amber-400 to-yellow-600`). `user.photoURL` is not threaded through the prop chain (`useAuth → chat page → ChatMessageList → MessageBubble`) so signed-in Google users see initial chips instead of their own profile photo.
 - **G38** [`AGUIProvider.tsx`](../../../frontend/src/providers/AGUIProvider.tsx) `useEffect([authLoading, user, getIdToken, useTeacherAuth])` calls `setTokenResolved(false)` at the top of every run. The render path's `if (!tokenResolved) return /* loading */;` gate **unmounts** the entire subtree for the duration of the new token fetch. The effect re-runs on every silent hourly Firebase ID-token refresh and every `onAuthStateChanged` fire (tab focus, anonymous-group identity hydration). For upstream Aitana (Cloud Run + Agent Engine co-located in `europe-west1`) the GET `/api/sessions/{id}/messages` returns in ~5–50ms and the flicker is invisible; for any fork whose backend region differs (AIPLA: Cloud Run in `europe-north1`, Agent Engine in `europe-west1`, ~400ms) the chat bubbles **disappear and reappear** mid-conversation. The unmount kills `useSessionMessages` local state (history block flashes empty, refetch fires unnecessarily) and `useSkillAgent.messages` (live area goes blank).
@@ -143,8 +143,8 @@ Header gets a count badge: `Conversations [50]`. Optional `maxHeight?: string` p
 ### G29 — `DefinitionList` primitive + `JsonAsStructuredCard` render path
 
 **New files:**
-- [`frontend/src/components/shared/DefinitionList.tsx`](../../../frontend/src/components/shared/DefinitionList.tsx)
-- [`frontend/src/components/chat/JsonAsStructuredCard.tsx`](../../../frontend/src/components/chat/JsonAsStructuredCard.tsx)
+- `frontend/src/components/shared/DefinitionList.tsx` (`../../../frontend/src/components/shared/DefinitionList.tsx`)
+- `frontend/src/components/chat/JsonAsStructuredCard.tsx` (`../../../frontend/src/components/chat/JsonAsStructuredCard.tsx`)
 
 **`DefinitionList`:**
 
@@ -171,7 +171,7 @@ export function DefinitionList({ items, density = "default" }: DefinitionListPro
 }
 ```
 
-**Render path change** in [`JsonCardBuilder.ts`](../../../frontend/src/components/chat/JsonCardBuilder.ts):
+**Render path change** in `JsonCardBuilder.ts` (`../../../frontend/src/components/chat/JsonCardBuilder.ts`):
 when the JSON is scalar-heavy (all values are primitives or short strings), route
 through `JsonAsStructuredCard` (which uses `DefinitionList` internally) instead of the
 A2UI `Row([Text, Text])` path.
@@ -183,7 +183,7 @@ doesn't have.
 
 ### G30 — Audit pane `emit_*` substitution
 
-**File:** [`frontend/src/components/audit/InspectorPanel.tsx`](../../../frontend/src/components/audit/InspectorPanel.tsx)
+**File:** `frontend/src/components/audit/InspectorPanel.tsx` (`../../../frontend/src/components/audit/InspectorPanel.tsx`)
 
 ```tsx
 <InputOutputCard
@@ -273,7 +273,7 @@ instead of swapping panes. User keeps control of what's visible.
 
 ### G32 — `DocTab` viewMode opt-out + Workbench Document gating
 
-**Files:** [`frontend/src/components/chat/DocTab.tsx`](../../../frontend/src/components/chat/DocTab.tsx), [`frontend/src/components/chat/DocTabsBar.tsx`](../../../frontend/src/components/chat/DocTabsBar.tsx)
+**Files:** [`frontend/src/components/chat/DocTab.tsx`](../../../frontend/src/components/doc-browser/DocTab.tsx), [`frontend/src/components/chat/DocTabsBar.tsx`](../../../frontend/src/components/doc-browser/DocTabsBar.tsx)
 
 Add `hideViewModeButtons?: boolean` to `DocTab` + `DocTabsBar`, default `false`
 (preserves template behaviour for forks not using the Workbench). The chat page passes
@@ -440,10 +440,10 @@ No new commands. Forks that re-brand chat surface colours edit `tailwind.config.
 | 10 | `BrandAvatar` theme-token restyle; `userPhotoURL` prop threaded through chat page → list → bubble (G34) | 2h |
 | 10b | `AGUIProvider`: add `hadTokenOnceRef`; gate `setTokenResolved(false)` on initial load; vitest covers (a) children stay mounted on user-ref change with stable token, (b) no extra GET `/messages` fires, (c) `HttpAgent` rebuilt with new bearer (G38) | 4h |
 | 11 | Visual-regression / Vitest snapshot tests for `MessageBubble` + `Workbench` + `DefinitionList` + `InspectorPanel` | 4h |
-| 12 | Manual smoke via [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md): full three-stage pipeline with workspace + MCP App + audit panels open simultaneously (chrome-devtools MCP) | 3h |
+| 12 | Manual smoke via aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`): full three-stage pipeline with workspace + MCP App + audit panels open simultaneously (chrome-devtools MCP) | 3h |
 | 13 | Docs: workshop talking points addendum to [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md); template README pointers | 2h |
 | 14 | `CLAUDE.md` mention of the Workbench + DefinitionList primitives | 1h |
-| 15 | Resolve [SEQUENCE.md G22](./SEQUENCE.md) row → point at this doc | 0.5h |
+| 15 | Resolve [SEQUENCE.md G22](SEQUENCE.md) row → point at this doc | 0.5h |
 
 **Total: ~35h ≈ 4.5d** (was 4d before G38).
 
@@ -455,7 +455,7 @@ No new commands. Forks that re-brand chat surface colours edit `tailwind.config.
 - **`InspectorPanel.test.tsx`** — record with `name: "emit_invoice_extraction"`; assert OUTPUT shows `argsJson` not `resultContent`; assert label is "Emitted payload (function-as-schema)".
 - **`Workbench.test.tsx`** — render with 4 tabs; switch active tab; assert non-active tabs have `display: none` (not unmounted); assert MCP App iframe `ref.current` is the same node before and after switch.
 - **`MessageBubble.test.tsx`** — `userPhotoURL` present → renders `<img>`; null → renders initial chip; assert no hardcoded `from-teal-` / `from-amber-` classes survive.
-- **Visual smoke**: drive the AP demo via chrome-devtools MCP per [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md):
+- **Visual smoke**: drive the AP demo via chrome-devtools MCP per aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`):
   - Run the three-stage pipeline; verify Workbench tabs stay mounted across `surface_action` events.
   - Open Vendor Globe MCP App in `Vendor` tab; switch to `Workspace`; switch back; assert no re-init (no second `ui/initialize` postMessage).
   - Open audit view on `emit_invoice_extraction`; assert structured payload visible on both sides.
@@ -472,15 +472,15 @@ No new commands. Forks that re-brand chat surface colours edit `tailwind.config.
 - [ ] Each `emit_*` payload renders **once** (workspace surface card) by default; inline-card mode is opt-in via `ChatConfig` (G33).
 - [ ] No hardcoded `from-teal-`/`from-amber-` survive in `BrandAvatar` or `MessageBubble`; `user.photoURL` from `useAuth` reaches `MessageBubble` (G34).
 - [ ] Vitest covering `AGUIProvider`: with a stable token, a `user`-reference change does **not** unmount children, does **not** trigger an extra GET `/messages`, **does** rebuild `HttpAgent` with the new bearer atomically (G38).
-- [ ] Visible smoke (drive via [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md)): force a token refresh mid-conversation by simulating a `user`-reference change in the AGUIProvider; assert no chat-bubble flicker (G38).
+- [ ] Visible smoke (drive via aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`)): force a token refresh mid-conversation by simulating a `user`-reference change in the AGUIProvider; assert no chat-bubble flicker (G38).
 - [ ] [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) talking points 6, 7 (layout primitives, tabbed workbench) added.
-- [ ] All existing tests pass; visual smoke via [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md) green.
+- [ ] All existing tests pass; visual smoke via aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`) green.
 
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — items G28–G34 registered here; resolves G22 follow-up row
-- [template-protocol-defaults.md](./template-protocol-defaults.md) — G24 function-as-schema is the source of truth that G30's audit-pane fix renders; G26 callback-composition makes G33's "single source of truth for the payload" reliable
-- [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) — Workbench tabs (G31) preserve MCP App iframe state that the artefact handshake depends on; pairs with that doc's `useSandboxedIframeMessages` hook
-- [template-mcp-apps-artefact-quality.md](./template-mcp-apps-artefact-quality.md) — pairs at the artefact-quality layer (theme.css, default seed state)
-- [aitana-frontend-verify skill](../../../.claude/skills/aitana-frontend-verify/SKILL.md) — operating manual for the chrome-devtools MCP smoke
+- [template-protocol-defaults.md](template-protocol-defaults.md) — G24 function-as-schema is the source of truth that G30's audit-pane fix renders; G26 callback-composition makes G33's "single source of truth for the payload" reliable
+- [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) — Workbench tabs (G31) preserve MCP App iframe state that the artefact handshake depends on; pairs with that doc's `useSandboxedIframeMessages` hook
+- [template-mcp-apps-artefact-quality.md](template-mcp-apps-artefact-quality.md) — pairs at the artefact-quality layer (theme.css, default seed state)
+- aitana-frontend-verify skill (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`) — operating manual for the chrome-devtools MCP smoke
 - [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) — workshop tracker; absorbs G28–G34 as worked examples

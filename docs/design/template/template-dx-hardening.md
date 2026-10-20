@@ -17,7 +17,7 @@
 | **#15** Skill-invoke endpoint not discoverable | ✅ Already documented | [`README.md:40-44`](../../../README.md) — OpenAPI JSON pointer, skill-invocation endpoint, `app_name=aitana_platform` constant gotcha |
 | **#17** `/gcs_config` mount wired but unread | ✅ Removed | No backend references to `_CONFIG_FOLDER` or `/gcs_config` — the dead plumbing has been cleaned up |
 | **#18** `frontend/Dockerfile` silently drops `NEXT_PUBLIC_*` ARGs | ✅ Shipped 2026-06-05 | Two-part fix: (a) [`frontend/Dockerfile:9-21`](../../../frontend/Dockerfile#L9) has a prominent warning comment with the 3-step "when adding a new NEXT_PUBLIC_ variable" checklist; (b) [`get-firebase-config.sh:15-37`](../../../get-firebase-config.sh#L15) diffs `.env.local` NEXT_PUBLIC_* keys against the Dockerfile's ARG declarations at Cloud Build time and **fails the build loudly** with the missing-ARG list — silent-drop bugs surface here instead of as `undefined`-at-runtime in production. |
-| **#24** Vendored protocol specs as project-local skill | ✅ Shipped | [.claude/skills/agent-protocols/](../../../.claude/skills/agent-protocols/) — SKILL.md + `references/` (10 specs) + `scripts/refresh-specs.sh` (quarterly refresh). Documented in CLAUDE.md project-skills section. |
+| **#24** Vendored protocol specs as project-local skill | ✅ Shipped | [.claude/skills/agent-protocols/](../../../.claude/skills/agent-protocols) — SKILL.md + `references/` (10 specs) + `scripts/refresh-specs.sh` (quarterly refresh). Documented in CLAUDE.md project-skills section. |
 
 ## Problem Statement
 
@@ -305,7 +305,7 @@ Add to CLAUDE.md "Project Skills" section:
 
 ## Related Documents
 
-- [aitana-adk-testing skill](../../../.claude/skills/aitana-adk-testing/SKILL.md)
-- [local-dev-cli.md](../../v6.1.0/local-dev-cli.md)
+- aitana-adk-testing skill (`../../../.claude/skills/aitana-adk-testing/SKILL.md`)
+- [local-dev-cli.md](../../archive/design/v6.1.0/local-dev-cli.md)
 - [template-session-management.md](template-session-management.md) — `/list-apps` and `APP_NAME` relationship
 - [SEQUENCE.md](SEQUENCE.md)

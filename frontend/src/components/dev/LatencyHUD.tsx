@@ -1,4 +1,4 @@
-// docs/design/v6.1.0/ttft-instrumentation.md M3 — developer latency HUD.
+// docs/archive/design/v6.1.0/ttft-instrumentation.md M3 — developer latency HUD.
 //
 // Fixed-position panel, bottom-right, gated by NEXT_PUBLIC_DEV_LATENCY_HUD=1.
 // Shows real (server) and perceived (client) TTFT side by side for the last

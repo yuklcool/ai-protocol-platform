@@ -20,7 +20,7 @@ surface read-back:
   * a TOOL returns an elicitation result (e.g. a refusal that needs input), or
   * an AGENT calls :func:`request_confirmation` from its own judgement.
 
-Design: docs/design/v6.8.0/elicitation-in-chat-primitive.md
+Design: docs/archive/design/v6.8.0/elicitation-in-chat-primitive.md
 """
 
 from __future__ import annotations

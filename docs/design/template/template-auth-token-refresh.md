@@ -4,7 +4,7 @@
 **Priority**: P1 (silent UX failure every Firebase-Auth-backed fork hits after ~1h)
 **Estimated**: 1d planned; ~1h actual
 **Scope**: Frontend (`lib/firebase.ts`, `providers/AGUIProvider.tsx`)
-**Dependencies**: [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) G38 (no-token-refresh-unmount-gate contract — G40 mutates headers in place specifically to keep that contract)
+**Dependencies**: [template-chat-surface-defaults.md](template-chat-surface-defaults.md) G38 (no-token-refresh-unmount-gate contract — G40 mutates headers in place specifically to keep that contract)
 **Created**: 2026-06-05
 **Last Updated**: 2026-06-05
 **Source items**: G40 / Friction 21 — downstream fork user (gde-ap-agent), 2026-06-05, after a long-running demo hit a 401 wall mid-session.
@@ -155,7 +155,7 @@ useEffect(() => {
 
 ### Pre-existing contract preserved
 
-The G38 "AGUIProvider must not unmount children on token refresh" contract from [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) holds — verified by a pre-existing test that re-renders the provider multiple times with a stable ref check on the child DOM node. G40's in-place mutation pattern is the natural way to honour both G38 (don't unmount) AND token-freshness without contradiction.
+The G38 "AGUIProvider must not unmount children on token refresh" contract from [template-chat-surface-defaults.md](template-chat-surface-defaults.md) holds — verified by a pre-existing test that re-renders the provider multiple times with a stable ref check on the child DOM node. G40's in-place mutation pattern is the natural way to honour both G38 (don't unmount) AND token-freshness without contradiction.
 
 ### CLI Surface
 
@@ -206,5 +206,5 @@ Pre-existing tests preserved: URL-encoding of skillId, `useAGUIAgent` throws out
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — G40 row
-- [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) — G38 (no-unmount-on-token-refresh contract); G40 mutates headers in place specifically to preserve G38
-- [template-auth-hardening.md](./template-auth-hardening.md) — sibling auth-cluster doc covering different items (#9, #19, #20, #21)
+- [template-chat-surface-defaults.md](template-chat-surface-defaults.md) — G38 (no-unmount-on-token-refresh contract); G40 mutates headers in place specifically to preserve G38
+- [template-auth-hardening.md](template-auth-hardening.md) — sibling auth-cluster doc covering different items (#9, #19, #20, #21)

@@ -65,7 +65,7 @@ def test_data_model_is_a_declared_series_envelope():
     """v6.12.0 M1: the dataModel is a generic series shape, not ENTSO-E-specific.
 
     Any dataset-shaped tool (load/solar/wind) can emit this same envelope so a
-    future chart tab needs no per-tool knowledge — see docs/design/v6.12.0/
+    future chart tab needs no per-tool knowledge — see docs/archive/design/v6.12.0/
     market-prices-workspace.md ("The shape: a declared series surface").
     """
     msgs = entsoe_prices_to_a2ui(_result())

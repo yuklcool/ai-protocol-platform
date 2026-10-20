@@ -10,7 +10,6 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { type Firestore, getFirestore } from "firebase/firestore";
 import {
   isAnonymousGroupAuthMode,
   readStoredGroupSession,
@@ -112,9 +111,7 @@ export async function getIdToken(forceRefresh = false): Promise<string | null> {
     const session = readStoredGroupSession();
     return session?.token ?? null;
   }
-  // Self-host local JWT must be checked before LOCAL_MODE because the current
-  // Compose uses LOCAL_MODE=1 to switch off GCP assumptions while still using
-  // a real PostgreSQL-backed identity provider.
+  // Explicit identity modes take precedence over the local development stub.
   if (isOidcAuthMode()) return getOidcToken();
   if (isLocalJwtAuthMode()) return getLocalJwtToken();
   // Development stub.
@@ -178,22 +175,6 @@ export async function signOut(): Promise<void> {
   const auth = getFirebaseAuth();
   if (!auth) return;
   await fbSignOut(auth);
-}
-
-export function getFirestoreDb(): Firestore | null {
-  const app = getFirebaseApp();
-  if (!app) return null;
-  return getFirestore(app);
-}
-
-export function firestoreTimestampToIso(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const d = (value as { toDate: () => Date }).toDate?.();
-    return d instanceof Date ? d.toISOString() : null;
-  }
-  return null;
 }
 
 export type { User };

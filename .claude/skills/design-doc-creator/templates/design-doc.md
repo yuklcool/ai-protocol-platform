@@ -35,7 +35,7 @@
 
 ## Axiom Alignment
 
-Score each axiom per [Product Axioms](../../../docs/product-axioms.md). Net score must be >= +4. Max 2 conflicts (-1) allowed.
+Score each axiom per [Product Axioms](../../../../docs/product-axioms.md). Net score must be >= +4. Max 2 conflicts (-1) allowed.
 
 | # | Axiom | Score | Notes |
 |---|-------|-------|-------|

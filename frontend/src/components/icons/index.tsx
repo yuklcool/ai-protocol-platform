@@ -37,25 +37,7 @@ export function DocIcon(props: IconProps) {
   );
 }
 
-/** Compare — two side-by-side panels. */
-export function CompareIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <rect x="3" y="4" width="7.5" height="16" rx="1.5" />
-      <rect x="13.5" y="4" width="7.5" height="16" rx="1.5" />
-    </Icon>
-  );
-}
 
-/** Search — magnifier. */
-export function SearchIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.2-3.2" />
-    </Icon>
-  );
-}
 
 /** Voice / read-aloud — speaker with sound waves. */
 export function VoiceIcon(props: IconProps) {
@@ -64,38 +46,6 @@ export function VoiceIcon(props: IconProps) {
       <path d="M4 9v6h3.5L13 19V5L7.5 9Z" />
       <path d="M16.5 8.5a5 5 0 0 1 0 7" />
       <path d="M19 6a8 8 0 0 1 0 12" />
-    </Icon>
-  );
-}
-
-/** Send — paper plane. */
-export function SendIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M22 2 11 13" />
-      <path d="M22 2 15 22l-4-9-9-4Z" />
-    </Icon>
-  );
-}
-
-/** Settings — sliders (softer than a gear, matches the rounded house style). */
-export function SettingsIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M4 7h16" />
-      <path d="M4 17h16" />
-      <circle cx="9" cy="7" r="2.2" />
-      <circle cx="15" cy="17" r="2.2" />
-    </Icon>
-  );
-}
-
-/** Sparkle — AI / authoring / magic. */
-export function SparkleIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M12 3c.6 4.2 1.8 5.4 6 6-4.2.6-5.4 1.8-6 6-.6-4.2-1.8-5.4-6-6 4.2-.6 5.4-1.8 6-6Z" />
-      <path d="M19 3.2c.2 1.2.6 1.6 1.8 1.8-1.2.2-1.6.6-1.8 1.8-.2-1.2-.6-1.6-1.8-1.8 1.2-.2 1.6-.6 1.8-1.8Z" />
     </Icon>
   );
 }

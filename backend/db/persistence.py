@@ -70,19 +70,6 @@ def get_repository() -> Repository:
     return _repository
 
 
-def get_tenant_repository(tenant_id: str, *, tenant_field: str = "tenantId") -> Repository:
-    """Return a fail-closed tenant-scoped view of the configured repository.
-
-    New tenant-owned domain modules should prefer this helper to manually
-    appending ``tenantId`` filters. Legacy collections can continue using the
-    unscoped facade until their documents have been migrated to explicit tenant
-    ownership.
-    """
-    from db.tenant_repository import TenantRepository
-
-    return TenantRepository(get_repository(), tenant_id, tenant_field=tenant_field)
-
-
 def reset_repository_for_testing(repository: Repository | None = None) -> None:
     global _repository
     _repository = repository
@@ -136,7 +123,3 @@ def array_union_field(collection: str, doc_id: str, field: str, values: list[Any
     if not values:
         return
     get_repository().array_union_field(collection, doc_id, field, values)
-
-
-def persistence_healthcheck() -> bool:
-    return get_repository().healthcheck()

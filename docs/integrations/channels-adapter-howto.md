@@ -6,7 +6,7 @@
 
 **Worked example:** `backend/channels/_demo_cli.py` — a stdin/stdout demo channel built by following this doc top-to-bottom. The demo is internal-only (never registered in `fast_api_app.py`), but the implementation is the canonical "minimal valid adapter".
 
-> **Deeper reference:** the [channels design doc](../design/v6.1.0/channels.md) covers the framework rationale, security model, and the v5→v6 migration. This howto is the operating manual.
+> **Deeper reference:** the [channels design doc](../archive/design/v6.1.0/implemented/channels.md) covers the framework rationale, security model, and the v5→v6 migration. This howto is the operating manual.
 
 ---
 
@@ -338,7 +338,7 @@ Adapters MUST NOT call `process_skill_request` directly. The framework is the on
 
 ## See also
 
-- [Channels design doc](../design/v6.1.0/channels.md) — framework architecture, security model, v5→v6 migration map
+- [Channels design doc](../archive/design/v6.1.0/implemented/channels.md) — framework architecture, security model, v5→v6 migration map
 - [`backend/channels/base.py`](../../backend/channels/base.py) — the ABC source-of-truth; every contract above is enforced or documented in this file
 - [`backend/channels/_demo_cli.py`](../../backend/channels/_demo_cli.py) — the worked example
 - [`backend/tests/channels/test_smoke_all_channels.py`](../../backend/tests/channels/test_smoke_all_channels.py) — the contract test new channels enrol in

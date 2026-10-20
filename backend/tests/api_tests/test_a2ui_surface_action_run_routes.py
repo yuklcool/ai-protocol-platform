@@ -680,7 +680,7 @@ def _one_doc_compare_skill() -> SkillConfig:
 
 
 # A start_compare click as the CompareLauncher (M2) will send it — payload
-# shape from docs/design/v6.7.0/ppa-compare-launcher.md.
+# shape from docs/archive/design/v6.7.0/ppa-compare-launcher.md.
 _START_COMPARE_BODY = {
     "surfaceId": "workspace",
     "action": {

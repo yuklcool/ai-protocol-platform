@@ -137,13 +137,8 @@ jobs:
           else
             echo "::notice::Published downstream: source sanitizer is not part of this repository."
           fi
-      - name: Report dangling doc links (downstream feedback #11)
-        # Also reporting-only: the repo carries ~794 pre-existing dangling
-        # links, a far bigger number than the 35/55 a downstream fork measured
-        # from its sample. Blocking on the absolute count would red every build;
-        # the near-term contract is "introduce no NEW ones", enforced in review
-        # against this reported number.
-        run: ./scripts/link-check.py || true
+      - name: Validate documentation links
+        run: ./scripts/link-check.py
 
   frontend:
     name: Frontend (lint + typecheck + test)

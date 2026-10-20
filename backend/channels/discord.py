@@ -573,9 +573,6 @@ class DiscordChannel(BaseChannel):
 # that need the PING ack can override `BaseChannel.handle_webhook`, but
 # the simplest fix is for the route to detect type=1 and answer
 # accordingly — addressed in v6.1.0 sprint follow-up.
-def discord_ping_response() -> dict[str, int]:
-    """Build the JSON body Discord expects for a successful PING ack."""
-    return {"type": 1}
 
 
 class _DiscordSink(ChannelSink):
@@ -647,7 +644,6 @@ class _DiscordSink(ChannelSink):
 __all__ = [
     "DISCORD_MAX_MESSAGE_LENGTH",
     "DiscordChannel",
-    "discord_ping_response",
 ]
 
 

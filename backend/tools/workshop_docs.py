@@ -1,22 +1,20 @@
 """Workshop docs search — RAG-lite over the platform's docs/ tree.
 
 Powers the `workshop-helper` skill. Walks
-`docs/workshop/`, `docs/integrations/`, `docs/design/v6.X.Y/implemented/`,
+`docs/workshop/`, `docs/integrations/`, current configuration guides,
 and `docs/talks/ai-ui-protocol-stack.md` at first call, builds an
 in-memory keyword index, and answers queries with the top-K matching
 documents + a snippet around the first hit.
 
 Deliberately small + dependency-free:
 - No embeddings, no vector store. Plain case-insensitive substring +
-  keyword-overlap scoring. The corpus is ~60 docs total, queries are
-  cheap.
+  keyword-overlap scoring. The current guide corpus is small, so queries are cheap.
 - Lazy-load on first call so module import + backend startup stay fast.
 - The agent's job is to interpret the snippets, not the tool's job to
   generate them. The tool just surfaces the candidates.
 
-The path-rewriter in `scripts/refresh-workshop-materials.sh` rewrites
-intra-platform paths to GitHub URLs when publishing — this tool
-returns the original on-disk paths (the agent runs in this repo).
+Historical version designs live under docs/archive/ and are intentionally
+excluded from the default helper corpus. Returned paths point to this checkout.
 """
 
 from __future__ import annotations
@@ -37,11 +35,12 @@ _DOCS_DIR = _REPO_ROOT / "docs"
 _INCLUDE_DIRS = [
     "workshop",
     "integrations",
-    "design/v6.0.0/implemented",
-    "design/v6.1.0/implemented",
-    "design/v6.2.0/implemented",
 ]
 _INCLUDE_FILES = [
+    "configuration-guide.md",
+    "chat-file-analysis.md",
+    "module-simplification.md",
+    "root-console-completion.md",
     "talks/ai-ui-protocol-stack.md",
 ]
 
@@ -199,11 +198,8 @@ def search_workshop_docs(query: str, max_results: int = 4) -> str:
 
     if not scored:
         return (
-            f"No documents matched **{query}**. The workshop helper's "
-            "knowledge base covers `docs/workshop/`, `docs/integrations/`, "
-            "every shipped sprint design in `docs/design/v6.X.Y/implemented/`, "
-            "and the canonical talk doc at "
-            "`docs/talks/ai-ui-protocol-stack.md`."
+            f"No documents matched **{query}**. Try keywords from the current "
+            "configuration, file analysis, protocol or workshop guides."
         )
 
     scored.sort(key=lambda pair: pair[0], reverse=True)

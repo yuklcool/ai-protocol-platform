@@ -93,7 +93,7 @@ def test_secret() -> str:
     and is effectively a bypass. That's intentional: local devs often can't read
     the secret directly (the role is granted to sa-platform, not to users) and
     impersonation would fail without `roles/iam.serviceAccountTokenCreator` on
-    the SA — see docs/design/v6.0.0/infra-terraform-lessons.md §12.
+    the SA — see docs/archive/design/v6.0.0/infra-terraform-lessons.md §12.
     """
     env = _require_env("GOOGLE_CLOUD_PROJECT")
 

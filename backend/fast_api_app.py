@@ -89,7 +89,7 @@ _agent_engine_id = os.getenv("AGENT_ENGINE_ID")
 # + memory services even when AGENT_ENGINE_ID is set. Cuts laptop TTFT
 # from ~9s to ~2s by avoiding Vertex Agent Engine round-trips to
 # europe-west1 per turn. Production unaffected — that env var is only
-# set in dev shells. See docs/design/v6.1.0/ttft-optimization.md.
+# set in dev shells. See docs/archive/design/v6.1.0/ttft-optimization.md.
 _force_local_session = os.getenv("AITANA_LOCAL_SESSION", "").strip().lower() == "memory"
 _session_using_vertex = bool(_agent_engine_id) and not _force_local_session
 

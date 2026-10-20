@@ -3,8 +3,8 @@
 // check; in prod builds Next.js still ships the route but the layout
 // returns notFound().
 //
-// See docs/design/v6.1.0/mcp-app-integrations.md M3 (and the design doc
-// for the sandbox proxy at docs/design/v6.1.0/mcp-sandbox-separate-origin.md).
+// See docs/archive/design/v6.1.0/mcp-app-integrations.md M3 (and the design doc
+// for the sandbox proxy at docs/archive/design/v6.1.0/mcp-sandbox-separate-origin.md).
 
 import Link from "next/link";
 
@@ -56,7 +56,7 @@ export default function McpAppsDevIndex() {
           <li>
             For the iframe to load actual MCP App content, point at a
             running map-server (see{" "}
-            <code>docs/design/v6.1.0/mcp-app-integrations.md</code> M1)
+            <code>docs/archive/design/v6.1.0/mcp-app-integrations.md</code> M1)
             and seed Firestore via{" "}
             <code>backend/scripts/seed_mcp_servers.py</code>
           </li>

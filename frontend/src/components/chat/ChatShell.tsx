@@ -1366,7 +1366,7 @@ function ChatShellContent({
   // sessions-changed bus and that id matches the URL session we're showing,
   // navigate to a fresh chat even if the originating handler missed the
   // active-session check (e.g. stale closure props on a detached panel).
-  // See docs/design/v6.1.0/implemented/session-delete-ui.md.
+  // See docs/archive/design/v6.1.0/implemented/session-delete-ui.md.
   useEffect(() => {
     return subscribeSessionsChangedDetailed((detail) => {
       if (detail.deletedSessionId && detail.deletedSessionId === sessionId) {

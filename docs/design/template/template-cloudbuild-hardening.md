@@ -349,7 +349,7 @@ missing). Or trigger the sandbox build manually:
 `gcloud builds submit infrastructure/mcp-sandbox --config infrastructure/mcp-sandbox/cloudbuild.yaml`.
 ```
 
-This pairs with [template-mcp-apps-artefact-quality.md](./template-mcp-apps-artefact-quality.md) — that doc improves the artefacts themselves; G37 ensures fork changes actually reach the deployed sandbox.
+This pairs with [template-mcp-apps-artefact-quality.md](template-mcp-apps-artefact-quality.md) — that doc improves the artefacts themselves; G37 ensures fork changes actually reach the deployed sandbox.
 
 ### Docs
 
@@ -394,7 +394,7 @@ to avoid a separate file). Format: problem → symptom → fix → prevention.
 
 ## Related Documents
 
-- [aitana-template-publish skill](../../../.claude/skills/aitana-template-publish/SKILL.md)
+- aitana-template-publish skill (`../../../.claude/skills/aitana-template-publish/SKILL.md`)
 - [template-auth-hardening.md](template-auth-hardening.md) — item #9 (Firebase region gotcha) goes in the same `docs/ops/gotchas.md`
 - [template-mcp-apps-artefact-quality.md](template-mcp-apps-artefact-quality.md) — pairs with G37; that doc improves artefact quality, G37 ensures fork changes to artefacts actually deploy
 - [SEQUENCE.md](SEQUENCE.md)

@@ -9,7 +9,7 @@ content they support* and be *viewable within one user interaction*, linking via
 the URL the response supplies. Without this transform the agent would narrate
 place names and drive times with no attribution anywhere on screen, which is a
 breach — so a Maps-enabled skill must not ship without it. See
-``docs/design/v6.23.0/maps-grounding.md`` M4.
+``docs/archive/design/v6.23.0/maps-grounding.md`` M4.
 
 Why it reuses ``kind: "sources"`` rather than adding a Maps tab: the payload's
 ``attribution`` object is ``{title, url}``, which is exactly the ``{title, uri}``

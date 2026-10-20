@@ -1,4 +1,4 @@
-// docs/design/v6.1.0/ttft-instrumentation.md M3 — frontend latency store.
+// docs/archive/design/v6.1.0/ttft-instrumentation.md M3 — frontend latency store.
 //
 // Captures per-message timings on the client side and exposes them to the
 // dev-only LatencyHUD. This is the *perceived* axis of TTFT — how long

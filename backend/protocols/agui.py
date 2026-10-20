@@ -56,7 +56,7 @@ def mount_skill_endpoint(
     ``use_thread_id_as_session_id=True`` so AG-UI thread IDs map 1:1 onto
     ADK sessions — otherwise ag-ui-adk allocates a fresh session per run
     and conversation memory evaporates between turns. See
-    docs/design/v6.0.0/streaming-and-protocols.md "Session identity" for
+    docs/archive/design/v6.0.0/streaming-and-protocols.md "Session identity" for
     the spike finding behind this default.
     """
     # Lazy import so this module stays cheap to import in tests that

@@ -76,6 +76,18 @@ class TestWhatIsNotChecked:
 
         assert _run(docs).returncode == 0
 
+    def test_fenced_and_inline_examples_are_not_live_links(self, docs):
+        (docs / "docs" / "index.md").write_text(
+            "```markdown\n[example](missing.md)\n```\n"
+            "`[inline example](also-missing.md)`\n"
+            "[citation](aip://doc/id/block/line)\n"
+        )
+        assert _run(docs).returncode == 0
+
+    def test_missing_image_in_prose_is_rejected(self, docs):
+        (docs / "docs" / "index.md").write_text("![diagram](missing.svg)\n")
+        assert _run(docs).returncode == 1
+
     def test_anchor_on_a_real_file_resolves(self, docs):
         """We verify the FILE resolves, not the heading — heading checks would
         break on every legitimate rename of a section."""
@@ -97,31 +109,7 @@ class TestShippedWiring:
         assert "link-check.py" in ci
 
 
-class TestNoNewDanglingLinks:
-    """The enforceable contract while ~794 pre-existing danglers remain.
-
-    Blocking on the absolute count would red every build, so the near-term
-    contract is a ratchet: don't make it worse. This test pins the ceiling —
-    when it fails because the number went UP, that is a new dangling link and
-    should be fixed rather than the ceiling raised. Lowering the ceiling as the
-    backlog is cleared is the intended direction.
-    """
-
-    CEILING = 800
-
-    def test_dangling_link_count_has_not_regressed(self):
-        result = subprocess.run(
-            [sys.executable, str(LINK_CHECK), "--root", str(REPO_ROOT)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            return  # backlog cleared entirely — nothing to ratchet
-
-        first = result.stderr.splitlines()[0]
-        count = int(first.split(":")[1].strip())
-        assert count <= self.CEILING, (
-            f"dangling links rose to {count} (ceiling {self.CEILING}). "
-            "A doc move or rename broke links — fix them rather than raising "
-            "the ceiling. See docs/design/template/template-parity-dispositions.md"
-        )
+class TestRepositoryLinks:
+    def test_repository_has_no_dangling_document_links(self):
+        result = _run(REPO_ROOT)
+        assert result.returncode == 0, result.stderr

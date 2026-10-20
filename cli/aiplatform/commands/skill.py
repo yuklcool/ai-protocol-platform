@@ -12,7 +12,7 @@ Used to:
   * Diagnose where time is being spent in production traffic without
     scraping logs.
 
-See docs/design/v6.1.0/ttft-instrumentation.md.
+See docs/archive/design/v6.1.0/ttft-instrumentation.md.
 """
 
 from __future__ import annotations

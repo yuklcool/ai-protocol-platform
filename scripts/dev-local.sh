@@ -32,7 +32,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export LOCAL_MODE=1
 export NEXT_PUBLIC_LOCAL_MODE=1
 # Force in-memory ADK sessions — Vertex Agent Engine round-trips add ~5s
-# TTFT from a laptop. See docs/design/v6.1.0/ttft-optimization.md.
+# TTFT from a laptop. See docs/archive/design/v6.1.0/ttft-optimization.md.
 export AITANA_LOCAL_SESSION=memory
 
 # LOCAL_MODE is a development baseline. The registry's production-safe

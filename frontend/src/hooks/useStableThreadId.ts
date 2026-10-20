@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
  * yields, but the user briefly sees an empty live area until
  * ``useSessionMessages`` GET populates ``initialMessages``. That's the
  * visible flicker described in
- * docs/design/v6.1.0/chat-history-deep-fixes-2.md as Bug A'.
+ * docs/archive/design/v6.1.0/chat-history-deep-fixes-2.md as Bug A'.
  *
  * Lifecycle:
  * - Initial mount, no URL session: mint a fresh UUID.

@@ -4,7 +4,7 @@ Spec-compliant separate-origin sandbox proxy for MCP App UI resources.
 Adopted from [`modelcontextprotocol/ext-apps/examples/basic-host`](https://github.com/modelcontextprotocol/ext-apps/tree/main/examples/basic-host)
 (commit `0008d3b7`, ext-apps 1.7.1).
 
-See [docs/design/v6.1.0/mcp-sandbox-separate-origin.md](../../docs/design/v6.1.0/mcp-sandbox-separate-origin.md)
+See [docs/archive/design/v6.1.0/mcp-sandbox-separate-origin.md](../../docs/archive/design/v6.1.0/implemented/mcp-sandbox-separate-origin.md)
 for the architectural rationale.
 
 ## What this is

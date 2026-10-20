@@ -6,7 +6,7 @@ instead of firing a synthetic chat message. We reuse the existing
 ``_run_parse`` + ``_store_document`` pipeline from upload.py — skipping
 the file→GCS upload step since the file already lives in GCS.
 
-Cache cascade (see docs/design/v6.4.0/document-import-by-reference.md):
+Cache cascade (see docs/archive/design/v6.4.0/document-import-by-reference.md):
 
 - L2  self-dedup: parsed_documents WHERE (userId=self, sourceUrl=gs_url).
       Hit → return the existing per-user record (~200ms, no parse).

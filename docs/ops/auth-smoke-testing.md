@@ -161,7 +161,7 @@ When merging `dev` → `test` (or `test` → `prod`):
 ## Related
 
 - [dev-accounts.md](dev-accounts.md) — dev uid + claims reference.
-- [deployed-urls.md](deployed-urls.md) — canonical per-env URLs.
+- deployed-urls.md (`deployed-urls.md`) — canonical per-env URLs.
 - [../../backend/scripts/whoami_smoke.py](../../backend/scripts/whoami_smoke.py) — the script.
 - [../../backend/tests/integration/test_whoami_deployed.py](../../backend/tests/integration/test_whoami_deployed.py) — pytest wrapper.
 - [../../scripts/smoke-deployed.sh](../../scripts/smoke-deployed.sh) — laptop-friendly smoke runner.

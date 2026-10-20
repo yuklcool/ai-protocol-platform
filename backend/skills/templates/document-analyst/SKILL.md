@@ -40,14 +40,14 @@ metadata:
       # the persistent workspace pane by default, not inline-in-chat.
       # The frontend (M3) honours this via `SurfaceRegistry`; until then
       # the field round-trips through SkillConfig with no behaviour
-      # change. See docs/design/v6.2.0/implemented/multi-surface-rendering.md.
+      # change. See docs/archive/design/v6.2.0/implemented/multi-surface-rendering.md.
       default_surface: workspace
 # v6.4.0 SHELL-MODES: standing public demo of the workbench-primary page shell.
 # The workbench (workspace A2UI surface — structured extractions + the
 # ext-apps-map MCP app) fills the viewport; chat is a left drawer, open by
 # default so the skill stays immediately usable. document-analyst is public
 # (no access gate), so this doubles as the auth-free verification vehicle for
-# the shell-modes feature. See docs/design/v6.4.0/skill-driven-shell-modes.md.
+# the shell-modes feature. See docs/archive/design/v6.4.0/skill-driven-shell-modes.md.
 shell:
   mode: workbench-primary
   chat:

@@ -6,7 +6,7 @@ reusing the `sessions_route` reconstruction — no new capture. Access-scoped:
 Tenant-scoped by stable tenantId; legacy domains require a trusted mapping.
 Platform administrators can inspect attributed sessions across tenant scopes.
 
-See docs/design/v6.9.0/analytics-and-reporting.md.
+See docs/archive/design/v6.9.0/analytics-and-reporting.md.
 """
 
 from __future__ import annotations
@@ -418,7 +418,7 @@ async def get_session_trace(session_id: str, scope: Scope) -> SessionTrace:
 #
 # "Admin traces not populating correctly for some sessions" (Mark, during the
 # 2026-08-06 UAT demo). The root cause is genuinely unknown, and the design doc
-# (docs/design/v6.23.0/trace-completeness-and-access.md) is explicit that Phase 2
+# (docs/archive/design/v6.23.0/trace-completeness-and-access.md) is explicit that Phase 2
 # must NOT be designed before this measures what is actually missing.
 #
 # A session's truth is spread over three stores that can each drift:

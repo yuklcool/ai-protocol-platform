@@ -15,7 +15,7 @@ The hook is ABOVE the iframe sandbox + CSP — defence-in-depth, not
 replacement. A reviewer that crashes or is bypassed leaves the
 sandbox boundary intact.
 
-Design contract: ``docs/design/v6.2.0/artefact-render-hook.md``.
+Design contract: ``docs/archive/design/v6.2.0/artefact-render-hook.md``.
 """
 
 from __future__ import annotations

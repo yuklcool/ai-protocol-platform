@@ -140,7 +140,7 @@ handoff-e2e:
 # catch custom<->ADK boundary regressions (the class jsdom/isolated tests miss).
 # Root passthrough to the backend target. This is the gate for a `google-adk`
 # version bump — it MUST stay green when the pin in backend/pyproject.toml moves.
-# See docs/design/v6.17.0/adk-contract-checklist.md.
+# See docs/archive/design/v6.17.0/adk-contract-checklist.md.
 adk-conformance:
 	@cd backend && $(MAKE) adk-conformance
 

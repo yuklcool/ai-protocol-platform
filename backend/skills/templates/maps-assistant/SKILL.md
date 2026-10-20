@@ -21,7 +21,7 @@ avatar: /images/avatars/skill-web-researcher.svg
 # and cannot express "test yes, prod no".
 #
 # WHEN PROD'S KEY LANDS: add maps-assistant to prod's enabled_skills (see
-# docs/design/v6.23.0/maps-grounding.md M3) — no change needed here.
+# docs/archive/design/v6.23.0/maps-grounding.md M3) — no change needed here.
 access_control:
   type: tagged
   tags:

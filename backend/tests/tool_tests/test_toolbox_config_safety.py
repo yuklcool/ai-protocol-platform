@@ -5,7 +5,7 @@ against ONE's real BigQuery datasets). They are STATIC — no Toolbox process, n
 BigQuery — so they run in CI on every push. The live behavioural proof lives in
 ``tests/integration/test_toolbox_live.py`` (marked ``integration``).
 
-Why these exist (design doc: docs/design/v6.14.0/mcp-toolbox-database-gateway.md):
+Why these exist (design doc: docs/archive/design/v6.14.0/mcp-toolbox-database-gateway.md):
 
   * Toolbox's ``allowedValues`` on a ``templateParameter`` is a **substring**
     match, not equality. ``"junk Day-Ahead Price DK1 junk"`` passes the check
@@ -143,7 +143,7 @@ _GENERIC_EXECUTORS = {
 
 @pytest.mark.parametrize("path", _shipped_config_paths(), ids=lambda p: p.parent.name)
 def test_generic_sql_executors_are_bound_to_a_scoped_source(path: Path) -> None:
-    """C3 **as amended by v6.23.0** (docs/design/v6.23.0/one-bigquery.md).
+    """C3 **as amended by v6.23.0** (docs/archive/design/v6.23.0/one-bigquery.md).
 
     The original C3 banned generic executors outright, citing Google's
     "not for production agents" note. That conflated two things, and the half

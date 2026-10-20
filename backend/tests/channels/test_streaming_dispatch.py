@@ -10,7 +10,7 @@ framework reaches it.
 So every test here drives `_dispatch_inbound` — the real entry point —
 rather than calling `send_streaming` directly.
 
-See `docs/design/v6.21.0/channels-agui-convergence.md`.
+See `docs/archive/design/v6.21.0/channels-agui-convergence.md`.
 """
 
 from __future__ import annotations

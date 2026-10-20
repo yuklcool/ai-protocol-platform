@@ -68,7 +68,7 @@ fi
 # Pin frontend to 3456 — 3000 is often occupied by other local servers.
 FRONTEND_PORT=3456
 # MCP sandbox proxy on its own port (different origin, per MCP Apps spec —
-# see docs/design/v6.1.0/mcp-sandbox-separate-origin.md).
+# see docs/archive/design/v6.1.0/mcp-sandbox-separate-origin.md).
 SANDBOX_PORT=3457
 
 # Fixed log paths so Claude Code can tail/read them mid-session.

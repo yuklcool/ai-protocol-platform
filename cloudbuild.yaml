@@ -102,7 +102,7 @@ substitutions:
   _PUBLIC_BASE_URL: ''
   # Feature flag: expose the Skill Studio authoring UI (/skills/studio). "true"
   # bakes NEXT_PUBLIC_ENABLE_SKILL_STUDIO into the frontend build. Behind Firebase
-  # auth; has known gaps (see docs/design/v6.9.0/skill-administration.md).
+  # auth; has known gaps (see docs/archive/design/v6.9.0/skill-administration.md).
   _ENABLE_SKILL_STUDIO: 'true'
   # Feature flag: read-aloud (TTS) button on assistant messages. Was set in
   # frontend/.env.local ONLY, so it worked locally and was compiled OUT of every
@@ -253,7 +253,7 @@ steps:
   # --- Build MCP Toolbox (v6.14.0 database-gateway sidecar) ---
   # Wraps Google's pinned upstream image (FROM …/toolbox:1.7.0) and bakes in our
   # curated tools.yaml. Runs as a THIRD container in this service, loopback-only.
-  # Design: docs/design/v6.14.0/mcp-toolbox-database-gateway.md
+  # Design: docs/archive/design/v6.14.0/mcp-toolbox-database-gateway.md
   # TEMPLATE-INVERT M3: tools.yaml is GENERATED from the tracked
   # tools.example.yaml and gitignored, so Cloud Build's clone does NOT contain
   # it and `COPY tools.yaml` would fail. Materialize it first.

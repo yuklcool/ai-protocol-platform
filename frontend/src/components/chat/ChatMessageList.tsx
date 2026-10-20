@@ -20,7 +20,7 @@ import { StreamingBubble } from "./StreamingBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { AssistantIntroBubble } from "./AssistantIntroBubble";
 import { PinnedWelcome } from "./PinnedWelcome";
-import { ChatPlacementForm, useChatSurfaces, type ChatSurfaceItem } from "./ChatPlacementForms";
+import { ChatPlacementForm, useChatSurfaces, type ChatSurfaceItem } from "./ChatPlacementForm";
 import type React from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { translateChat } from "@/lib/i18n/chat";
@@ -62,7 +62,7 @@ interface ChatMessageListProps {
   /**
    * Server-authored stage label from AG-UI STAGE_PROGRESS Custom events,
    * surfaced inside the TypingIndicator. Decouples perceived TTFT from
-   * real model TTFT — see docs/design/v6.1.0/ttft-instrumentation.md.
+   * real model TTFT — see docs/archive/design/v6.1.0/ttft-instrumentation.md.
    */
   stageLabel?: string | null;
   /** Persistent skill→skill delegation markers (SKILL-DELEGATION M3),

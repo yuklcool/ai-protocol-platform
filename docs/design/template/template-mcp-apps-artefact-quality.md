@@ -4,7 +4,7 @@
 **Priority**: P2 (UX-polish for artefacts; the underlying iframe-host protocol works)
 **Estimated**: 1.5d planned; ~1h actual (G36 scope-cut as N/A; shared theme.css premature with only one artefact)
 **Scope**: `infrastructure/mcp-sandbox/artefacts/_template/v1/index.html` + frontend `StaticArtefactFrame` + iframe-guide
-**Dependencies**: [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) (#28/#29/#30 — iframe-host protocol path); pairs with [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) G31 (Workbench mount preservation)
+**Dependencies**: [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) (#28/#29/#30 — iframe-host protocol path); pairs with [template-chat-surface-defaults.md](template-chat-surface-defaults.md) G31 (Workbench mount preservation)
 **Created**: 2026-06-05
 **Last Updated**: 2026-06-05
 **Source items**: G35 (artefacts ignore `hostContext.theme`), G36 (artefacts ship with empty/skeletal default state) — captured by gde-ap-agent fork 2026-06-03 during AP demo polish
@@ -37,7 +37,7 @@ time.
 
 **Current State:**
 
-- **G35** `StaticArtefactFrame` correctly sends `hostContext.theme` per MCP Apps spec (§Host Context). Artefact HTMLs under [`infrastructure/mcp-sandbox/artefacts/`](../../../infrastructure/mcp-sandbox/artefacts/) hardcode `#0a0f1e` / `#e8a800` and never read the field. Host flips to light mode → artefacts stay dark → visual clash.
+- **G35** `StaticArtefactFrame` correctly sends `hostContext.theme` per MCP Apps spec (§Host Context). Artefact HTMLs under [`infrastructure/mcp-sandbox/artefacts/`](../../../infrastructure/mcp-sandbox/artefacts) hardcode `#0a0f1e` / `#e8a800` and never read the field. Host flips to light mode → artefacts stay dark → visual clash.
 - **G36** Starter artefacts (e.g. `ap-vendor-kg/index.html`) ship with `"Run the validator to populate the graph"` as the default UI. First-time judges see nothing interesting; the validator's runtime push *does* land but only after the user takes action — by then the impression "the iframe is empty" has set in.
 
 **Impact:**
@@ -89,11 +89,11 @@ Two changes per starter artefact: (G35) replace hardcoded colours with CSS custo
 properties on `:root[data-theme]`, read `hostContext.theme` from `ui/initialize` and
 react to `ui/update-theme` notifications; (G36) pre-seed each artefact with realistic
 demo data lifted from the same fixtures the backend reads. Ship the theme boilerplate
-once at [`infrastructure/mcp-sandbox/artefacts/shared/theme.css`](../../../infrastructure/mcp-sandbox/artefacts/shared/theme.css) so every artefact gets it via `@import` rather than copy-paste.
+once at [`infrastructure/mcp-sandbox/artefacts/shared/theme.css`](../frontend-style-kit/theme.css) so every artefact gets it via `@import` rather than copy-paste.
 
 ### G35 — `hostContext.theme` consumption + shared theme.css
 
-**New file:** [`infrastructure/mcp-sandbox/artefacts/shared/theme.css`](../../../infrastructure/mcp-sandbox/artefacts/shared/theme.css)
+**New file:** [`infrastructure/mcp-sandbox/artefacts/shared/theme.css`](../frontend-style-kit/theme.css)
 
 ```css
 :root {
@@ -158,7 +158,7 @@ The artefact's listener updates `data-theme` and CSS variables cascade.
 
 ### G36 — Pre-seeded artefact default state
 
-**File:** [`infrastructure/mcp-sandbox/artefacts/ap-vendor-kg/index.html`](../../../infrastructure/mcp-sandbox/artefacts/ap-vendor-kg/index.html) (canonical example; sibling artefacts follow the same pattern)
+**File:** `infrastructure/mcp-sandbox/artefacts/ap-vendor-kg/index.html` (`../../../infrastructure/mcp-sandbox/artefacts/ap-vendor-kg/index.html`) (canonical example; sibling artefacts follow the same pattern)
 
 Lift seed data from the same vendor-master fixture the backend reads at
 `backend/tools/vendor_master/fixtures/vendors.json` (or wherever it lives). For the AP
@@ -178,7 +178,7 @@ Mark the seed source clearly on screen:
 ```
 
 **Runtime push behaviour:** validator's `ui/update-data` payload **overlays** the seed
-(per-path patches per [template-protocol-defaults.md G25](./template-protocol-defaults.md#g25-—-a2ui-updatedatamodel-per-path-patches-as-the-default)). The seed survives until the
+(per-path patches per [template-protocol-defaults.md G25](template-protocol-defaults.md#g25-—-a2ui-updatedatamodel-per-path-patches-as-the-default)). The seed survives until the
 agent has demonstrably overridden the relevant fields.
 
 **Apply same pattern to sibling artefacts:**
@@ -197,7 +197,7 @@ need demonstrable content".
 No new commands. Artefact deploys ride on the existing
 [`scripts/deploy-mcp-sandbox.sh`](../../../scripts/deploy-mcp-sandbox.sh) path (to be
 auto-triggered per the Friction 14 add to
-[template-cloudbuild-hardening.md](./template-cloudbuild-hardening.md)).
+[template-cloudbuild-hardening.md](template-cloudbuild-hardening.md)).
 
 ## Implementation Plan
 
@@ -209,8 +209,8 @@ auto-triggered per the Friction 14 add to
 | 4 | Update host-side `StaticArtefactFrame` to emit `ui/update-theme` notifications on host theme flip (G35 host side) | 1h |
 | 5 | Pre-seed `ap-vendor-kg/index.html` with vendor-master snapshot lifted from backend fixtures; render watermark; verify overlay behaviour (G36 canonical) | 2h |
 | 6 | Pre-seed `vendor-globe/index.html` + `ap-dashboard/index.html` with realistic snapshots from same fixtures (G36 siblings) | 2h |
-| 7 | Visual smoke via [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md): open each artefact in light + dark host themes; assert correct colour palette + seed data visible (chrome-devtools MCP) | 1.5h |
-| 8 | Docs: extend [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) iframe-guide section with theming + seeding best practices; cross-link this doc | 1h |
+| 7 | Visual smoke via aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`): open each artefact in light + dark host themes; assert correct colour palette + seed data visible (chrome-devtools MCP) | 1.5h |
+| 8 | Docs: extend [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) iframe-guide section with theming + seeding best practices; cross-link this doc | 1h |
 | 9 | Workshop talking-point 8 added to [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) | 1h |
 
 **Total: ~13h ≈ 1.5d** (matches sprint estimate).
@@ -218,7 +218,7 @@ auto-triggered per the Friction 14 add to
 ## Testing Strategy
 
 - **No unit tests** for the artefact HTMLs themselves (static HTML/JS in iframes is poorly served by unit tests). Manual visual smoke is the right gate.
-- **Visual smoke** via chrome-devtools MCP (operating manual: [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md)):
+- **Visual smoke** via chrome-devtools MCP (operating manual: aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`)):
   1. Open the chat page with host theme = light; open each artefact; assert CSS variables resolve to light tokens (no hardcoded `#0a0f1e` visible).
   2. Flip host to dark mode; assert artefacts re-render with dark tokens within one animation frame.
   3. Open each artefact before running any agent; assert seed data is visible (the demo Acme GmbH KG snapshot is the canonical check).
@@ -233,12 +233,12 @@ auto-triggered per the Friction 14 add to
 - [ ] Each starter artefact opens to a realistic seeded snapshot (no "waiting" placeholder); a 30s glance reads as "interactive demo" not "empty iframe" (G36).
 - [ ] Runtime push from the agent overlays the seed; the seed survives until the agent explicitly overrides the relevant fields (G36).
 - [ ] [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) workshop talking-point 8 added.
-- [ ] [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) iframe-guide section extended with theming + seeding best practices.
+- [ ] [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) iframe-guide section extended with theming + seeding best practices.
 
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — items G35, G36 registered here
-- [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) — iframe-host protocol (sibling); this doc consumes the `hostContext` channel that doc surfaces
-- [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) — G31 Workbench tab persistence guarantees artefact handshake state survives tab switches; without that, runtime `ui/update-theme` is moot
-- [template-cloudbuild-hardening.md](./template-cloudbuild-hardening.md) — Friction 14 add: artefact-path-watching Cloud Build trigger so a fork's retheme actually lands on the deployed sandbox
+- [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) — iframe-host protocol (sibling); this doc consumes the `hostContext` channel that doc surfaces
+- [template-chat-surface-defaults.md](template-chat-surface-defaults.md) — G31 Workbench tab persistence guarantees artefact handshake state survives tab switches; without that, runtime `ui/update-theme` is moot
+- [template-cloudbuild-hardening.md](template-cloudbuild-hardening.md) — Friction 14 add: artefact-path-watching Cloud Build trigger so a fork's retheme actually lands on the deployed sandbox
 - [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) — workshop tracker; talking-point 8 absorbs G35–G36
