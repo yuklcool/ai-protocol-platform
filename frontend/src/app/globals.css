@@ -983,9 +983,10 @@
   .composer-form > button {
     min-height: 44px;
   }
-  /* Tablets/phones: the table scrolls inside its panel, page never overflows. */
+  /* Disable sticky headers on phones but retain the containing block for
+     absolutely positioned screen-reader labels inside horizontally scrolling tables. */
   .data-table thead th {
-    position: static;
+    position: relative;
   }
 }
 @media (prefers-reduced-motion: reduce) {

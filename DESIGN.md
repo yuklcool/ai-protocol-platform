@@ -6,7 +6,7 @@
 
 [原始参考包](docs/design/frontend-style-kit/README.md) 保留最初视觉来源、字体及许可证。本轮在它的品牌色基础上适配真实产品，不复制演示页业务结构。当前可交互示意稿见 [界面预览](outputs/glass-workspace-design.html)，不依赖服务或网络，示例数据不代表平台实际状态。
 
-本轮完成源码层面的全站视觉调整。按用户要求，**未执行本地服务、测试、类型检查、构建或浏览器截图验收**；代码审阅与示意稿不等同于运行验收。逐页覆盖与证据边界见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
+本轮完成源码层面的全站视觉调整。代码审阅、设计示意稿与运行验收分别记录；运行结果以 [PR #137](https://github.com/yuklcool/ai-protocol-platform/pull/137) 中对应提交的 CI 和真实浏览器证据为准。逐页覆盖与证据边界见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
 
 ## 用户路径与信息架构
 
