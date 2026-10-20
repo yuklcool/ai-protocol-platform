@@ -3,7 +3,6 @@
 Sprint TEMPLATE-INVERT, post-M5. This exists because the identity scrub kept
 producing the same failure and I kept finding it one instance at a time:
 
-  AUTH_OPERATOR_DOMAINS   traced by hand in M3
   bq _DATA_PROJECT        traced by hand in M3
   tools.yaml              found by the MCP-registry gate, after deploy
   ENTSOE_PROJECT          found by grep, only because someone asked
@@ -99,15 +98,9 @@ def test_serving_code_declares_no_placeholder_env_default() -> None:
     )
 
 
-@pytest.mark.parametrize("env_var", ["ENTSOE_PROJECT", "AUTH_OPERATOR_DOMAINS"])
+@pytest.mark.parametrize("env_var", ["ENTSOE_PROJECT"])
 def test_deployment_identity_env_vars_are_passed_by_the_pipelines(env_var: str) -> None:
-    """Removing a default only works if the deploy supplies the value.
-
-    That is the half that is easy to forget: M3 emptied AUTH_OPERATOR_DOMAINS
-    and wired it the same day; M4 emptied nothing but rewrote ENTSOE_PROJECT's
-    default and wired nothing, so the tool pointed at a project that does not
-    exist.
-    """
+    """A required deployment identity must be passed explicitly."""
     text = _pipeline_text()
     assert text, "no pipelines found — did they move?"
 

@@ -73,7 +73,7 @@ def test_folder_document_and_agent_context_share_postgres(monkeypatch) -> None:
     reset_repository_for_testing(None)
 
 
-def test_session_attachment_choices_survive_repository_restart_and_tenant_switch(monkeypatch):
+def test_session_attachment_choices_survive_repository_restart_and_user_switch(monkeypatch):
     from types import SimpleNamespace
 
     from fastapi import HTTPException
@@ -90,7 +90,7 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
     reset_repository_for_testing(None)
     suffix = uuid.uuid4().hex[:12]
     session_id, doc_id, other_id = (f"{prefix}-{suffix}" for prefix in ("session", "doc", "other"))
-    owner = User(uid=f"owner-{suffix}", email="owner@example.comtenant-{suffix}")
+    owner = User(uid=f"owner-{suffix}", email="owner@example.com")
     other = owner.model_copy(update={"uid": f"other-user-{suffix}"})
     token = _context.set(None)
     set_user_context(owner)

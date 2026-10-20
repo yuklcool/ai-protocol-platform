@@ -9,7 +9,7 @@
 1. [模块边界](docs/module-simplification.md)：Root、Skill、工具和权限。
 2. [代码导览](docs/workshop/code-tour.md)：产品请求到 ADK/AG-UI 的入口。
 3. [协议验收](docs/protocol-operation-acceptance.md)：A2UI 操作与刷新恢复。
-4. [真实模型验收](docs/real-provider-acceptance.md)：Provider、工具和双租户验证。
+4. [真实模型验收](docs/real-provider-acceptance.md)：Provider、工具和双用户隔离验证。
 5. [附件分析](docs/chat-file-analysis.md)：格式、选择、来源及失败边界。
 
 [历史版本设计](docs/archive/design/README.md)用于理解演进；旧课程截图、步骤和版本状态应结合当前实现核对。

@@ -13,15 +13,12 @@ So the defaults themselves have to be fork-safe, and this deployment's real
 values move into deploy config. These are not cosmetic — each one below is a
 live misconfiguration in any fork that inherits it:
 
-  AUTH_OPERATOR_DOMAINS  a fork enabling AUTH_REQUIRE_KNOWN_DOMAIN would admit
-                         *our* domain as its operators (AIPLA #42)
   bq _DATA_PROJECT       CLI queries aimed at a BigQuery project the fork
                          cannot read, with a confusing permission error
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -159,10 +156,3 @@ def test_no_local_developer_path_in_shipped_python() -> None:
             offenders.append(str(path.relative_to(REPO_ROOT)))
 
     assert offenders == [], f"local developer paths in shipped source: {offenders}"
-
-
-def test_environment_is_not_relied_on_by_these_tests() -> None:
-    """Guard: these assertions must hold regardless of the developer's shell."""
-    assert os.environ.get("AUTH_OPERATOR_DOMAINS") in (None, ""), (
-        "unset AUTH_OPERATOR_DOMAINS locally — it masks the default under test"
-    )

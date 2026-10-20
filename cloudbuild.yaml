@@ -31,19 +31,6 @@ substitutions:
   # Admin seed allowlist — SA emails permitted to call
   # /api/admin/seed-platform-skills. Terraform-managed per env.
   _ADMIN_SEED_ALLOWED_SAS: terraform_managed
-  # TEMPLATE-INVERT M3: operator email domains (csv) for the v6.18.0 Gap-B
-  # domain gate. DEPLOYMENT IDENTITY — backend/auth/__init__.py no longer
-  # defaults to ours, so this is the only supplier.
-  #
-  # !! Empty here on purpose (a fork must not inherit our domains), which means
-  # every env running AUTH_REQUIRE_KNOWN_DOMAIN=1 MUST override it in its
-  # trigger substitutions. Per traps.md #23 that is TWO places: run_client.tfvars
-  # feeds the BRANCH trigger only, and the hand-maintained tag-release trigger
-  # that deploys test has to be updated separately.
-  #
-  # If it is missed, the backend logs a loud AUTH_OPERATOR_DOMAINS_MISSING error
-  # at startup rather than silently denying every operator.
-  _AUTH_OPERATOR_DOMAINS: ""
   # MODEL-RELIABILITY M3: deployment residency gate (eu-strict|unrestricted),
   # enforced by construction in resolve_model_chain. dev = unrestricted (the
   # accepted dev/demo US-egress exception); set "eu-strict" per-trigger when
@@ -555,31 +542,6 @@ steps:
           dev|test) AI_SEARCH_SRC_BUCKET=${_PROJECT_ID}-$${ENV_TIER}-llmops-bucket ;;
           *)        AI_SEARCH_SRC_BUCKET="" ;;
         esac
-        # v6.18.0 Gap B: restrict authentication to the deployment's operator +
-        # mapped-tenant domains. Enabled on dev/test; prod DEFERRED until the
-        # #31-coordinated TENANT_FALLBACK_FAIL_CLOSED flip (needs this
-        # deployment's own upload bucket first). Gap A (bucket authz) is
-        # on-by-default and needs no flag.
-        #
-        # TEMPLATE-INVERT M3: operator domains are DEPLOYMENT IDENTITY and no
-        # longer have a code default — backend/auth/__init__.py defaults to
-        # empty so a fork cannot inherit ours (AIPLA #42). This pipeline is
-        # therefore the sole supplier: without the _AUTH_OPERATOR_DOMAINS
-        # substitution below, dev/test would 403 every operator, because both
-        # set AUTH_REQUIRE_KNOWN_DOMAIN=1.
-        case "$${ENV_TIER}" in
-          dev|test) AUTH_REQUIRE_KNOWN_DOMAIN=1 ;;
-          *)        AUTH_REQUIRE_KNOWN_DOMAIN=0 ;;
-        esac
-        # v6.18.0: deny an unmapped tenant the shared fallback bucket (read AND
-        # write) — closes the shared-bucket exposure alongside Gap-A/B. dev/test
-        # on; prod DEFERRED (frozen). Precondition-free: operators are admins
-        # (read via Gap-A bypass) and don't upload, so their upload-403 is
-        # intended. Coordinated with #31 (write-side UX already shipped).
-        case "$${ENV_TIER}" in
-          dev|test) TENANT_FALLBACK_FAIL_CLOSED=1 ;;
-          *)        TENANT_FALLBACK_FAIL_CLOSED=0 ;;
-        esac
         gcloud run deploy ${_SERVICE_NAME} \
           --region=${_REGION} \
           --project=${_PROJECT_ID} \
@@ -617,10 +579,7 @@ steps:
           --set-env-vars=VERTEX_AI_SEARCH_PROJECT=aitana-ai-search \
           --set-env-vars=VERTEX_AI_SEARCH_LOCATION=eu \
           --set-env-vars=AI_SEARCH_SOURCE_BUCKET_OVERRIDE=$${AI_SEARCH_SRC_BUCKET} \
-          --set-env-vars=AUTH_REQUIRE_KNOWN_DOMAIN=$${AUTH_REQUIRE_KNOWN_DOMAIN} \
-          --set-env-vars='^|^AUTH_OPERATOR_DOMAINS=${_AUTH_OPERATOR_DOMAINS}' \
           --set-env-vars=ENTSOE_PROJECT=${_ENTSOE_PROJECT} \
-          --set-env-vars=TENANT_FALLBACK_FAIL_CLOSED=$${TENANT_FALLBACK_FAIL_CLOSED} \
           --set-env-vars=SLOW_STREAM_PROBE_ENABLED=${_SLOW_STREAM_PROBE_ENABLED} \
           --set-env-vars=MODEL_RESIDENCY_POLICY=${_MODEL_RESIDENCY_POLICY} \
           --set-env-vars=COMPACTION_SECOND_PASS_ENABLED=${_COMPACTION_SECOND_PASS} \

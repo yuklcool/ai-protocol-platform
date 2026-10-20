@@ -39,11 +39,11 @@ def test_admin_config_domains_round_trip_through_postgres(monkeypatch, tmp_path)
     assert platform_config.get_platform_config().preamble == preamble
     assert updated.updated_by == f"ci-{suffix}"
 
-    group_id = f"group-{suffix}"
+    user_id = f"user-{suffix}"
     from db.user_profiles import UserProfile, get_user_profile, save_user_profile
 
-    save_user_profile(group_id, UserProfile(information="postgres profile"))
-    assert get_user_profile(group_id).information == "postgres profile"
+    save_user_profile(user_id, UserProfile(information="postgres profile"))
+    assert get_user_profile(user_id).information == "postgres profile"
 
     from auth import User
     from observability.user_context import set_user_context
@@ -56,19 +56,18 @@ def test_admin_config_domains_round_trip_through_postgres(monkeypatch, tmp_path)
         {
             "url": "https://mcp.example.test/mcp",
             "enabled": True,
-            "scope": "tenant",
-            "tenantId": "tenant-a",
         },
     )
     clear_registry_cache()
     set_user_context(User(uid="viewer"))
     assert _cached_server_config(server_id)["url"] == "https://mcp.example.test/mcp"
-    set_user_context(User(uid="viewer"))
-    assert _cached_server_config(server_id) is None
+    set_user_context(User(uid="another-viewer"))
+    assert _cached_server_config(server_id)["url"] == "https://mcp.example.test/mcp"
     clear_registry_cache()
     set_user_context(User(uid=""))
 
     repository.delete_document("mcp_servers", server_id)
+    repository.delete_document("user_profiles", user_id)
     repository.delete_document(platform_config.COLLECTION, PLATFORM_CONFIG_DOC_ID)
     platform_config.invalidate_cache()
     reset_repository_for_testing(None)

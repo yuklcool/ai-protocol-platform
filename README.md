@@ -6,7 +6,7 @@
 
 **界面设计：**全站浅色、淡紫与薄荷绿的玻璃风格，规范见 [DESIGN.md](DESIGN.md)，逐页验收见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
 
-**第一次使用请从[完整中文配置流程](docs/configuration-guide.md)开始。**手册按“部署 → 登录 → 模型 → 用户与账号 → Skill/工具/MCP → 知识 → A2UI → 额度 → 验收”的顺序说明在哪里配置、怎样填写以及如何确认生效。
+**第一次使用请从[完整中文配置流程](docs/configuration-guide.md)开始。**手册说明部署、登录、模型与公共能力、个人设置、交互和升级清理的配置与验收。
 
 ## 功能与入口
 

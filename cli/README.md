@@ -1,6 +1,6 @@
 # aiplatform CLI
 
-Admin CLI for the Aitana Labs v6 platform. Manages buckets, folders, groups,
+Admin CLI for the Aitana Labs v6 platform. Manages buckets, folders,
 skills, and does dry-run access checks against the backend REST API.
 
 > **Renamed 2026-04-28:** the binary was previously called `aitana`. The
@@ -91,8 +91,7 @@ aiplatform --help
 aiplatform bucket  { list | show | create | grant | revoke }
 aiplatform folder  { list | create }
 aiplatform docs    { folder { list | new } | upload }
-aiplatform groups  { add-user | remove-user | list-user }   # backend TODO
-aiplatform access  { check }                                # backend TODO
+aiplatform access  { check }
 aiplatform skill   { probe }
 ```
 
@@ -156,29 +155,14 @@ aiplatform --env local skill probe my-skill --json
 
 See [docs/archive/design/v6.1.0/implemented/ttft-instrumentation.md](../docs/archive/design/v6.1.0/implemented/ttft-instrumentation.md).
 
-### Groups (backend TODO)
+### Access check
 
 ```bash
-aiplatform --env dev groups add-user    --group ops --uid u-1
-aiplatform --env dev groups remove-user --group ops --uid u-1
-aiplatform --env dev groups list-user   --uid u-1
+# Platform-admin preview of an account's Agent and personal bindings
+aiplatform --env local access check --email alice@example.com
 ```
 
-> The `/api/groups/*` and `/api/users/*/groups` endpoints are not yet
-> implemented server-side. The CLI targets the planned shape so wiring lands
-> cleanly.
-
-### Access check (backend TODO)
-
-```bash
-# dry-run access check for the current user
-aiplatform --env dev access check --bucket bkt-abc123
-
-# check as another user (admin-only server-side)
-aiplatform --env dev access check --folder fld-1 --as-email alice@yourcompany.com
-```
-
-> The `/api/access/check` endpoint is not yet implemented server-side.
+`/api/admin/access/check` returns the effective Skill catalog and MCP bindings.
 
 ## Development
 

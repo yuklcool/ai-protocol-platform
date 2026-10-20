@@ -161,9 +161,6 @@ def test_comma_valued_env_vars_use_the_delimiter_override(steps, pipeline):
     text = CLOUDBUILD.read_text(encoding="utf-8")
     subs = pipeline.get("substitutions", {})
     comma_valued = {k for k, v in subs.items() if isinstance(v, str) and "," in v}
-    # AUTH_OPERATOR_DOMAINS is comma-valued by nature (a domain LIST) even when
-    # its default here is empty, so it is always in scope.
-    comma_valued.add("_AUTH_OPERATOR_DOMAINS")
 
     offenders = []
     for name in sorted(comma_valued):

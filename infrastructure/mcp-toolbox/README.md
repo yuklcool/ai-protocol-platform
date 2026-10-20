@@ -15,7 +15,7 @@ with no auth block, so **this needs zero backend code**.
 
 The trade: a Cloud Run service account is **per service, not per container**, so
 Toolbox shares `sa-platform` and cannot be scoped narrower than the frontend.
-That is acceptable because the tenant boundary is the **GCP project** (each
+That is acceptable because the deployment boundary is the **GCP project** (each
 data-client gets its own fork/project), and the runtime SA already reads the client's
 data today via `backend/tools/entsoe_query.py` — so there is no new exposure.
 

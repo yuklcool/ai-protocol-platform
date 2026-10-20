@@ -285,11 +285,7 @@ def list_skills(
     access = request.state.access
     configs = skill_config.list_skills(owner_id=owner_id, tag=tag, access_type=access_type, limit=limit)
 
-    # enabled_skills narrowing, and the skill-admin bypass of that narrowing).
-    # v6.16.0: that combination now lives in ONE evaluator shared with
-    # /api/admin/access/check, so the "what do my users actually see" screen
-    # cannot drift from what this endpoint really returns. Do not re-inline the
-    # filter here — see skills/visibility.py for why.
+    # Use the same ACL evaluator as the access preview.
     visible = visible_configs(configs, access)
 
     return [SkillResponse.from_config(c) for c in visible]

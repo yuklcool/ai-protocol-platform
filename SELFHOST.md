@@ -84,7 +84,7 @@ Session 使用 ADK `DatabaseSessionService`，按可信用户分区存储 app na
 
 交互表单需要同时开启 `a2uiEnabled`、`allowSurfaceContextWrites`、`allowActionTriggeredRuns`。普通聊天与表单操作共享 `/api/agent/stream` 和 Root 策略。
 
-Root 额度管理需要用户额度、模型价格和 `budgetEnabled`。Root 开关启用后直接创建持久化用户执行器，即使 `BUDGET_ENFORCER=off` 也会执行；环境变量用于兼容旧 Skill/外部预算接口，详见[配置流程](docs/configuration-guide.md)。
+Root 的 `budgetEnabled` 使用已注册的通用预算执行器。`BUDGET_ENFORCER=off` 时关闭 Root 预算；`in-memory` 提供单进程执行器，不持久化额度。需要持久化预算时由部署方实现并注册执行器。
 
 ## 7. 域名与反向代理
 

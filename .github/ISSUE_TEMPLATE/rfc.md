@@ -40,7 +40,7 @@ assignees: ""
 
 - API:
 - Database:
-- Tenant / Auth:
+- User / Auth:
 - Protocol:
 - Deployment:
 - Upstream compatibility:

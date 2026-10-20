@@ -18,7 +18,7 @@ def _run() -> object:
 @respx.mock
 def test_whoami_platform() -> None:
     respx.get(f"{BASE}/api/admin/whoami").mock(
-        return_value=httpx.Response(200, json={"scope": "platform", "domains": [], "email": "owner@yourcompany.com"})
+        return_value=httpx.Response(200, json={"scope": "platform", "email": "owner@yourcompany.com"})
     )
     result = _run()
     assert result.exit_code == 0, result.output
@@ -27,24 +27,11 @@ def test_whoami_platform() -> None:
 
 
 @respx.mock
-def test_whoami_tenant_lists_domains() -> None:
-    respx.get(f"{BASE}/api/admin/whoami").mock(
-        return_value=httpx.Response(
-            200, json={"scope": "tenant", "domains": ["a.com", "b.com"], "email": "ops@a.com"}
-        )
-    )
-    result = _run()
-    assert result.exit_code == 0, result.output
-    assert "tenant" in result.output
-    assert "a.com" in result.output and "b.com" in result.output
-
-
-@respx.mock
 def test_whoami_none_explains_what_to_do() -> None:
     """A bare 'none' would leave the operator guessing between the two causes
     that actually produce it — no tag in THIS env, or a stale token."""
     respx.get(f"{BASE}/api/admin/whoami").mock(
-        return_value=httpx.Response(200, json={"scope": "none", "domains": [], "email": "u@x.com"})
+        return_value=httpx.Response(200, json={"scope": "none", "email": "u@x.com"})
     )
     result = _run()
     assert result.exit_code == 0, result.output

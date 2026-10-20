@@ -35,7 +35,7 @@ assignees: ""
 - [ ] Frontend
 - [ ] Agent / Skill
 - [ ] MCP
-- [ ] Auth / Tenant
+- [ ] Auth / User isolation
 - [ ] Provider
 - [ ] Release / Infra
 

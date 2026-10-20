@@ -1,7 +1,7 @@
 [project]
 name = "aiplatform"
 version = "0.1.0"
-description = "`aiplatform` CLI — bucket/folder/groups/access/skill admin for the v6 platform"
+description = "`aiplatform` CLI — bucket/folder/access/skill admin for the v6 platform"
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Holosun ApS" }]
 dependencies = [
