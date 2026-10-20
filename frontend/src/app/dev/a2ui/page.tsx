@@ -160,14 +160,14 @@ function Pattern1Section() {
   }, []);
 
   return (
-    <section className="space-y-3" data-testid="pattern1-section">
+    <section className="glass-panel space-y-3 p-5" data-testid="pattern1-section">
       <header className="space-y-1">
         <h2 className="text-lg font-semibold">Pattern 1 — Click-Driven AI UI</h2>
         <p className="text-sm text-muted-foreground">
           This surface fires an agent turn on click — no chat composer.
         </p>
       </header>
-      <div className="rounded border p-3">
+      <div className="surface-sunken p-3">
         <A2UISurfaceMount
           surfaceId={PATTERN1_SURFACE_ID}
           skillId={PATTERN1_SKILL_ID}
@@ -186,7 +186,7 @@ function Pattern1Section() {
       </p>
       {hint && (
         <p
-          className="text-xs text-amber-700"
+          className="notice notice--warning"
           role="status"
           data-testid="pattern1-hint"
         >
@@ -200,17 +200,21 @@ function Pattern1Section() {
 export default function A2uiDevPage() {
   return (
     <SurfaceRegistryProvider>
-      <main className="page-container mx-auto max-w-3xl space-y-8 p-8">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold">A2UI fixture playground</h1>
-          <p className="text-sm text-muted-foreground">
-            Hand-crafted A2UI scenarios that render without a live agent.
-            Useful when triaging surface-rendering bugs without booting the
-            whole backend.
-          </p>
-        </header>
-        <Pattern1Seeder />
-        <Pattern1Section />
+      <main className="page-container">
+        <div className="page-body max-w-3xl space-y-6">
+          <header className="page-header">
+            <div className="min-w-0">
+              <h1 className="page-header__title">A2UI fixture playground</h1>
+              <p className="page-header__desc">
+                Hand-crafted A2UI scenarios that render without a live agent.
+                Useful when triaging surface-rendering bugs without booting the
+                whole backend.
+              </p>
+            </div>
+          </header>
+          <Pattern1Seeder />
+          <Pattern1Section />
+        </div>
       </main>
     </SurfaceRegistryProvider>
   );

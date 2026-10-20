@@ -18,12 +18,12 @@ export function SkillStudioShell({ draft, isNew, isDirty, isSaving, onSave, onCa
       <header className="app-toolbar flex shrink-0 flex-wrap items-center gap-3 px-4 py-3">
         <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
-          <Link href="/skills" className="text-xs text-muted-foreground">{t("studio.agentStudio")}</Link>
+          <Link href="/skills" className="inline-flex min-h-11 items-center text-xs text-muted-foreground hover:text-primary">{t("studio.agentStudio")}</Link>
           <h1 className="truncate text-sm font-semibold">{isNew ? t("studio.newSkill") : draft.displayName || draft.name}</h1>
         </div>
-        <span className="hidden text-xs text-muted-foreground sm:inline">{isDirty ? t("studio.unsaved") : t("studio.synced")}</span>
-        <button type="button" onClick={onCancel} className="rounded-md border px-3 py-1.5 text-xs">{t("studio.cancel")}</button>
-        <button type="button" onClick={onSave} disabled={!isDirty || isSaving} className="inline-flex items-center gap-1.5 button-primary px-3 py-1.5 text-xs disabled:opacity-50">
+        <span className={`badge hidden sm:inline-flex ${isDirty ? "badge--warning" : "badge--success"}`}>{isDirty ? t("studio.unsaved") : t("studio.synced")}</span>
+        <button type="button" onClick={onCancel} className="button-secondary min-h-11 px-3 py-1.5 text-xs">{t("studio.cancel")}</button>
+        <button type="button" onClick={onSave} disabled={!isDirty || isSaving} className="button-primary min-h-11 items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50">
           <Save className="h-3.5 w-3.5" aria-hidden />{isSaving ? t("studio.saving") : t("studio.save")}
         </button>
       </header>

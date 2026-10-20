@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { SignInRequired } from "@/components/chat/SignInRequired";
 import { UsagePanel } from "@/components/admin/UsagePanel";
-import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
+import { Notice, useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 import {
   ArrowIcon,
   CopyButton,
@@ -188,12 +188,12 @@ export default function AnalyticsPage() {
       .catch(() => setTraceState("error"));
   }, []);
 
-  if (loading) return <Centered>{t("加载中…", "Loading…")}</Centered>;
+  if (loading) return <Centered><p role="status" className="skeleton w-full max-w-md p-6 text-center text-sm">{t("加载中…", "Loading…")}</p></Centered>;
   if (!user) return <SignInRequired />;
   if (state === "forbidden") {
     return (
       <Centered>
-        <div className="max-w-md text-center">
+        <div className="glass-panel max-w-md p-6 text-center">
           <h1 className="mb-2 text-lg font-semibold">
             {t("需要管理员权限", "Admins only")}
           </h1>
@@ -210,29 +210,33 @@ export default function AnalyticsPage() {
   const hasFilters = Boolean(ownerFilter || skillFilter || q.trim());
 
   return (
-    <main className="page-container mx-auto max-w-[1500px] p-6">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold">
-          {t("用量与运行分析", "Analytics")}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "查看用量，并检索历史会话中的消息、工具调用及委派轨迹。",
-            "Browse and search past sessions; open a full trace of messages, tool calls, and delegations in the order they happened.",
-          )}
-        </p>
+    <main className="page-container mx-auto max-w-[1500px]">
+      <header className="page-header">
+        <div className="min-w-0">
+          <h1 className="page-header__title">
+            {t("用量与运行分析", "Analytics")}
+          </h1>
+          <p className="page-header__desc">
+            {t(
+              "查看用量，并检索历史会话中的消息、工具调用及委派轨迹。",
+              "Browse and search past sessions; open a full trace of messages, tool calls, and delegations in the order they happened.",
+            )}
+          </p>
+        </div>
       </header>
+      <div className="page-body space-y-5">
       <UsagePanel />
 
       <form
-        className="mb-4 flex flex-wrap items-center gap-2"
+        className="glass-panel flex min-w-0 flex-wrap items-center gap-3 p-4"
         onSubmit={(e) => {
           e.preventDefault();
           loadSessions(q.trim(), ownerFilter, skillFilter);
         }}
       >
         <input
-          className="min-w-0 w-full sm:w-auto sm:min-w-[16rem] flex-1 rounded-md border px-3 py-2 text-sm"
+          aria-label={t("搜索历史会话", "Search sessions")}
+          className="glass-control min-w-0 w-full sm:w-auto sm:min-w-[16rem] flex-1 px-3 py-2 text-sm"
           placeholder={t(
             "搜索标题、用户或技能…",
             "Search title, owner, or skill…",
@@ -242,7 +246,7 @@ export default function AnalyticsPage() {
         />
         <select
           aria-label={t("按用户筛选", "Filter by user")}
-          className="rounded-md border bg-background px-2 py-2 text-sm"
+          className="glass-control min-w-0 max-w-full px-3 py-2 text-sm"
           value={ownerFilter}
           onChange={(e) => setOwnerFilter(e.target.value)}
         >
@@ -263,7 +267,7 @@ export default function AnalyticsPage() {
         </select>
         <select
           aria-label={t("按技能筛选", "Filter by skill")}
-          className="rounded-md border bg-background px-2 py-2 text-sm"
+          className="glass-control min-w-0 max-w-full px-3 py-2 text-sm"
           value={skillFilter}
           onChange={(e) => setSkillFilter(e.target.value)}
         >
@@ -279,14 +283,14 @@ export default function AnalyticsPage() {
         </select>
         <button
           type="submit"
-          className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40"
+          className="button-primary px-4 py-2 text-sm"
         >
           {t("搜索", "Search")}
         </button>
         {hasFilters && (
           <button
             type="button"
-            className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:text-foreground"
+            className="button-secondary px-3 py-2 text-sm"
             onClick={() => {
               setQ("");
               setOwnerFilter("");
@@ -300,21 +304,21 @@ export default function AnalyticsPage() {
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)]">
         {/* Session list */}
-        <section className="glass-panel">
+        <section className="glass-panel min-w-0 overflow-hidden">
           <div className="border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
             {t("历史会话", "Sessions")}
             {state === "ok" && `(${rows.length})`}
           </div>
           {state === "loading" && (
-            <Note>{t("正在加载会话…", "Loading sessions…")}</Note>
+            <div role="status" className="skeleton m-3 p-6 text-sm text-muted-foreground">{t("正在加载会话…", "Loading sessions…")}</div>
           )}
           {state === "error" && (
-            <Note>
+            <div className="p-3"><Notice tone="danger">
               {t(
                 "无法加载会话，请重试。",
                 "Could not load sessions. Try again.",
               )}
-            </Note>
+            </Notice></div>
           )}
           {state === "ok" && rows.length === 0 && (
             <Note>{t("没有匹配的会话。", "No sessions match.")}</Note>
@@ -336,12 +340,12 @@ export default function AnalyticsPage() {
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
                         {r.transcript_lost && (
-                          <span className="rounded-full border border-amber-500/50 px-1.5 text-[10px] uppercase text-amber-600">
+                          <span className="badge badge--warning">
                             {t("消息记录不可用", "transcript lost")}
                           </span>
                         )}
                         {r.archived && (
-                          <span className="rounded-full border px-1.5 text-[10px] uppercase text-muted-foreground">
+                          <span className="badge">
                             {t("已归档", "archived")}
                           </span>
                         )}
@@ -355,7 +359,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                       {(r.skill_label || r.skill_id) && (
-                        <span className="rounded-full bg-muted px-1.5 py-px text-[10px] text-foreground/70">
+                        <span className="badge badge--brand">
                           {r.skill_label || r.skill_id}
                         </span>
                       )}
@@ -391,7 +395,7 @@ export default function AnalyticsPage() {
         </section>
 
         {/* Trace detail */}
-        <section className="glass-panel">
+        <section className="glass-panel min-w-0 overflow-hidden">
           <div className="border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
             {t("执行轨迹", "Trace")}
           </div>
@@ -404,13 +408,14 @@ export default function AnalyticsPage() {
             </Note>
           )}
           {traceState === "loading" && (
-            <Note>{t("正在加载执行轨迹…", "Loading trace…")}</Note>
+            <div role="status" className="skeleton m-3 p-6 text-sm text-muted-foreground">{t("正在加载执行轨迹…", "Loading trace…")}</div>
           )}
           {traceState === "error" && (
-            <Note>{t("无法加载执行轨迹。", "Could not load this trace.")}</Note>
+            <div className="p-3"><Notice tone="danger">{t("无法加载执行轨迹。", "Could not load this trace.")}</Notice></div>
           )}
           {traceState === "ok" && trace && <TraceView trace={trace} />}
         </section>
+      </div>
       </div>
     </main>
   );
@@ -575,7 +580,7 @@ function TraceView({ trace }: { trace: Trace }) {
       <TraceHeader trace={trace} />
 
       {trace.transcript_available === false && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+        <div className="notice notice--warning">
           Transcript unavailable — this session&rsquo;s stored messages could
           not be read (the canonical session is missing while its index row
           survives). The session metadata is still shown; the message history
@@ -664,7 +669,7 @@ function TraceView({ trace }: { trace: Trace }) {
 
 function Note({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+    <div className="empty-state text-sm text-muted-foreground">
       {children}
     </div>
   );

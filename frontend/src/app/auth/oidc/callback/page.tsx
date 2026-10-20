@@ -45,15 +45,16 @@ export default function OidcCallbackPage() {
   }, [t]);
 
   return (
-    <main className="page-container flex min-h-screen items-center justify-center bg-background p-6">
-      <section className="w-full max-w-md glass-panel border-border bg-card p-6 text-center shadow-sm">
+    <main className="page-container flex min-h-screen items-center justify-center">
+      <section className="glass-panel w-full max-w-md p-6 text-center">
         <h1 className="text-lg font-semibold text-foreground">{t("auth.signIn")}</h1>
         {error ? (
-          <p className="mt-3 text-sm text-red-600" role="alert">
-            {error}
-          </p>
+          <div className="notice notice--danger mt-3 flex-col text-left" role="alert">
+            <p className="font-semibold">{t("auth.failed")}</p>
+            <p className="break-words">{error}</p>
+          </div>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">{t("auth.checking")}</p>
+          <p className="notice notice--info mt-3" role="status">{t("auth.checking")}</p>
         )}
       </section>
     </main>

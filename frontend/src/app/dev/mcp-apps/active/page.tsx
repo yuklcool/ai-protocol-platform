@@ -87,20 +87,23 @@ export default function McpAppsActivePage() {
   }
 
   return (
-    <main className="page-container mx-auto max-w-3xl space-y-6 p-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">MCP Apps active smoke</h1>
-        <p className="text-sm text-muted-foreground">
+    <main className="page-container">
+      <div className="page-body max-w-3xl space-y-6">
+      <header className="page-header">
+        <div className="min-w-0">
+        <h1 className="page-header__title">MCP Apps active smoke</h1>
+        <p className="page-header__desc">
           Full active iframe → host bridge. The router{"'"}s{" "}
           <code>onChatMessage</code> is wired to the log below instead of
           to <code>useSkillAgent.sendMessage</code> so you can exercise
           the adapter without sending real chat turns.
         </p>
+        </div>
       </header>
 
-      <section className="space-y-2">
+      <section className="glass-panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Iframe (real bridge)</h2>
-        <div className="rounded border p-3">
+        <div className="surface-sunken p-3">
           <MCPAppToolCallRouter
             toolCalls={[FIXTURE_TOOL_CALL]}
             mcpServerIds={["ext-apps-map"]}
@@ -111,7 +114,7 @@ export default function McpAppsActivePage() {
         </div>
       </section>
 
-      <section className="space-y-2">
+      <section className="glass-panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Synthetic notifications</h2>
         <p className="text-xs text-muted-foreground">
           Bypasses the iframe; sends each payload directly to the
@@ -125,7 +128,7 @@ export default function McpAppsActivePage() {
               key={n.label}
               type="button"
               onClick={() => fireSynthetic(n)}
-              className="rounded border px-3 py-1 text-xs hover:bg-muted"
+              className="button-secondary min-h-11 max-w-full whitespace-normal px-3 py-2 text-xs"
             >
               fire: {n.label}
             </button>
@@ -133,22 +136,22 @@ export default function McpAppsActivePage() {
           <button
             type="button"
             onClick={clearLog}
-            className="rounded border border-destructive px-3 py-1 text-xs text-destructive hover:bg-destructive/10"
+            className="button-danger min-h-11 px-3 py-2 text-xs"
           >
             clear log
           </button>
         </div>
       </section>
 
-      <section className="space-y-2">
+      <section className="glass-panel space-y-3 p-5">
         <h2 className="text-lg font-semibold">Adapter log</h2>
         {log.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">
+          <p className="empty-state text-sm text-muted-foreground">
             No notifications yet. Click a button above or interact with
             the iframe to see what the adapter translated.
           </p>
         ) : (
-          <ol className="space-y-2 rounded border bg-muted/30 p-3 font-mono text-xs">
+          <ol className="surface-sunken space-y-2 p-3 font-mono text-xs" aria-live="polite">
             {log.map((entry, i) => (
               <li key={i} className="border-l-2 border-primary pl-2">
                 <span className="text-muted-foreground">
@@ -166,6 +169,7 @@ export default function McpAppsActivePage() {
           </ol>
         )}
       </section>
+      </div>
     </main>
   );
 }

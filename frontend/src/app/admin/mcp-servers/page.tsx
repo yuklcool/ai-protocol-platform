@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import NextLink from "next/link";
 
+import { Notice } from "@/components/admin/ConsolePrimitives";
 import { SignInRequired } from "@/components/chat/SignInRequired";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -105,6 +106,9 @@ export default function McpServersPage() {
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"info" | "success" | "danger">("info");
+  const [serversLoading, setServersLoading] = useState(true);
+  const [serversLoaded, setServersLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [diagnosticId, setDiagnosticId] = useState<string | null>(null);
   const [health, setHealth] = useState<McpHealth | null>(null);
@@ -114,7 +118,10 @@ export default function McpServersPage() {
     translateMcpAdmin(locale, key, params);
 
   const load = async () => {
+    setServersLoading(true);
+    setServersLoaded(false);
     setNotice(null);
+    setNoticeTone("danger");
     try {
       const serversResponse = await fetchWithAuth(API);
       if (!serversResponse.ok) {
@@ -122,8 +129,11 @@ export default function McpServersPage() {
         return;
       }
       setServers(await serversResponse.json());
+      setServersLoaded(true);
     } catch {
       setNotice(t("load.service"));
+    } finally {
+      setServersLoading(false);
     }
   };
 
@@ -162,6 +172,7 @@ export default function McpServersPage() {
     if (!id || !form.url.trim()) return;
     setBusy(true);
     setNotice(null);
+    setNoticeTone("danger");
     try {
       const body: Record<string, unknown> = {
         url: form.url.trim(),
@@ -182,6 +193,7 @@ export default function McpServersPage() {
         setNotice(await errorDetail(response, t("save.failed", { id })));
         return;
       }
+      setNoticeTone("success");
       setNotice(t("save.ok", { id }));
       resetForm();
       await load();
@@ -202,6 +214,7 @@ export default function McpServersPage() {
       return;
     setBusy(true);
     setNotice(null);
+    setNoticeTone("danger");
     try {
       const response = await fetchWithAuth(
         `${API}/${encodeURIComponent(server.server_id)}`,
@@ -221,6 +234,7 @@ export default function McpServersPage() {
         setHealth(null);
         setDiscovery(null);
       }
+      setNoticeTone("success");
       setNotice(t("delete.ok", { id: server.server_id }));
       await load();
     } finally {
@@ -231,6 +245,7 @@ export default function McpServersPage() {
   const toggleEnabled = async (server: McpServer) => {
     setBusy(true);
     setNotice(null);
+    setNoticeTone("danger");
     const body: Record<string, unknown> = {
       url: server.url,
       transport: server.transport,
@@ -259,6 +274,7 @@ export default function McpServersPage() {
         );
         return;
       }
+      setNoticeTone("success");
       setNotice(
         t(server.enabled ? "toggle.disabled" : "toggle.enabled", {
           id: server.server_id,
@@ -275,6 +291,7 @@ export default function McpServersPage() {
     setHealth(null);
     setDiscovery(null);
     setNotice(null);
+    setNoticeTone("danger");
     const response = await fetchWithAuth(
       `${API}/${encodeURIComponent(server.server_id)}/health`,
       { method: "POST" },
@@ -296,6 +313,7 @@ export default function McpServersPage() {
     setHealth(null);
     setDiscovery(null);
     setNotice(null);
+    setNoticeTone("danger");
     const response = await fetchWithAuth(
       `${API}/${encodeURIComponent(server.server_id)}/discover`,
       { method: "POST" },
@@ -313,43 +331,46 @@ export default function McpServersPage() {
   };
 
   if (loading || state === "loading")
-    return <Centered>{t("state.loading")}</Centered>;
+    return <Centered><p role="status" className="skeleton w-full max-w-md p-6 text-center text-sm">{t("state.loading")}</p></Centered>;
   if (!user) return <SignInRequired />;
   if (state === "error")
-    return <Centered>{t("state.adminUnavailable")}</Centered>;
-  if (!isAdmin) return <Centered>{t("state.adminRequired")}</Centered>;
+    return <Centered><Notice tone="danger">{t("state.adminUnavailable")}</Notice></Centered>;
+  if (!isAdmin) return <Centered><Notice tone="warning">{t("state.adminRequired")}</Notice></Centered>;
 
   return (
-    <main className="page-container mx-auto max-w-6xl p-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{t("title")}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+    <main className="page-container mx-auto max-w-6xl">
+      <header className="page-header">
+        <div className="min-w-0">
+          <h1 className="page-header__title">{t("title")}</h1>
+          <p className="page-header__desc">
             {t("description")}
           </p>
         </div>
+        <div className="page-header__actions">
         <NextLink
           href="/admin"
-          className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted/40"
+          className="button-secondary px-3 py-2 text-sm"
         >
           {t("back")}
         </NextLink>
+        </div>
       </header>
 
-      {notice && (
-        <div className="mb-4 rounded-md border px-3 py-2 text-sm">{notice}</div>
-      )}
+      <div className="page-body space-y-5">
+      <Notice tone={noticeTone}>{notice}</Notice>
 
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
-        <section className="glass-panel">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <section className="glass-panel min-w-0 overflow-hidden">
           <div className="border-b px-4 py-3">
             <h2 className="font-medium">{t("registry.title")}</h2>
             <p className="text-xs text-muted-foreground">
               {t("registry.description")}
             </p>
           </div>
-          {servers.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+          {serversLoading ? (
+            <p role="status" className="skeleton m-4 p-6 text-sm text-muted-foreground">{t("state.loading")}</p>
+          ) : !serversLoaded && servers.length === 0 ? null : servers.length === 0 ? (
+            <p className="empty-state text-sm text-muted-foreground">
               {t("registry.empty")}
             </p>
           ) : (
@@ -359,17 +380,17 @@ export default function McpServersPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-sm font-medium">
+                        <span className="break-all font-mono text-sm font-medium">
                           {server.server_id}
                         </span>
                         <Badge>{server.transport}</Badge>
-                        <Badge>
+                        <Badge tone={server.enabled ? "success" : "warning"}>
                           {server.enabled
                             ? t("registry.enabled")
                             : t("registry.disabled")}
                         </Badge>
                         {server.has_credentials && (
-                          <Badge>{t("registry.credentials")}</Badge>
+                          <Badge tone="brand">{t("registry.credentials")}</Badge>
                         )}
                       </div>
                       <p className="mt-1 break-all text-xs text-muted-foreground">
@@ -419,7 +440,7 @@ export default function McpServersPage() {
           )}
         </section>
 
-        <section className="glass-panel p-4">
+        <section className="glass-panel min-w-0 p-4 sm:p-5">
           <h2 className="font-medium">
             {editingId
               ? t("form.editTitle", { id: editingId })
@@ -428,7 +449,7 @@ export default function McpServersPage() {
           <div className="mt-3 grid gap-3">
             <Field label={t("form.serverId")}>
               <input
-                className="w-full rounded-md border px-3 py-2 text-sm font-mono disabled:opacity-60"
+                className="glass-control w-full min-w-0 px-3 py-2 text-sm font-mono disabled:opacity-60"
                 value={form.serverId}
                 disabled={!!editingId}
                 placeholder="example-map"
@@ -439,7 +460,7 @@ export default function McpServersPage() {
             </Field>
             <Field label={t("form.url")}>
               <input
-                className="w-full rounded-md border px-3 py-2 text-sm font-mono"
+                className="glass-control w-full min-w-0 px-3 py-2 text-sm font-mono"
                 value={form.url}
                 placeholder="http://mcp-example-map:8080/mcp"
                 onChange={(event) =>
@@ -450,7 +471,7 @@ export default function McpServersPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t("form.transport")}>
                 <select
-                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  className="glass-control w-full min-w-0 px-3 py-2 text-sm"
                   value={form.transport}
                   onChange={(event) =>
                     setForm({
@@ -467,7 +488,7 @@ export default function McpServersPage() {
             </div>
             <Field label={t("form.description")}>
               <input
-                className="w-full rounded-md border px-3 py-2 text-sm"
+                className="glass-control w-full min-w-0 px-3 py-2 text-sm"
                 value={form.description}
                 onChange={(event) =>
                   setForm({ ...form, description: event.target.value })
@@ -476,7 +497,7 @@ export default function McpServersPage() {
             </Field>
             <Field label={t("form.credentialHeaders")}>
               <textarea
-                className="min-h-24 w-full rounded-md border px-3 py-2 text-sm font-mono"
+                className="min-h-24 glass-control w-full min-w-0 px-3 py-2 text-sm font-mono"
                 value={form.headersText}
                 onChange={(event) =>
                   setForm({
@@ -523,14 +544,14 @@ export default function McpServersPage() {
             </label>
             <div className="flex justify-end gap-2">
               <button
-                className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40"
+                className="button-secondary px-3 py-2 text-sm"
                 onClick={resetForm}
                 disabled={busy}
               >
                 {t("form.clear")}
               </button>
               <button
-                className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
+                className="button-primary px-4 py-2 text-sm disabled:opacity-50"
                 onClick={() => void save()}
                 disabled={busy || !form.serverId.trim() || !form.url.trim()}
               >
@@ -542,7 +563,7 @@ export default function McpServersPage() {
       </div>
 
       {diagnosticId && (
-        <section className="mt-6 glass-panel p-4">
+        <section className="glass-panel min-w-0 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-medium">
@@ -554,7 +575,7 @@ export default function McpServersPage() {
               </p>
             </div>
             <button
-              className="text-xs text-muted-foreground underline"
+              className="button-secondary px-2 py-1 text-xs"
               onClick={() => {
                 setDiagnosticId(null);
                 setHealth(null);
@@ -606,7 +627,7 @@ export default function McpServersPage() {
                 </div>
               )}
               {discovery.warnings.length > 0 && (
-                <div className="rounded-md border border-amber-500/40 p-3 text-xs">
+                <div className="notice notice--warning block">
                   {discovery.warnings.map((warning, index) => (
                     <p key={`${warning.capability}-${index}`}>
                       <strong>{warning.capability}</strong> · {warning.category}
@@ -619,6 +640,7 @@ export default function McpServersPage() {
           )}
         </section>
       )}
+      </div>
     </main>
   );
 }
@@ -632,11 +654,10 @@ function DiagnosticStatus({
 }) {
   return (
     <div
-      className={`mt-3 rounded-md border p-3 text-sm ${
-        result.ok ? "border-emerald-500/40" : "border-red-500/40"
-      }`}
+      role={result.ok ? "status" : "alert"}
+      className={`notice mt-3 block ${result.ok ? "notice--success" : "notice--danger"}`}
     >
-      <strong>
+      <strong className={`badge ${result.ok ? "badge--success" : "badge--danger"}`}>
         {result.ok
           ? t("diagnostics.connected")
           : t("diagnostics.failed", {
@@ -661,9 +682,9 @@ function Count({ title, value }: { title: string; value: number }) {
   );
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
+function Badge({ children, tone }: { children: React.ReactNode; tone?: "brand" | "success" | "warning" }) {
   return (
-    <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+    <span className={`badge${tone ? ` badge--${tone}` : ""}`}>
       {children}
     </span>
   );
@@ -685,9 +706,7 @@ function Action({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-md border px-2 py-1 text-xs hover:bg-muted/40 disabled:opacity-50 ${
-        danger ? "text-red-600" : ""
-      }`}
+      className={`${danger ? "button-danger" : "button-secondary"} px-2 py-1 text-xs disabled:opacity-50`}
     >
       {children}
     </button>

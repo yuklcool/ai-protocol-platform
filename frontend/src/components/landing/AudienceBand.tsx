@@ -34,23 +34,23 @@ export function AudienceBand() {
   const { t } = useI18n();
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-6 py-16 md:px-10 md:py-20">
-      <div className="mb-8 flex items-end justify-between">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+    <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-8 md:py-16">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <h2 className="text-base font-semibold">
           {t("home.audience.heading")}
         </h2>
       </div>
-      <ul className="grid grid-cols-1 gap-px overflow-hidden glass-panel border-border bg-border md:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {AUDIENCES.map((audience, i) => (
           <li
             key={audience.key}
-            className="group relative flex flex-col gap-3 bg-background p-6"
+            className="glass-panel glass-panel--flat relative flex min-w-0 flex-col gap-4 p-5 sm:p-6"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[10px] tabular-nums text-primary">
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
+              <span className="badge px-2.5 py-1 text-xs font-medium text-primary">
                 {t(audience.role)}
               </span>
             </div>

@@ -72,14 +72,15 @@ export function UsagePanel() {
   const cost = (value: number) => `$${value.toFixed(6)}`;
   const totals = data?.totals;
   return (
-    <section className="mb-6 space-y-4 glass-panel p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto text-base font-semibold">
+    <section className="glass-panel min-w-0 space-y-4 p-4 sm:p-5" aria-busy={loading}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+        <h2 className="text-base font-semibold">
           {t("用量统计", "Usage")}
         </h2>
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
         <select
           aria-label={t("用量时间范围", "Usage time range")}
-          className={`${control} w-auto`}
+          className={`${control} w-auto min-w-0 max-w-full`}
           value={days}
           onChange={(e) => setDays(e.target.value)}
         >
@@ -91,7 +92,7 @@ export function UsagePanel() {
         </select>
         <select
           aria-label={t("用户用量", "Usage user")}
-          className={`${control} w-auto`}
+          className={`${control} w-auto min-w-0 max-w-full`}
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
         >
@@ -111,6 +112,7 @@ export function UsagePanel() {
         >
           {t("刷新用量", "Refresh usage")}
         </button>
+        </div>
       </div>
       <p className="text-xs leading-5 text-muted-foreground">
         {t(
@@ -118,13 +120,13 @@ export function UsagePanel() {
           "Tokens use persisted provider-reported usage; costs are estimates. Accounting starts with this version. Calls without reported usage are excluded.",
         )}
       </p>
-      <Notice>{notice}</Notice>
+      <Notice tone="danger">{notice}</Notice>
       {loading && (
-        <p role="status" className="text-sm">
+        <p role="status" className="skeleton p-6 text-sm text-muted-foreground">
           {t("正在加载用量…", "Loading usage…")}
         </p>
       )}
-      {totals && (
+      {!loading && totals && (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
@@ -139,28 +141,28 @@ export function UsagePanel() {
               ],
               [t("估算费用", "Estimated cost"), cost(totals.estimatedCostUsd)],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-md border bg-muted/20 p-3">
+              <div key={label} className="min-w-0 rounded-xl border bg-background/60 p-4">
                 <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="mt-2 text-xl font-medium">{value}</p>
+                <p className="mt-2 break-words text-xl font-semibold tabular-nums">{value}</p>
               </div>
             ))}
           </div>
           {totals.unpricedCalls > 0 && (
-            <Notice>
+            <Notice tone="warning">
               {t(
                 `${totals.unpricedCalls} 次调用缺少模型定价，费用统计不含这些调用的成本。`,
                 `${totals.unpricedCalls} calls have no known pricing; their cost is excluded.`,
               )}
             </Notice>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="min-w-0 overflow-x-auto rounded-xl border bg-background/40">
+            <table className="data-table min-w-[640px]" aria-label={t("用户用量明细", "Usage by user")}>
               <thead>
                 <tr>
                   {[
                     t("用户", "User"), t("模型调用", "Model calls"), t("输入 / 输出 Token", "Input / output tokens"), t("估算费用", "Estimated cost"),
-                  ].map((label) => (
-                    <th className="p-2 font-medium" key={label}>
+                  ].map((label, index) => (
+                    <th className={index > 0 ? "num" : undefined} key={label}>
                       {label}
                     </th>
                   ))}
@@ -168,35 +170,47 @@ export function UsagePanel() {
               </thead>
               <tbody>
                 {data.users.map((row) => (
-                  <tr key={row.userId} className="border-t">
-                    <td className="p-2">{row.userId}</td>
-                    <td className="p-2">{row.calls}</td><td className="p-2">{row.inputTokens} / {row.outputTokens}</td><td className="p-2">{cost(row.estimatedCostUsd)}</td>
+                  <tr key={row.userId}>
+                    <td className="max-w-64 break-words">{row.userId}</td>
+                    <td className="num">{row.calls}</td>
+                    <td className="num whitespace-nowrap">{row.inputTokens} / {row.outputTokens}</td>
+                    <td className="num">{cost(row.estimatedCostUsd)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {data.users.length === 0 && (
-              <p className="p-3 text-sm text-muted-foreground">
+              <p className="empty-state text-sm text-muted-foreground">
                 {t("暂无用户用量。", "No user usage.")}
               </p>
             )}
           </div>
           {data.models.length > 0 && (
-            <details>
+            <details className="rounded-xl border bg-background/40 p-4">
               <summary className="cursor-pointer text-sm">
                 {t("按模型查看", "View by model")}
               </summary>
-              <div className="mt-3 space-y-2">
-                {data.models.map((model) => (
-                  <p
-                    key={model.modelId}
-                    className="break-all text-xs text-muted-foreground"
-                  >
-                    {model.modelId} · {model.calls} ·{" "}
-                    {model.inputTokens + model.outputTokens} Token ·{" "}
-                    {cost(model.estimatedCostUsd)}
-                  </p>
-                ))}
+              <div className="mt-3 min-w-0 overflow-x-auto">
+                <table className="data-table min-w-[560px]" aria-label={t("模型用量明细", "Usage by model")}>
+                  <thead>
+                    <tr>
+                      <th>{t("模型", "Model")}</th>
+                      <th className="num">{t("模型调用", "Model calls")}</th>
+                      <th className="num">{t("总 Token", "Total tokens")}</th>
+                      <th className="num">{t("估算费用", "Estimated cost")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.models.map((model) => (
+                      <tr key={model.modelId}>
+                        <td className="max-w-64 break-all">{model.modelId}</td>
+                        <td className="num">{model.calls}</td>
+                        <td className="num">{model.inputTokens + model.outputTokens}</td>
+                        <td className="num">{cost(model.estimatedCostUsd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </details>
           )}

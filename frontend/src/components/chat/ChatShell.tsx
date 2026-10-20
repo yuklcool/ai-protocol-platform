@@ -829,18 +829,15 @@ function StreamErrorBanner({
   const boxTone = amber
     ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
     : "border-destructive/40 bg-destructive/10 text-destructive";
-  const btnTone = amber
-    ? "border-amber-500/40 hover:bg-amber-500/20"
-    : "border-destructive/40 hover:bg-destructive/20";
   return (
-    <div className={`inline-block max-w-[80%] space-y-2 rounded-md border px-3 py-2 text-sm ${boxTone}`}>
+    <div role="alert" className={`notice inline-block max-w-full space-y-3 rounded-xl border px-4 py-3 text-sm ${boxTone}`}>
       <p>{error.message}</p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {error.retryable && (
           <button
             type="button"
             onClick={onRetry}
-            className={`rounded border px-2 py-0.5 text-xs ${btnTone}`}
+            className="button-secondary px-3 py-1.5 text-xs"
           >
             {translateChat(locale, "shell.retry")}
           </button>
@@ -848,7 +845,7 @@ function StreamErrorBanner({
         <button
           type="button"
           onClick={onDismiss}
-          className="rounded border border-destructive/20 px-2 py-0.5 text-xs text-destructive/70 hover:bg-destructive/10"
+          className="button-ghost px-3 py-1.5 text-xs"
         >
           {translateChat(locale, "shell.dismiss")}
         </button>
@@ -1548,7 +1545,7 @@ function ChatShellContent({
           backend cold-start in flight. Disables the input at the same time. */}
       {!chatReady && (
         <div
-          className="mb-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+          className="notice mb-3 flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-800"
           role="status"
           aria-live="polite"
         >
@@ -1583,12 +1580,13 @@ function ChatShellContent({
       <InContextBadge openTabs={openTabs} includedDocIds={includedDocIds} />
       <UploadDropZone skillId={skillId} scopeKey={effectiveSessionId} attachedCount={openTabs.length} disabled={!attachmentsReady} onUploadComplete={handleUploadedDocOpen} onBusyChange={setUploadBusy} onBlockingChange={setUploadBlocked} />
       {attachmentsSaving && <p role="status" className="text-xs text-muted-foreground">正在保存附件选择…</p>}
-      {attachmentError && <div role="alert" className="text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave}>重试</button></div>}
+      {attachmentError && <div role="alert" className="notice flex flex-wrap items-center gap-2 text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave} className="button-secondary px-3 py-1.5 text-xs">重试</button></div>}
       {unreadableAttachments.length > 0 && <p role="alert" className="text-xs text-destructive">{unreadableAttachments.map((tab) => tab.filename).join("、")} 尚不可分析，请等待解析完成、重试或取消选择。</p>}
       <form
         // items-end: as the textarea grows the Send/Stop button stays aligned
         // with the LAST line rather than stretching to the full box height.
-        className="composer-form flex items-end gap-2"
+        className="composer composer-form flex items-end gap-2 focus-within:ring-2 focus-within:ring-primary/30"
+        aria-label={translateChat(locale, "shell.messagePlaceholder")}
         onSubmit={(e) => {
           e.preventDefault();
           void handleSend();
@@ -1618,17 +1616,19 @@ function ChatShellContent({
               ? translateChat(locale, "shell.messagePlaceholder")
               : translateChat(locale, "shell.connectingPlaceholder")
           }
-          className="glass-control max-h-48 min-w-0 flex-1 resize-none overflow-y-auto px-3 py-2 text-sm"
+          className="max-h-48 min-w-0 flex-1 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-3 py-2 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={translateChat(locale, "shell.messagePlaceholder")}
           disabled={inputDisabled}
         />
         {isLoading ? (
-          <button type="button" onClick={() => { stop(); setDraft(lastUserMessageRef.current); }} className="rounded-md border px-3 py-2 text-sm">
+          <button type="button" onClick={() => { stop(); setDraft(lastUserMessageRef.current); }} className="button-secondary shrink-0 px-3 py-2 text-sm" aria-label={translateChat(locale, "shell.stop")}>
             {translateChat(locale, "shell.stop")}
           </button>
         ) : (
           <button
             type="submit"
-            className="button-primary px-3 py-2 text-sm "
+            className="button-primary shrink-0 px-3 py-2 text-sm"
+            aria-label={translateChat(locale, "shell.send")}
             disabled={!draft.trim() || inputDisabled}
           >
             {translateChat(locale, "shell.send")}
@@ -1792,7 +1792,7 @@ function ChatShellContent({
             // input to the bottom of an empty pane. Flips to the transcript
             // layout the instant the first message is sent (isFreshChat→false).
             <div className="flex flex-1 flex-col items-center justify-center overflow-auto p-4">
-              <div className="w-full max-w-2xl space-y-6">
+              <div className="glass-panel w-full max-w-2xl space-y-6 p-5 sm:p-8">
                 {skillIntroMessage && !enteredViaResume && (
                   <AssistantIntroBubble content={skillIntroMessage} skillName={displayName} />
                 )}
@@ -1886,7 +1886,7 @@ function ChatShellContent({
           <button
             type="button"
             onClick={toggleWorkbenchCollapsed}
-            className="group flex h-full w-6 shrink-0 flex-col items-center justify-center border-l bg-muted/40 transition-colors hover:bg-muted"
+            className="button-ghost group flex h-full w-6 shrink-0 flex-col items-center justify-center rounded-none border-l"
             aria-label={translateChat(locale, "shell.expandWorkbench")}
             title={translateChat(locale, "shell.expandWorkbench")}
           >
@@ -1939,7 +1939,7 @@ function ChatShellContent({
           <button
             type="button"
             onClick={toggleWorkbenchCollapsed}
-            className="absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="button-ghost absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center p-0"
             aria-label={translateChat(locale, "shell.collapseWorkbench")}
             title={translateChat(locale, "shell.collapseWorkbench")}
           >

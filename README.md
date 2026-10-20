@@ -4,7 +4,7 @@
 
 平台只有一个面向用户的 Root Agent。模型、工具、MCP、知识和交互行为由 Root Agent 统一配置；Skill 用于复用指令、参考资料和资源文件。用户从普通对话进入，智能体可以调用工具、生成交互表单，并在刷新后恢复会话和界面状态。
 
-**界面设计：**全站浅色、淡紫与薄荷绿的玻璃风格，规范见 [DESIGN.md](DESIGN.md)，逐页验收见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
+**界面设计：**全站浅色、淡紫与薄荷绿的分层玻璃工作台，规范见 [DESIGN.md](DESIGN.md)，可查看[交互式设计示意稿](outputs/glass-workspace-design.html)。逐页覆盖及尚未运行验证的边界见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
 
 **第一次使用请从[完整中文配置流程](docs/configuration-guide.md)开始。**手册说明部署、登录、模型与公共能力、个人设置、交互和升级清理的配置与验收。
 

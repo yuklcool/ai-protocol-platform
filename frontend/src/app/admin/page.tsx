@@ -116,14 +116,14 @@ export default function AdminHub() {
   );
 
   if (loading || state === "loading")
-    return <Centered>{t("admin.loading")}</Centered>;
+    return <Centered><div role="status" className="skeleton w-full max-w-md p-6 text-center text-sm text-muted-foreground">{t("admin.loading")}</div></Centered>;
   if (!user) return <SignInRequired />;
 
   if (state === "error") {
     return (
       <Centered>
-        <div className="max-w-md text-center">
-          <h1 className="mb-2 text-lg font-semibold">
+        <div className="glass-panel max-w-md p-6 text-center">
+          <h1 className="notice notice--danger mb-2 text-lg font-semibold">
             {t("admin.accessCheckFailed")}
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -137,7 +137,7 @@ export default function AdminHub() {
   if (!isAdmin) {
     return (
       <Centered>
-        <div className="max-w-md text-center">
+        <div className="glass-panel max-w-md p-6 text-center">
           <h1 className="mb-2 text-lg font-semibold">{t("admin.only")}</h1>
           <p className="text-sm text-muted-foreground">
             {t("admin.onlyDescription")}
@@ -148,7 +148,7 @@ export default function AdminHub() {
           <button
             type="button"
             onClick={() => void recheck()}
-            className="mt-2 rounded border px-3 py-1.5 text-sm hover:bg-muted"
+            className="button-secondary mt-2 px-3 py-1.5 text-sm"
           >
             {t("admin.recheck")}
           </button>
@@ -160,17 +160,17 @@ export default function AdminHub() {
   const areas = AREAS.filter((area) => isPlatform || !area.platformOnly);
 
   return (
-    <main className="page-container mx-auto max-w-4xl p-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">{t("admin.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("admin.subtitle")}</p>
+    <main className="page-container mx-auto max-w-4xl">
+      <header className="page-header">
+        <div className="min-w-0">
+          <h1 className="page-header__title">{t("admin.title")}</h1>
+          <p className="page-header__desc">{t("admin.subtitle")}</p>
         </div>
-        <LanguageSwitcher />
+        <div className="page-header__actions"><LanguageSwitcher /></div>
       </header>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="page-body grid gap-4 sm:grid-cols-2">
         {areas.map((area) => (
-          <section key={area.title} className="glass-panel p-4">
+          <section key={area.title} className="glass-panel min-w-0 p-5">
             <h2 className="font-medium">{t(area.title)}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {t(area.question)}
@@ -180,7 +180,7 @@ export default function AdminHub() {
                 <li key={link.label}>
                   <NextLink
                     href={link.href}
-                    className="text-sm text-foreground underline-offset-2 hover:underline"
+                    className="inline-flex rounded-md px-2 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
                   >
                     {t(link.label)}
                   </NextLink>

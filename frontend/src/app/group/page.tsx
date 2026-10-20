@@ -25,15 +25,17 @@ import { isAnonymousGroupAuthMode } from "@/lib/anonymousGroupAuth";
 export default function GroupJoinPage() {
   if (!isAnonymousGroupAuthMode()) {
     return (
-      <main className="page-container mx-auto flex max-w-md flex-col items-center justify-center gap-3 p-8 text-center">
-        <h1 className="text-2xl font-semibold">Group join not available</h1>
-        <p className="text-sm text-muted-foreground">
-          This deployment doesn&apos;t use anonymous group-ID auth. Try the
-          regular sign-in flow on the home page.
-        </p>
-        <Link className="text-sm underline" href="/">
-          Go home
-        </Link>
+      <main className="page-container">
+        <section className="page-body glass-panel flex max-w-md flex-col items-center gap-4 p-5 text-center">
+          <h1 className="page-header__title">Group join not available</h1>
+          <p className="notice notice--info">
+            This deployment doesn&apos;t use anonymous group-ID auth. Try the
+            regular sign-in flow on the home page.
+          </p>
+          <Link className="button-secondary min-h-11 px-4 py-2 text-sm" href="/">
+            Go home
+          </Link>
+        </section>
       </main>
     );
   }
@@ -66,17 +68,20 @@ function GroupJoinForm() {
   }
 
   return (
-    <main className="page-container mx-auto flex max-w-md flex-col gap-6 p-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Join your group</h1>
-        <p className="text-sm text-muted-foreground">
+    <main className="page-container">
+      <div className="page-body max-w-md space-y-6">
+      <header className="page-header">
+        <div className="min-w-0">
+        <h1 className="page-header__title">Join your group</h1>
+        <p className="page-header__desc">
           Your teacher gave you a short code (looks like{" "}
-          <code className="rounded bg-muted px-1 py-0.5">PHYS-7K2N</code>).
+          <code className="surface-sunken px-1 py-0.5">PHYS-7K2N</code>).
           Type it below to start.
         </p>
+        </div>
       </header>
 
-      <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+      <form className="glass-panel flex flex-col gap-4 p-5" onSubmit={handleSubmit} noValidate>
         <label className="flex flex-col gap-1">
           <span className="text-sm font-medium">Group code</span>
           <input
@@ -88,7 +93,7 @@ function GroupJoinForm() {
             onChange={(e) => setCode(e.target.value)}
             disabled={isJoining}
             placeholder="XXXX-XXXX"
-            className="rounded border px-3 py-2 font-mono uppercase tracking-wider"
+            className="glass-control min-h-11 w-full px-3 py-2 font-mono uppercase tracking-wider"
             aria-invalid={error ? "true" : undefined}
             aria-describedby={error ? "group-error" : undefined}
           />
@@ -99,7 +104,7 @@ function GroupJoinForm() {
         <button
           type="submit"
           disabled={!code.trim() || isJoining}
-          className="button-primary px-4 py-2 disabled:opacity-50"
+          className="button-primary min-h-11 px-4 py-2 disabled:opacity-50"
         >
           {isJoining ? "Joining…" : "Join"}
         </button>
@@ -109,6 +114,7 @@ function GroupJoinForm() {
         Anonymous sessions don&apos;t survive closing this tab. If you lose
         the code, ask your teacher for a fresh one.
       </footer>
+      </div>
     </main>
   );
 }
@@ -137,7 +143,7 @@ function ErrorBlock({
     <p
       id="group-error"
       role="alert"
-      className="text-sm text-destructive"
+      className="notice notice--danger"
     >
       {body}
     </p>

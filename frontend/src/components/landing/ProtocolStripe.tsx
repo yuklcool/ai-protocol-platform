@@ -39,22 +39,22 @@ export function ProtocolStripe() {
   const hasTechRoute = Boolean(demo.techHref);
 
   return (
-    <section className="bg-white/20">
-      <div className="mx-auto w-full max-w-7xl px-6 py-10 md:px-10">
-        <div className="mb-6 flex items-end justify-between">
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+    <section>
+      <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-8 md:py-16">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-base font-semibold">
             {t("home.builtOn")}
           </h2>
           {hasTechRoute ? (
             <Link
               href={demo.techHref}
-              className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-primary"
+              className="button-ghost inline-flex items-center px-3 py-2 text-sm"
             >
               {t("home.seeFullStack")}
             </Link>
           ) : null}
         </div>
-        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {demo.pillars.map((pillar) => {
             const translated = PILLAR_KEYS[pillar.key];
             const label = translated ? t(translated.label) : pillar.label;
@@ -64,12 +64,12 @@ export function ProtocolStripe() {
               : pillar.spec ?? "#";
             const external = !hasTechRoute && Boolean(pillar.spec);
             return (
-              <li key={pillar.key} className="glass-panel feature-card relative">
+              <li key={pillar.key} className="glass-panel glass-panel--flat feature-card relative min-w-0">
                 <Link
                   href={tileHref}
                   target={external ? "_blank" : undefined}
                   rel={external ? "noopener noreferrer" : undefined}
-                  className="group flex h-full flex-col gap-2 p-4 transition-colors hover:bg-muted/40"
+                  className="group flex h-full flex-col gap-3 rounded-[inherit] p-5 transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-6"
                 >
                   <ProtocolIcon
                     pillar={pillar.key as ProtocolIconKey}
@@ -78,7 +78,7 @@ export function ProtocolStripe() {
                   <span className="text-sm font-semibold tracking-tight text-foreground">
                     {label}
                   </span>
-                  <span className="text-xs leading-snug text-muted-foreground">
+                  <span className="text-sm leading-relaxed text-muted-foreground">
                     {tagline}
                   </span>
                 </Link>
@@ -87,7 +87,7 @@ export function ProtocolStripe() {
                     href={pillar.spec}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="absolute right-2 top-2 rounded px-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-primary"
+                    className="button-ghost absolute right-3 top-3 px-2 py-1 text-xs"
                     aria-label={t("home.specOpens", { label })}
                   >
                     {t("home.spec")}

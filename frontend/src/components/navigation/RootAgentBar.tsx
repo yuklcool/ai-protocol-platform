@@ -45,7 +45,7 @@ export function RootAgentBar({}: {
       </div>
       <Link
         href="/skills"
-        className="hidden rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex"
+        className="button-ghost hidden text-xs sm:inline-flex"
       >
         {t("rootAgent.bar.skills")}
       </Link>
@@ -55,7 +55,8 @@ export function RootAgentBar({}: {
         onClick={() => {
           router.push("/chat/root-agent");
         }}
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+        className="button-secondary min-h-10 shrink-0 text-xs disabled:opacity-50"
+        aria-label={t("rootAgent.bar.newChat")}
       >
         <SquarePen className="h-4 w-4" aria-hidden />
         <span className="hidden sm:inline">{t("rootAgent.bar.newChat")}</span>
@@ -63,7 +64,7 @@ export function RootAgentBar({}: {
       {scope.isPlatform && (
         <Link
           href="/agent"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="button-ghost h-10 w-10 shrink-0 p-0"
           title={t("rootAgent.bar.configure")}
           aria-label={t("rootAgent.bar.configure")}
         >
