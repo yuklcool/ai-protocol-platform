@@ -101,16 +101,20 @@ test("真实 Provider 从新对话附件中读取未知编号、计算差额并�
       {name:"数值.csv",mimeType:"text/csv",buffer:Buffer.from("项目,原值,现值\n费用,1297,817\n")},
     ]);
     await expect(page.getByRole("checkbox",{name:/^取消分析 /})).toHaveCount(2,{timeout:30_000});
+    await expect(page).toHaveURL(/session=/);
+    const session = new URL(page.url()).searchParams.get("session");
+    await saveComplete(page, token, session, ["批次.txt", "数值.csv"].map(filename => ({filename, included: true})));
+    await expect.poll(() => ids.length).toBe(2);
     const composer=page.locator("textarea").first(); await expect(composer).toBeEnabled();
     const stream=page.waitForResponse(r=>r.url().endsWith("/api/agent/stream")&&r.request().method()==="POST");
     await composer.fill("请给出附件中的批次编号，计算费用从原值到现值减少了多少，并注明两个文件名及对应行号。"); await composer.press("Enter");
     const response=await stream; expect(response.ok()).toBe(true);
+    const sent=JSON.parse(response.request().postData()); expect(sent.forwardedProps.document_ids.sort()).toEqual(ids.sort());
     const wire=await response.text(); const events=wire.split("\n").filter(line=>line.startsWith("data:")).map(line=>JSON.parse(line.slice(5)));
     expect(events.some(event=>event.type==="RUN_ERROR")).toBe(false);
     expect(events.some(event=>event.type==="RUN_FINISHED")).toBe(true);
     const text=events.filter(event=>event.type==="TEXT_MESSAGE_CONTENT").map(event=>event.delta).join("");
     expect(text).toContain(marker); expect(text).toMatch(/480/); expect(text).toContain("批次.txt"); expect(text).toContain("数值.csv"); expect(text).toMatch(/行/);
-    const sent=JSON.parse(response.request().postData()); expect(sent.forwardedProps.document_ids.sort()).toEqual(ids.sort());
     await expect(page.getByText(marker,{exact:false}).first()).toBeVisible();
     await page.screenshot({path:info.outputPath("chat-file-real-provider.png"),fullPage:true});
     await info.attach("analysis-evidence",{body:JSON.stringify({providerBase:process.env.REAL_PROVIDER_BASE_URL,model:process.env.REAL_PROVIDER_MODEL,uploads,answer:text},null,2),contentType:"application/json"});

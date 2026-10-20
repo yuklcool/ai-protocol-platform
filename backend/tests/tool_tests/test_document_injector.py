@@ -51,6 +51,8 @@ async def test_current_selection_and_source_locations_reach_the_model(repo):
     assert "UNIQUE-a" in texts(req) and "UNIQUE-b" in texts(req)
     assert "a.txt" in texts(req) and "第 1 行" in texts(req)
     assert len(req.contents) == 3
+    await callback(SimpleNamespace(state={"document_ids": ["a", "b"]}), req)
+    assert len(req.contents) == 3
 
 
 @pytest.mark.asyncio
