@@ -131,11 +131,11 @@ export default function AuditPage() {
                   <table className="data-table min-w-[760px]">
                     <thead>
                       <tr>
-                        <th>{t("时间", "When")}</th>
-                        <th>{t("操作人", "Who")}</th>
-                        <th>{t("操作", "Action")}</th>
-                        <th>{t("目标", "Target")}</th>
-                        <th><span className="sr-only">{t("变更详情", "Change details")}</span></th>
+                        <th scope="col">{t("时间", "When")}</th>
+                        <th scope="col">{t("操作人", "Who")}</th>
+                        <th scope="col">{t("操作", "Action")}</th>
+                        <th scope="col">{t("目标", "Target")}</th>
+                        <th scope="col" aria-label={t("变更详情", "Change details")}><span className="sr-only">{t("变更详情", "Change details")}</span></th>
                       </tr>
                     </thead>
                     <tbody>

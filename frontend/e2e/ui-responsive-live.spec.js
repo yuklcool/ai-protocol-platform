@@ -47,14 +47,16 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
         if(route === "/admin/audit") {
           const table=page.getByRole("table");
           await expect(table.or(page.getByRole("heading",{name:"暂无审计记录",exact:true}))).toBeVisible();
-          if(viewport.width < 768 && await table.isVisible()) {
-            const scroller=table.locator("..");
-            await scroller.evaluate(element=>{element.scrollLeft=element.scrollWidth;});
-            expect(await scroller.evaluate(element=>element.scrollLeft)).toBeGreaterThan(0);
-            await expect(page.getByRole("columnheader",{name:"变更详情",exact:true})).toBeInViewport();
-          }
         }
         await snapshot(page,info,`${viewport.width}-${route.slice(1).replaceAll("/","-")}`);
+        if(route === "/admin/audit" && viewport.width < 768 && await page.getByRole("table").isVisible()) {
+          const table=page.getByRole("table");
+          const scroller=table.locator("..");
+          await scroller.evaluate(element=>{element.scrollLeft=element.scrollWidth;});
+          expect(await scroller.evaluate(element=>element.scrollLeft)).toBeGreaterThan(0);
+          await expect(table.getByRole("columnheader",{name:"变更详情",exact:true})).toBeInViewport();
+          await snapshot(page,info,"390-admin-audit-scrolled");
+        }
       }
     }
     await page.setViewportSize(sizes[2]);
