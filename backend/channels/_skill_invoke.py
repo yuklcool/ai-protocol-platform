@@ -18,7 +18,7 @@ There are two entry points over ONE underlying event stream:
 Both fold errors the same way, via `collect_reply`, so a `RUN_ERROR` is
 user-visible on EVERY channel rather than being silently dropped (the
 `"(no response)"` bug: a model outage and an empty answer were
-indistinguishable). See `docs/design/v6.21.0/channels-agui-convergence.md`.
+indistinguishable). See `docs/archive/design/v6.21.0/channels-agui-convergence.md`.
 """
 
 from __future__ import annotations

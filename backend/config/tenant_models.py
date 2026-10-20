@@ -137,21 +137,10 @@ def assert_model_allowed(
     raise TenantModelAccessError(f"Model {model_id!r} is not allowed for tenant {stable_id or '(unknown)'!r}")
 
 
-def filter_allowed_model_ids(
-    model_ids: Iterable[str],
-    *,
-    tenant_id: str | None = None,
-    policy: TenantModelPolicy | None = None,
-) -> list[str]:
-    active = policy or load_tenant_model_policy(tenant_id)
-    return [model_id for model_id in model_ids if active.allows(model_id)]
-
-
 __all__ = [
     "TenantModelAccessError",
     "TenantModelPolicy",
     "assert_model_allowed",
-    "filter_allowed_model_ids",
     "load_tenant_model_policy",
     "tenant_id_for_user",
     "validate_tenant_model_policy",

@@ -131,6 +131,6 @@ probably know why already.
 ## Related
 
 - [G44](../design/template/template-fork-ergonomics.md#item-g44--dual-cloudbuildyaml-deployment-model-not-discoverable-by-forks) — the tracker entry that surfaced this doc.
-- [deployed-urls.md](deployed-urls.md) — the canonical list of live URLs per env (currently documents both services because the platform's own deploys exercise Model B).
+- deployed-urls.md (`deployed-urls.md`) — the canonical list of live URLs per env (currently documents both services because the platform's own deploys exercise Model B).
 - [template-cloudbuild-hardening.md](../design/template/template-cloudbuild-hardening.md) — `cloudbuild.yaml` defaults that apply equally to both files (per-project log bucket, channel-secret gating, metadata-server token mint).
 - [template-a2a-spec-compliance.md](../design/template/template-a2a-spec-compliance.md) — G43; A2A crawler concerns that affect the Model A-vs-B choice if you plan to register with Gemini Enterprise.

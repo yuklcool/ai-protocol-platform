@@ -33,18 +33,13 @@ The lookup falls through to domain → wildcard as expected.
 
 ---
 
-## Anonymous-group users trigger Firestore permission-denied console errors
+## 文件列表不再使用浏览器 Firestore 订阅
 
-**Symptom:** Dozens of `FirebaseError: Missing or insufficient permissions` in the browser console when running in `NEXT_PUBLIC_AUTH_MODE=anonymous_group_id` mode.
+旧版 `useDocBrowser`、`useDocument` 直接调用 `onSnapshot`，匿名组模式没有 Firebase 用户时会持续产生 permission-denied。
 
-**Root cause:** `useDocBrowser`, `useDocument`, and related hooks called `onSnapshot()` unconditionally. Anonymous-group sessions have no Firebase Auth user, so Firestore rules deny the snapshot immediately — and the SDK retries forever, flooding the console.
+当前实现统一调用认证 REST，身份和租户权限在后端校验；不再通过按认证模式跳过订阅来修补。检查文件列表、预览和附件恢复时，应核对 `fetchWithAuth`、文档 REST 及会话附件接口。不要恢复旧的 Firestore 监听器或用户级附件缓存。
 
-**Fix:** Import `isAnonymousGroupAuthMode` and return early before calling `onSnapshot`:
-```typescript
-import { isAnonymousGroupAuthMode } from "@/lib/anonymousGroupAuth";
-if (!db || !uid || isAnonymousGroupAuthMode()) return;
-```
-Applied to `useDocBrowser.ts` (both folder and document listeners) and `useDocument.ts`.
+当前操作见[文件上传与分析](../chat-file-analysis.md)。
 
 ---
 

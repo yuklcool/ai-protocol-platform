@@ -1,6 +1,6 @@
 # Anonymous group-ID auth — fork adoption howto
 
-**Sprint reference:** [v6.2.0 sprint 2.11 design doc](../design/v6.2.0/anonymous-group-id-auth.md)
+**Sprint reference:** [v6.2.0 sprint 2.11 design doc](../archive/design/v6.2.0/implemented/anonymous-group-id-auth.md)
 **For:** Forks deploying the platform to classroom / event / kiosk / customer-demo contexts where students or attendees don't have persistent accounts.
 
 This howto walks a fork operator through enabling the fourth auth mode end-to-end: backend env var, frontend env var, deployment topology, two-frontend pattern, ops concerns (secret rotation, scale-out, no-PII contract).
@@ -240,7 +240,7 @@ Carried from the design doc:
 
 ## Related
 
-- [Sprint 2.11 design doc](../design/v6.2.0/anonymous-group-id-auth.md) — full threat model + axiom alignment.
-- [Sprint 2.12 budget-enforcement](../design/v6.2.0/budget-enforcement.md) — uses `User.group_id` from sprint 2.11 as the budget identity key.
-- [Sprint 2.14 tenant-id-span-attribute](../design/v6.2.0/tenant-id-span-attribute.md) — drops `tenant.group_id` on every OTel span so per-cohort research data lands cleanly.
+- [Sprint 2.11 design doc](../archive/design/v6.2.0/implemented/anonymous-group-id-auth.md) — full threat model + axiom alignment.
+- [Sprint 2.12 budget-enforcement](../archive/design/v6.2.0/implemented/budget-enforcement.md) — uses `User.group_id` from sprint 2.11 as the budget identity key.
+- [Sprint 2.14 tenant-id-span-attribute](../archive/design/v6.2.0/implemented/tenant-id-span-attribute.md) — drops `tenant.group_id` on every OTel span so per-cohort research data lands cleanly.
 - [AIPLA ADR-001](https://www.sunholo.com/aipla/architecture.html#adr-001-student-identity-no-auth-anonymous-group-ids) — the originating request.

@@ -7,8 +7,8 @@
 // A2UI arrives via TOOL_CALL_* events (send_a2ui_json_to_client tool) — not fenced blocks.
 // MCP App UI surfaces are decided by the router from the tool DEFINITION's
 // _meta.ui block (UI-by-reference), not the tool result text.
-// See: docs/talks/workshop.md §W6c, docs/design/v6.1.0/a2ui-tool-delivery.md
-// See: docs/design/v6.1.0/mcp-app-integrations.md
+// See: docs/talks/workshop.md §W6c, docs/archive/design/v6.1.0/a2ui-tool-delivery.md
+// See: docs/archive/design/v6.1.0/mcp-app-integrations.md
 
 "use client";
 

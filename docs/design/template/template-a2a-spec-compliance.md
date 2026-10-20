@@ -382,9 +382,9 @@ agents-cli register-gemini-enterprise \
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — G43 row
-- [template-fork-ergonomics.md G39](./template-fork-ergonomics.md) — the
+- [template-fork-ergonomics.md G39](template-fork-ergonomics.md) — the
   Next ingress proxy this design extends
-- [template-agui-terminal-dedup.md G41](./template-agui-terminal-dedup.md) —
+- [template-agui-terminal-dedup.md G41](template-agui-terminal-dedup.md) —
   sibling "fork registration / discovery failure surfaced only at the
   integration boundary" doc
 - gde-ap-agent fork commits `236fdcb` + `dbc5856` — source of the URL-rewrite

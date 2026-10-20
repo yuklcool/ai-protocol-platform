@@ -201,14 +201,6 @@ def tenant_id_for_domain(domain: str) -> str | None:
     return TenantDirectory(get_repository()).tenant_id_for_domain(domain)
 
 
-def get_tenant_by_domain(domain: str) -> TenantConfig | None:
-    return TenantDirectory(get_repository()).get_by_domain(domain)
-
-
-def put_tenant(config: TenantConfig) -> TenantConfig:
-    return TenantDirectory(get_repository()).put(config)
-
-
 __all__ = [
     "DOMAIN_MAPPING_COLLECTION",
     "LEGACY_CLIENT_COLLECTION",
@@ -216,9 +208,7 @@ __all__ = [
     "TenantConfig",
     "TenantDirectory",
     "get_tenant",
-    "get_tenant_by_domain",
     "normalize_domain",
     "normalize_tenant_id",
-    "put_tenant",
     "tenant_id_for_domain",
 ]

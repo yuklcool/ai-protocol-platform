@@ -1,7 +1,7 @@
 """Unit tests for db.models.document — the ParsedDocument contract.
 
 Contract lock for Phase 1B document-ui. If these tests break, the Firestore
-schema at docs/design/v6.0.0/document-ui.md:291-336 and the generated
+schema at docs/archive/design/v6.0.0/document-ui.md:291-336 and the generated
 contracts/document.schema.json need to be reviewed together.
 """
 

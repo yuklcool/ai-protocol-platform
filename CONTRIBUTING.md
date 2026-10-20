@@ -12,7 +12,7 @@ forks.
 
 - **First time here?** Start with [WORKSHOP.md](WORKSHOP.md) — clone,
   `LOCAL_MODE=1`, `make dev`, chat in under 30 minutes.
-- **Architecture:** [docs/design/v6.1.0/SEQUENCE.md](docs/design/v6.1.0/SEQUENCE.md)
+- **Architecture:** [docs/archive/design/v6.1.0/SEQUENCE.md](docs/archive/design/v6.1.0/SEQUENCE.md)
 - **Protocol talk:** [docs/talks/ai-ui-protocol-stack.md](docs/talks/ai-ui-protocol-stack.md)\n- **Development planning:** [docs/development-planning.md](docs/development-planning.md)
 
 ## Reporting bugs

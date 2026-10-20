@@ -37,7 +37,7 @@ minting tokens. Phase 1A.5 will:
 
 1. Replace this mount with skill-driven dynamic mounting.
 2. Compose Firebase bearer-token middleware (see the "deferred" row in
-   `docs/design/v6.0.0/streaming-and-protocols.md` "Verified Event Flow").
+   `docs/archive/design/v6.0.0/streaming-and-protocols.md` "Verified Event Flow").
 3. Remove the `spike_agent` + `mount_skill_endpoint(..., "spike", ...)` call.
 
 **Do not let this endpoint ship to `test` or `prod`.** Before those branches

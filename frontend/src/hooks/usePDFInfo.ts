@@ -11,11 +11,6 @@ interface PDFInfo {
 // Module-level cache: avoids duplicate requests within a session.
 const _cache = new Map<string, PDFInfo | "error">();
 
-/** Pre-populate the cache (e.g. dev fixtures that know page counts ahead of time). */
-export function seedPDFInfoCache(url: string, info: PDFInfo): void {
-  _cache.set(url, info);
-}
-
 export function usePDFInfo(url: string): { info: PDFInfo | null; loading: boolean } {
   const cached = _cache.get(url);
   const [info, setInfo] = useState<PDFInfo | null>(

@@ -13,7 +13,7 @@ Security mitigations layered around this stub:
 3. The visible banner mounted by the frontend in LOCAL_MODE makes the
    stubbed state obvious to anyone using the system.
 
-See ``docs/design/v6.1.0/local-mode-and-workshop-readiness.md`` §313
+See ``docs/archive/design/v6.1.0/local-mode-and-workshop-readiness.md`` §313
 "Security Considerations" for the full rationale.
 """
 

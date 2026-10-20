@@ -32,4 +32,4 @@ fetch "https://modelcontextprotocol.io/introduction" "mcp-architecture.md"
 fetch "https://agentskills.io/specification" "agent-skills-spec.md"
 
 echo "Done. Commit the updated references/ directory."
-echo "Note: mcp-apps-spec-2026-01-26.md is maintained manually — see docs/design/v6.1.0/ for the SEP-1865 spec."
+echo "Note: mcp-apps-spec-2026-01-26.md is maintained manually — see docs/archive/design/v6.1.0/ for the SEP-1865 spec."

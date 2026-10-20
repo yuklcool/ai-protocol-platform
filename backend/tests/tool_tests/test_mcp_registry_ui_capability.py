@@ -23,7 +23,7 @@ Workaround: declare UI support via the connection params ``headers`` field —
 ``x-aitana-mcp-ui-supported: text/html;profile=mcp-app``. Spec-compliant
 servers should key off this; the live ext-apps map-server emits UI resources
 unconditionally so the demo still works either way. Documented in
-docs/design/v6.1.0/mcp-app-integrations.md Open Questions.
+docs/archive/design/v6.1.0/mcp-app-integrations.md Open Questions.
 
 These tests lock the workaround in place so a future ADK upgrade that DOES
 plumb capabilities through can swap to the canonical path without losing

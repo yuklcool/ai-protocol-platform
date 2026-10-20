@@ -47,7 +47,7 @@ cd /path/to/ext-apps/examples/map-server
 bun run serve:http   # listens on localhost:3001/mcp
 ```
 
-(Per `docs/design/v6.1.0/mcp-app-integrations.md` — sprint 1.7 M1 spike
+(Per `docs/archive/design/v6.1.0/mcp-app-integrations.md` — sprint 1.7 M1 spike
 captured the local-dev setup.)
 
 ## Cloud Run service

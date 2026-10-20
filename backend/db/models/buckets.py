@@ -7,7 +7,7 @@ bucket.
 
 Access is evaluated against the shared `AccessControl` schema from
 `db.models.access` — no duplicated type definitions. See
-`docs/design/v6.0.0/resource-access-control.md` for the full contract.
+`docs/archive/design/v6.0.0/resource-access-control.md` for the full contract.
 
 Folder invariant: `effective_access` is **required** on every persisted
 folder. The API computes it on every write (folder.access_control or

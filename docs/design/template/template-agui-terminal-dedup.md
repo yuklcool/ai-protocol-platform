@@ -163,6 +163,6 @@ Mocking strategy: tiny `_FakeEvent` class with a `.type.value` string and a `.mo
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — G41 row
-- [template-auth-token-refresh.md](./template-auth-token-refresh.md) — sibling "universal frontend trap" doc (G40) — both are template-shipped code where the failure is invisible until a long demo surfaces it
+- [template-auth-token-refresh.md](template-auth-token-refresh.md) — sibling "universal frontend trap" doc (G40) — both are template-shipped code where the failure is invisible until a long demo surfaces it
 - [adk/agui.py](../../../backend/adk/agui.py) — the file under test
-- [ag_ui_adk SDK source](../../../backend/.venv/lib/python3.12/site-packages/ag_ui_adk/adk_agent.py) lines 1510-1530 (the bug) and 2370-2380 (the queue-based error emission)
+- ag_ui_adk SDK source (`../../../backend/.venv/lib/python3.12/site-packages/ag_ui_adk/adk_agent.py`) lines 1510-1530 (the bug) and 2370-2380 (the queue-based error emission)

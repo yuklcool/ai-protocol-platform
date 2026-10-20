@@ -23,12 +23,12 @@ Run `make dev` from the repo root to bring up the stack
    - renders without crashing
    - exercises the primary interaction without needing a live backend
 3. Add a row to this table
-4. Cross-link from the relevant design doc (e.g. `docs/design/v6.1.0/<feature>.md`)
+4. Cross-link from the relevant design doc (e.g. `docs/archive/design/v6.1.0/<feature>.md`)
 
 ## Why dev routes (not Storybook)
 
 Each dev route lives next to the components it exercises and uses the
 same routing + provider stack as production. Lower friction than a
 parallel Storybook config; harder to drift from real wiring. See the
-discussion in [docs/design/v6.1.0/a2ui-workshop-demo.md](../design/v6.1.0/a2ui-workshop-demo.md)
+discussion in [docs/archive/design/v6.1.0/a2ui-workshop-demo.md](../archive/design/v6.1.0/a2ui-workshop-demo.md)
 for the original framing (the workshop W6 demo introduced the pattern).

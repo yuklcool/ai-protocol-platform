@@ -13,7 +13,7 @@ This locks both branches of the invariant using the REAL production functions
 `drain_stage_events`): bound → the A2UI_SURFACE event is on the queue; unbound →
 it vanishes into the NULL tracker.
 
-Part of `make adk-conformance`. See docs/design/v6.17.0/adk-contract-checklist.md.
+Part of `make adk-conformance`. See docs/archive/design/v6.17.0/adk-contract-checklist.md.
 """
 
 from __future__ import annotations

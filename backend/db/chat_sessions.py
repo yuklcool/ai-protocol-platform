@@ -155,11 +155,6 @@ def clear_provisional(session_id: str, not_after: datetime | None = None) -> Non
     update_document(_COLLECTION, session_id, {"provisional": False, "firstMessageAt": stamp.isoformat()})
 
 
-def save_session_index(idx: ChatSessionIndex) -> None:
-    _assert_current_tenant(idx)
-    set_document(_COLLECTION, idx.session_id, _to_document(idx))
-
-
 def update_session_fields(session_id: str, fields: dict) -> None:
     _assert_mutation_scope(session_id)
     update_document(_COLLECTION, session_id, fields)
@@ -206,13 +201,6 @@ def get_session_index(session_id: str) -> ChatSessionIndex | None:
     if data is None:
         return None
     return _from_document(data, session_id)
-
-
-def get_session_index_for_tenant(session_id: str, tenant_id: str) -> ChatSessionIndex | None:
-    idx = get_session_index(session_id)
-    if idx is None or not session_in_tenant(idx, tenant_id):
-        return None
-    return idx
 
 
 def app_name_for_session(idx: ChatSessionIndex) -> str:
@@ -383,13 +371,11 @@ __all__ = [
     "clear_provisional",
     "create_session_index",
     "get_session_index",
-    "get_session_index_for_tenant",
     "list_sessions_for_document",
     "list_sessions_for_skill",
     "most_recent_session_for_user",
     "owner_domain_of",
     "resolved_session_tenant_id",
-    "save_session_index",
     "session_in_tenant",
     "session_tenant_allowed",
     "set_session_skill",

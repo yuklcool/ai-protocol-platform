@@ -24,7 +24,7 @@ do when they don't, and how to verify.
 | Seeder | [backend/admin/platform_seed.py](../../backend/admin/platform_seed.py) | Idempotent-by-name, reads `backend/skills/templates/` |
 | SA auth | [backend/admin/auth.py](../../backend/admin/auth.py) | Verifies Google ID token + `ADMIN_SEED_ALLOWED_SAS` allowlist |
 | Cloud Build step | [backend/cloudbuild.yaml](../../backend/cloudbuild.yaml), [cloudbuild.yaml](../../cloudbuild.yaml) | Non-fatal POST to the admin endpoint after smoke |
-| Templates | [backend/skills/templates/](../../backend/skills/templates/) | One dir per skill, each with a YAML-frontmatter `SKILL.md` |
+| Templates | [backend/skills/templates/](../../backend/skills/templates) | One dir per skill, each with a YAML-frontmatter `SKILL.md` |
 
 ## When the seed runs
 
@@ -168,6 +168,6 @@ next deploy (template-managed skills only) or `aiplatform skill push`.
 
 - [agent-factory-smoke.md](agent-factory-smoke.md) — end-to-end SSE probe
   for the agent factory; works against a platform skill id.
-- [deployed-urls.md](deployed-urls.md) — service URLs per environment.
+- deployed-urls.md (`deployed-urls.md`) — service URLs per environment.
 - [auth-smoke-testing.md](auth-smoke-testing.md) — Firebase auth round
   trip.

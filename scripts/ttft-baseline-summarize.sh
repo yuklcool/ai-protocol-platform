@@ -6,7 +6,7 @@
 # for each plus the delta.
 #
 # A delta >5ms p50 violates the M5 contract in
-# docs/design/v6.1.0/ttft-instrumentation.md — instrumentation is supposed
+# docs/archive/design/v6.1.0/ttft-instrumentation.md — instrumentation is supposed
 # to be free, and a measurable hit means the LatencyTracker hot path needs
 # revisiting before this sprint can move to implemented/.
 

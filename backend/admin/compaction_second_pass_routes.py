@@ -11,7 +11,7 @@ Unlike the task route this returns the summary text (an admin operator holds
 the same trust as the replay endpoint, which already does) and treats a
 decline as data rather than a retryable failure — a human is looking at it.
 
-See docs/design/v6.23.0/compaction-second-pass.md.
+See docs/archive/design/v6.23.0/compaction-second-pass.md.
 """
 
 from __future__ import annotations

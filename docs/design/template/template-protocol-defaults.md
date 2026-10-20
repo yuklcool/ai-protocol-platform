@@ -19,7 +19,7 @@
 | G26 callback composition | ✅ Shipped | `adk/callbacks.py::compose_after_agent_callbacks` + wired in `adk/agent.py::create_agent` (replaces the bespoke `_composed_after_agent` that dropped returns). Tests: `tests/unit/test_compose_after_agent_callbacks.py` (5 cases). |
 | G27 v0.9 Button shape | ✅ Already correct | `backend/skills/templates/workspace-demo-interactive/SKILL.md` already documents and prescribes the v0.9 form (child Text id + `action.event`). No code changes needed; deploy-time validator is a follow-up. |
 
-**What's next** for full design-doc closure: deploy-time A2UI schema validator script (G27 part 2; nice-to-have, catches v0.8 regressions at build time rather than runtime); ship a canonical `_starter/v1` artefact with vanilla-JS JSON-RPC helpers (more naturally lives in [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) implementation work).
+**What's next** for full design-doc closure: deploy-time A2UI schema validator script (G27 part 2; nice-to-have, catches v0.8 regressions at build time rather than runtime); ship a canonical `_starter/v1` artefact with vanilla-JS JSON-RPC helpers (more naturally lives in [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) implementation work).
 
 ## Problem Statement
 
@@ -32,7 +32,7 @@ template chose poorly and now bites every multi-stage fork.
 
 **Current State:**
 
-- **G24** `backend/tools/structured_extraction.py` + `backend/tools/schemas/__init__.py` are the template's primary path for schema-validated JSON output. They fire a **second Gemini call** with `response_mime_type: application/json` + `response_schema: <schema>` after the agent runs, adding +3–5s latency per specialist. The pattern was chosen for determinism in [docs/design/forks/gde-ap-agent/schema-enforced-extraction.md](../forks/gde-ap-agent/schema-enforced-extraction.md) — "the callback fires unconditionally; no LLM discretion."
+- **G24** `backend/tools/structured_extraction.py` + `backend/tools/schemas/__init__.py` are the template's primary path for schema-validated JSON output. They fire a **second Gemini call** with `response_mime_type: application/json` + `response_schema: <schema>` after the agent runs, adding +3–5s latency per specialist. The pattern was chosen for determinism in docs/design/forks/gde-ap-agent/schema-enforced-extraction.md (`../forks/gde-ap-agent/schema-enforced-extraction.md`) — "the callback fires unconditionally; no LLM discretion."
 - **G25** Starter SKILL.md JSON shows `updateDataModel` with `value: { ... }` and no `path` field. The A2UI v0.9 SDK defaults missing `path` to `"/"`, then calls `surface.dataModel.set("/", value)` — **replacing the entire data model**. Every multi-stage skill (extractor → validator → poster) clobbers prior fields on each step; only the last specialist's payload survives on screen.
 - **G26** `backend/adk/agent.py` `_composed_after_agent(callback_context) -> None` composes after-agent callbacks but its return type is annotated `None` and **silently drops** the return value of each callback. ADK only emits an extra response event when an after-agent callback returns `Content`; with `None`, the schema-validated JSON Part never reaches the wire and `JsonCardBuilder` has nothing to render. Twelve-line bug; hours to diagnose because every component looks right in isolation.
 - **G27** Starter SKILL.md JSON snippets ship the **v0.8 `Button` shape** (`{component: "Button", label, action: "stringName", context: {}}`). A2UI v0.9's BasicCatalog requires `{component: "Button", child: "<text-id>", action: {event: {name, context}}}` plus a sibling `Text` component for the child. The LLM hits a validation error on attempt 1 and self-corrects to v0.9 on attempt 2 — a wasted Gemini turn per pipeline run.
@@ -58,8 +58,8 @@ template chose poorly and now bites every multi-stage fork.
 
 **Non-Goals:**
 - Removing the `response_schema` callback. It remains as the fallback for the LLM-forgot-to-call-the-tool case; only the primary path changes.
-- Auto-migrating existing fork SKILL.md files. The flip is a template default; per-fork overrides (including [`forks/gde-ap-agent/schema-enforced-extraction.md`](../forks/gde-ap-agent/schema-enforced-extraction.md)) stay valid.
-- A general-purpose A2UI starter library. This doc scopes the four specific defaults that bit the AP demo; broader A2UI ergonomics belong with [G22 follow-up `template-chat-surface-defaults.md`](./template-chat-surface-defaults.md).
+- Auto-migrating existing fork SKILL.md files. The flip is a template default; per-fork overrides (including `forks/gde-ap-agent/schema-enforced-extraction.md` (`../forks/gde-ap-agent/schema-enforced-extraction.md`)) stay valid.
+- A general-purpose A2UI starter library. This doc scopes the four specific defaults that bit the AP demo; broader A2UI ergonomics belong with [G22 follow-up `template-chat-surface-defaults.md`](template-chat-surface-defaults.md).
 
 ## Axiom Alignment
 
@@ -132,7 +132,7 @@ for key in (
 ```
 
 The callback runs only when the LLM forgot to call the emit tool, preserving the
-determinism guarantee from [forks/gde-ap-agent/schema-enforced-extraction.md](../forks/gde-ap-agent/schema-enforced-extraction.md)
+determinism guarantee from forks/gde-ap-agent/schema-enforced-extraction.md (`../forks/gde-ap-agent/schema-enforced-extraction.md`)
 for the failure case while keeping the success path fast.
 
 **Trade-offs (must appear in template docs):**
@@ -146,7 +146,7 @@ for the failure case while keeping the success path fast.
 | Frontend integration | text Part needs JSON sniffing | tool-call event is canonical |
 | Determinism story | strong (unconditional) | strong w/ fallback safety net |
 
-**Migration note:** [docs/design/forks/gde-ap-agent/schema-enforced-extraction.md](../forks/gde-ap-agent/schema-enforced-extraction.md) explicitly chose `response_schema` callback for determinism. That decision remains valid for that fork; this doc only flips the **template default** so new forks inherit the faster path. Update that fork's doc with a one-line note that the template default has flipped — the fork is free to keep its callback-primary stance.
+**Migration note:** docs/design/forks/gde-ap-agent/schema-enforced-extraction.md (`../forks/gde-ap-agent/schema-enforced-extraction.md`) explicitly chose `response_schema` callback for determinism. That decision remains valid for that fork; this doc only flips the **template default** so new forks inherit the faster path. Update that fork's doc with a one-line note that the template default has flipped — the fork is free to keep its callback-primary stance.
 
 ### G25 — A2UI `updateDataModel` per-path patches as the default
 
@@ -268,7 +268,7 @@ The companion workshop ([docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-p
 1. **Function-as-schema is the default, not the response_schema callback.** Save the callback for the case where the specialist genuinely has no tools.
 2. **A2UI per-path patches.** Demo the root-replace clobber in 30 seconds; show the per-path fix.
 3. **`after_agent_callback` return values are the canonical follow-up-event channel.** Show the composed-callbacks helper.
-4. **Ship verifying smoke scripts.** A `whoami_smoke.py` + `verify-judge-path.sh` pair lets an agent self-verify a deploy. (Coordinates with [template-fork-ergonomics.md G23](./template-fork-ergonomics.md#item-g23-—-sanitize-pipeline-strips-whoami-smoke-code-but-leaves-the-docs).)
+4. **Ship verifying smoke scripts.** A `whoami_smoke.py` + `verify-judge-path.sh` pair lets an agent self-verify a deploy. (Coordinates with [template-fork-ergonomics.md G23](template-fork-ergonomics.md#item-g23-—-sanitize-pipeline-strips-whoami-smoke-code-but-leaves-the-docs).)
 5. **Don't conflate protocol limitations with template-default limitations.** The protocol stack here is solid; template ergonomics are what needs work. Critical for the workshop's pitch.
 
 ### CLI Surface
@@ -303,7 +303,7 @@ common — out of scope for this sprint.
 - **`test_validate_a2ui_surfaces.py`** — assert validator passes on a known-good v0.9 surface; fails (non-zero exit) on a deliberately-malformed v0.8 Button shape.
 - **`test_a2ui_per_path_render.tsx`** — frontend integration test: drive `updateDataModel` with two per-path patches; assert both fields survive on screen.
 - **CI**: add `validate_a2ui_surfaces.py` to `make lint` or a new `make validate-surfaces` target; gate on it in `.github/workflows/ci.yml`.
-- **Manual smoke**: run a three-stage pipeline (extractor → validator → poster) against a fresh fork; assert (a) total latency drops by ≥6s vs. callback-only baseline, (b) workspace card shows all fields from all stages, (c) audit pane shows real emitted payload (paired with [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) Friction 7).
+- **Manual smoke**: run a three-stage pipeline (extractor → validator → poster) against a fresh fork; assert (a) total latency drops by ≥6s vs. callback-only baseline, (b) workspace card shows all fields from all stages, (c) audit pane shows real emitted payload (paired with [template-chat-surface-defaults.md](template-chat-surface-defaults.md) Friction 7).
 
 ## Success Criteria
 
@@ -315,14 +315,14 @@ common — out of scope for this sprint.
 - [ ] All starter SKILL.md A2UI JSON snippets pass `validate_a2ui_surfaces.py` with v0.9 schema; v0.8 Button shape is removed from every template file (G27).
 - [ ] Cloud Build fails the deploy on any A2UI v0.8/v0.9 regression introduced in a starter surface JSON (G27 validator).
 - [ ] [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) includes the five new talking points and worked examples.
-- [ ] [forks/gde-ap-agent/schema-enforced-extraction.md](../forks/gde-ap-agent/schema-enforced-extraction.md) has a "Template-default-flip note" pointing here.
+- [ ] forks/gde-ap-agent/schema-enforced-extraction.md (`../forks/gde-ap-agent/schema-enforced-extraction.md`) has a "Template-default-flip note" pointing here.
 - [ ] All existing tests pass.
 
 ## Related Documents
 
 - [SEQUENCE.md](SEQUENCE.md) — items G24–G27 registered here
-- [template-fork-ergonomics.md](./template-fork-ergonomics.md) — G19 sub-agent wiring + G21 `role` discriminator pair with G24's function-as-schema flow (a specialist invoked via structured-input endpoint emits via `emit_*` tool)
-- [template-chat-surface-defaults.md](./template-chat-surface-defaults.md) — pairs with this doc; Friction 7 (audit pane shows STOP sentinel) is fixed at the frontend layer once G24's emit pattern is the source of truth
-- [template-mcp-apps-artefacts.md](./template-mcp-apps-artefacts.md) — callback-composition patterns; the `_BLOCK_TEMPLATE` framing in `iframe_context.py` is the InstructionProvider analogue of the function-as-schema "tell the model exactly what to do" principle
-- [forks/gde-ap-agent/schema-enforced-extraction.md](../forks/gde-ap-agent/schema-enforced-extraction.md) — original determinism-first decision; superseded **as template default** by this doc; per-fork override still valid
+- [template-fork-ergonomics.md](template-fork-ergonomics.md) — G19 sub-agent wiring + G21 `role` discriminator pair with G24's function-as-schema flow (a specialist invoked via structured-input endpoint emits via `emit_*` tool)
+- [template-chat-surface-defaults.md](template-chat-surface-defaults.md) — pairs with this doc; Friction 7 (audit pane shows STOP sentinel) is fixed at the frontend layer once G24's emit pattern is the source of truth
+- [template-mcp-apps-artefacts.md](template-mcp-apps-artefacts.md) — callback-composition patterns; the `_BLOCK_TEMPLATE` framing in `iframe_context.py` is the InstructionProvider analogue of the function-as-schema "tell the model exactly what to do" principle
+- forks/gde-ap-agent/schema-enforced-extraction.md (`../forks/gde-ap-agent/schema-enforced-extraction.md`) — original determinism-first decision; superseded **as template default** by this doc; per-fork override still valid
 - [docs/talks/ai-ui-protocol-stack.md](../../talks/ai-ui-protocol-stack.md) — workshop tracker; absorbs G24–G27 as worked examples

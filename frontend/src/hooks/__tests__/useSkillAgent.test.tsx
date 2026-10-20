@@ -298,7 +298,7 @@ describe("useSkillAgent — core", () => {
   });
 });
 
-// docs/design/v6.1.0/ttft-instrumentation.md M2 — STAGE_PROGRESS labels
+// docs/archive/design/v6.1.0/ttft-instrumentation.md M2 — STAGE_PROGRESS labels
 // from the backend LatencyTracker decouple perceived TTFT from real
 // model TTFT. The hook subscribes to onCustomEvent, filters for
 // STAGE_PROGRESS by name, and exposes the latest label as state.

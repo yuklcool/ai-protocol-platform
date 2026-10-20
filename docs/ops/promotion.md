@@ -1,9 +1,9 @@
 # Runbook — releasing and promoting (dev · test · prod)
 
 How code reaches each environment. For one-time environment *creation* see
-[env-cut-runbook.md](env-cut-runbook.md); this is the routine path.
+env-cut-runbook.md (`env-cut-runbook.md`); this is the routine path.
 
-Design rationale: [build-once-artifact-promotion.md](../design/v6.20.0/build-once-artifact-promotion.md).
+Design rationale: [build-once-artifact-promotion.md](../archive/design/v6.20.0/build-once-artifact-promotion.md).
 Adopted from the AIPLA fork's upstream feedback #46/#47.
 
 ## The three routes
@@ -23,7 +23,7 @@ triggers on it (`mcp-sandbox`, `mcp-ext-apps-map`) are NOT part of the release
 pipeline, so the branch is still their only deploy path. Retiring both branches
 is planned for after the prod release (~2026-08-31) — the blockers, the audit
 behind them, and the order of work are in
-[env-promotion-audit.md § Roadmap](env-promotion-audit.md#roadmap--retire-the-test--prod-branches).
+env-promotion-audit.md § Roadmap (`env-promotion-audit.md#roadmap--retire-the-test--prod-branches`).
 
 ## Release: cut a version tag
 
@@ -132,7 +132,7 @@ the auto-created `<project>_cloudbuild` bucket. See
 
 ## Related
 
-- [deployed-urls.md](deployed-urls.md) — what is live per env (**source of truth**)
-- [env-cut-runbook.md](env-cut-runbook.md) — one-time environment creation
-- [env-promotion-audit.md](env-promotion-audit.md) — drift classes + the IAM cascade
-- [build-once-artifact-promotion.md](../design/v6.20.0/build-once-artifact-promotion.md) — why promotion copies rather than rebuilds
+- deployed-urls.md (`deployed-urls.md`) — what is live per env (**source of truth**)
+- env-cut-runbook.md (`env-cut-runbook.md`) — one-time environment creation
+- env-promotion-audit.md (`env-promotion-audit.md`) — drift classes + the IAM cascade
+- [build-once-artifact-promotion.md](../archive/design/v6.20.0/build-once-artifact-promotion.md) — why promotion copies rather than rebuilds

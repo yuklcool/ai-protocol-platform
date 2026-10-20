@@ -33,9 +33,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Markdown inline links. Skips images (leading !) — those are checked too, but
-# via the same path resolution, so no separate pattern is needed.
-LINK_RE = re.compile(r"(?<!\!)\[[^\]]*\]\(([^)]+)\)")
+# Markdown links and images in prose; fenced and inline code are examples.
+LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
 # Where to look for links. Deliberately the same surface the fork measured.
 SEARCH_GLOBS = ("docs/**/*.md", "*.md", ".claude/skills/**/*.md", "**/CLAUDE.md")
@@ -44,7 +43,9 @@ SKIP_PREFIXES = ("http://", "https://", "mailto:", "#", "tel:", "data:")
 
 
 def is_external(target: str) -> bool:
-    return target.startswith(SKIP_PREFIXES)
+    return target.startswith(SKIP_PREFIXES) or bool(
+        re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target)
+    )
 
 
 def collect_files(root: Path) -> list[Path]:
@@ -63,8 +64,20 @@ def check(root: Path) -> list[tuple[Path, int, str]]:
             lines = path.read_text().splitlines()
         except (UnicodeDecodeError, OSError):
             continue
+        fence = None
         for lineno, line in enumerate(lines, 1):
-            for target in LINK_RE.findall(line):
+            marker = re.match(r"^\s{0,3}(`{3,}|~{3,})", line)
+            if marker:
+                token = marker.group(1)
+                if fence is None:
+                    fence = token
+                elif token[0] == fence[0] and len(token) >= len(fence):
+                    fence = None
+                continue
+            if fence:
+                continue
+            prose = re.sub(r"(`+)[^`]*?\1", "", line)
+            for target in LINK_RE.findall(prose):
                 target = target.split()[0].strip()  # drop optional "title"
                 if is_external(target) or not target:
                     continue

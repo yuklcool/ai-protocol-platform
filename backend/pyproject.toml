@@ -132,7 +132,7 @@ testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow",
     "integration: marks tests requiring external services",
-    "adk_contract: hermetic 'real ADK flow' guard for a custom<->ADK contract (make adk-conformance); see docs/design/v6.17.0/adk-contract-checklist.md",
+    "adk_contract: hermetic 'real ADK flow' guard for a custom<->ADK contract (make adk-conformance); see docs/archive/design/v6.17.0/adk-contract-checklist.md",
 ]
 
 [tool.codespell]

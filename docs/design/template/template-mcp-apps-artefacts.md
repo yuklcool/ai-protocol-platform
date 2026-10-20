@@ -15,9 +15,9 @@
 |------|------------------------|-------|
 | Static-artefact subtree in sandbox | ✅ Shipped (commit `2fa6eec`) | [infrastructure/mcp-sandbox/serve.ts:148-181](../../../infrastructure/mcp-sandbox/serve.ts#L148) |
 | `StaticArtefactFrame.tsx` (280 LOC) | ✅ Shipped | [frontend/src/components/workspace/StaticArtefactFrame.tsx](../../../frontend/src/components/workspace/StaticArtefactFrame.tsx) |
-| `useMcpAppMessages.ts` (86 LOC) | ✅ Shipped | [frontend/src/hooks/useMcpAppMessages.ts](../../../frontend/src/hooks/useMcpAppMessages.ts) |
+| `useMcpAppMessages.ts` (86 LOC) | ✅ Shipped | frontend/src/hooks/useMcpAppMessages.ts (`../../../frontend/src/hooks/useMcpAppMessages.ts`) |
 | `StaticArtefactFrame.test.tsx` (10 cases) | ✅ Shipped 2026-06-05 (MCPAPP-AUDIT) | [frontend/src/components/workspace/__tests__/StaticArtefactFrame.test.tsx](../../../frontend/src/components/workspace/__tests__/StaticArtefactFrame.test.tsx) — ported from AIPLA |
-| `useMcpAppMessages.test.tsx` | ✅ Shipped | [frontend/src/hooks/__tests__/useMcpAppMessages.test.tsx](../../../frontend/src/hooks/__tests__/useMcpAppMessages.test.tsx) |
+| `useMcpAppMessages.test.tsx` | ✅ Shipped | frontend/src/hooks/__tests__/useMcpAppMessages.test.tsx (`../../../frontend/src/hooks/__tests__/useMcpAppMessages.test.tsx`) |
 | `_template/v1/index.html` artefact with JSON-RPC helpers | ✅ Shipped (311 LOC, single self-contained file) | [infrastructure/mcp-sandbox/artefacts/_template/v1/index.html](../../../infrastructure/mcp-sandbox/artefacts/_template/v1/index.html) |
 | `docs/ops/mcp-apps-iframe-guide.md` | ✅ Shipped (commit `d16a447`); revised 2026-06-05 to retire hook section | [docs/ops/mcp-apps-iframe-guide.md](../../ops/mcp-apps-iframe-guide.md) |
 | `_BLOCK_TEMPLATE` positive guidance (#29) | ✅ Shipped | [backend/adk/iframe_context.py:56-79](../../../backend/adk/iframe_context.py#L56) |
@@ -181,7 +181,7 @@ path as AppRenderer-summoned ones.
 // Responds to ping
 ```
 
-The companion hook [`useMcpAppMessages`](../../../frontend/src/hooks/useMcpAppMessages.ts) (~90 LOC)
+The companion hook `useMcpAppMessages` (`../../../frontend/src/hooks/useMcpAppMessages.ts`) (~90 LOC)
 is the listener primitive both `StaticArtefactFrame` and any downstream artefact wrapper
 can use. Useful standalone when an observer needs notifications outside the frame
 component (telemetry, dev pages, tests).
@@ -293,7 +293,7 @@ No new commands for this PR. The `aiplatform sessions bootstrap` command from
 | 8 | Update `_BLOCK_TEMPLATE` in `iframe_context.py` with positive guidance | 1h |
 | 9 | Write `test_iframe_context.py` — assert positive guidance present in rendered block | 0.5h |
 | 10 | Update `docs/ops/mcp-apps-iframe-guide.md` InstructionProvider framing section | 1h |
-| 11 | Local smoke via [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md): mount the `_starter` artefact via `StaticArtefactFrame`, drive the handshake, assert spec-shape JSON-RPC envelopes flow | 1.5h |
+| 11 | Local smoke via aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`): mount the `_starter` artefact via `StaticArtefactFrame`, drive the handshake, assert spec-shape JSON-RPC envelopes flow | 1.5h |
 
 **Total: ~17.5h ≈ 2d** (matches existing sprint estimate — Parts A-C add work, but
 dropping the hook + hook tests removes ~3h).
@@ -313,7 +313,7 @@ dropping the hook + hook tests removes ~3h).
 - **`test_iframe_context.py`:**
   - `wrap_with_iframe_context(state)` output contains `"You SHOULD reference these values"`.
   - Output still contains the security note (injection defence not removed).
-- **Manual smoke** via [aitana-frontend-verify](../../../.claude/skills/aitana-frontend-verify/SKILL.md):
+- **Manual smoke** via aitana-frontend-verify (`../../../.claude/skills/aitana-frontend-verify/SKILL.md`):
   - Mount the `_starter` artefact via `StaticArtefactFrame` against the deployed mcp-sandbox.
   - Drive the handshake; assert spec-shape JSON-RPC envelopes in the chrome-devtools network panel.
   - Trigger an artefact-side `rpcNotify("ui/update-model-context", {...})`; assert the host receives it; assert the backend's `iframe-context` endpoint sees the same shape.
@@ -332,7 +332,7 @@ dropping the hook + hook tests removes ~3h).
 
 ## Related Documents
 
-- [mcp-app-update-model-context.md](../../v6.1.0/implemented/mcp-app-update-model-context.md)
-- [artefact-render-hook.md](../../v6.2.0/implemented/artefact-render-hook.md)
-- [a2ui-surface-context.md](../../v6.2.0/implemented/a2ui-surface-context.md)
+- [mcp-app-update-model-context.md](../../archive/design/v6.1.0/implemented/mcp-app-update-model-context.md)
+- [artefact-render-hook.md](../../archive/design/v6.2.0/implemented/artefact-render-hook.md)
+- [a2ui-surface-context.md](../../archive/design/v6.2.0/implemented/a2ui-surface-context.md)
 - [SEQUENCE.md](SEQUENCE.md)

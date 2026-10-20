@@ -104,11 +104,6 @@ def _parse_template(skill_md: Path) -> dict[str, Any]:
     }
 
 
-def _existing_platform_skill_names() -> set[str]:
-    configs = skill_config.list_skills(owner_id=PLATFORM_OWNER_UID, limit=200)
-    return {c.name for c in configs}
-
-
 def _existing_platform_skill_by_name() -> dict[str, Any]:
     configs = skill_config.list_skills(owner_id=PLATFORM_OWNER_UID, limit=200)
     return {c.name: c for c in configs}
@@ -299,15 +294,6 @@ def seed(templates_root: Path | None = None, dry_run: bool = False) -> SeedSumma
     return summary
 
 
-def seed_platform_skills(
-    templates_root: Path = DEFAULT_TEMPLATES_ROOT,
-    *,
-    dry_run: bool = False,
-) -> SeedSummary:
-    """Compatibility entry point for callers introduced during persistence work."""
-    return seed(templates_root=templates_root, dry_run=dry_run)
-
-
 __all__ = [
     "DEFAULT_TEMPLATES_ROOT",
     "DEMO_SKILL_NAMES",
@@ -315,5 +301,4 @@ __all__ = [
     "SeedSummary",
     "_parse_template",
     "seed",
-    "seed_platform_skills",
 ]

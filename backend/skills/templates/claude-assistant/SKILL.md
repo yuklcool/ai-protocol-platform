@@ -28,7 +28,7 @@ metadata:
     - get_document_content
   # Tiered reasoning: this mid tier escalates to the top tier (Deep Reasoner,
   # Claude Opus 4.8) ONLY when it judges the problem warrants it — the cascade in
-  # docs/design/v6.8.0/complexity-graded-model-routing.md. auto = transparent transfer.
+  # docs/archive/design/v6.8.0/complexity-graded-model-routing.md. auto = transparent transfer.
   delegation:
     enabled: true
     maxDepth: 2

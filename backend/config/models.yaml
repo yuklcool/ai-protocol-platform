@@ -430,7 +430,7 @@ platform_default: "gemini-3-7-flash"
 # day-to-day on `lite` (fast Gemini); deep work is delegated to sub-skills
 # configured with `smart` (Anthropic). Keys are logical tiers; values are
 # registry ids. Add more tiers here without touching ModelEntry.tier.
-# See docs/design/v6.6.0/one-app-fork-convergence.md (Workstream D).
+# See docs/archive/design/v6.6.0/one-app-fork-convergence.md (Workstream D).
 
 # Every tier is a residency variant map: `default` serves the unrestricted
 # deployments (dev + test), `eu-strict` serves prod. That split is what lets

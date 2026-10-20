@@ -19,7 +19,7 @@ on 2026-06-07 — see `docs/design/template/template-a2a-spec-compliance.md` (G4
 Two operational patterns covered in this doc; a third (publish to
 Cloud Marketplace so any GE customer can install us) is tracked
 separately in
-[cloud-marketplace-publishing.md](./cloud-marketplace-publishing.md).
+[cloud-marketplace-publishing.md](cloud-marketplace-publishing.md).
 Pick before running anything — the choice shapes who pays the
 $30/seat/month subscription, who sees the agent in their Console, and
 how much per-fork setup work there is.
@@ -183,7 +183,7 @@ surface Gemini Enterprise's registration tool fetches. It must be:
 
 The template's G39 + G43 commits ship full v0.2 compliance out of the
 box — a fresh fork following the
-[deploy guide](../ops/deployed-urls.md) should produce a compliant card
+deploy guide (`../ops/deployed-urls.md`) should produce a compliant card
 without code changes.
 
 ### 3. The `agents-cli` tool
@@ -598,5 +598,5 @@ picks up changes on its own discovery refresh — no action needed.
 - Upstream Gemini Enterprise docs:
   [Subscriptions](https://cloud.google.com/agentspace/docs/subscriptions),
   [Register a custom agent](https://cloud.google.com/agentspace/docs/register-custom-agents).
-- [cloud-marketplace-publishing.md](./cloud-marketplace-publishing.md) —
+- [cloud-marketplace-publishing.md](cloud-marketplace-publishing.md) —
   Pattern C workstream for publishing the platform on Cloud Marketplace.

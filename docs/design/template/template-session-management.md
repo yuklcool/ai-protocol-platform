@@ -283,6 +283,6 @@ without needing a browser.
 
 ## Related Documents
 
-- [aitana-adk-testing skill](../../../.claude/skills/aitana-adk-testing/SKILL.md) — session debugging tools
-- [mcp-app-update-model-context.md](../../v6.1.0/implemented/mcp-app-update-model-context.md)
+- aitana-adk-testing skill (`../../../.claude/skills/aitana-adk-testing/SKILL.md`) — session debugging tools
+- [mcp-app-update-model-context.md](../../archive/design/v6.1.0/implemented/mcp-app-update-model-context.md)
 - [SEQUENCE.md](SEQUENCE.md)

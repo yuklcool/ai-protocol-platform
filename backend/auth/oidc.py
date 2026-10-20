@@ -134,10 +134,6 @@ def oidc_browser_config() -> OidcBrowserConfig:
     )
 
 
-def validate_oidc_config() -> None:
-    oidc_config()
-
-
 def _subject_doc_id(issuer: str, subject: str) -> str:
     material = (_normalise_issuer(issuer) + "\n" + subject.strip()).encode("utf-8")
     return hashlib.sha256(material).hexdigest()
@@ -597,5 +593,4 @@ __all__ = [
     "oidc_provider_status",
     "reset_oidc_cache_for_testing",
     "user_from_oidc_token",
-    "validate_oidc_config",
 ]

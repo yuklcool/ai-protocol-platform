@@ -1,7 +1,7 @@
 """GCS signed-URL issuance for agent-driven read access to buckets/folders.
 
 Design (RESOURCE-ACCESS M3, see
-docs/design/v6.0.0/resource-access-control.md §Signed URLs):
+docs/archive/design/v6.0.0/resource-access-control.md §Signed URLs):
 
     1. The Cloud Run service account does NOT carry storage.objects.get
        permission directly. At signing time we impersonate a dedicated

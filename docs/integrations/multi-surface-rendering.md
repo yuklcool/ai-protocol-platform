@@ -8,7 +8,7 @@ a confirmation modal).
 right field in your `SkillConfig` and (optionally) setting `update_mode` for
 live updates.
 
-**Deeper reference:** the [design doc](../design/v6.2.0/implemented/multi-surface-rendering.md)
+**Deeper reference:** the [design doc](../archive/design/v6.2.0/implemented/multi-surface-rendering.md)
 covers the rationale, the layout, and the protocol. This howto is the
 operating manual for skill authors.
 
@@ -299,7 +299,7 @@ To turn it off temporarily, comment out the `a2ui:` block in the skill's
 
 ## Related
 
-- [Multi-surface design doc](../design/v6.2.0/implemented/multi-surface-rendering.md) — full design, axiom alignment, architecture
-- [A2UI tool delivery](../design/v6.1.0/implemented/a2ui-tool-delivery.md) — the protocol primitive surfaces extend
+- [Multi-surface design doc](../archive/design/v6.2.0/implemented/multi-surface-rendering.md) — full design, axiom alignment, architecture
+- [A2UI tool delivery](../archive/design/v6.1.0/implemented/a2ui-tool-delivery.md) — the protocol primitive surfaces extend
 - [Channels adapter howto](channels-adapter-howto.md) — sibling pattern; channel routing parallels surface routing
 - A2UI spec: [a2ui.org](https://a2ui.org) — protocol-level `surfaceId` semantics

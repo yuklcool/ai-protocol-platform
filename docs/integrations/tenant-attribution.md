@@ -1,6 +1,6 @@
 # Tenant attribution — fork adoption howto
 
-**Sprint reference:** [v6.2.0 sprint 2.14 design doc](../design/v6.2.0/implemented/tenant-id-span-attribute.md)
+**Sprint reference:** [v6.2.0 sprint 2.14 design doc](../archive/design/v6.2.0/implemented/tenant-id-span-attribute.md)
 **For:** Forks running the platform in multi-tenant contexts where Cloud Trace needs to be queryable by tenant identity (cohort, organization, customer, team).
 
 This is the simplest of the four AIPLA template-extensions to adopt — the platform's defaults give you `tenant.uid`, `tenant.auth_mode`, optional `tenant.group_id`, and optional `tenant.uid_hash` on every span out of the box. Forks plug `register_tenant_enricher` to add their own attributes (e.g. AIPLA's `tenant.class_id`).
@@ -260,7 +260,7 @@ The same tenant identity threads through all four — a single Cloud Trace query
 
 ## Related docs
 
-- [Sprint 2.14 design doc](../design/v6.2.0/implemented/tenant-id-span-attribute.md) — full Protocol contract, axiom alignment, security considerations.
+- [Sprint 2.14 design doc](../archive/design/v6.2.0/implemented/tenant-id-span-attribute.md) — full Protocol contract, axiom alignment, security considerations.
 - [Sprint 2.11 anonymous-group-id-auth howto](anonymous-group-id-auth.md) — provides the `group_id` identity that lands as `tenant.group_id`.
 - [Sprint 2.12 budget-enforcement howto](budget-enforcement.md) — consumes the same identity for budget consultations; correlates with span attribution via shared `group_id`.
 - [Sprint 2.13 artefact-review-hooks howto](artefact-review-hooks.md) — third sibling sprint; audit logs share the `tenant.group_id` attribution.

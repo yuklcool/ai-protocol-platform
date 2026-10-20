@@ -4,7 +4,7 @@ Google [MCP Toolbox for Databases](https://mcp-toolbox.dev/) v1.7.0, running as
 a **third container in the `platform-frontend` Cloud Run service**, serving
 hand-authored BigQuery queries to skills as MCP tools.
 
-Design: [`docs/design/v6.14.0/mcp-toolbox-database-gateway.md`](../../docs/design/v6.14.0/mcp-toolbox-database-gateway.md)
+Design: `docs/archive/design/v6.14.0/mcp-toolbox-database-gateway.md` (`../../docs/archive/design/v6.14.0/mcp-toolbox-database-gateway.md`)
 
 ## Why a sidecar and not its own service
 

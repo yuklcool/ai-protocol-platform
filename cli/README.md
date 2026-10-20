@@ -154,7 +154,7 @@ aiplatform --env local skill probe my-skill --message "Hello"
 aiplatform --env local skill probe my-skill --json
 ```
 
-See [docs/design/v6.1.0/implemented/ttft-instrumentation.md](../docs/design/v6.1.0/implemented/ttft-instrumentation.md).
+See [docs/archive/design/v6.1.0/implemented/ttft-instrumentation.md](../docs/archive/design/v6.1.0/implemented/ttft-instrumentation.md).
 
 ### Groups (backend TODO)
 

@@ -5,7 +5,7 @@
 # replaced atomically with the new set, all other secret keys are preserved.
 #
 # v6.4.0 ONE-DEMO M1: per-deployment branding via build-time env vars
-# (see docs/design/v6.4.0/multi-tenant-demo-readiness.md).
+# (see docs/archive/design/v6.4.0/multi-tenant-demo-readiness.md).
 #
 # Usage:
 #   scripts/update-deployment-branding.sh                # interactive, env=dev

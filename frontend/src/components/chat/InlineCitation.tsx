@@ -71,37 +71,3 @@ export function InlineCitation({ href, children, navigateToBlock }: InlineCitati
     </button>
   );
 }
-
-const INLINE_LINK_RE = new RegExp(
-  `\\[([^\\]]+)\\]\\(((?:${escapedSchemes}):\\/\\/[^)]+)\\)`,
-  "g",
-);
-
-export function renderWithCitations(
-  text: string,
-  navigateToBlock: (docId: string, blockId: string) => void,
-): React.ReactNode[] {
-  const nodes: React.ReactNode[] = [];
-  let cursor = 0;
-  INLINE_LINK_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = INLINE_LINK_RE.exec(text)) !== null) {
-    if (match.index > cursor) {
-      nodes.push(text.slice(cursor, match.index));
-    }
-    const [, label, href] = match;
-    nodes.push(
-      <InlineCitation key={match.index} href={href} navigateToBlock={navigateToBlock}>
-        {label}
-      </InlineCitation>,
-    );
-    cursor = match.index + match[0].length;
-  }
-
-  if (cursor < text.length) {
-    nodes.push(text.slice(cursor));
-  }
-
-  return nodes.length > 0 ? nodes : [text];
-}

@@ -100,4 +100,4 @@ gcloud storage buckets get-iam-policy gs://multivac-acme-energy-bucket \
 ## Do this at env-cut
 
 Part of cutting a new env that hosts the ONE customer — see
-[env-cut-runbook.md](env-cut-runbook.md).
+env-cut-runbook.md (`env-cut-runbook.md`).

@@ -33,7 +33,7 @@ review** — the bulk is M4's mechanical work, not M2's.
 
 | Was | Now | Why |
 |---|---|---|
-| `docs/design/v6.4.0/multi-tenant-demo-readiness.md` | `docs/customers/one/demo-readiness.md` | Title is literally *"ONE Demo Readiness — This Deployment Is Acme Energy"*. Definitionally deployment-specific. 64 customer tokens in 938 lines. |
+| `docs/archive/design/v6.4.0/multi-tenant-demo-readiness.md` | `docs/customers/one/demo-readiness.md` | Title is literally *"ONE Demo Readiness — This Deployment Is Acme Energy"*. Definitionally deployment-specific. 64 customer tokens in 938 lines. |
 | `…/multi-tenant-demo-readiness-sprint.md` | `docs/customers/one/demo-readiness-sprint.md` | Its sprint companion. |
 
 `docs/customers/` is now a single glob exclusion in the sanitizer, so a new
@@ -48,7 +48,7 @@ That form is correct in both tiers.
 
 ## Renamed, not moved (M2, done)
 
-`docs/design/v6.6.0/one-app-fork-convergence{,-sprint}.md` →
+`docs/archive/design/v6.6.0/one-app-fork-convergence{,-sprint}.md` →
 `fork-convergence{,-sprint}.md`, with all **nine** referrers updated.
 
 These were customer-*named* but generic platform design (model tiers, Skill
@@ -104,7 +104,7 @@ The 18 flagged for review all resolved to **scrub-in-place** except
   Vertex RAG service agent needs `objectViewer` on the source bucket) that uses
   the customer bucket as its worked example. The knowledge is transferable; the
   bucket name is not.
-- **`docs/design/v6.23.0/SEQUENCE.md`** scores highest of the docs (12.9
+- **`docs/archive/design/v6.23.0/SEQUENCE.md`** scores highest of the docs (12.9
   tokens/100 lines) yet is a platform version index. It is the clearest proof
   that density is a *signal*, not a rule — which is why the triage tool now
   routes high-density files to `REVIEW` rather than auto-recommending a move.

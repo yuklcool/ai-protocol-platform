@@ -12,7 +12,7 @@ vi.mock("@/components/protocols/MCPAppToolCallRouter", () => ({
 }));
 // ChatPlacementForm mounts an A2UISurfaceMount (needs the registry provider) —
 // stub it to a marker so we can assert interleave ORDER without the provider.
-vi.mock("../ChatPlacementForms", () => ({
+vi.mock("../ChatPlacementForm", () => ({
   ChatPlacementForm: ({ surfaceId }: { surfaceId: string }) => (
     <div data-chat-form={surfaceId}>form:{surfaceId}</div>
   ),

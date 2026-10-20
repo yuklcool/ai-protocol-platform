@@ -12,7 +12,7 @@ Status codes ARE the retry protocol — Cloud Tasks retries any non-2xx:
 
 The handler returns 2xx only after `append_event` has landed (or a no-op is
 established), so at-least-once delivery + the staleness check give
-exactly-once EFFECT. See docs/design/v6.23.0/compaction-second-pass.md.
+exactly-once EFFECT. See docs/archive/design/v6.23.0/compaction-second-pass.md.
 """
 
 from __future__ import annotations

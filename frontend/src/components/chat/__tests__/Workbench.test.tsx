@@ -10,7 +10,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
-import { Workbench, type WorkbenchTab, useTabBadges } from "../Workbench";
+import { Workbench, type WorkbenchTab } from "../Workbench";
 
 function tab(id: string, content: React.ReactNode, extras: Partial<WorkbenchTab> = {}): WorkbenchTab {
   return { id, label: id, content, ...extras };
@@ -296,40 +296,6 @@ describe("Workbench", () => {
     );
     fireEvent.keyDown(screen.getByRole("tablist"), { key: "ArrowLeft" });
     expect(onActiveTabChange).toHaveBeenCalledWith("c");
-  });
-});
-
-describe("useTabBadges", () => {
-  function Harness() {
-    const { mark, clearOnActivate, isBadged } = useTabBadges();
-    return (
-      <div>
-        <span data-testid="a-badged">{String(isBadged("a"))}</span>
-        <span data-testid="b-badged">{String(isBadged("b"))}</span>
-        <button type="button" onClick={() => mark("a")}>mark-a</button>
-        <button type="button" onClick={() => mark("b")}>mark-b</button>
-        <button type="button" onClick={() => clearOnActivate("a")}>activate-a</button>
-      </div>
-    );
-  }
-
-  it("isBadged returns true after mark and false after clearOnActivate", () => {
-    render(<Harness />);
-    expect(screen.getByTestId("a-badged").textContent).toBe("false");
-
-    fireEvent.click(screen.getByText("mark-a"));
-    expect(screen.getByTestId("a-badged").textContent).toBe("true");
-
-    fireEvent.click(screen.getByText("activate-a"));
-    expect(screen.getByTestId("a-badged").textContent).toBe("false");
-  });
-
-  it("clearOnActivate is a no-op when the id was never marked (no extra render)", () => {
-    render(<Harness />);
-    // Should not throw and should not flip 'b' to true:
-    fireEvent.click(screen.getByText("activate-a"));
-    expect(screen.getByTestId("a-badged").textContent).toBe("false");
-    expect(screen.getByTestId("b-badged").textContent).toBe("false");
   });
 });
 

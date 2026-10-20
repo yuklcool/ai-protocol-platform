@@ -1,6 +1,6 @@
 """Pydantic models for parsed documents.
 
-Mirrors the Firestore schema at docs/design/v6.0.0/document-ui.md lines 291-336.
+Mirrors the Firestore schema at docs/archive/design/v6.0.0/document-ui.md lines 291-336.
 
 These models are the canonical Python types for the document-ui feature. They are
 consumed by:
@@ -15,7 +15,7 @@ Python code uses snake_case via Pydantic's `populate_by_name=True`.
 Block shape is intentionally permissive (`type` + `text` + freeform `properties`)
 because the v6.0.0 target runs against `ailang-parse>=0.5.1` whose `Block` is a
 dataclass with union fields across block types. The companion JSON schema at
-`docs/design/v6.0.0/contracts/document.schema.json` is generated from this module.
+`docs/archive/design/v6.0.0/contracts/document.schema.json` is generated from this module.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ class ParsedDocument(BaseModel):
     them; request-time authorization must never infer a stable tenant merely
     from an email domain.
 
-    Mirrors the schema at docs/design/v6.0.0/document-ui.md:291-336 extended
+    Mirrors the schema at docs/archive/design/v6.0.0/document-ui.md:291-336 extended
     with file-browser fields (folderId, parseStatus, stats).
     """
 

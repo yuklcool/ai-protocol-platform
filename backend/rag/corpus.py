@@ -132,16 +132,6 @@ def _retrieval_query_sync(corpus_name: str, query: str, top_k: int) -> list[dict
     return results
 
 
-async def import_document_from_gcs(corpus_name: str, gcs_uri: str) -> None:
-    """Import a GCS document into the corpus via the batch import path.
-
-    Use this (not ``upload_document``) when the source file already lives in GCS.
-    ``import_files`` is the Vertex-native path for GCS URIs and avoids a
-    download-then-re-upload round-trip.
-    """
-    await asyncio.to_thread(_import_files_sync, corpus_name, gcs_uri)
-
-
 def _import_files_sync(corpus_name: str, gcs_uri: str) -> None:
     from vertexai import rag
 

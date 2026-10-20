@@ -198,7 +198,7 @@ class A2uiToolConfig(BaseModel):
             "`a2ui_surface_context.{surfaceId}.lastAction` session-state "
             "namespace. The InstructionProvider injects both into the "
             "next agent prompt. See "
-            "docs/design/v6.2.0/implemented/a2ui-surface-context.md."
+            "docs/archive/design/v6.2.0/implemented/a2ui-surface-context.md."
         ),
     )
     allow_action_triggered_runs: bool = Field(
@@ -208,7 +208,7 @@ class A2uiToolConfig(BaseModel):
             "that bundle the A2UI action write with an agent run. Distinct trust "
             "grant from allow_surface_context_writes — opt in here only if the "
             "skill is designed to be driven entirely by surface clicks. See "
-            "docs/design/v6.1.0/action-triggered-agent-turn.md."
+            "docs/archive/design/v6.1.0/action-triggered-agent-turn.md."
         ),
     )
 

@@ -251,6 +251,6 @@ wildcard seeding happens automatically.
 
 ## Related Documents
 
-- [anonymous-group-id-auth.md](../../v6.2.0/implemented/anonymous-group-id-auth.md) — v6.2.0 2.11 (template sync pending)
+- [anonymous-group-id-auth.md](../../archive/design/v6.2.0/implemented/anonymous-group-id-auth.md) — v6.2.0 2.11 (template sync pending)
 - [template-cloudbuild-hardening.md](template-cloudbuild-hardening.md) — `scripts/bootstrap-gcp-project.sh` where the Firebase region assertion goes
 - [SEQUENCE.md](SEQUENCE.md)

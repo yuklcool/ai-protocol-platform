@@ -3,7 +3,7 @@
 // MessageBubble) using the tool DEFINITION's _meta.ui binding, per the
 // MCP Apps spec (UI-by-reference). The chip always renders just a chip;
 // it does NOT inspect resultContent for ui:// URIs anymore.
-// See: docs/design/v6.1.0/mcp-app-integrations.md (M2A — frontend)
+// See: docs/archive/design/v6.1.0/mcp-app-integrations.md (M2A — frontend)
 
 "use client";
 

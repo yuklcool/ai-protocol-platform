@@ -7,25 +7,15 @@ path and hunt in the weeds. This file is the playbook. Read it before touching
 `a2ui_*_render.py`, `callbacks.py`, or adding any tool that should show UI.
 
 See also: memory `a2ui-workspace-render-trap`, and the authoritative designs
-`docs/design/v6.7.0/implemented/tool-results-as-a2ui.md` (7.3) +
+`docs/archive/design/v6.7.0/implemented/tool-results-as-a2ui.md` (7.3) +
 `workbench-artifacts-model.md` (7.5).
 
-## Compaction lives here too — read the findings log first
+## Compaction
 
-`session.py` (config), `compaction_summarizer.py` (policy) and the per-turn
-demotion in `callbacks.py` are the conversation-compaction subsystem. It has its
-own recurring-failure playbook, kept version-independent because the findings
-outlive any one version:
-
-**[docs/projects/compaction/README.md](../../docs/projects/compaction/README.md)**
-
-Read it before touching any of those three files. The short version of why:
-compaction is **lossy and invisible** — the summary replaces the raw turns in
-the model's request while the UI keeps showing the full transcript, so a
-degraded answer looks identical to a good one. It was also completely INERT for
-months while its unit tests passed, because nothing checked the config reached
-the code that reads it. The log carries the mechanism map, the measured numbers,
-nine traps, and what is still unproven.
+`session.py`、`compaction_summarizer.py` 和 `callbacks.py` 共同控制对话压缩。
+修改前阅读[上下文保真度记录](../../docs/archive/design/v6.23.0/conversation-context-fidelity.md)
+和[压缩接线与观测记录](../../docs/archive/design/v6.23.0/compaction-wiring-and-observability.md)。
+压缩是有损的；必须检查配置到达实际 Runner，以及真实流中的事件和上下文。
 
 ## The golden rule — don't invent, register a mapping
 

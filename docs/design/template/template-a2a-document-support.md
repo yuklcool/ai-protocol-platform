@@ -218,7 +218,7 @@ If step 2 doesn't log but the deploy is correct, the interceptor isn't running �
 - [template-a2a-invocation-bridge.md](template-a2a-invocation-bridge.md) — G45, the invocation surface this doc extends
 - [template-a2a-spec-compliance.md](template-a2a-spec-compliance.md) — G43, the discovery layer (this doc extends `inputModes` advertised there)
 - [docs/integrations/gemini-enterprise.md](../../integrations/gemini-enterprise.md) — operator's guide; gets new Troubleshooting entries for file-input failures
-- [docs/design/v6.1.0/local-dev-cli.md](../v6.1.0/local-dev-cli.md) — the CLI affordance lives here
+- [docs/archive/design/v6.1.0/local-dev-cli.md](../../archive/design/v6.1.0/local-dev-cli.md) — the CLI affordance lives here
 - Upstream brief: `<local-path>` §6 (1178-1356) + Frictions 29 (1358-1397) + 30 (1401-1443)
 - Source commits to port from: gde-ap-agent `aaf0315`, `10f7a93`, `7687784`
 

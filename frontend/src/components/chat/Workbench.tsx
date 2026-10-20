@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyTab } from "./EmptyTab";
@@ -176,15 +176,4 @@ export function Workbench({
       </div>
     </div>
   );
-}
-
-export function useTabBadges() {
-  const [badged, setBadged] = useState<Record<string, boolean>>({});
-  return {
-    mark: (id: string) => setBadged((p) => ({ ...p, [id]: true })),
-    clear: (id: string) => setBadged((p) => ({ ...p, [id]: false })),
-    clearOnActivate: (id: string) =>
-      setBadged((p) => (p[id] ? { ...p, [id]: false } : p)),
-    isBadged: (id: string) => Boolean(badged[id]),
-  };
 }

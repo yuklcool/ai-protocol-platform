@@ -136,7 +136,7 @@ def load_models_config() -> ModelsConfig:
 # A skill's `model` field (SkillMetadata.model) may be a logical tier name
 # (`lite`, `smart`), a registry id (`gemini-2-5-flash`), or a raw provider api
 # name (`gemini-2.5-flash`). These helpers collapse all three to the api name
-# the ADK model wrappers expect. See docs/design/v6.6.0/one-app-fork-convergence.md.
+# the ADK model wrappers expect. See docs/archive/design/v6.6.0/one-app-fork-convergence.md.
 
 
 def _entry_by_id(cfg: ModelsConfig, model_id: str) -> ModelEntry | None:

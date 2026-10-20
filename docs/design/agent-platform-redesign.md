@@ -10,7 +10,7 @@
 > 不是默认独立对外暴露的 Agent。后续实现以 Issue #74 的
 > **Single Root Agent + Skills / Tools / MCP / Knowledge** 为准。
 
-![Agent Platform Redesign](./agent-platform-redesign.svg)
+![Agent Platform Redesign](agent-platform-redesign.svg)
 
 ## 1. 重设计目标
 

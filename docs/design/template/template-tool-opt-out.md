@@ -191,5 +191,5 @@ All tests are ported from AIPLA — see commit references above. Key cases:
 
 ## Related Documents
 
-- [a2ui-surface-context.md](../../v6.2.0/implemented/a2ui-surface-context.md) — A2UI background
+- [a2ui-surface-context.md](../../archive/design/v6.2.0/implemented/a2ui-surface-context.md) — A2UI background
 - [SEQUENCE.md](SEQUENCE.md)

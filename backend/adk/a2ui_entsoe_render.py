@@ -119,7 +119,7 @@ def entsoe_prices_to_a2ui(typed_result: Any, tool_context: Any = None) -> list[d
                     # can emit this shape so a future chart tab needs no per-tool
                     # knowledge. `y` is a list so the same surface later charts
                     # load/solar/wind columns from the same tables with no new
-                    # component. See docs/design/v6.12.0/market-prices-workspace.md
+                    # component. See docs/archive/design/v6.12.0/market-prices-workspace.md
                     # ("The shape: a declared series surface").
                     "kind": "series",
                     "title": title,

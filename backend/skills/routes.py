@@ -137,11 +137,11 @@ class SkillResponse(BaseModel):
     # v6.4.0 4.5 SKILL-ONBOARDING: nullable additive. None for skills lacking
     # the welcome frontmatter block — frontend reads `welcome?.introMessage ??
     # initialMessage` so older skills still get a greeting if they set
-    # initialMessage. See docs/design/v6.4.0/skill-onboarding.md.
+    # initialMessage. See docs/archive/design/v6.4.0/skill-onboarding.md.
     welcome: dict | None = None
     # v6.4.0 SHELL-MODES: nullable additive page-level shell shape. None for
     # skills lacking the shell frontmatter block — frontend ShellRouter falls
-    # back to ChatShell. See docs/design/v6.4.0/skill-driven-shell-modes.md.
+    # back to ChatShell. See docs/archive/design/v6.4.0/skill-driven-shell-modes.md.
     shell: dict | None = None
 
     model_config = {"populate_by_name": True}

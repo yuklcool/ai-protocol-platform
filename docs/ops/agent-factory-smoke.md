@@ -7,7 +7,7 @@ up the skill in Firestore, the ADK agent factory builds a per-user
 and the response streams back as Server-Sent Events.
 
 **Runs against:** `platform-backend` on `your-project-id`
-(see [deployed-urls.md](deployed-urls.md) for URL resolution).
+(see deployed-urls.md (`deployed-urls.md`) for URL resolution).
 
 ## What this probes
 
@@ -116,8 +116,8 @@ response. `TEXT_MESSAGE_START/END` bracket each assistant message.
 
 ## Related
 
-- Design: [agent-factory.md](../design/v6.0.0/agent-factory.md)
-- Sprint plan: [agent-factory-sprint.md](../design/v6.0.0/agent-factory-sprint.md)
+- Design: [agent-factory.md](../archive/design/v6.0.0/implemented/agent-factory.md)
+- Sprint plan: agent-factory-sprint.md (`../design/v6.0.0/agent-factory-sprint.md`)
 - Sprint JSON: `.claude/state/sprints/sprint_AGENT-FACTORY.json`
 - Integration test (mocked LLM): `backend/tests/api_tests/test_stream_skill.py`
 - Auth chain: [auth-smoke-testing.md](auth-smoke-testing.md)

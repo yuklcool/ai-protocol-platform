@@ -12,7 +12,7 @@ The flow inside `handle_webhook`:
     process_skill_request → send
 
 A new adapter is ~80-120 LOC because identity / commands / attachments /
-webhook plumbing are all inherited. See `docs/design/v6.1.0/channels.md`
+webhook plumbing are all inherited. See `docs/archive/design/v6.1.0/channels.md`
 for the design and `docs/integrations/channels-adapter-howto.md` (M5)
 for a walkthrough.
 """

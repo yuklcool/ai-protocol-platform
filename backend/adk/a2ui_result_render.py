@@ -7,7 +7,7 @@ pushed to the ``workspace`` surface via an out-of-band AG-UI CUSTOM event
 ``adk.callbacks.make_a2ui_result_emitter`` +
 ``observability.timing.LatencyTracker.emit_a2ui_surface``).
 
-Design (docs/design/v6.7.0/tool-results-as-a2ui.md, Model B):
+Design (docs/archive/design/v6.7.0/tool-results-as-a2ui.md, Model B):
 
   * ``register(transform, tool_names=..., result_matcher=...)`` adds a mapping
     keyed on tool name and/or result shape. First matching mapping wins.

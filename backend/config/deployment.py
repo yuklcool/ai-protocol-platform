@@ -61,14 +61,8 @@ def configure_google_genai_environment() -> None:
         os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
 
 
-def startup_requires_gcp_project() -> bool:
-    """Whether the process-wide startup guard must require a GCP project."""
-    return is_managed_gcp_mode()
-
-
 __all__ = [
     "configure_google_genai_environment",
     "is_managed_gcp_mode",
     "is_self_hosted_mode",
-    "startup_requires_gcp_project",
 ]

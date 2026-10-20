@@ -10,11 +10,11 @@
 **Future sessions:** Tue 18 Aug · Tue 17 Nov · Tue 16 Feb · + more TBA
 
 This doc is the **instructor's running order**. Companion docs:
-- [`pre-work.md`](pre-work.md) — what attendees do 24–48h before arriving
+- `pre-work.md` (`pre-work.md`) — what attendees do 24–48h before arriving
 - [`code-tour.md`](code-tour.md) — the 7-file ~1,600-LOC reading map
 - [`protocol-gotchas.md`](protocol-gotchas.md) — the bear traps we hit at v6 bring-up, mapped to blocks (so attendees can route around them in block 5)
-- [`skeleton-skill.md`](skeleton-skill.md) — the block 5 template
-- [`helper-agent-design.md`](helper-agent-design.md) — the meta-demo agent (TBD)
+- `skeleton-skill.md` (`skeleton-skill.md`) — the block 5 template
+- `helper-agent-design.md` (`helper-agent-design.md`) — the meta-demo agent (TBD)
 
 ---
 
@@ -108,7 +108,7 @@ Attendees arrive having already run `make dev-local`. The room buzzes from minut
 5min  — 2-3 attendee demos
 ```
 
-**Skeleton skill** lives at [`skeleton-skill.md`](skeleton-skill.md). One file. ~30 LOC. Attendees copy + modify.
+**Skeleton skill** lives at `skeleton-skill.md` (`skeleton-skill.md`). One file. ~30 LOC. Attendees copy + modify.
 
 ### Block 6 — A2A discovery + close (10 min)
 
@@ -159,7 +159,7 @@ Realistic schedule expects ~10 min slack across blocks (someone's question, a de
 ## What makes it amazing (five amplifiers)
 
 1. **Pre-work works.** Attendees arrive with a working platform. Dry-run pre-work on a fresh laptop NOT in the dev environment to catch invisible-to-you issues.
-2. **The workshop helper agent IS the meta-demo.** It runs on the platform, uses every protocol, and demonstrates all four AIPLA template-extensions. **Critically: it's preloaded with the workshop's own docs corpus** — this agenda, the [`code-tour`](code-tour.md), the [`protocol-gotchas`](protocol-gotchas.md), every shipped sprint doc in `docs/design/v6.X.Y/implemented/`, every howto in `docs/integrations/`. Attendees can ask it "how does the surface-context loop work?" or "what's the seven-gate access control on iframe-context?" and get the actual design-doc answer, not a hallucinated one. Detailed design in [`helper-agent-design.md`](helper-agent-design.md). **The docs corpus is the demo** — RAG over real design docs proves the "document-centric UI" axiom in real time.
+2. **The workshop helper agent IS the meta-demo.** It runs on the platform, uses every protocol, and demonstrates all four AIPLA template-extensions. **Critically: it's preloaded with the workshop's own docs corpus** — this agenda, the [`code-tour`](code-tour.md), the [`protocol-gotchas`](protocol-gotchas.md), every shipped sprint doc in `docs/archive/design/v6.X.Y/implemented/`, every howto in `docs/integrations/`. Attendees can ask it "how does the surface-context loop work?" or "what's the seven-gate access control on iframe-context?" and get the actual design-doc answer, not a hallucinated one. Detailed design in `helper-agent-design.md` (`helper-agent-design.md`). **The docs corpus is the demo** — RAG over real design docs proves the "document-centric UI" axiom in real time.
 3. **"Watch the wire" moments.** Each protocol block has a DevTools-network demo showing actual bytes. Developers want to see the protocol, not abstractions over it.
 4. **Live `/.well-known/agent.json` + skills dropdown finale.** Two checkpoints. Attendees see their public artifact.
 5. **Show-and-tell submission via the helper agent.** Workspace pane updates live with submissions. Social momentum.
@@ -171,9 +171,9 @@ Realistic schedule expects ~10 min slack across blocks (someone's question, a de
 | Item | Where | Status |
 |---|---|---|
 | Working `make dev-local` on instructor laptop | local | ✅ verified daily |
-| Pre-work email + script | [`pre-work.md`](pre-work.md) | TBD |
+| Pre-work email + script | `pre-work.md` (`pre-work.md`) | TBD |
 | Slides (axioms, stack diagram, "where next") | local | TBD |
-| Skeleton skill template | [`skeleton-skill.md`](skeleton-skill.md) | TBD |
+| Skeleton skill template | `skeleton-skill.md` (`skeleton-skill.md`) | TBD |
 | Helper agent live + per-attendee budget configured | platform | TBD (own sprint) |
 | 7-file code-tour map | [`code-tour.md`](code-tour.md) | ✅ |
 | Fresh-laptop pre-work dry-run | external machine | TBD (one week before) |

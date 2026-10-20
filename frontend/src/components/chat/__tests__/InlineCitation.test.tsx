@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { InlineCitation, renderWithCitations } from "../InlineCitation";
+import { InlineCitation } from "../InlineCitation";
 
 describe("InlineCitation", () => {
   it("renders as a chip button for aitana:// URIs", () => {
@@ -47,30 +47,5 @@ describe("InlineCitation", () => {
     );
     const link = screen.getByRole("link", { name: /unsafe/i });
     expect(link).toHaveAttribute("href", "#");
-  });
-});
-
-describe("renderWithCitations", () => {
-  it("returns plain text nodes unchanged when no aitana:// links present", () => {
-    const navigate = vi.fn();
-    const nodes = renderWithCitations("Hello world", navigate);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]).toBe("Hello world");
-  });
-
-  it("splits text on [label](aitana://) markdown links and renders chips", () => {
-    const navigate = vi.fn();
-    const text = "See [Q1 Report](aitana://doc/d1/block/b1) for details.";
-    const nodes = renderWithCitations(text, navigate);
-    // Should have: "See ", chip, " for details."
-    expect(nodes).toHaveLength(3);
-  });
-
-  it("rendered chip calls navigateToBlock on click", () => {
-    const navigate = vi.fn();
-    const text = "Check [Table 1](aitana://doc/doc-x/block/blk-y) here.";
-    const { getByRole } = render(<>{renderWithCitations(text, navigate)}</>);
-    fireEvent.click(getByRole("button"));
-    expect(navigate).toHaveBeenCalledWith("doc-x", "blk-y");
   });
 });

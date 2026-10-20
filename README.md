@@ -151,7 +151,7 @@ v1.1.1 发布基线为 `29688543e0b4c1749210a8be90b0c94a207ca87e`：
 | [S3 兼容存储](docs/s3-object-storage.md) | 可选对象存储及 Compose 变量传递 |
 | [模块边界](docs/module-simplification.md) | Root、Skill、管理和协议模块职责 |
 
-历史设计、开发交接与上游记录分别保存在 `docs/design/`、[HANDOFF.md](HANDOFF.md) 和 [UPSTREAM.md](UPSTREAM.md)。实际操作以当前配置文档及对应版本代码为准。
+当前设计从[设计索引](docs/design/README.md)进入；历史版本已移至[设计归档](docs/archive/design/README.md)。开发交接与上游记录见 [HANDOFF.md](HANDOFF.md) 和 [UPSTREAM.md](UPSTREAM.md)。实际操作以当前配置文档及对应版本代码为准。
 
 ## 许可证
 

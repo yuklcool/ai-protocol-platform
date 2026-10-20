@@ -127,7 +127,7 @@ export interface UseSkillAgentReturn {
    * Custom events from the backend LatencyTracker. Null between runs
    * and after the first model token has landed (the streaming bubble
    * takes over the UX). Decouples perceived TTFT from real TTFT —
-   * see docs/design/v6.1.0/ttft-instrumentation.md.
+   * see docs/archive/design/v6.1.0/ttft-instrumentation.md.
    */
   stageLabel: string | null;
   /**
@@ -556,7 +556,7 @@ export function useSkillAgent(options?: {
         // AGENT_DELEGATION — a skill handed off (auto) or proposed a handoff
         // (suggest). Drives the transient "Handing off…" indicator (reusing the
         // stageLabel tier) plus a persistent transcript chip. See
-        // observability/timing.py + docs/design/v6.7.0/skill-delegation.md.
+        // observability/timing.py + docs/archive/design/v6.7.0/skill-delegation.md.
         if (event.name === "AGENT_DELEGATION" && event.value && typeof event.value === "object") {
           const v = event.value as {
             parent?: unknown;

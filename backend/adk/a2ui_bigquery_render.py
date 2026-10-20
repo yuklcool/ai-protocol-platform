@@ -3,7 +3,7 @@
 Registers a result→A2UI mapping for the ``one-bigquery`` toolset's two query
 tools on the proven 7.3 path ([a2ui_result_render](a2ui_result_render.py)).
 
-Design: docs/design/v6.23.0/one-bigquery.md
+Design: docs/archive/design/v6.23.0/one-bigquery.md
 
 ## Why this reuses the `prices` tab instead of adding a component
 

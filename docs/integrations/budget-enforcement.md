@@ -1,6 +1,6 @@
 # Budget enforcement — fork adoption howto
 
-**Sprint reference:** [v6.2.0 sprint 2.12 design doc](../design/v6.2.0/implemented/budget-enforcement.md)
+**Sprint reference:** [v6.2.0 sprint 2.12 design doc](../archive/design/v6.2.0/implemented/budget-enforcement.md)
 **For:** Forks running the platform with cost-per-tenant guardrails — classroom cohorts on a fixed monthly LLM budget, commercial tenants billed against a quota, internal teams with chargeback policies.
 
 This howto walks a fork operator from "I want to enforce a budget per cohort" to a running deployment with soft warnings, hard blocks, and a working banner. The platform ships a pluggable Protocol + reference in-memory implementation; the actual policy (Firestore, BigQuery, Redis, billing-system integration) is fork-side.
@@ -337,8 +337,8 @@ Combined with sprint 2.14 (`tenant.uid`/`tenant.group_id` on every OTel span), y
 
 ## Related docs
 
-- [Sprint 2.12 design doc](../design/v6.2.0/implemented/budget-enforcement.md) — full Protocol contract, axiom alignment, security/performance considerations.
+- [Sprint 2.12 design doc](../archive/design/v6.2.0/implemented/budget-enforcement.md) — full Protocol contract, axiom alignment, security/performance considerations.
 - [Sprint 2.11 anonymous-group-id-auth howto](anonymous-group-id-auth.md) — provides the `group_id` identity AIPLA's enforcer will key on.
-- [Sprint 2.14 tenant-id-span-attribute](../design/v6.2.0/tenant-id-span-attribute.md) — lands `tenant.uid` / `tenant.group_id` on every OTel span. Pairs cleanly: every `consult` log line gets the same identity attribution.
+- [Sprint 2.14 tenant-id-span-attribute](../archive/design/v6.2.0/implemented/tenant-id-span-attribute.md) — lands `tenant.uid` / `tenant.group_id` on every OTel span. Pairs cleanly: every `consult` log line gets the same identity attribution.
 - [backend/observability/llm_metrics.py](../../backend/observability/llm_metrics.py) — the per-model pricing table the in-memory enforcer reuses for cost projection.
 - [AIPLA ADR-014](https://www.sunholo.com/aipla/architecture.html#adr-014-per-group-per-class-budget-enforcement) — the request that surfaced this.

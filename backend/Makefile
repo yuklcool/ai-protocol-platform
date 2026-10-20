@@ -45,7 +45,7 @@ test-fast:
 # custom<->ADK boundary regressions — the class of bug jsdom/isolated unit tests
 # miss. This is the gate for an ADK version bump: it MUST stay green when the
 # `google-adk` pin in pyproject.toml changes.
-# See docs/design/v6.17.0/adk-contract-checklist.md.
+# See docs/archive/design/v6.17.0/adk-contract-checklist.md.
 adk-conformance:
 	uv run pytest tests/ -m adk_contract -v --tb=short
 

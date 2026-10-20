@@ -16,19 +16,6 @@ export function useNow(intervalMs = 10_000): number {
   return now;
 }
 
-export function formatRelative(ts: number, now: number): string {
-  if (!ts) return "";
-  const diff = Math.max(0, now - ts);
-  const s = Math.floor(diff / 1000);
-  if (s < 5) return "just now";
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return new Date(ts).toLocaleDateString();
-}
-
 export function absoluteTime(ts: number): string {
   if (!ts) return "";
   return new Date(ts).toLocaleTimeString();

@@ -11,7 +11,7 @@ Two invariants that were previously UNtested (test_agui.py covers only mounting)
   mis-flagged empty and 404'd as an error. Confirm cards (which emit
   TOOL_CALL_START + A2UI_SURFACE) are covered by the same output accounting.
 
-Part of `make adk-conformance`. See docs/design/v6.17.0/adk-contract-checklist.md.
+Part of `make adk-conformance`. See docs/archive/design/v6.17.0/adk-contract-checklist.md.
 """
 
 from __future__ import annotations

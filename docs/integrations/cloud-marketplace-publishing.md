@@ -6,7 +6,7 @@ so any Gemini Enterprise customer can discover and install it without us
 running their subscription or sharing IAM with them.
 
 It is the third operational pattern after the two in
-[gemini-enterprise.md](./gemini-enterprise.md):
+[gemini-enterprise.md](gemini-enterprise.md):
 
 | Pattern | Distribution | Subscription owner | Who sees the agent |
 |---|---|---|---|
@@ -219,5 +219,5 @@ public. Until that command runs, the listing is reviewable but invisible.
 - [Pricing models](https://docs.cloud.google.com/marketplace/docs/partners/ai-agents/pricing-models)
 - [Publication process](https://docs.cloud.google.com/marketplace/docs/partners/ai-agents/publish)
 - [A2A protocol spec](https://a2a-protocol.org/latest/)
-- Sibling docs: [gemini-enterprise.md](./gemini-enterprise.md) (Patterns A/B),
+- Sibling docs: [gemini-enterprise.md](gemini-enterprise.md) (Patterns A/B),
   `docs/design/template/template-a2a-spec-compliance.md` (G43).

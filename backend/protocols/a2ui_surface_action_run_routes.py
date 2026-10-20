@@ -11,7 +11,7 @@ demos (declarative agent-driven UI — no chat composer) that's a
 missing rung. This endpoint bundles write + run so a single click
 drives a full turn, end-to-end, without any user-typed message.
 
-See ``docs/design/v6.1.0/action-triggered-agent-turn.md`` for the
+See ``docs/archive/design/v6.1.0/action-triggered-agent-turn.md`` for the
 design rationale, the 8 gates, and the wire contract.
 
 Auth + access boundary (eight gates):

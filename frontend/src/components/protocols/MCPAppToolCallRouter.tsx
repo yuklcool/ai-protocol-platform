@@ -39,7 +39,7 @@ import {
 /** Sandbox proxy URL — MUST be on a different origin than the host per
  * MCP Apps spec (so the inner iframe's allow-same-origin can't read host
  * cookies). Read from NEXT_PUBLIC_MCP_SANDBOX_URL at build time; defaults
- * to the local dev port (3457). See docs/design/v6.1.0/mcp-sandbox-separate-origin.md.
+ * to the local dev port (3457). See docs/archive/design/v6.1.0/mcp-sandbox-separate-origin.md.
  */
 const SANDBOX_PROXY_URL =
   process.env.NEXT_PUBLIC_MCP_SANDBOX_URL || "http://localhost:3457/sandbox.html";

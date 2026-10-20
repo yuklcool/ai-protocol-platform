@@ -14,7 +14,7 @@ Validation (length cap) is enforced by the ``PlatformConfig`` model on the write
 path in ``config.platform_config.update_platform_config`` — an over-cap preamble
 is rejected with a 422 rather than landing in the store.
 
-See docs/design/v6.14.0/platform-preamble.md.
+See docs/archive/design/v6.14.0/platform-preamble.md.
 """
 
 from __future__ import annotations
@@ -47,9 +47,7 @@ class PlatformConfigUpdate(BaseModel):
 
     preamble: str | None = Field(default=None, max_length=PREAMBLE_MAX_LEN)
     enabled: bool | None = None
-    # The one user-facing Agent. The route remains platform-admin gated during
-    # the compatibility phase; runtime composition will consume this block in
-    # the Root Agent migration.
+    # Platform Root configuration is resolved for each authorized runtime request.
     agent: RootAgentConfig | None = None
     # Compaction tuning (1b). Sent as a whole block — its own fields are each
     # optional-and-nullable, so an admin CLEARS a lever by sending null (restore

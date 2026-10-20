@@ -1,6 +1,6 @@
 """HTTP proxy for frontend → MCP server JSON-RPC traffic.
 
-Architecture (Path A, decided 2026-04-30 — see docs/design/v6.1.0/mcp-app-integrations.md):
+Architecture (Path A, decided 2026-04-30 — see docs/archive/design/v6.1.0/mcp-app-integrations.md):
 
 The frontend's `@mcp-ui/client` MCP `Client` connects to *this* endpoint
 instead of talking to MCP servers directly. Two reasons:

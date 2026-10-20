@@ -23,7 +23,7 @@
 // SCOPE / HONESTY: jsdom green is NOT proof this renders live (both CLAUDE.mds).
 // What it proves is the tab-assembly half — given the real event on the wire,
 // Home survives and the result gets its own tab. The live half is the manual
-// gate in docs/design/v6.23.0/workspace-home-persistence.md.
+// gate in docs/archive/design/v6.23.0/workspace-home-persistence.md.
 
 import { render, screen, act, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";

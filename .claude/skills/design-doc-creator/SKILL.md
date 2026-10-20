@@ -141,7 +141,7 @@ Before defining any schema, format, protocol, or data model, check whether an es
 - [ ] Check protocol standards: AG-UI, A2UI, MCP, A2A
 - [ ] If using Claude Code patterns, check existing SKILL.md conventions
 - [ ] If a standard exists: adopt it, extend via metadata — do not reinvent
-- [ ] **If the design touches a custom↔ADK seam** (a callback, a tool result, the model layer, the AG-UI stream, a handoff), check [`adk-contract-checklist.md`](../../../docs/design/v6.17.0/adk-contract-checklist.md). Conform to ADK's control-flow contracts (turn-finality, per-member model stamping, awaited coroutines, tracker binding) rather than building a parallel mechanism — that seam is where the recurring bugs live. Any new such seam owes a hermetic "real ADK flow" guard (`make adk-conformance`).
+- [ ] **If the design touches a custom↔ADK seam** (a callback, a tool result, the model layer, the AG-UI stream, a handoff), check [`adk-contract-checklist.md`](../../../docs/archive/design/v6.17.0/adk-contract-checklist.md). Conform to ADK's control-flow contracts (turn-finality, per-member model stamping, awaited coroutines, tracker binding) rather than building a parallel mechanism — that seam is where the recurring bugs live. Any new such seam owes a hermetic "real ADK flow" guard (`make adk-conformance`).
 
 **Key standards for this project:**
 - **Skill definitions**: Agent Skills spec (`SKILL.md` format) + ADK `load_skill_from_dir()` / `SkillToolset`
@@ -155,7 +155,7 @@ Before defining any schema, format, protocol, or data model, check whether an es
 
 **5b-bis. Consider CLI Affordances (MANDATORY for any feature with developer-facing surface)**
 
-The v6 platform ships a local-dev CLI (`aitana`, see [local-dev-cli.md](../../../docs/design/v6.1.0/local-dev-cli.md)) that hosts every developer touchpoint. **Whenever you write a design doc, ask: does this feature need a CLI command to be ergonomic?** If yes, scope that command in the same doc so it ships with the feature, not as a follow-up.
+The v6 platform ships a local-dev CLI (`aitana`, see [local-dev-cli.md](../../../docs/archive/design/v6.1.0/local-dev-cli.md)) that hosts every developer touchpoint. **Whenever you write a design doc, ask: does this feature need a CLI command to be ergonomic?** If yes, scope that command in the same doc so it ships with the feature, not as a follow-up.
 
 **Heuristic — add a CLI command when the feature involves any of:**
 - A new resource type that gets created/listed/updated/deleted by developers (e.g., skills, MCP servers, datastores, evalsets, channels) — typically `aitana <resource> new/list/get/push/pull/diff`
@@ -169,7 +169,7 @@ The v6 platform ships a local-dev CLI (`aitana`, see [local-dev-cli.md](../../..
 - A small **"CLI Surface"** subsection under **Design** listing the new commands, their flags, and their position in the existing `aitana` command tree
 - A line item in the **Implementation Plan** for the CLI work (typically 0.1-0.25 day per command — Click subcommand + an httpx call + a unit test)
 - A line in **Success Criteria** asserting the new command works end-to-end
-- A backlink to [local-dev-cli.md](../../../docs/design/v6.1.0/local-dev-cli.md) under **Related Documents**
+- A backlink to [local-dev-cli.md](../../../docs/archive/design/v6.1.0/local-dev-cli.md) under **Related Documents**
 - Update `cli/services.yaml` if the feature adds a local process
 
 **When to skip:**

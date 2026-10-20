@@ -1,20 +1,12 @@
 ---
 name: mcp-app-artefact
 description: >
-  Add or modify an MCP App artefact — a hand-curated HTML/JS/WASM surface
-  rendered as a sandboxed cross-origin iframe in the workbench. Covers the
-  static-artefact path (one shared mcp-sandbox Cloud Run service, files under
-  infrastructure/mcp-sandbox/artefacts/<name>/v<version>/), the decision tree for
-  "A2UI vs MCP-App iframe", the host chain (StaticArtefactFrame → sandbox.html
-  proxy → inner iframe), CONTENT-DRIVEN iframe sizing, the two app→AI channels
-  (A2UI surface-context vs MCP iframe-context), the confidential-content +
-  ADR-013 security gates, and the Cloud Build wiring (NEXT_PUBLIC_MCP_SANDBOX_URL,
-  ALLOWED_HOST_ORIGINS). Use when the user says "add a new MCP app", "new
-  artefact", "embed an interactive visualization", "the artefact is blank/tiny",
-  "size the iframe", "the artefact can't talk to the AI", or references
-  mcp-sandbox / StaticArtefactFrame / the obligation artefact. Do NOT use for
-  declarative tool-result UI (that's A2UI — see docs/design/v6.7.0/
-  tool-results-as-a2ui.md) or agent-skills authoring (skill-creator).
+  Create or update an MCP App HTML, JavaScript or WASM surface rendered in
+  the platform's sandboxed iframe. Use for adding an MCP app or artefact,
+  embedding an interactive visualization, debugging a blank or tiny iframe,
+  resizing it, or connecting the app to the agent. Covers sandbox origin,
+  host messages and authenticated content; use A2UI mappings for declarative
+  tool-result UI.
 license: Apache-2.0
 metadata:
   author: Aitana platform (adapted from the AIPLA cphu-aipla-app fork)
@@ -40,9 +32,9 @@ what A2UI can't express:
 
 | Need | Use | Reference |
 |---|---|---|
-| Show a tool's structured result (table, cards, key-diffs) | **A2UI on the workspace** (result→A2UI mapping, generic `A2UISurfaceMount`) | `docs/design/v6.7.0/tool-results-as-a2ui.md` |
-| Collect structured input back to the AI (form, picker, confirm) | **A2UI in chat** (surface-action / surface-action-run loop) | `docs/design/v6.7.0/tool-input-elicitation-a2ui.md` |
-| Richer static layout than A2UI, still no JS | **generative-html surface** (sanitized, no scripts) | `docs/design/v6.7.0/generative-ui-surface.md` |
+| Show a tool's structured result (table, cards, key-diffs) | **A2UI on the workspace** (result→A2UI mapping, generic `A2UISurfaceMount`) | `docs/archive/design/v6.7.0/tool-results-as-a2ui.md` |
+| Collect structured input back to the AI (form, picker, confirm) | **A2UI in chat** (surface-action / surface-action-run loop) | `docs/archive/design/v6.7.0/tool-input-elicitation-a2ui.md` |
+| Richer static layout than A2UI, still no JS | **generative-html surface** (sanitized, no scripts) | `docs/archive/design/v6.7.0/generative-ui-surface.md` |
 | **Live JS / WASM / canvas / pointer-driven simulation** | **MCP-App iframe** (THIS skill) | `ppa-obligation-analysis` (WASM deontic engine) |
 
 The one live exemplar is **`ppa-obligation-analysis`** — a verified deontic

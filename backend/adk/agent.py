@@ -14,7 +14,7 @@ The factory has three layers:
   3. `create_agent(skill_config, user)` and `create_agent_with_thinking(...)`
      — assemble the above into an ADK LlmAgent with per-user callbacks.
 
-Thinking strategy (3 tiers, see docs/design/v6.0.0/agent-factory.md):
+Thinking strategy (3 tiers, see docs/archive/design/v6.0.0/agent-factory.md):
   A. Gemini only, no `thinking_model` → single agent with a planner at the
      skill's declared `thinking:` depth (off | low | dynamic; default dynamic),
      built via `config.thinking` so the 2.5-vs-3.x parameter split lives in one
@@ -1072,7 +1072,7 @@ def create_agent(
         # our before_agent_callback. The gap from agent_factory_done →
         # runner_setup_done attributes ag_ui_adk wrap + ADK runner enter
         # + plugin setup — the second-largest unexplained cost the M1
-        # baseline revealed. See docs/design/v6.1.0/ttft-optimization.md.
+        # baseline revealed. See docs/archive/design/v6.1.0/ttft-optimization.md.
         from observability.timing import STAGE_RUNNER_SETUP_DONE, get_current_tracker
 
         get_current_tracker().mark(STAGE_RUNNER_SETUP_DONE)

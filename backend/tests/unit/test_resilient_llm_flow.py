@@ -9,7 +9,7 @@ never rewritten). This drives the real `ResilientLlm.generate_content_async`
 seam: the primary raises a fallbackable error, and we assert the fallback saw its
 OWN model id, not the primary's.
 
-Part of `make adk-conformance`. See docs/design/v6.17.0/adk-contract-checklist.md.
+Part of `make adk-conformance`. See docs/archive/design/v6.17.0/adk-contract-checklist.md.
 """
 
 from __future__ import annotations

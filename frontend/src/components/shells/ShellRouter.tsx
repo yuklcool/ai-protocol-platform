@@ -29,7 +29,7 @@ export interface ShellRouterProps {
  * skill switcher) is universal — a user routed into a specialised shell is
  * never stranded without a way to navigate.
  *
- * See docs/design/v6.4.0/skill-driven-shell-modes.md.
+ * See docs/archive/design/v6.4.0/skill-driven-shell-modes.md.
  */
 export function ShellRouter({ shell, ...props }: ShellRouterProps) {
   const mode = shell?.mode ?? "chat-primary";

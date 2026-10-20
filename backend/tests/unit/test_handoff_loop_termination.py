@@ -38,7 +38,7 @@ from adk.elicitation import NEEDS_INPUT_KEY
 from db.models import DelegateRule
 
 # Part of the ADK-contract conformance gate (`make adk-conformance`): a hermetic
-# "real ADK flow" guard. See docs/design/v6.17.0/adk-contract-checklist.md (C1).
+# "real ADK flow" guard. See docs/archive/design/v6.17.0/adk-contract-checklist.md (C1).
 pytestmark = pytest.mark.adk_contract
 
 _TARGET_AGENT = "one_obligation_analysis"

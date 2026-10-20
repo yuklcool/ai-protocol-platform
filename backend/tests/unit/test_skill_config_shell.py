@@ -5,7 +5,7 @@ unknown-mode so the page-level shell declaration stays backwards-compatible
 with skills written before the `shell` field existed, while rejecting
 invalid mode values at the write boundary.
 
-See docs/design/v6.4.0/skill-driven-shell-modes.md.
+See docs/archive/design/v6.4.0/skill-driven-shell-modes.md.
 """
 
 from __future__ import annotations
