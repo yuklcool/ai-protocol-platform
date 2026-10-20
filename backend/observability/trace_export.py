@@ -1,28 +1,3 @@
-"""Cloud Trace span export (issue #39).
-
-The platform believed it was tracing. It was not: `setup_telemetry()` only
-registered a tenant-attribution *span processor* on "whichever TracerProvider is
-active", and nothing ever installed one. The OTel default is
-``ProxyTracerProvider``, which has no ``add_span_processor`` — so that wire-up
-silently no-op'd (exactly as its own comment warned it would) and no exporter
-existed anywhere in runtime code. Cloud Trace held **2 traces for test and 5 for
-dev across seven days**, which is what "not tracing" looks like.
-
-ADK and the GenAI instrumentation emit spans regardless — model calls, tool
-calls, delegations. Without an SDK provider they are created and dropped. This
-module installs the provider and the Cloud Trace exporter so they land, which
-also makes the pre-existing tenant-attribution processor start working.
-
-**Sampling.** Default is sample-everything, which is right at current volume
-(tens of turns a day) and is what makes a single reported session analysable
-after the fact. Set ``OTEL_TRACES_SAMPLER_ARG`` to a 0..1 ratio to reduce it if
-volume grows; ``TRACE_EXPORT_ENABLED=0`` disables export entirely.
-
-**Failure policy.** Every failure here is swallowed and logged. Telemetry must
-never take the request path down — if the exporter cannot start, the platform
-runs untraced rather than not at all.
-"""
-
 from __future__ import annotations
 
 import logging

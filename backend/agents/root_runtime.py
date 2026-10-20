@@ -39,37 +39,6 @@ class RootCapabilityDenied(Exception):
     """Raised when the Root Agent cannot use the requested capability."""
 
 
-def effective_root_config(config: RootAgentConfig, tenant_id: str | None) -> RootAgentConfig:
-    """Apply the tenant policy overlay; tenant lists replace platform defaults.
-
-    A tenant override is an explicit replacement for list-valued bindings, so
-    tenant-private Skills do not need to be stored in the platform-wide
-    ``skills`` list. Fields omitted by the override inherit the global value.
-    """
-    tenant = (tenant_id or "").strip()
-    override = config.tenant_overrides.get(tenant) if tenant else None
-    if override is None:
-        return config
-
-    updates: dict[str, Any] = {}
-    for field in (
-        "model",
-        "budget_enabled",
-        "instructions",
-        "skills",
-        "tools",
-        "mcp_servers",
-        "knowledge",
-        "interaction",
-        "permissions",
-        "specialist_agents",
-    ):
-        value = getattr(override, field)
-        if value is not None:
-            updates[field] = value
-    return config.model_copy(deep=True, update=updates)
-
-
 def _permission_values(permissions: dict[str, Any], *names: str) -> set[str]:
     values: set[str] = set()
     for name in names:
@@ -121,8 +90,8 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
     tool_configs = dict(metadata.tool_configs or {})
     tool_configs["root_agent"] = {"enabled": True, "budget_enabled": config.budget_enabled}
     if config.budget_enabled:
-        # A capability cannot exempt itself or choose another tenant bucket.
-        tool_configs["budget"] = {"identity_key": "tenant_id", "missing_identity_policy": "block"}
+        # A capability cannot exempt itself or choose another user bucket.
+        tool_configs["budget"] = {"identity_key": "uid", "missing_identity_policy": "block"}
 
     # Skill-level model strategy and delegation are not Root Agent policy.
     # Clear them before composing so a capability cannot smuggle in a second
@@ -155,6 +124,7 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
     tool_configs["mcp"] = {"servers": list(dict.fromkeys(config.mcp_servers))}
 
     interaction = config.interaction
+    metadata.enable_confirmation = interaction.a2ui_enabled
     a2ui = dict(tool_configs.get("a2ui") or {})
     a2ui.update(
         {
@@ -196,6 +166,5 @@ __all__ = [
     "ROOT_AGENT_ID",
     "RootCapabilityDenied",
     "compose_root_skill",
-    "effective_root_config",
     "resolve_root_capability",
 ]

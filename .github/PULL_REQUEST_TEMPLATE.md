@@ -25,7 +25,7 @@ Closes #
 - [ ] Frontend tests / typecheck
 - [ ] Relevant CI gates
 - [ ] Real Provider / MCP / browser acceptance（如适用）
-- [ ] Tenant / permission / fail-closed coverage（如适用）
+- [ ] User / permission / fail-closed coverage（如适用）
 - [ ] Migration / rollback validation（如适用）
 
 ## Evidence

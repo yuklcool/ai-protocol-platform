@@ -347,4 +347,4 @@ Existing `useSkillAgent.onRunFailed` already classifies errors. Add a `budget_ex
 - [AIPLA ADR-014](https://www.sunholo.com/aipla/architecture.html#adr-014-per-group-per-class-budget-enforcement) — the request.
 - [backend/observability/llm_metrics.py](../../../../../backend/observability/llm_metrics.py) — existing meter; budget enforcer consults the same pricing table.
 - [anonymous-group-id-auth.md](anonymous-group-id-auth.md) — sprint 2.11 (shipped 2026-05-19); provides the `group_id` identity that AIPLA's enforcer impl will key on.
-- [tenant-id-span-attribute.md](tenant-id-span-attribute.md) — sprint 2.14; budget consultations land in OTel with full attribution.
+- tenant-id-span-attribute.md — sprint 2.14; budget consultations land in OTel with full attribution.

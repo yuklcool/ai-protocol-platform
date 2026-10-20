@@ -25,7 +25,7 @@ on:
       - backend/config/models.yaml
       - backend/config/platform_config.py
       - backend/db/chat_sessions.py
-      - backend/db/clients.py
+      - backend/db/user_profiles.py
       - backend/db/folders.py
       - backend/db/persistence.py
       - backend/db/repository.py
@@ -44,12 +44,9 @@ on:
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
-      - backend/admin/clients.py
       - backend/admin/tool_permissions_routes.py
       - backend/admin/access_routes.py
-      - backend/admin/groups_routes.py
       - backend/auth/capability_access.py
-      - backend/tests/api_tests/test_permission_groups.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_upload.py
@@ -67,7 +64,6 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/storage_tests/**
       - backend/tests/unit/test_admin_audit.py
-      - backend/tests/unit/test_clients.py
       - backend/tests/unit/test_document_context_persistence.py
       - backend/tests/unit/test_document_folders_persistence.py
       - backend/tests/unit/test_permissions.py
@@ -102,7 +98,7 @@ on:
       - backend/config/models.yaml
       - backend/config/platform_config.py
       - backend/db/chat_sessions.py
-      - backend/db/clients.py
+      - backend/db/user_profiles.py
       - backend/db/folders.py
       - backend/db/persistence.py
       - backend/db/repository.py
@@ -121,12 +117,9 @@ on:
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
-      - backend/admin/clients.py
       - backend/admin/tool_permissions_routes.py
       - backend/admin/access_routes.py
-      - backend/admin/groups_routes.py
       - backend/auth/capability_access.py
-      - backend/tests/api_tests/test_permission_groups.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
       - backend/tests/api_tests/test_upload.py
@@ -144,7 +137,6 @@ on:
       - backend/tests/persistence_tests/**
       - backend/tests/storage_tests/**
       - backend/tests/unit/test_admin_audit.py
-      - backend/tests/unit/test_clients.py
       - backend/tests/unit/test_document_context_persistence.py
       - backend/tests/unit/test_document_folders_persistence.py
       - backend/tests/unit/test_permissions.py
@@ -251,11 +243,9 @@ jobs:
               tests/persistence_tests/test_group_auth_repository.py \
               tests/persistence_tests/test_mcp_registry_repository.py \
               tests/unit/test_admin_audit.py \
-              tests/unit/test_clients.py \
               tests/unit/test_permissions.py \
               tests/unit/test_skill_config.py \
               tests/unit/test_platform_config.py \
-              tests/api_tests/test_permission_groups.py \
               tests/api_tests/test_sessions_recent.py \
               tests/api_tests/test_sessions_route.py
           docker compose run --rm --no-deps \
@@ -263,11 +253,11 @@ jobs:
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
             -e GROUP_AUTH_SIGNING_SECRET=ci-group-auth-repository-secret \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, accounts_routes, access_routes, groups_routes; from auth import group_id_auth, permissions; from config import platform_config; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); platform_config.invalidate_cache(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit, accounts_routes, access_routes; from auth import group_id_auth, permissions; from config import platform_config; from db import chat_sessions, folders, user_profiles; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); platform_config.invalidate_cache(); print('user-owned persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
-          docker compose up -d postgres
+          docker compose up -d --wait postgres
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
@@ -294,12 +284,12 @@ jobs:
             -e OBJECT_STORAGE_BACKEND=local \
             -e OBJECT_STORAGE_LOCAL_ROOT=/data/objects \
             -e ADK_ARTIFACT_ROOT=/data/artifacts \
-            backend uv run python -c "import asyncio; from google.genai import types; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; from auth.models import User; from observability.tenant_context import set_tenant_context; set_tenant_context(User(uid='ci-user', tenant_id='ci-tenant')); s=get_object_storage(); i=s.put_bytes('ci-tenant','restart/probe.bin',b'volume-survives'); assert i.size==15; a=get_artifact_service(); asyncio.run(a.save_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt',artifact=types.Part.from_text(text='artifact-survives'))); print('local object/artifact write OK')"
+            backend uv run python -c "import asyncio; from google.genai import types; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; from auth.models import User; from observability.user_context import set_user_context; set_user_context(User(uid='ci-user')); s=get_object_storage(); i=s.put_bytes('ci-user','restart/probe.bin',b'volume-survives'); assert i.size==15; a=get_artifact_service(); asyncio.run(a.save_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt',artifact=types.Part.from_text(text='artifact-survives'))); print('local object/artifact write OK')"
           docker compose run --rm --no-deps \
             -e OBJECT_STORAGE_BACKEND=local \
             -e OBJECT_STORAGE_LOCAL_ROOT=/data/objects \
             -e ADK_ARTIFACT_ROOT=/data/artifacts \
-            backend uv run python -c "import asyncio; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; from auth.models import User; from observability.tenant_context import set_tenant_context; set_tenant_context(User(uid='ci-user', tenant_id='ci-tenant')); s=get_object_storage(); assert s.get_bytes('ci-tenant','restart/probe.bin')==b'volume-survives'; a=get_artifact_service(); p=asyncio.run(a.load_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); assert p is not None and p.text=='artifact-survives'; s.delete('ci-tenant','restart/probe.bin'); asyncio.run(a.delete_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); print('local object/artifact restart read OK')"
+            backend uv run python -c "import asyncio; from object_storage import get_object_storage; from adk.artifact_backend import get_artifact_service; from auth.models import User; from observability.user_context import set_user_context; set_user_context(User(uid='ci-user')); s=get_object_storage(); assert s.get_bytes('ci-user','restart/probe.bin')==b'volume-survives'; a=get_artifact_service(); p=asyncio.run(a.load_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); assert p is not None and p.text=='artifact-survives'; s.delete('ci-user','restart/probe.bin'); asyncio.run(a.delete_artifact(app_name='aitana_platform',user_id='ci-user',session_id='ci-session',filename='probe.txt')); print('local object/artifact restart read OK')"
 
       - name: Verify ADK Session, Memory and A2UI resume survive PostgreSQL reconstruction
         run: |

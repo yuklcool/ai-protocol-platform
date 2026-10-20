@@ -36,23 +36,6 @@ const AREAS: Area[] = [
     ],
   },
   {
-    href: "/admin/tenants",
-    title: "admin.area.tenant.title",
-    question: "admin.area.tenant.question",
-    links: [
-      {
-        href: "/admin/tenants",
-        label: "admin.area.tenant.config",
-        note: "admin.area.tenant.configNote",
-      },
-      {
-        href: "/admin/tenants",
-        label: "admin.area.tenant.effective",
-        note: "admin.area.tenant.effectiveNote",
-      },
-    ],
-  },
-  {
     href: "/admin/users",
     title: "admin.area.people.title",
     question: "admin.area.people.question",
@@ -61,11 +44,6 @@ const AREAS: Area[] = [
         href: "/admin/users",
         label: "admin.area.people.users",
         note: "admin.area.people.usersNote",
-      },
-      {
-        href: "/admin/groups",
-        label: "admin.area.people.groups",
-        note: "admin.area.people.groupsNote",
       },
     ],
   },
@@ -133,7 +111,7 @@ const AREAS: Area[] = [
 export default function AdminHub() {
   const { t } = useI18n();
   const { user, loading } = useAuth();
-  const { state, tenantIds, isAdmin, isPlatform, recheck } = useAdminScope(
+  const { state, isAdmin, isPlatform, recheck } = useAdminScope(
     !loading && !!user,
   );
 
@@ -187,11 +165,6 @@ export default function AdminHub() {
         <div>
           <h1 className="text-xl font-semibold">{t("admin.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("admin.subtitle")}</p>
-          {!isPlatform && tenantIds.length > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("admin.scopedTo", { domains: tenantIds.join(", ") })}
-            </p>
-          )}
         </div>
         <LanguageSwitcher />
       </header>

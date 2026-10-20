@@ -182,7 +182,6 @@ def build_agui_adk_agent(
     # `app_name` rides on the same copy (the App owns the name under `from_app`).
     # Construct the App from the already-authorized request agent. Importing
     # backend/app.py here also constructs its unrelated bootstrap model under
-    # the current tenant policy; a tenant allowing only its gateway model then
     # fails before any request even when its Root model is configured correctly.
     from google.adk.apps import App
 

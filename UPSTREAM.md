@@ -7,13 +7,13 @@ This repository is a long-lived self-hosted fork of:
 - Fork: `yuklcool/ai-protocol-platform`
 - Fork integration branch: `main`
 
-The goal is to keep receiving upstream ADK, AG-UI, A2UI, MCP/MCP Apps and frontend improvements without re-implementing the fork's Self-host, persistence, identity, tenant, model-provider and release work after every upstream update.
+The goal is to keep receiving upstream ADK, AG-UI, A2UI, MCP/MCP Apps and frontend improvements without re-implementing the fork's Self-host, persistence, identity, user, model-provider and release work after every upstream update.
 
 ## Core rule
 
 **Never merge upstream directly into `main`.**
 
-Every upstream update goes through a temporary `sync/upstream-YYYYMMDD[-N]` branch and a normal pull request. The sync PR must pass the same server-authoritative Self-host/Tenant/MCP/Provider regressions as any other architecture-changing PR before it can be merged.
+Every upstream update goes through a temporary `sync/upstream-YYYYMMDD[-N]` branch and a normal pull request. The sync PR must pass the same server-authoritative Self-host/User/MCP/Provider regressions as any other architecture-changing PR before it can be merged.
 
 The frozen deployment branch `deploy/2026-09-15` must never be moved by upstream synchronization.
 
@@ -41,7 +41,7 @@ Self-host-specific behavior should live here (or in equivalent provider/adapter 
 - object/artifact storage adapters
 - model Provider Registry/runtime model resolver
 - MCP Server Registry/Admin configuration
-- first-class Tenant/policy/audit/budget enforcement
+- verified user ownership, shared Agent policy and audit
 - Self-host Compose/release/migration scripts
 - admin/configuration UI surfaces
 
@@ -56,7 +56,7 @@ The following files/directories are intentionally customized and require explici
 - `SELFHOST.md`, `HANDOFF.md`, `UPSTREAM.md`
 - `backend/config/` and runtime provider/persistence/auth wiring
 - admin routes and admin frontend pages
-- tenant authorization/policy enforcement
+- user authorization/policy enforcement
 - release and self-host GitHub Actions
 - branding/i18n configuration
 
@@ -68,8 +68,8 @@ Do not resolve these conflicts with a blanket `ours` or `theirs` strategy.
 2. PostgreSQL remains the default durable structured-state backend.
 3. Local persistent volume remains the default object/artifact storage path.
 4. `local-jwt` remains the default Self-host identity provider; Firebase/GCP remain optional adapters.
-5. Tenant/Auth/Permission decisions remain server-authoritative and fail closed.
-6. Browser-provided tenant/role/group claims are never treated as authorization truth.
+5. User/Auth/Permission decisions remain server-authoritative and fail closed.
+6. Browser-provided user/role/group claims are never treated as authorization truth.
 7. Dynamic models continue through the unified model registry/runtime resolver.
 8. MCP credentials and Provider API-key references are never returned as plaintext.
 9. MCP Apps keep a separate sandbox origin.
@@ -113,7 +113,7 @@ Classify incoming changes before resolving them:
 - protocol/runtime: ADK, AG-UI, A2UI, MCP/MCP Apps
 - frontend/UI
 - persistence/storage
-- auth/tenant/security
+- auth/user/security
 - model/provider
 - deployment/release
 - docs/examples
@@ -139,7 +139,7 @@ A sync PR is not mergeable by process until the applicable existing gates are gr
 - Self-host auth baseline
 - Self-host no-GCP gate
 - Core runtime persistence
-- Tenant isolation / Tenant live self-host acceptance
+- User isolation / User live self-host acceptance
 - MCP admin gate
 - MCP live self-host acceptance (including browser sandbox coverage where triggered)
 - Model provider gate
@@ -147,7 +147,7 @@ A sync PR is not mergeable by process until the applicable existing gates are gr
 
 If release files are touched, `Self-host release images` must also pass. If a real-Provider boundary is changed, run the manual real Provider acceptance before calling that boundary verified.
 
-CI that uses fixtures does not substitute for an explicitly required real external Provider or target-deployment migration acceptance.
+CI that uses fixtures does not substitute for an explicitly required real external Provider or target-deployment acceptance.
 
 ### 6. Merge and record
 
@@ -168,9 +168,9 @@ This is an architecture-level log, not a list of every changed file. Update it w
 | Session/Memory | PostgreSQL-backed ADK Session and durable Memory | Minimize default infrastructure | Preserve ADK semantics while mapping new upstream event/state fields into the PostgreSQL adapter |
 | Object/Artifact storage | Local volume default, cloud adapters optional | Minimal Self-host stack | Do not hard-code local paths into upstream protocol code |
 | Identity | Built-in PostgreSQL/local-JWT default, external IdPs optional | Self-host must start without Firebase | Upstream auth changes enter through the IdentityProvider boundary; authorization stays server-side |
-| Tenant boundary | Explicit stable `tenant_id`, fail-closed resource/policy isolation | Domain-only ownership is insufficient | Never weaken stable tenant scoping to accept browser/domain guesses |
+| User boundary | Explicit stable `user_id`, fail-closed resource/policy isolation | Domain-only ownership is insufficient | Never weaken stable user scoping to accept browser/domain guesses |
 | Model routing | Dynamic Provider/Model Registry with per-provider Base URL + secret ref | Multiple OpenAI-compatible/self-host gateways | Reconcile upstream model features through the unified resolver rather than model-name heuristics |
-| MCP management | Persisted MCP Registry/Admin + tenant scope + skill binding/proxy | Self-host configuration without source edits | Preserve MCP protocol compatibility; credentials remain write-only/redacted |
+| MCP management | Shared MCP Registry/Admin + Agent bindings/proxy | Self-host configuration without source edits | Preserve MCP protocol compatibility; credentials remain write-only/redacted |
 | Self-host deployment | PostgreSQL + backend + frontend + separate MCP sandbox, minimal dependencies | Production-style no-GCP default | Do not add Redis/MinIO/Keycloak/etc. as mandatory dependencies without an explicit architecture decision |
 | Release | Versioned prebuilt Self-host images/release Compose | No-clone deployment path | Release changes must pass Self-host release gates and preserve separate sandbox origin |
 | Branding/i18n | Configuration layer preferred over source-wide product-name edits | Reduce future upstream conflicts | New product copy should be configurable; legal attribution/licensing remains intact |

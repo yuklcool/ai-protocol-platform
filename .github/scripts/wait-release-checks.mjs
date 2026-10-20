@@ -1,6 +1,7 @@
 // Release only the exact commit that passed the operation and persistence gates.
 const workflows = [
   "ci.yml",
+  "user-ownership.yml",
   "core-runtime-persistence.yml",
   "model-provider-gate.yml",
   "a2ui-live-acceptance.yml",

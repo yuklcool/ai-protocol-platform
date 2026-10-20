@@ -1,38 +1,3 @@
-"""HTTP proxy for frontend → MCP server JSON-RPC traffic.
-
-Architecture (Path A, decided 2026-04-30 — see docs/archive/design/v6.1.0/mcp-app-integrations.md):
-
-The frontend's `@mcp-ui/client` MCP `Client` connects to *this* endpoint
-instead of talking to MCP servers directly. Two reasons:
-
-  1. **Auth boundary** — the user's Bearer token validates HERE; the upstream
-     MCP server never sees it. Servers carry their own auth via the
-     `headers` config field on `mcp_servers/{server_id}` (e.g. an HMAC
-     secret, OAuth bearer issued for the proxy).
-  2. **Root Agent 授权** — 只允许当前租户有效 Root 配置绑定的服务器。
-     空列表表示无 MCP 权限,不再扫描 Skill 或读取旧绑定。
-
-The proxy is intentionally a dumb forwarder: it does not parse JSON-RPC, does
-not introspect methods, does not maintain a session pool. The frontend's MCP
-`Client` does the protocol work; the proxy just relays bytes (with the right
-content-type + body) and enforces the auth + allowlist.
-
-Two MCP clients to keep straight:
-  * The **agent's** McpToolset — talks to the upstream server directly via
-    ``backend/tools/mcp/registry.py``. UI capability declaration lives there.
-  * The **frontend's** Client — talks to *this proxy*. The frontend's own
-    `initialize` request carries its capabilities in the JSON-RPC body, so
-    they flow through automatically.
-
-Errors:
-  * 401 — missing/invalid Bearer token (handled upstream by `get_current_user`)
-  * 403 — server is outside the effective Root Agent bindings
-  * 404 — `server_id` not registered or not visible to the caller's tenant
-  * 502 — upstream returned 5xx
-  * 504 — upstream timed out
-  * 4xx — forwarded verbatim from upstream (the JSON-RPC error body explains)
-"""
-
 from __future__ import annotations
 
 import json
@@ -43,7 +8,6 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from auth import User, get_current_user
-from auth.access_context import build_access_context
 from auth.capability_access import authorized_root_config, mcp_call_allowed
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.persistence import get_document
@@ -53,7 +17,7 @@ from protocols.artefact_review import (
     get_registered_artefact_reviewer,
 )
 from tools.mcp.registry import UnresolvedHeaderSecret, _resolve_header_secrets
-from tools.mcp.tenant_scope import mcp_config_visible_to_tenant
+from tools.mcp.scope import mcp_config_enabled
 
 log = logging.getLogger(__name__)
 
@@ -125,12 +89,9 @@ async def _forward(*, server_id: str, request: Request, user: User, method: str)
     three; auth + allowlist gates apply uniformly.
     """
     # Derive identity from the verified user, never headers/body or ambient metadata.
-    tenant_id = build_access_context(user).tenant_id
-    if not tenant_id:
-        raise HTTPException(status_code=403, detail="Tenant context required for MCP server")
 
     server_config = get_document(_MCP_COLLECTION, server_id)
-    if not mcp_config_visible_to_tenant(server_config, tenant_id):
+    if not mcp_config_enabled(server_config):
         log.info("mcp_proxy: unknown server_id=%s caller_uid=%s", server_id, user.uid)
         raise HTTPException(status_code=404, detail=f"MCP server '{server_id}' not registered")
 

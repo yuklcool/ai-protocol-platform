@@ -1,12 +1,3 @@
-"""In-memory repository used by LOCAL_MODE and persistence contract tests.
-
-``MemoryRepository()`` is intentionally an isolated repository instance.  The
-LOCAL_MODE fixture store is shared only when the persistence factory explicitly
-injects ``db.firestore.get_client()``.  Keeping that choice out of this adapter
-prevents environment variables from silently changing repository semantics in
-unit tests, migration tools, tenant wrappers, or other direct callers.
-"""
-
 from __future__ import annotations
 
 from typing import Any

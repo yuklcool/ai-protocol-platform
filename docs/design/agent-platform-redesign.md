@@ -1,7 +1,7 @@
 # AI Protocol Platform — 产品重设计方案
 
-> 状态：Proposal  
-> Target：v1.1 — Platform Productization  
+> 状态：Proposal
+> Target：v1.1 — Platform Productization
 > Parent Epic：#74
 > 日期：2026-09-20
 
@@ -14,7 +14,7 @@
 
 ## 1. 重设计目标
 
-当前平台已经具备 Model Provider、Skill、Native Tools、MCP/MCP Apps、AG-UI、A2UI、Tenant、Tool Permission、Session/Memory 等底层能力，但产品层仍以历史 Skill Studio / Admin 页面为中心组织，导致用户必须理解内部数据结构才能完成 Agent 配置。
+当前平台已经具备 Model Provider、Skill、Native Tools、MCP/MCP Apps、AG-UI、A2UI、User、Tool Permission、Session/Memory 等底层能力，但产品层仍以历史 Skill Studio / Admin 页面为中心组织，导致用户必须理解内部数据结构才能完成 Agent 配置。
 
 本方案不继续在旧页面上叠加字段，而是把产品重新定义为三层：
 
@@ -28,7 +28,7 @@ Skills / Tools / MCP / Models / Knowledge / Secrets
 
 Administration
 负责：治理
-Tenant / User / Group / Permission / Usage / Audit
+User / User / Group / Permission / Usage / Audit
 ```
 
 Developer 能力单独收口，用于 Playground、A2UI、MCP Apps、协议调试和 Demo，不再污染主用户路径。
@@ -76,7 +76,7 @@ Resources
   Secrets
 
 Administration
-  Tenants
+  Users
   Users & Groups
   Permissions
   Usage
@@ -220,7 +220,7 @@ Capabilities
 - URL
 - Transport
 - Authentication
-- Tenant / Platform scope
+- User / Platform scope
 - Health
 - Discovery
 - Tools / Resources / Prompts
@@ -263,7 +263,7 @@ MCP Admin 不再以“选 Skill 再绑定”为主操作。
 
 ```text
 Root Agent capability ceiling
-∩ Tenant policy
+∩ User policy
 ∩ Group policy
 ∩ User permission
 = Effective runtime access
@@ -271,7 +271,7 @@ Root Agent capability ceiling
 
 展示：
 - Visibility
-- Tenant / Group / User
+- User / Group / User
 - Model effective access
 - Tool effective access
 - MCP effective access
@@ -357,7 +357,7 @@ Resources
 /resources/knowledge
 /resources/secrets
 
-/admin/tenants
+/admin/users
 /admin/users
 /admin/groups
 /admin/permissions

@@ -49,9 +49,7 @@ export type Current = {
   root_model: string;
   root_model_id: string | null;
   root_api_name: string | null;
-  tenant_model_id: string | null;
-  tenant_api_name: string | null;
-  tenant_allowed: boolean;
+  allowed: boolean;
 };
 export type Discovery = Check & {
   models: string[];

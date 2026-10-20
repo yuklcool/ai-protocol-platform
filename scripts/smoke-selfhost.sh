@@ -89,7 +89,7 @@ printf '\nProvider-dependent acceptance still required separately:\n'
 printf '  [ ] Run a normal chat/Runtime Skill turn against a real Provider\n'
 printf '  [ ] Confirm real Provider Tool Calling\n'
 printf '  [ ] Confirm a real model chooses and executes a bound MCP Tool\n'
-printf '  [ ] Verify final Tenant quota / Tool Permission / Model Policy on that live path\n\n'
+printf '  [ ] Verify final User ownership / Agent tool bindings / Model configuration on that live path\n\n'
 
 if [ "$failures" -gt 0 ]; then
   echo "Smoke test failed with $failures blocking check(s)." >&2

@@ -13,7 +13,7 @@ and add an opt-in email-domain allowlist so the ONE deployment admits only
 
 | # | Doc | Priority | Est. | Depends on | Notes |
 |---|-----|----------|------|------------|-------|
-| 1 | [tenant-scoped-data-access](tenant-scoped-data-access.md) | P0 | ~1.5–2d | v6.3.0 client-tenant + bucket accessControl ✅; **coordinates with issue [#31](https://github.com/sunholo-data/ai-protocol-platform/issues/31)** (upload/write-side sibling — same incident) | Phase 1 (bucket authz) is the leak and ships first, on-by-default. Phase 2 (domain allowlist) is flag-gated. Phase 3 enables on dev/test; the **#31-coordinated `TENANT_FALLBACK_FAIL_CLOSED` flip** is deferred and has **no bucket precondition** (operators are admins → read via bypass, don't upload). **Prod deferred** (frozen pending v5/v6 Firestore de-risk). |
+| 1 | tenant-scoped-data-access | P0 | ~1.5–2d | v6.3.0 client-tenant + bucket accessControl ✅; **coordinates with issue [#31](https://github.com/sunholo-data/ai-protocol-platform/issues/31)** (upload/write-side sibling — same incident) | Phase 1 (bucket authz) is the leak and ships first, on-by-default. Phase 2 (domain allowlist) is flag-gated. Phase 3 enables on dev/test; the **#31-coordinated `TENANT_FALLBACK_FAIL_CLOSED` flip** is deferred and has **no bucket precondition** (operators are admins → read via bypass, don't upload). **Prod deferred** (frozen pending v5/v6 Firestore de-risk). |
 
 ## Timeline estimate
 

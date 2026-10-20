@@ -15,7 +15,7 @@
 | `/skills` | 列表、加载与空状态、进入 Studio |
 | `/skills/studio/new` | 编辑器、可换行工具栏、配置控件 |
 | `/admin` | 管理入口与权限状态 |
-| `/admin/tenants` | 租户列表、创建表单、Agent 策略 |
+| `/admin/users` | 用户列表、创建表单、Agent 策略 |
 | `/admin/users` | 用户列表、表单、有效权限 |
 | `/admin/groups` | 权限组列表、资源勾选 |
 | `/admin/mcp-servers` | 服务、诊断、错误、工具/资源/应用信息 |
@@ -34,7 +34,7 @@
 ## 关键操作
 
 - 响应式用例：手机打开导航、Escape 关闭、焦点返回、切换模型页、填写服务表单；对话文件侧栏打开和关闭。轮询页面按标题或编辑控件就绪验收，不等待网络空闲。
-- `root-console-live.spec.js`：租户、账号、权限组、知识、撤销及普通成员拒绝。
+- `root-console-live.spec.js`：用户账号、权限组、知识、撤销及普通成员拒绝。
 - `model-setup-live.spec.js`：模型服务接入、测试、重测、刷新、手机表单、产品对话发出实际 HTTP 模型请求。
 - `chat-files-live.spec.js`：真实附件上传、解析、选择、移除、刷新恢复与会话隔离。
 - 原 MCP 与 A2UI 端到端门禁：真实工具/资源请求、动作提交、持久化与刷新恢复。

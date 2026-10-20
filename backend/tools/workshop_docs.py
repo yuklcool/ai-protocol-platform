@@ -156,35 +156,6 @@ def _snippet(doc: dict, tokens: list[str]) -> str:
 
 
 def search_workshop_docs(query: str, max_results: int = 4) -> str:
-    """Search the workshop docs corpus for content matching a query.
-
-    Use this whenever the user asks about:
-    - Workshop agenda, code tour, protocol gotchas, pre-work
-    - How AG-UI, A2UI, MCP Apps, A2A, or ADK work in this platform
-    - Sprint design decisions in v6.0.0, v6.1.0, or v6.2.0
-    - Fork-adoption howtos for budget, artefact review, tenant attribution,
-      anonymous-group auth, channels, multi-surface rendering
-
-    Returns formatted top-matching documents with:
-    - File path (clickable in the workshop repo)
-    - Title (from the doc's `# Heading`)
-    - Snippet around the first match
-
-    Cite the path in your answer so the user can read the source. If no
-    documents match, say so — DO NOT invent facts. Real ground-truth
-    answers grounded in the repo are more valuable than confident
-    hallucinations.
-
-    Args:
-        query: Free-text search terms. Multiple keywords are scored
-            additively (more matches = higher rank). Title matches weigh
-            more than body matches.
-        max_results: Number of top hits to return. Default 4. Keep small
-            (≤6) so the prompt stays focused.
-
-    Returns:
-        Markdown-formatted results, or a "no matches" message.
-    """
     docs = _load_index()
     tokens = _tokenise(query)
     if not tokens:

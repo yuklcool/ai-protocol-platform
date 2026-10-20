@@ -33,7 +33,7 @@ End-state: peer agents and Gemini Enterprise can both push files INTO and query 
 | EARNED TRUST | +2 | "Agent silently sees empty document_ids" is the worst possible trust failure — close it BEFORE more forks hit it |
 | SKILLS NOT FEATURES | +1 | File-aware skills now work over A2A without per-skill plumbing — the artifact contract stays the same |
 | RIGHT MODEL RIGHT MOMENT | 0 | Orthogonal |
-| GRACEFUL DEGRADATION | +2 | Tools return `[]` / `ok=False` when no bucket bound; interceptor no-ops when disabled; single-tenant deploys that don't use the feature pay zero cost |
+| GRACEFUL DEGRADATION | +2 | Tools return `[]` / `ok=False` when no bucket bound; interceptor no-ops when disabled; single-user deploys that don't use the feature pay zero cost |
 | PROTOCOL OVER CUSTOM | +2 | A2A `FilePart` is the spec; ADK's `A2aAgentExecutorConfig.execute_interceptors` is the canonical extension point. The Friction 30 anti-pattern (custom `metadata` field) is explicitly rejected in favour of standard env-var config |
 | API FIRST | +1 | Two new tools (`list_org_documents`, `read_org_document`) become invocable from the agent loop, no UI gymnastics |
 | OBSERVABLE | +1 | Interceptor logs `logger.info` on every FilePart processed; clear "interceptor ran but no FileParts" vs "interceptor didn't run at all" disambiguation |
@@ -112,11 +112,11 @@ The interceptor matches what `convert_a2a_part_to_genai_part` would have done, b
 
 Forks that don't serve file-aware skills shouldn't pay for filesystem writes per A2A call. Default `ENABLE_A2A_FILE_INPUT=false`; opt in by setting the env var. The interceptor short-circuits to a no-op return when disabled, so the cost is one `os.environ.get()` per request.
 
-### Why org bucket is single-tenant (Scenario B + Friction 30)
+### Why org bucket is single-user (Scenario B + Friction 30)
 
-The cleanest tenant-scoping for org documents would be per-registration metadata on the Discovery Engine Agent resource — "this registration is bound to bucket X". Friction 30 documents the standards check: the Agent resource schema has no `metadata` field. PATCHing one returns `INVALID_ARGUMENT: Unknown name "metadata" at 'agent'`.
+The cleanest user-scoping for org documents would be per-registration metadata on the Discovery Engine Agent resource — "this registration is bound to bucket X". Friction 30 documents the standards check: the Agent resource schema has no `metadata` field. PATCHing one returns `INVALID_ARGUMENT: Unknown name "metadata" at 'agent'`.
 
-For now: one env var per deploy, `A2A_AGENT_DOCUMENTS_BUCKET=gs://...`. All peers reaching this deploy share the same bucket. Multi-tenant forks needing per-call bucket lookup must wait for Google to add a peer-identification header (none observed yet on GE traffic) and implement a Firestore-keyed lookup themselves. The design ships the documented fork extension point; doesn't implement the multi-tenant path.
+For now: one env var per deploy, `A2A_AGENT_DOCUMENTS_BUCKET=gs://...`. All peers reaching this deploy share the same bucket. Multi-user forks needing per-call bucket lookup must wait for Google to add a peer-identification header (none observed yet on GE traffic) and implement a Firestore-keyed lookup themselves. The design ships the documented fork extension point; doesn't implement the multi-user path.
 
 ## CLI Surface
 
@@ -199,7 +199,7 @@ aiplatform a2a probe-org-bucket
 The real interop test that takes the longest to set up but catches the most:
 
 1. Upload a `.docx` through the Gemini Enterprise workspace UI targeting our registered agent
-2. Watch backend logs for `file_extraction.py: persisted doc:abc123 from FilePart` 
+2. Watch backend logs for `file_extraction.py: persisted doc:abc123 from FilePart`
 3. Agent's response references the document's content (not "I see no attachments")
 4. Org bucket: ask "what historical invoices do you know about?" → agent calls `list_org_documents` → reads the most relevant → answers grounded in its content
 
@@ -232,7 +232,7 @@ If step 2 doesn't log but the deploy is correct, the interceptor isn't running �
 
 4. **What happens if `A2A_AGENT_DOCUMENTS_BUCKET` is set but the SA lacks objectViewer?** The tools should fail gracefully — log warning, return `[]` from `list_org_documents`, return `{"ok": False}` from `read_org_document`. NOT 500 the agent turn. Important for "I set the env but forgot the IAM grant" debugging.
 
-5. **Multi-tenant per-call bucket lookup** — explicitly out of scope per Friction 30. Document the Firestore-lookup pattern as a fork extension; don't implement.
+5. **Multi-user per-call bucket lookup** — explicitly out of scope per Friction 30. Document the Firestore-lookup pattern as a fork extension; don't implement.
 
 ## Sprint Plan + JSON
 

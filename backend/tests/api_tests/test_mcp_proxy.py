@@ -17,37 +17,30 @@ from protocols import mcp_proxy
 @pytest.fixture
 def setup(monkeypatch):
     user = User(
-        uid="viewer", email="viewer@example.com", tenant_id="tenant-a", permission_group_ids=frozenset({"maps"})
+        uid="viewer",
+        email="viewer@example.com",
     )
-    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
     from db.persistence import get_repository, reset_repository_for_testing
     from db.repositories.memory import MemoryRepository
-    from db.tenants import TenantConfig, TenantDirectory
 
     reset_repository_for_testing(MemoryRepository())
     repo = get_repository()
     ids = ["map-server", "map", "private", "global"]
-    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledMcpServers=ids))
-    repo.set_document(
-        GROUP_COLLECTION,
-        "maps",
-        PermissionGroup(id="maps", tenantId="tenant-a", label="maps", mcpServers=ids).model_dump(by_alias=True),
-    )
     for ref in ids:
-        repo.set_document(
-            "mcp_servers", ref, {"scope": "platform", "enabled": True, "url": "https://mcp.example.test/mcp"}
-        )
+        repo.set_document("mcp_servers", ref, {"enabled": True, "url": "https://mcp.example.test/mcp"})
     app = FastAPI()
     app.include_router(mcp_proxy.router)
 
     async def identity(request: Request):
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = identity
     root = RootAgentConfig(mcpServers=["map-server"])
     server = {
-        "scope": "platform",
         "enabled": True,
         "url": "https://upstream.example.com/mcp",
         "headers": {"x-server-secret": "server-secret"},
@@ -94,17 +87,6 @@ def test_unbinding_takes_effect_on_next_request(setup):
     root.mcp_servers.clear()
     assert client.get("/mcp/map-server").status_code == 403
     assert upstream.request.call_count == 1
-
-
-def test_tenant_override_replaces_global_binding(setup):
-    client, root, server, _ = setup
-    from db.models.root_agent import RootAgentTenantOverride
-
-    root.mcp_servers = ["global"]
-    root.tenant_overrides = {"tenant-a": RootAgentTenantOverride(mcpServers=["private"])}
-    server.update(scope="tenant", tenantId="tenant-a")
-    assert client.get("/mcp/private").status_code == 200
-    assert client.get("/mcp/global").status_code == 403
 
 
 @pytest.mark.parametrize("fields", [{"enabled": False}, {"scope": "tenant", "tenantId": "tenant-b"}])

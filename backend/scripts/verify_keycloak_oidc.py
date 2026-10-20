@@ -20,7 +20,6 @@ CLIENT_ID = os.environ.get("OIDC_CLIENT_ID", "ai-protocol-platform")
 USERNAME = os.environ.get("KEYCLOAK_TEST_USERNAME", "oidc-admin")
 PASSWORD = os.environ.get("KEYCLOAK_TEST_PASSWORD", "oidc-demo-password")
 LOCAL_EMAIL = os.environ.get("KEYCLOAK_TEST_EMAIL", "owner@example.com")
-TENANT_ID = os.environ.get("KEYCLOAK_TEST_TENANT", "tenant-keycloak")
 
 
 async def main() -> None:
@@ -34,8 +33,6 @@ async def main() -> None:
     local = create_local_user(
         email=LOCAL_EMAIL,
         password="compatibility-only-local-password",
-        tenant_id=TENANT_ID,
-        group_tags={f"tenant-admin:{TENANT_ID}"},
     )
 
     discovery_url = f"{ISSUER}/.well-known/openid-configuration"
@@ -70,14 +67,11 @@ async def main() -> None:
 
     assert resolved.uid == local.uid
     assert resolved.email == LOCAL_EMAIL
-    assert resolved.tenant_id == TENANT_ID
-    assert resolved.group_tags == frozenset({f"tenant-admin:{TENANT_ID}"})
     assert resolved.auth_mode == "oidc"
 
     print("Keycloak OIDC compatibility acceptance OK")
     print(f"issuer={ISSUER}")
     print(f"subject={subject}")
-    print(f"tenant={resolved.tenant_id}")
 
 
 if __name__ == "__main__":

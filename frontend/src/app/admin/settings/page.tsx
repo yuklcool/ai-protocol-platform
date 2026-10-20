@@ -213,7 +213,7 @@ export default function PlatformSettingsPage() {
 
       <p className="mt-4 text-xs text-muted-foreground">
         This text is sent to every model provider on every turn, for every skill
-        and tenant. Keep it generic — anything customer- or skill-specific
+        and user. Keep it generic — anything customer- or skill-specific
         belongs in that skill instead.
       </p>
 

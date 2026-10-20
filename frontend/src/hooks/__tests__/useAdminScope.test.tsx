@@ -3,7 +3,7 @@
 // The property worth protecting: "you are not an admin" and "we couldn't find
 // out" must stay DIFFERENT states. Collapsing them is what the old
 // probe-a-data-endpoint approach did, and it produced two bugs at once — a
-// tenant admin told they had no access, and a backend outage silently
+// newly authorized admin told they had no access, and a backend outage silently
 // indistinguishable from a permissions denial.
 
 import { renderHook, waitFor } from "@testing-library/react";
@@ -26,7 +26,7 @@ vi.mock("@/lib/apiClient", () => ({
 
 import { fetchWithAuth } from "@/lib/apiClient";
 
-function mockWhoAmI(body: { scope: string; tenantIds?: string[] }) {
+function mockWhoAmI(body: { scope: string }) {
   vi.mocked(fetchWithAuth).mockResolvedValue({
     ok: true,
     status: 200,
@@ -37,31 +37,21 @@ function mockWhoAmI(body: { scope: string; tenantIds?: string[] }) {
 describe("useAdminScope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    auth.user = { email: "u@x.com" };
+    auth.user = { uid: "test-user", email: "u@x.com" };
     auth.loading = false;
   });
 
   it("resolves platform scope", async () => {
-    mockWhoAmI({ scope: "platform", tenantIds: [] });
+    mockWhoAmI({ scope: "platform" });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("platform"));
     expect(result.current.isAdmin).toBe(true);
     expect(result.current.isPlatform).toBe(true);
   });
 
-  it("resolves tenant scope with its tenantIds", async () => {
-    mockWhoAmI({ scope: "tenant", tenantIds: ["a.com"] });
-    const { result } = renderHook(() => useAdminScope());
-    await waitFor(() => expect(result.current.state).toBe("tenant"));
-    expect(result.current.isAdmin).toBe(true);
-    // A tenant admin is an admin, but NOT a platform admin — platform-only
-    // surfaces gate on this distinction.
-    expect(result.current.isPlatform).toBe(false);
-    expect(result.current.tenantIds).toEqual(["a.com"]);
-  });
 
   it("resolves 'none' for a signed-in non-admin", async () => {
-    mockWhoAmI({ scope: "none", tenantIds: [] });
+    mockWhoAmI({ scope: "none" });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("none"));
     expect(result.current.isAdmin).toBe(false);
@@ -85,7 +75,7 @@ describe("useAdminScope", () => {
   });
 
   it("treats an unrecognised scope value as 'none' rather than trusting it", async () => {
-    mockWhoAmI({ scope: "superuser", tenantIds: [] });
+    mockWhoAmI({ scope: "superuser" });
     const { result } = renderHook(() => useAdminScope());
     await waitFor(() => expect(result.current.state).toBe("none"));
     expect(result.current.isAdmin).toBe(false);
@@ -118,10 +108,4 @@ describe("useAdminScope", () => {
     expect(fetchWithAuth).toHaveBeenCalledTimes(1);
   });
 
-  it("tolerates a malformed tenantIds field", async () => {
-    mockWhoAmI({ scope: "tenant", tenantIds: undefined });
-    const { result } = renderHook(() => useAdminScope());
-    await waitFor(() => expect(result.current.state).toBe("tenant"));
-    expect(result.current.tenantIds).toEqual([]);
-  });
 });

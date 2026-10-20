@@ -308,8 +308,8 @@ lives in claims).
 ## Related Documents
 
 - [administration-overview.md](administration-overview.md) (9.1 — shared admin model)
-- [skill-administration.md](skill-administration.md) (9.2), [domain-tenant-administration.md](domain-tenant-administration.md) (9.4)
-- [auth-and-permissions.md](../../v6.0.0/implemented/auth-and-permissions.md), [resource-access-control.md](../../v6.0.0/implemented/resource-access-control.md), [client-tenant-management.md](../../v6.3.0/implemented/client-tenant-management.md)
+- [skill-administration.md](skill-administration.md) (9.2), domain-tenant-administration.md (9.4)
+- [auth-and-permissions.md](../../v6.0.0/implemented/auth-and-permissions.md), [resource-access-control.md](../../v6.0.0/implemented/resource-access-control.md), client-tenant-management.md
 
 ---
 

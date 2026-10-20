@@ -70,64 +70,64 @@ class _FakeS3Client:
         return f"https://signed.example/{operation}/{Params['Key']}?expires={ExpiresIn}"
 
 
-def test_s3_contract_streaming_listing_delete_and_tenant_isolation():
+def test_s3_contract_streaming_listing_delete_and_user_isolation():
     client = _FakeS3Client()
     storage = S3ObjectStorage("objects", client=client)
 
-    info = storage.put_fileobj("tenant-a", "docs/report.txt", BytesIO(b"abcdef"), chunk_size=2)
-    storage.put_bytes("tenant-b", "docs/report.txt", b"other")
+    info = storage.put_fileobj("user-a", "docs/report.txt", BytesIO(b"abcdef"), chunk_size=2)
+    storage.put_bytes("user-b", "docs/report.txt", b"other")
 
-    assert info.tenant_id == "tenant-a"
+    assert info.user_id == "user-a"
     assert info.key == "docs/report.txt"
     assert info.size == 6
-    assert info.uri == "s3://objects/tenants/tenant-a/docs/report.txt"
-    assert storage.get_bytes("tenant-a", "docs/report.txt") == b"abcdef"
-    assert list(storage.iter_bytes("tenant-a", "docs/report.txt", chunk_size=2)) == [b"ab", b"cd", b"ef"]
-    assert storage.exists("tenant-a", "docs/report.txt") is True
-    assert [item.key for item in storage.list_objects("tenant-a", prefix="docs")] == ["docs/report.txt"]
-    assert [item.key for item in storage.list_objects("tenant-b")] == ["docs/report.txt"]
+    assert info.uri == "s3://objects/users/user-a/docs/report.txt"
+    assert storage.get_bytes("user-a", "docs/report.txt") == b"abcdef"
+    assert list(storage.iter_bytes("user-a", "docs/report.txt", chunk_size=2)) == [b"ab", b"cd", b"ef"]
+    assert storage.exists("user-a", "docs/report.txt") is True
+    assert [item.key for item in storage.list_objects("user-a", prefix="docs")] == ["docs/report.txt"]
+    assert [item.key for item in storage.list_objects("user-b")] == ["docs/report.txt"]
 
-    storage.delete("tenant-a", "docs/report.txt")
-    assert storage.exists("tenant-a", "docs/report.txt") is False
-    assert storage.get_bytes("tenant-b", "docs/report.txt") == b"other"
+    storage.delete("user-a", "docs/report.txt")
+    assert storage.exists("user-a", "docs/report.txt") is False
+    assert storage.get_bytes("user-b", "docs/report.txt") == b"other"
 
 
 def test_s3_rejects_namespace_escape_and_invalid_chunks():
     storage = S3ObjectStorage("objects", client=_FakeS3Client())
 
     with pytest.raises(StoragePathError):
-        storage.put_bytes("tenant-a", "../tenant-b/secret.txt", b"x")
+        storage.put_bytes("user-a", "../user-b/secret.txt", b"x")
     with pytest.raises(StoragePathError):
-        storage.exists("../tenant-b", "secret.txt")
+        storage.exists("../user-b", "secret.txt")
     with pytest.raises(ValueError, match="chunk_size"):
-        list(storage.iter_bytes("tenant-a", "safe.txt", chunk_size=0))
+        list(storage.iter_bytes("user-a", "safe.txt", chunk_size=0))
 
 
-def test_s3_presigned_urls_remain_tenant_scoped():
+def test_s3_presigned_urls_remain_user_scoped():
     client = _FakeS3Client()
     storage = S3ObjectStorage("objects", client=client)
 
-    download = storage.generate_presigned_download_url("tenant-a", "docs/a.pdf", expires_in=60)
+    download = storage.generate_presigned_download_url("user-a", "docs/a.pdf", expires_in=60)
     upload = storage.generate_presigned_upload_url(
-        "tenant-a",
+        "user-a",
         "incoming/a.pdf",
         expires_in=120,
         content_type="application/pdf",
     )
 
-    assert "tenants/tenant-a/docs/a.pdf" in download
-    assert "tenants/tenant-a/incoming/a.pdf" in upload
+    assert "users/user-a/docs/a.pdf" in download
+    assert "users/user-a/incoming/a.pdf" in upload
     assert client.presign_calls == [
         (
             "get_object",
-            {"Bucket": "objects", "Key": "tenants/tenant-a/docs/a.pdf"},
+            {"Bucket": "objects", "Key": "users/user-a/docs/a.pdf"},
             60,
         ),
         (
             "put_object",
             {
                 "Bucket": "objects",
-                "Key": "tenants/tenant-a/incoming/a.pdf",
+                "Key": "users/user-a/incoming/a.pdf",
                 "ContentType": "application/pdf",
             },
             120,
@@ -135,9 +135,9 @@ def test_s3_presigned_urls_remain_tenant_scoped():
     ]
 
     with pytest.raises(ValueError, match="expires_in"):
-        storage.generate_presigned_download_url("tenant-a", "docs/a.pdf", expires_in=0)
+        storage.generate_presigned_download_url("user-a", "docs/a.pdf", expires_in=0)
     with pytest.raises(ValueError, match="expires_in"):
-        storage.generate_presigned_upload_url("tenant-a", "docs/a.pdf", expires_in=604801)
+        storage.generate_presigned_upload_url("user-a", "docs/a.pdf", expires_in=604801)
 
 
 def test_s3_configuration_validation():
@@ -153,7 +153,7 @@ def test_s3_configuration_validation():
 
 def test_factory_wires_s3_environment(monkeypatch):
     monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("OBJECT_STORAGE_S3_BUCKET", "tenant-objects")
+    monkeypatch.setenv("OBJECT_STORAGE_S3_BUCKET", "user-objects")
     monkeypatch.setenv("OBJECT_STORAGE_S3_ENDPOINT", "https://r2.example.invalid")
     monkeypatch.setenv("OBJECT_STORAGE_S3_REGION", "auto")
     monkeypatch.setenv("OBJECT_STORAGE_S3_ACCESS_KEY", "access")
@@ -163,7 +163,7 @@ def test_factory_wires_s3_environment(monkeypatch):
     try:
         storage = get_object_storage()
         assert isinstance(storage, S3ObjectStorage)
-        assert storage.bucket_name == "tenant-objects"
+        assert storage.bucket_name == "user-objects"
         assert storage.endpoint_url == "https://r2.example.invalid"
         assert storage.region_name == "auto"
         assert storage.addressing_style == "path"

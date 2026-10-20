@@ -23,9 +23,7 @@ export function UserMenu() {
   const [open, setOpen] = useState(false);
   // Admin discoverability: the /admin area was URL-only. Ask the backend for
   // the caller's admin scope lazily on first menu-open and reveal an "Admin"
-  // link to any admin — platform OR tenant. v6.16.0: this used to probe
   // GET /api/admin/clients (a platform-only DATA endpoint), which is exactly
-  // why a tenant-admin holder never saw this link.
   const { isAdmin } = useAdminScope(open);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -106,6 +104,7 @@ export function UserMenu() {
               </p>
             )}
           </div>
+          <Link href="/settings/personal" role="menuitem" onClick={() => setOpen(false)} className="mt-1 block rounded-sm px-3 py-2 text-sm hover:bg-muted">{t("个人 Skill 与信息", "Personal Skills and information")}</Link>
           {isAdmin && (
             <Link
               href="/admin"

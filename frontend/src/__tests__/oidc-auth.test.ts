@@ -51,7 +51,6 @@ describe("OIDC browser session", () => {
     const result = await completeOidcSignIn("authorization-code", "opaque-state");
 
     expect(result.returnTo).toBe("/skills?tab=mine");
-    expect(result.session.user.tenantId).toBe("tenant-a");
     expect(getOidcToken()).toBe("verified-id-token");
     expect(window.sessionStorage.getItem(OIDC_SESSION_STORAGE_KEY)).toContain(
       "verified-id-token",

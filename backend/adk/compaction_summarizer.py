@@ -259,18 +259,6 @@ class FidelityEventSummarizer(LlmEventSummarizer):
 
 
 def build_compaction_summarizer(*, llm=None) -> LlmEventSummarizer | None:
-    """The summarizer every compaction config carries.
-
-    Request runtimes pass their already-authorized resilient model chain. This
-    keeps compaction on the configured provider and tenant policy. Legacy callers
-    without a supplied model resolve the configured summarizer model through
-    the same resilience layer.
-
-    Returns None if the model can't be resolved (an unmounted provider on a
-    fork, a residency violation). ADK then falls back to its own default
-    summarizer, which is worse but not broken — losing tool fidelity beats
-    failing every turn once the threshold is crossed.
-    """
     try:
         from adk.agent import resolve_model_chain
         from adk.compaction_settings import summarizer_model_ref

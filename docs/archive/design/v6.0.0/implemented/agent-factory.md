@@ -118,7 +118,7 @@ def resolve_tools(tool_names: list[str], tool_configs: dict) -> list[FunctionToo
             logger.warning("unknown tool '%s' requested by skill; skipping", name)
             continue
         config = tool_configs.get(name, {})
-        tools.append(TOOL_REGISTRY[name](config))
+        tools.append(TOOL_REGISTRYname)
     return tools
 ```
 
@@ -133,11 +133,11 @@ from google.adk.models import Gemini, Claude, LiteLlm
 
 def resolve_model(model_id: str) -> Gemini | Claude | LiteLlm:
     """Create the correct ADK model wrapper for the given model ID.
-    
+
     - Gemini: Gemini(model=...) or pass string ID (ADK resolves via LLMRegistry)
     - Claude: Claude(model=...) — Vertex AI only, requires GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION
     - OpenAI: LiteLlm(model="openai/...") — requires OPENAI_API_KEY
-    
+
     Note: Claude and LiteLlm require google-adk[extensions] (anthropic/litellm packages).
     """
     if model_id.startswith("gemini-"):
@@ -431,7 +431,7 @@ async def stream_skill(
             attachments=request.attachments,
         ):
             yield f"data: {json.dumps(event)}\n\n"
-    
+
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",

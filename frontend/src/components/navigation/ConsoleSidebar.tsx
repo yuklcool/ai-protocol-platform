@@ -8,7 +8,6 @@ import {
   Activity,
   Bot,
   Boxes,
-  Building2,
   LayoutDashboard,
   Plug,
   ScrollText,
@@ -82,14 +81,7 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "管理",
     en: "Administration",
     items: [
-      {
-        href: "/admin/tenants",
-        zh: "租户管理",
-        en: "Tenants",
-        icon: Building2,
-      },
       { href: "/admin/users", zh: "用户管理", en: "Users", icon: UsersRound },
-      { href: "/admin/groups", zh: "权限组", en: "Groups", icon: ShieldCheck },
       { href: "/admin/analytics", zh: "用量统计", en: "Usage", icon: Activity },
       { href: "/admin/audit", zh: "审计日志", en: "Audit", icon: ScrollText },
     ],

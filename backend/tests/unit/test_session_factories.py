@@ -19,7 +19,7 @@ class TestGetSessionService:
     def test_returns_in_memory_when_no_env(self):
         with patch.dict("os.environ", {}, clear=True):
             svc = session_mod.get_session_service()
-        assert type(svc).__name__ == "InMemorySessionService"
+        assert type(svc.delegate).__name__ == "InMemorySessionService"
 
     def test_returns_vertex_ai_when_env_set(self):
         env = {
@@ -36,8 +36,8 @@ class TestGetSessionService:
         # silently falling back to InMemory, which loses every session.
         from google.adk.sessions import VertexAiSessionService
 
-        assert isinstance(svc, VertexAiSessionService)
-        assert type(svc).__name__ == "ResilientVertexSessionService"
+        assert isinstance(svc.delegate, VertexAiSessionService)
+        assert type(svc.delegate).__name__ == "ResilientVertexSessionService"
 
 
 class TestGetMemoryService:
@@ -67,7 +67,7 @@ class TestGetArtifactService:
     def test_returns_in_memory_when_no_env(self):
         with patch.dict("os.environ", {}, clear=True):
             svc = session_mod.get_artifact_service()
-        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert type(svc).__name__ == "UserScopedArtifactService"
         assert type(svc.delegate).__name__ == "InMemoryArtifactService"
 
     def test_returns_gcs_when_bucket_set(self):
@@ -78,7 +78,7 @@ class TestGetArtifactService:
         env = {"ADK_ARTIFACT_BUCKET": "my-bucket", "GOOGLE_CLOUD_PROJECT": "test-project"}
         with patch.dict("os.environ", env, clear=True), patch("google.cloud.storage.Client"):
             svc = session_mod.get_artifact_service()
-        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert type(svc).__name__ == "UserScopedArtifactService"
         assert type(svc.delegate).__name__ == "GcsArtifactService"
 
 

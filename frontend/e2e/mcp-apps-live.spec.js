@@ -1,5 +1,4 @@
 const { test, expect } = require("@playwright/test");
-const { provisionAdminTenant } = require("./selfhost-fixtures");
 
 const FRONTEND_URL = process.env.MCP_BROWSER_FRONTEND_URL || "http://localhost:3456";
 const BACKEND_URL = process.env.MCP_BROWSER_BACKEND_URL || "http://127.0.0.1:1956";
@@ -49,10 +48,8 @@ test.describe("real MCP Apps browser acceptance", () => {
 
     let serverCreated = false;
     let context = null;
-    const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
-    const rootPath = `/api/admin/tenant-root/${encodeURIComponent(login.user.tenantId)}`;
-    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
-    const originalRoot = await authedApi(token, rootPath);
+    const rootPath = "/api/admin/platform-config";
+    const originalRoot = (await authedApi(token, rootPath)).agent;
 
     try {
       await authedApi(token, `/api/admin/mcp-servers/${SERVER_ID}`, {
@@ -61,7 +58,6 @@ test.describe("real MCP Apps browser acceptance", () => {
         body: JSON.stringify({
           url: UPSTREAM_URL,
           transport: "streamable-http",
-          scope: "platform",
           enabled: true,
           description: "real browser MCP Apps acceptance",
         }),
@@ -81,17 +77,12 @@ test.describe("real MCP Apps browser acceptance", () => {
       expect(discovery.mcp_apps?.resourceUris?.some((uri) => String(uri).startsWith("ui://"))).toBe(true);
       expect(discovery.tools?.some((tool) => tool.name === "show-map")).toBe(true);
 
-      await authedApi(token, tenantPath, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled_mcp_servers: [...new Set([...originalTenant.enabledMcpServers, SERVER_ID])] }),
-      });
       await authedApi(token, rootPath, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ override: {
-          ...originalRoot.override,
-          mcpServers: [...new Set([...originalRoot.effective.mcpServers, SERVER_ID])],
+        body: JSON.stringify({ agent: {
+          ...originalRoot,
+          mcpServers: [...new Set([...originalRoot.mcpServers, SERVER_ID])],
         } }),
       });
 
@@ -177,12 +168,7 @@ test.describe("real MCP Apps browser acceptance", () => {
       await authedApi(token, rootPath, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ override: originalRoot.override }),
-      });
-      await authedApi(token, tenantPath, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled_mcp_servers: originalTenant.enabledMcpServers }),
+        body: JSON.stringify({ agent: originalRoot }),
       });
       if (serverCreated) {
         await authedApi(token, `/api/admin/mcp-servers/${SERVER_ID}`, { method: "DELETE" }).catch(() => {});

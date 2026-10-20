@@ -23,7 +23,6 @@ from pydantic import BaseModel, Field, ValidationError
 
 from auth import AccessContext, User, get_current_user
 from buckets import bucket_config, folder_config
-from db.clients import UnmappedTenantError, resolve_documents_bucket
 from db.models import AccessControl, BucketConfig, BucketFolderConfig
 
 logger = logging.getLogger(__name__)
@@ -32,42 +31,8 @@ router = APIRouter(prefix="/api/buckets", tags=["buckets"])
 
 
 def _authorize_bucket_read(user: User, access: AccessContext, name: str) -> None:
-    """Raise 403 unless the caller is authorized to read GCS bucket ``name``.
-
-    The file-serving endpoints (`/{name}/list|preview|thumbnail`) stream bytes
-    from an arbitrary bucket name under the runtime SA's credentials. Without this
-    gate, any authenticated user could name a bucket the SA can read (e.g. a
-    tenant's confidential ``…-llmops-bucket``) and exfiltrate it — the tenant
-    isolation lives at the app layer, not the SA grant (v6.18.0). Allow iff:
-
-      - the caller is a platform admin (operator diagnostics — explicit + logged), or
-      - ``name`` is the caller's own tenant ``documents_bucket``, or
-      - ``name`` is a registered bucket-config the caller ``can_access`` (v6.3.0 ACLs)
-        **AND** the caller's email domain is in that config's ``allowed_domains``
-        (v6.18.1, issue #37 — see ``_domain_allowed``).
-
-    The bucket-config door carries BOTH checks because the config is an operator
-    blessing, not a user assertion: registration is admin-only (``create_bucket``)
-    and the domain binding is a second, independent lock. Before #37 the door
-    opened on ``can_access`` alone, and ``can_access`` short-circuits on
-    "owner always wins" — so a self-registered config named any bucket the runtime
-    SA could read and returned True. Two locks now: an attacker would need an
-    admin JWT *and* a matching login domain.
-
-    Deny-by-default and fail-closed: an unmapped tenant under
-    ``TENANT_FALLBACK_FAIL_CLOSED`` raises ``UnmappedTenantError`` → caught → 403,
-    never a silent allow. The 403 reuses the structured ``{code, message}`` shape
-    (mirrors upload-side ``TENANT_NOT_PROVISIONED``) so the UI renders a specific
-    "why" (NEVER-SILENT #8).
-    """
     if access.is_platform_admin:
         return
-    try:
-        if name == resolve_documents_bucket(user):
-            return
-    except UnmappedTenantError:
-        pass  # fail-closed unmapped tenant → fall through to the config check / deny
-
     cfg = bucket_config.find_by_gcs_name(name)
     if cfg is not None and access.can_access(cfg) and _domain_allowed(user, cfg):
         return
@@ -188,15 +153,6 @@ def _domain_allowed(user: User, cfg: BucketConfig) -> bool:
 
 
 def _require_platform_admin(request: Request, action: str) -> None:
-    """Raise 403 unless the caller is a platform admin.
-
-    Registering a GCS bucket into the platform is an OPERATOR act (issue #37):
-    it names a real bucket the runtime SA can read, and the read gate trusts that
-    naming. Self-service registration let any signed-in user mint themselves a
-    config for someone else's bucket and walk through the bucket-config door
-    ("owner always wins"). Ordinary users never need this — their own tenant
-    bucket is reachable via the tenant-bucket door.
-    """
     access = request.state.access
     if not access.is_platform_admin:
         logger.warning("bucket-admin DENY uid=%s action=%s", access.uid, action)
@@ -459,9 +415,7 @@ def delete_folder(
 # calls /api/buckets/{name}/list to render the bucket contents. SA does the
 # read; frontend never sees credentials. Authorization is at the APP layer:
 # every file endpoint calls `_authorize_bucket_read` (platform admin / the
-# caller's own tenant bucket / a bucket-config they can_access) BEFORE the SA
 # read (v6.18.0). The SA's bucket whitelist is defence-in-depth behind that gate,
-# NOT the primary boundary — the SA can read a tenant's confidential llmops
 # bucket, so "the SA can read it" must never be the only check.
 
 import re as _re  # noqa: E402
@@ -578,17 +532,6 @@ def preview_bucket_object(
     object_name: str = Query(..., alias="object", description="Full object name within the bucket"),
     user: User = Depends(get_current_user),  # noqa: B008
 ) -> Any:
-    """Stream a single bucket object's bytes for inline preview (auth-gated).
-
-    Access surface: authenticated + ``_authorize_bucket_read`` (platform admin,
-    the caller's own tenant bucket, or a bucket-config the caller can_access) —
-    the SA's bucket whitelist is only defence-in-depth behind the app-layer gate.
-
-    SECURITY: bytes are streamed through this authenticated route — NEVER a
-    public / signed URL — so previews of private content (e.g. ONE's PPA
-    contracts) stay behind the user's Firebase bearer. Do not add a public
-    variant. See CLAUDE.md "Security Hard Rules".
-    """
     from fastapi.responses import StreamingResponse
 
     if not _BUCKET_NAME_PATTERN.match(name):

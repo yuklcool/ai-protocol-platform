@@ -2,26 +2,8 @@
 name: maps-assistant
 display_name: Maps & Places
 avatar: /images/avatars/skill-web-researcher.svg
-# Opened to ONE 2026-08-12 (requested after the admin-only trial), alongside
-# adding this skill to one-assistant's delegation.allow so the ONE front door
-# can hand off to it.
-#
-# PROD IS STILL PROTECTED, and NOT by these tags. Prod's
-# MAPS_GROUNDING_API_KEY is still the "dummy_value" placeholder (staged
-# rollout — terraform applied on dev/test only), so a Maps call there would
-# 401. What keeps ONE off that path is the SECOND gate: `enabled_skills` on
-# clients/acmeenergy.com, which is per-env runtime data that does NOT ride a
-# deploy. `maps-assistant` was added to that allowlist on dev and test only;
-# prod's list is non-null and omits it, so the skill is invisible there
-# regardless of tags.
-#
-# That two-gate split is deliberate — it lets a skill's ACCESS ship with the
-# code while its per-customer EXPOSURE stays an env-by-env decision. Do not
-# "simplify" prod safety into the tag list; the tags are shared across envs
-# and cannot express "test yes, prod no".
-#
-# WHEN PROD'S KEY LANDS: add maps-assistant to prod's enabled_skills (see
-# docs/archive/design/v6.23.0/maps-grounding.md M3) — no change needed here.
+# Requires a valid MAPS_GROUNDING_API_KEY in the deployment.
+# Resource ACL and the Agent binding determine availability.
 access_control:
   type: tagged
   tags:

@@ -177,7 +177,6 @@ def upsert_provider(provider_id: str, body: ProviderWrite, scope: PlatformScope)
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
         action="upsert_model_provider",
         target=provider_id,
         before=_audit_provider(before),
@@ -200,7 +199,6 @@ def delete_provider(provider_id: str, scope: PlatformScope) -> ProviderView:
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
         action="delete_model_provider",
         target=provider_id,
         before=_audit_provider(data),
@@ -325,7 +323,6 @@ def upsert_dynamic_model(model_id: str, body: DynamicModelWrite, scope: Platform
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
         action="upsert_dynamic_model",
         target=model_id,
         before=before,
@@ -343,27 +340,20 @@ def delete_dynamic_model(model_id: str, scope: PlatformScope) -> DynamicModelVie
     from config.model_provider_registry import registry_settings
     from config.model_readiness import READINESS_COLLECTION
     from config.platform_config import get_platform_config
-    from db.tenants import TENANT_COLLECTION
 
     root = get_platform_config().agent
     settings = registry_settings()
     if (
         root.model == model_id
-        or any(override.model == model_id for override in root.tenant_overrides.values())
         or settings.get("platformDefault") == model_id
         or model_id in (settings.get("tierDefaults") or {}).values()
     ):
-        raise HTTPException(409, "此模型仍用于平台或租户 Root、高级路由,请先替换相应选择再删除。")
-    for tenant in query_documents(TENANT_COLLECTION):
-        policy = tenant.get("modelPolicy") or {}
-        if policy.get("defaultModel") == model_id or model_id in (policy.get("allowedModels") or []):
-            raise HTTPException(409, "此模型仍被租户默认模型或白名单引用,请先修改租户模型策略再删除。")
+        raise HTTPException(409, "此模型仍用于Agent、高级路由,请先替换相应选择再删除。")
     delete_document(MODELS_COLLECTION, model_id)
     delete_document(READINESS_COLLECTION, model_id)
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
         action="delete_dynamic_model",
         target=model_id,
         before=data,

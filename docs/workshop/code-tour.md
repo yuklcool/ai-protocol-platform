@@ -4,7 +4,7 @@
 
 | 顺序 | 代码入口 | 阅读重点 |
 | --- | --- | --- |
-| 1 | [Root 组合](../../backend/agents/root_runtime.py) | 平台配置、租户覆盖、模型和能力上限 |
+| 1 | [Root 组合](../../backend/agents/root_runtime.py) | 平台配置、个人能力组合、模型和能力上限 |
 | 2 | [应用与流入口](../../backend/fast_api_app.py) | `/api/agent/stream`、认证及协议路由 |
 | 3 | [单轮处理](../../backend/skills/skill_processor.py) | 授权、会话、Agent 创建和事件流 |
 | 4 | [ADK 工厂](../../backend/adk/agent.py) | 模型路由、工具解析、回调组合 |

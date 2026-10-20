@@ -1,8 +1,8 @@
 """Provider-neutral binary object storage contract.
 
 The database owns metadata and authorization. Object storage owns bytes only.
-Business code addresses an object by ``(tenant_id, key)`` so every adapter has
-an explicit tenant boundary instead of relying on bucket/container naming.
+Business code addresses an object by ``(user_id, key)`` so every adapter has
+an explicit user boundary instead of relying on bucket/container naming.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import BinaryIO, Protocol
 class ObjectInfo:
     """Stable information returned by storage adapters."""
 
-    tenant_id: str
+    user_id: str
     key: str
     size: int
     uri: str
@@ -26,7 +26,7 @@ class ObjectStorage(Protocol):
 
     ``put_fileobj`` is the preferred path for HTTP uploads because it keeps
     memory bounded for large files. ``put_bytes`` remains convenient for small
-    generated payloads and tests. Implementations must treat ``tenant_id`` as a
+    generated payloads and tests. Implementations must treat ``user_id`` as a
     hard namespace boundary and reject keys that can escape that namespace.
 
     Remote providers may expose time-limited direct transfer URLs. Local
@@ -34,36 +34,36 @@ class ObjectStorage(Protocol):
     therefore raises ``NotImplementedError`` for the presigned URL methods.
     """
 
-    def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo: ...
+    def put_bytes(self, user_id: str, key: str, data: bytes) -> ObjectInfo: ...
 
     def put_fileobj(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         fileobj: BinaryIO,
         *,
         chunk_size: int = 1024 * 1024,
     ) -> ObjectInfo: ...
 
-    def get_bytes(self, tenant_id: str, key: str) -> bytes: ...
+    def get_bytes(self, user_id: str, key: str) -> bytes: ...
 
     def iter_bytes(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         chunk_size: int = 1024 * 1024,
     ): ...
 
-    def exists(self, tenant_id: str, key: str) -> bool: ...
+    def exists(self, user_id: str, key: str) -> bool: ...
 
-    def delete(self, tenant_id: str, key: str) -> None: ...
+    def delete(self, user_id: str, key: str) -> None: ...
 
-    def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]: ...
+    def list_objects(self, user_id: str, *, prefix: str = "") -> list[ObjectInfo]: ...
 
     def generate_presigned_download_url(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         expires_in: int = 900,
@@ -71,7 +71,7 @@ class ObjectStorage(Protocol):
 
     def generate_presigned_upload_url(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         expires_in: int = 900,

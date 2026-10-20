@@ -14,11 +14,11 @@ from db.models.root_agent import RootAgentConfig
 
 
 def _user() -> User:
-    return User(uid="user-1", email="user@example.com", domain="example.com", tenant_id="tenant-1")
+    return User(uid="user-1", email="user@example.com", domain="example.com")
 
 
 def _access() -> AccessContext:
-    return AccessContext(uid="user-1", email="user@example.com", domain="example.com", tenant_id="tenant-1")
+    return AccessContext(uid="user-1", email="user@example.com", domain="example.com")
 
 
 def _skill(skill_id: str = "cap-a", slug: str = "cap-a") -> SkillConfig:
@@ -49,18 +49,6 @@ def test_resolver_loads_only_the_requested_capability():
 
     assert resolved is capability
     resolve.assert_called_once_with("cap-a", "user-1")
-
-
-def test_resolver_enforces_root_ceiling_and_tenant_filter():
-    capability = _skill().model_copy(update={"tenant_id": "foreign"})
-    with (
-        patch("agents.root_runtime.resolve_skill_ref", return_value=capability),
-    ):
-        with pytest.raises(RootCapabilityDenied):
-            resolve_root_capability(RootAgentConfig(skills=["cap-a"]), _user(), _access(), "cap-a")
-
-    with pytest.raises(RootCapabilityDenied):
-        resolve_root_capability(RootAgentConfig(skills=["cap-a"]), _user(), _access(), "cap-b")
 
 
 def test_composition_applies_root_model_instruction_and_capability_ceilings():

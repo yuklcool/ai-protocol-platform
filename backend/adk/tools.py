@@ -61,15 +61,14 @@ async def list_documents(
     Returns:
         A formatted list of document names, IDs, and status.
     """
-    from observability.tenant_context import get_tenant_context
+    from observability.user_context import get_user_context
 
-    identity = get_tenant_context() or {}
+    identity = get_user_context() or {}
     selected = set(tool_context.state.get("document_ids") or []) if tool_context is not None else set()
-    if not identity.get("tenant.id") or not identity.get("tenant.uid") or not selected:
+    if not identity.get("user.id") or not selected:
         return "本轮未选择可读取的附件,请先在对话中选择文件。"
     filters: list[tuple[str, str, object]] = [
-        ("userId", "==", identity["tenant.uid"]),
-        ("tenantId", "==", identity["tenant.id"]),
+        ("userId", "==", identity["user.id"]),
     ]
     if skill_id:
         filters.append(("skillId", "==", skill_id))

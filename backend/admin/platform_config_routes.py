@@ -1,22 +1,3 @@
-"""Platform-config admin plane (v6.14.0).
-
-The platform preamble is prepended to EVERY skill's agent prompt, so editing it
-is a platform-admin-only, audited action:
-
-  * ``GET /api/admin/platform-config`` — read the current config (preamble text,
-    enabled flag, last-edit metadata).
-  * ``PUT /api/admin/platform-config`` — update the preamble and/or enabled flag.
-
-``aitana-admin`` gated (deny-by-default) via the shared ``PlatformScope`` dependency
-(the platform preamble is global — no single tenant may own it), and
-every write records a before/after in the append-only ``admin_audit`` collection.
-Validation (length cap) is enforced by the ``PlatformConfig`` model on the write
-path in ``config.platform_config.update_platform_config`` — an over-cap preamble
-is rejected with a 422 rather than landing in the store.
-
-See docs/archive/design/v6.14.0/platform-preamble.md.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -136,7 +117,6 @@ def write_platform_config(body: PlatformConfigUpdate, scope: PlatformScope) -> P
 
     record_admin_action(
         actor_uid=scope.user.uid,
-        actor_tenant_id=scope.user.tenant_id or "",
         actor_email=scope.user.email or "",
         action="update_platform_config",
         target="singleton",

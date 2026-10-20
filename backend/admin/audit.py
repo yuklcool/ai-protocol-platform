@@ -25,15 +25,11 @@ def record_admin_action(
     action: str,
     target: str,
     actor_email: str = "",
-    tenant_id: str = "",
-    actor_tenant_id: str = "",
     before: Any = None,
     after: Any = None,
 ) -> None:
     """Append one audit record for an admin mutation."""
     record = {
-        "tenantId": tenant_id.strip(),
-        "actorTenantId": actor_tenant_id.strip(),
         "actorUid": actor_uid,
         "actorEmail": actor_email,
         "action": action,
@@ -56,27 +52,16 @@ def record_admin_action(
 
 def list_admin_actions(
     *,
-    domains: frozenset[str] | None,
     limit: int = 100,
     action: str | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Read by explicit target tenant; unattributed legacy rows are platform-only.
-
-    ``domains`` is the historical parameter name for stable tenant scope keys.
-    Actor identity and target strings are never used to infer ownership.
-    """
-    if domains is not None and not domains:
-        return [], 0
-    filters = None if domains is None else [("tenantId", "in", sorted(domains))]
-
+    """Read the administrator audit trail."""
     try:
-        raw = query_documents(_COLLECTION, filters=filters, order_by="ts", order_direction="DESCENDING", limit=None)
+        raw = query_documents(_COLLECTION, filters=None, order_by="ts", order_direction="DESCENDING", limit=None)
     except Exception as exc:
         logger.error("admin_audit read FAILED: %s", exc)
         return [], 0
 
-    # Defense in depth, also prevents cross-tenant counts from leaking.
-    raw = [row for row in raw if domains is None or row.get("tenantId") in domains]
     scanned = len(raw)
     rows: list[dict[str, Any]] = []
     for row in raw:

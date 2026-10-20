@@ -26,29 +26,29 @@ def repo():
     reset_repository_for_testing(None)
 
 
-def test_selection_checks_owner_and_stable_tenant(repo):
-    assert validate_selection(["a", "a"], user_id="same", tenant_id="t1") == ["a"]
-    for user, tenant in (("other", "t1"), ("same", "t2"), ("same", "")):
+def test_selection_checks_user_owner(repo):
+    assert validate_selection(["a", "a"], user_id="same") == ["a"]
+    for user in ("other", ""):
         with pytest.raises(DocumentUnavailable):
-            readable_document("a", user_id=user, tenant_id=tenant)
+            readable_document("a", user_id=user)
 
 
 @pytest.mark.parametrize("status", ["pending", "pending_ai_extraction", "failed"])
 def test_unreadable_file_blocks_analysis_instead_of_false_success(repo, status):
     repo.set_document("parsed_documents", "a", {"parseStatus": status, "parseError": "解析未完成"}, merge=True)
     with pytest.raises(DocumentUnavailable, match="解析未完成"):
-        validate_selection(["a"], user_id="same", tenant_id="t1")
-    assert readable_document("a", user_id="same", tenant_id="t1", ready=False)
+        validate_selection(["a"], user_id="same")
+    assert readable_document("a", user_id="same", ready=False)
 
 
 def test_missing_deleted_empty_and_excessive_selection_are_rejected(repo):
     with pytest.raises(DocumentUnavailable):
-        validate_selection(["a"] * 11, user_id="same", tenant_id="t1")
+        validate_selection(["a"] * 11, user_id="same")
     with pytest.raises(DocumentUnavailable):
-        validate_selection(["missing"], user_id="same", tenant_id="t1")
+        validate_selection(["missing"], user_id="same")
     repo.set_document("parsed_documents", "a", {"blocks": []}, merge=True)
     with pytest.raises(DocumentUnavailable):
-        validate_selection(["a"], user_id="same", tenant_id="t1")
+        validate_selection(["a"], user_id="same")
     repo.set_document("parsed_documents", "a", {"deletionStatus": "deleting"}, merge=True)
     with pytest.raises(DocumentUnavailable):
-        readable_document("a", user_id="same", tenant_id="t1", ready=False)
+        readable_document("a", user_id="same", ready=False)

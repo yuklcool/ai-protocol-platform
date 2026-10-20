@@ -16,7 +16,6 @@ on:
       - backend/scripts/seed_a2ui_live.py
       - backend/skills/**
       - frontend/e2e/a2ui-live.spec.js
-      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/app/chat/**
       - frontend/src/components/chat/**
       - frontend/src/components/protocols/**
@@ -38,7 +37,6 @@ on:
       - backend/scripts/seed_a2ui_live.py
       - backend/skills/**
       - frontend/e2e/a2ui-live.spec.js
-      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/app/chat/**
       - frontend/src/components/chat/**
       - frontend/src/components/protocols/**

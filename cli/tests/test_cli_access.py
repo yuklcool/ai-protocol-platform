@@ -20,7 +20,9 @@ EMAIL = "alice@example.com"
 @respx.mock
 def test_access_check_email_only() -> None:
     route = respx.post(f"{BASE}/api/admin/access/check").mock(
-        return_value=httpx.Response(200, json={"tags": [{"tag": "ONE", "provenances": ["direct"]}]})
+        return_value=httpx.Response(
+            200, json={"skills": [{"id": "personal-skill", "label": "Personal Skill"}], "mcpServers": []}
+        )
     )
     runner = CliRunner()
     result = runner.invoke(main, ["--env", "local", "access", "check", "--email", EMAIL])
@@ -28,22 +30,7 @@ def test_access_check_email_only() -> None:
     assert route.called
     body = json.loads(route.calls.last.request.content)
     assert body == {"email": EMAIL}
-    assert "ONE" in result.output
-
-
-@respx.mock
-def test_access_check_with_skill_and_tool() -> None:
-    route = respx.post(f"{BASE}/api/admin/access/check").mock(
-        return_value=httpx.Response(200, json={"tags": []})
-    )
-    runner = CliRunner()
-    result = runner.invoke(
-        main,
-        ["--env", "local", "access", "check", "--email", EMAIL, "--skill", "s-1", "--tool", "ai_search"],
-    )
-    assert result.exit_code == 0, result.output
-    body = json.loads(route.calls.last.request.content)
-    assert body == {"email": EMAIL, "skillId": "s-1", "toolName": "ai_search"}
+    assert "personal-skill" in result.output
 
 
 def test_access_check_requires_email() -> None:

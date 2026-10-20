@@ -26,7 +26,7 @@ describe("i18n", () => {
       "共 3 个可用",
     );
     expect(
-      translate("en", "admin.scopedTo", { domains: "tenant.example" }),
-    ).toContain("tenant.example");
+      translate("en", "rootAgent.overview.capabilitySummary", { skills: 2, tools: 3, mcp: 1 }),
+    ).toContain("2 Skills");
   });
 });

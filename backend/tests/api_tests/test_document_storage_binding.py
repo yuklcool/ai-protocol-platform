@@ -23,7 +23,7 @@ def test_attributed_legacy_gcs_document_uses_compatibility_adapter() -> None:
 
     assert isinstance(storage, LegacyGcsObjectStorage)
     assert storage.bucket_name == "legacy-bucket"
-    assert tenant_id == "example.com"
+    assert tenant_id == "user_a"
     assert key == "users/user_a/docs/f/old.pdf"
     assert backend == "gcs-legacy"
 
@@ -31,7 +31,7 @@ def test_attributed_legacy_gcs_document_uses_compatibility_adapter() -> None:
 def test_unattributed_legacy_gcs_document_fails_closed() -> None:
     user = User(uid="user_a", email="alice@example.com", domain="example.com")
     legacy_doc = {
-        "userId": "user_a",
+        "userId": "someone-else",
         "originalFilename": "old.pdf",
         "sourceFormat": "pdf",
         "sourceUrl": "gs://legacy-bucket/users/user_a/docs/f/old.pdf",

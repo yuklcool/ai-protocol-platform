@@ -7,7 +7,7 @@
 | 服务 | 默认端口 | 职责 |
 | --- | --- | --- |
 | `frontend` | 主机 `3456` → 容器 `8080` | 中文界面、对话/工作台、后端代理 |
-| `backend` | `1956` | FastAPI、ADK、认证、租户与协议运行时 |
+| `backend` | `1956` | FastAPI、ADK、认证、用户与协议运行时 |
 | `postgres` | 容器网络 `5432` | 配置、账号、Session、Memory、账本 |
 | `mcp-sandbox` | 主机 `3457` → 容器 `8080` | 独立浏览器源的 MCP Apps 沙箱 |
 
@@ -50,11 +50,11 @@ SELFHOST_ADMIN_PASSWORD=替换为至少12字符的密码
 
 初始管理员仅在 `auth_users` 为空时创建。后续重启不覆盖现有密码或角色；修改环境变量不能重置旧密码，应在用户管理中操作。密码使用加盐 `scrypt` 哈希。
 
-JWT 默认有效期 60 分钟，浏览器保存在 `sessionStorage`；关闭标签页后需重新登录，当前没有 refresh-token 流程。服务端从持久化账号重新确认租户/权限；敏感账号变更会撤销旧会话。签名密钥需稳定保存，轮换时可通过 `JWT_PREVIOUS_SIGNING_KEYS` 暂时兼容旧密钥。密钥缺失/过短或首次启动缺少管理员配置会明确失败。
+JWT 默认有效期 60 分钟，浏览器保存在 `sessionStorage`；关闭标签页后需重新登录，当前没有 refresh-token 流程。服务端从持久化账号重新确认用户/权限；敏感账号变更会撤销旧会话。签名密钥需稳定保存，轮换时可通过 `JWT_PREVIOUS_SIGNING_KEYS` 暂时兼容旧密钥。密钥缺失/过短或首次启动缺少管理员配置会明确失败。
 
 OIDC 是可选企业身份适配，见[OIDC 接入](docs/selfhost-oidc.md)。Firebase 保留云端适配；`AUTH_BACKEND=stub` 仅用于开发。
 
-## 4. 持久化与租户
+## 4. 持久化与用户
 
 ```env
 DATA_BACKEND=postgres
@@ -68,15 +68,15 @@ ADK_ARTIFACT_ROOT=/data/artifacts
 
 PostgreSQL 保存结构化数据，`object-data` 卷保存文件字节和 Artifact。发布卷名为 `ai-protocol-platform-postgres-data` 与 `ai-protocol-platform-object-data`。已有部署必须核实实际挂载，避免切换 Compose 时连接新空卷。
 
-Session 使用 ADK `DatabaseSessionService`，按可信租户分区存储 app namespace。Memory 按 tenant/app/UID 分区，支持持久化文本/关键词召回，`MEMORY_SEARCH_SCAN_LIMIT` 限制扫描量。文件下载经认证接口处理，不暴露本地磁盘路径。
+Session 使用 ADK `DatabaseSessionService`，按可信用户分区存储 app namespace。Memory 按 app/UID 分区，支持持久化文本/关键词召回，`MEMORY_SEARCH_SCAN_LIMIT` 限制扫描量。文件下载经认证接口处理，不暴露本地磁盘路径。
 
-稳定 `tenant_id` 是授权边界；邮箱域名仅为兼容映射。Session、文件、Skill、MCP、工具、模型、审计和额度均需要租户作用域。
+已验证的 UID 是个人数据归属边界；Agent 统一绑定公共 Skill、MCP 和工具，个人设置只增加用户自己的 Skill 与信息。邮箱域不推断数据所有者。
 
-## 5. 初始化与历史迁移
+## 5. 初始化与旧数据清理
 
-后端启动依次执行 SQL migration、持久化种子初始化、初始管理员创建和 Uvicorn。`scripts/apply_selfhost_migrations.py` 幂等执行 SQL，并记录在 `platform_schema_migrations`。
+后端启动先执行数据库升级文件，再幂等创建管理员账号。账号凭据和公共平台配置保留；旧组织目录、权限组、专属 MCP、组织归属内容、旧 Session namespace 与 Memory 直接删除，不转换为用户数据。
 
-自动 SQL migration 不代表历史 ownership 或 Session/Memory namespace 已迁移。已有部署按[历史归属迁移](docs/tenant-ownership-migration.md)执行，并单独审核 namespace 搬迁；无归属旧历史不会作为租户请求的自动回退数据源。
+新会话、记忆、Artifact 和文件以用户 ID 保存。完整行为见[配置流程](docs/configuration-guide.md#7-旧部署升级)。本地卷或远程桶中的旧二进制对象不会自动复制到新用户路径。
 
 ## 6. 模型、Root 与交互
 
@@ -84,7 +84,7 @@ Session 使用 ADK `DatabaseSessionService`，按可信租户分区存储 app na
 
 交互表单需要同时开启 `a2uiEnabled`、`allowSurfaceContextWrites`、`allowActionTriggeredRuns`。普通聊天与表单操作共享 `/api/agent/stream` 和 Root 策略。
 
-Root 额度管理需要租户额度、模型价格和 `budgetEnabled`。Root 开关启用后直接创建持久化租户执行器，即使 `BUDGET_ENFORCER=off` 也会执行；环境变量用于兼容旧 Skill/外部预算接口，详见[配置流程](docs/configuration-guide.md)。
+Root 的 `budgetEnabled` 使用已注册的通用预算执行器。`BUDGET_ENFORCER=off` 时关闭 Root 预算；`in-memory` 提供单进程执行器，不持久化额度。需要持久化预算时由部署方实现并注册执行器。
 
 ## 7. 域名与反向代理
 
@@ -104,7 +104,16 @@ FRONTEND_PUBLIC_URL=https://ai.example.com
 
 ## 8. 环境变量传递
 
-`.env` 用于 Compose 插值，未列入服务 `environment`/`env_file` 的变量不会自动进入容器。默认传递常用模型/OIDC 参数；自定义模型密钥、MCP 密钥或 S3 参数需用额外 Compose 文件显式传递，见[配置流程](docs/configuration-guide.md#10-可选配置与环境变量传递)。
+`.env` 用于 Compose 插值，未列入服务 `environment`/`env_file` 的变量不会自动进入容器。默认传递常用模型/OIDC 参数；自定义模型密钥、MCP 密钥或 S3 参数需用额外 Compose 文件显式传递。例如 `compose.extra.yml`：
+
+```yaml
+services:
+  backend:
+    environment:
+      MY_MCP_KEY: ${MY_MCP_KEY}
+```
+
+把实际值填入 `.env`，启动及后续管理命令均追加 `-f compose.extra.yml`，例如 `docker compose -f docker-compose.release.yml -f compose.extra.yml up -d`。后端密钥引用填写 `${MY_MCP_KEY}`。
 
 ## 9. 日常检查
 
@@ -116,15 +125,15 @@ curl -fsS http://localhost:3456/api/health
 curl -fsS http://localhost:3457/sandbox.html >/dev/null
 ```
 
-源码部署省略 `-f docker-compose.release.yml`，源码目录可运行 `bash scripts/smoke-selfhost.sh`。健康检查不代替真实模型、工具、A2UI、刷新恢复和双租户验收，见[协议验收](docs/protocol-operation-acceptance.md)。
+源码部署省略 `-f docker-compose.release.yml`，源码目录可运行 `bash scripts/smoke-selfhost.sh`。健康检查不代替真实模型、工具、A2UI、刷新恢复和双用户验收，见[协议验收](docs/protocol-operation-acceptance.md)。
 
 ## 10. 备份、升级与回滚
 
-备份 PostgreSQL 和文件/Artifact 卷，另行保护配置与签名密钥。先在真实数据副本验证恢复、迁移和回滚。需要一致恢复点时，先停止业务写入再备份数据库和对象卷。
+备份 PostgreSQL 和文件/Artifact 卷，另行保护配置与签名密钥。验证备份可恢复并复验当前协议与用户隔离行为。需要一致恢复点时，先停止业务写入再备份数据库和对象卷。
 
-镜像回退可恢复旧 `APP_VERSION` 后拉取启动；不兼容数据库迁移还需恢复匹配的数据与对象备份。ownership journal 回滚、Session/Memory namespace 回滚和整体恢复分别验收。
+镜像回退可恢复旧 `APP_VERSION` 后拉取启动；不兼容数据库迁移还需恢复匹配的数据与对象备份。本次改造直接清理旧组织数据，不提供归属迁移或 journal 回滚。
 
-v1.1.1 已完成[发布镜像验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)和[同提交真实协议/租户验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)。目标部署的历史迁移与回滚仍见 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9)。
+v1.1.1 已完成[发布镜像验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)和[同提交真实协议/用户验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)。目标部署的现场验收边界见 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9)。
 
 ## 11. 本地源码开发
 

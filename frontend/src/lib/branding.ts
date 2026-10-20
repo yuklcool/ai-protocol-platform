@@ -114,7 +114,7 @@ export const BRANDING: Branding = {
       },
       {
         key: "benchmark",
-        label: "Tenant isolation",
+        label: "User privacy",
         tagline: "Server-authoritative boundaries",
       },
       {
@@ -137,12 +137,12 @@ export const BRANDING: Branding = {
 };
 
 /**
- * First-class extension seam for future tenant-level display branding. The
- * server remains authoritative for which overrides a tenant may supply; this
- * helper only defines the safe presentation fields a tenant may eventually
+ * First-class extension seam for future installation display branding. The
+ * server remains authoritative for which overrides a installation may supply; this
+ * helper only defines the safe presentation fields a installation may eventually
  * override without touching protocol/runtime identity.
  */
-export type TenantBrandingOverrides = {
+export type BrandingOverrides = {
   appName?: string;
   tagline?: string;
   description?: string;
@@ -151,7 +151,7 @@ export type TenantBrandingOverrides = {
 };
 
 export function resolveBranding(
-  overrides?: TenantBrandingOverrides | null,
+  overrides?: BrandingOverrides | null,
 ): Branding {
   if (!overrides) return BRANDING;
   return {

@@ -159,6 +159,6 @@ the edge.
 
 ## Related Documents
 
-- [administration-overview.md](implemented/administration-overview.md) (identity/audit), [user-group-administration.md](implemented/user-group-administration.md), [domain-tenant-administration.md](implemented/domain-tenant-administration.md)
+- [administration-overview.md](implemented/administration-overview.md) (identity/audit), [user-group-administration.md](implemented/user-group-administration.md), domain-tenant-administration.md
 - [jobs-and-subagents.md](../v6.8.0/jobs-and-subagents.md) — reports-as-jobs (OQ4)
 - product-axioms #8 OBSERVABLE BY DEFAULT (the capture this consumes), #9 SECURE BY CONSTRUCTION (the edge boundary)

@@ -336,5 +336,5 @@ Content-Type: application/json
 - [AIPLA ADR-001](https://www.sunholo.com/aipla/architecture.html#adr-001-student-identity-no-auth-anonymous-group-ids) — the request that surfaced this.
 - [backend/auth/local_mode_stub.py](../../../../../backend/auth/local_mode_stub.py) — closest existing pattern; this design parallels its structure.
 - budget-enforcement.md (`../budget-enforcement.md`) — sprint 2.12, depends on this for the per-cohort identity in budget keys.
-- [tenant-id-span-attribute.md](tenant-id-span-attribute.md) — sprint 2.14, the `group_id` lands on every span via that hook.
+- tenant-id-span-attribute.md — sprint 2.14, the `group_id` lands on every span via that hook.
 - [ai-ui-protocol-stack.md](../../../../talks/ai-ui-protocol-stack.md) — talk audit row marks anonymous-group-id auth as ✅ now that it's shipped (sprint 2.11, 2026-05-19).

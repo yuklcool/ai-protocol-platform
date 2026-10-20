@@ -3,7 +3,7 @@
 This provider deliberately reuses the existing persistence abstraction so the
 self-host stack does not need a second auth database. Passwords are stored as
 scrypt hashes and every authenticated request re-loads the authoritative user
-record before constructing ``User``; tenant/domain/group tags are therefore
+record before constructing ``User``; roles are therefore
 never trusted from browser-supplied claims.
 """
 
@@ -44,10 +44,6 @@ def _normalise_email(email: str) -> str:
 
 def _domain_for_email(email: str) -> str:
     return email.rsplit("@", 1)[1] if "@" in email else ""
-
-
-def _normalise_tenant_id(tenant_id: str) -> str:
-    return (tenant_id or "").strip()
 
 
 def _user_doc_id(email: str) -> str:
@@ -101,18 +97,13 @@ def verify_password(password: str, encoded: str) -> bool:
 def _record_to_user(record: dict[str, Any]) -> User:
     email = _normalise_email(str(record.get("email") or ""))
     domain = str(record.get("domain") or _domain_for_email(email)).strip().lower()
-    # Legacy auth_users rows predate explicit tenant ids. Domain fallback keeps
-    # those accounts on their existing scope until a migration writes tenantId.
-    tenant_id = _normalise_tenant_id(str(record.get("tenantId") or domain))
     raw_tags = set(record.get("groupTags") or [])
     return User(
         uid=str(record["uid"]),
         email=email,
         domain=domain,
-        tenant_id=tenant_id,
         group_tags=frozenset(str(tag) for tag in raw_tags),
         auth_mode=AUTH_MODE,
-        permission_group_ids=frozenset(record.get("permissionGroupIds") or []),
     )
 
 
@@ -128,38 +119,33 @@ def create_local_user(
     email: str,
     password: str,
     group_tags: set[str] | frozenset[str] | list[str] | tuple[str, ...] = (),
-    permission_group_ids: list[str] | tuple[str, ...] = (),
     uid: str | None = None,
-    tenant_id: str | None = None,
     disabled: bool = False,
     overwrite: bool = False,
 ) -> User:
-    """Create one local account using a deterministic email document key.
-
-    ``tenant_id`` is independent from the account email domain. Omitting it
-    preserves the legacy behavior by using the email domain as the tenant id.
-    """
+    """Create one local account using a deterministic email document key."""
     normalised = _normalise_email(email)
     if not normalised or "@" not in normalised:
         raise ValueError("a valid email address is required")
     domain = _domain_for_email(normalised)
-    explicit_tenant_id = _normalise_tenant_id(tenant_id or domain)
-    if not explicit_tenant_id:
-        raise ValueError("tenant_id must be non-empty")
 
     doc_id = _user_doc_id(normalised)
     existing = persistence.get_document(USER_COLLECTION, doc_id)
     if existing is not None and not overwrite:
         raise ValueError("local user already exists")
+    if uid:
+        conflicts = persistence.query_documents(USER_COLLECTION, filters=[("uid", "==", uid)])
+        if any(str(row.get("email") or "").casefold() != normalised for row in conflicts):
+            raise ValueError("user ID already belongs to another account")
+        if existing and str(existing.get("uid")) != uid:
+            raise ValueError("an existing account's user ID cannot be changed")
     now = int(time.time())
     record = {
         "uid": uid or (str(existing.get("uid")) if existing else str(uuid.uuid4())),
         "email": normalised,
         "domain": domain,
-        "tenantId": explicit_tenant_id,
         "passwordHash": hash_password(password),
         "groupTags": sorted({str(tag).strip() for tag in group_tags if str(tag).strip()}),
-        "permissionGroupIds": sorted(set(permission_group_ids)),
         "disabled": bool(disabled),
         "createdAt": existing.get("createdAt", now) if existing else now,
         "updatedAt": now,
@@ -232,7 +218,6 @@ def issue_access_token(user: User) -> tuple[str, int]:
     payload = {
         "sub": user.uid,
         "email": user.email,
-        "tenant_id": user.tenant_id or user.domain,
         "auth_mode": AUTH_MODE,
         "iss": _issuer(),
         "aud": _audience(),
@@ -265,12 +250,7 @@ def _decode_access_token(token: str) -> dict[str, Any]:
 
 
 def user_from_token(token: str) -> User:
-    """Verify the token, then resolve tenant/roles/domain from trusted persistence.
-
-    ``tenant_id`` is included in the JWT for downstream interoperability, but
-    authorization deliberately reloads the authoritative auth_users row and
-    therefore does not trust a stale or browser-manipulated tenant claim.
-    """
+    """Verify the token, then resolve roles from trusted persistence."""
     decoded = _decode_access_token(token)
     if decoded.get("auth_mode") != AUTH_MODE:
         raise jwt.InvalidTokenError("wrong auth mode")
@@ -300,7 +280,7 @@ async def get_current_user_local_jwt(request: Request) -> User:
         logger.info("auth: rejected local-jwt token (%s)", type(exc).__name__)
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     request.state.access = build_access_context(user)
-    logger.info("auth: local-jwt uid=%s tenant=%s", user.uid, user.tenant_id or user.domain)
+    logger.info("auth: local-jwt uid=%s", user.uid)
     return user
 
 

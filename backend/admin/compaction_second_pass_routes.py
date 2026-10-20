@@ -45,53 +45,60 @@ class RecompactRequest(BaseModel):
 @router.post("/recompact")
 async def recompact(body: RecompactRequest, scope: PlatformScope) -> dict:
     """Run the second pass over a session now (or preview it with dry_run)."""
-    from adk.agui import APP_NAME
-    from adk.compaction_second_pass import run_second_pass
-    from adk.compaction_summarizer import build_compaction_summarizer
-    from adk.session import get_session_service
+    from observability.user_context import authorized_resource_user
 
-    session_service = get_session_service()
-    try:
-        session = await session_service.get_session(app_name=APP_NAME, user_id=body.user_id, session_id=body.session_id)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"could not read session: {exc}") from exc
-    if session is None:
-        raise HTTPException(status_code=404, detail="session not found for that user_id")
+    with authorized_resource_user(body.user_id):
+        from adk.agui import APP_NAME
+        from adk.compaction_second_pass import run_second_pass
+        from adk.compaction_summarizer import build_compaction_summarizer
+        from adk.session import get_session_service
 
-    if body.enqueue:
-        from google.adk.apps.compaction import _latest_compaction_event
+        session_service = get_session_service()
+        try:
+            session = await session_service.get_session(
+                app_name=APP_NAME, user_id=body.user_id, session_id=body.session_id
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"could not read session: {exc}") from exc
+        if session is None:
+            raise HTTPException(status_code=404, detail="session not found for that user_id")
 
-        from internal_tasks.enqueue import schedule_second_pass
+        if body.enqueue:
+            from google.adk.apps.compaction import _latest_compaction_event
 
-        latest = _latest_compaction_event(list(session.events or []))
-        comp = latest.actions.compaction if latest is not None else None
-        end_ts = getattr(comp, "end_timestamp", None)
-        if end_ts is None:
-            raise HTTPException(status_code=422, detail="session has no compaction to second-pass")
-        created = schedule_second_pass(
-            session_id=body.session_id, user_id=body.user_id, compaction_end_ts=end_ts, delay_seconds=0
+            from internal_tasks.enqueue import schedule_second_pass
+
+            latest = _latest_compaction_event(list(session.events or []))
+            comp = latest.actions.compaction if latest is not None else None
+            end_ts = getattr(comp, "end_timestamp", None)
+            if end_ts is None:
+                raise HTTPException(status_code=422, detail="session has no compaction to second-pass")
+            created = schedule_second_pass(
+                session_id=body.session_id, user_id=body.user_id, compaction_end_ts=end_ts, delay_seconds=0
+            )
+            log.info(
+                "admin.compaction_recompact: uid=%s session=%s ENQUEUED=%s", scope.user.uid, body.session_id, created
+            )
+            return {"enqueued": created, "compaction_end_ts": end_ts}
+
+        summarizer = build_compaction_summarizer()
+        if summarizer is None:
+            raise HTTPException(status_code=503, detail="could not resolve a summariser model; see server logs")
+
+        outcome = await run_second_pass(
+            session=session,
+            session_service=session_service,
+            summarizer=summarizer,
+            dry_run=body.dry_run,
         )
-        log.info("admin.compaction_recompact: uid=%s session=%s ENQUEUED=%s", scope.user.uid, body.session_id, created)
-        return {"enqueued": created, "compaction_end_ts": end_ts}
-
-    summarizer = build_compaction_summarizer()
-    if summarizer is None:
-        raise HTTPException(status_code=503, detail="could not resolve a summariser model; see server logs")
-
-    outcome = await run_second_pass(
-        session=session,
-        session_service=session_service,
-        summarizer=summarizer,
-        dry_run=body.dry_run,
-    )
-    log.info(
-        "admin.compaction_recompact: uid=%s session=%s appended=%s dry_run=%s selected=%d out=%d %dms",
-        scope.user.uid,
-        body.session_id,
-        outcome.appended,
-        outcome.dry_run,
-        outcome.selected_events,
-        outcome.summary_chars,
-        outcome.elapsed_ms,
-    )
-    return outcome.__dict__.copy()
+        log.info(
+            "admin.compaction_recompact: uid=%s session=%s appended=%s dry_run=%s selected=%d out=%d %dms",
+            scope.user.uid,
+            body.session_id,
+            outcome.appended,
+            outcome.dry_run,
+            outcome.selected_events,
+            outcome.summary_chars,
+            outcome.elapsed_ms,
+        )
+        return outcome.__dict__.copy()

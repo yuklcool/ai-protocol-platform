@@ -7,7 +7,7 @@
 | 模块 | 职责 |
 | --- | --- |
 | `fast_api_app.py` | 应用、认证路由、协议端点 |
-| `agents/root_runtime.py` | Root 配置、租户覆盖、授权能力组合 |
+| `agents/root_runtime.py` | Root 配置、个人能力组合、授权能力组合 |
 | `skills/skill_processor.py` | 单轮执行、ADK 与 AG-UI 桥接 |
 | `adk/agent.py` | 模型与工具工厂、回调组合 |
 | `adk/session.py` | Session、Memory、Artifact 后端及压缩配置 |
@@ -34,6 +34,6 @@ make test-fast
 
 普通单元回归不调用外部模型或 GCP；数据库、浏览器及真实 Provider 用独立门禁。按实际改动运行适用用例，保留其提交、运行及结果证据。
 
-Ruff 的版本与 CI 对齐，修改后同时运行 check 与 format-check。测试支持代码放 `tests/support/`；防止宽松 mock 掩盖生产错误。新增参数的缺失、权限、租户与失败路径要覆盖。
+Ruff 的版本与 CI 对齐，修改后同时运行 check 与 format-check。测试支持代码放 `tests/support/`；防止宽松 mock 掩盖生产错误。新增参数的缺失、权限、用户与失败路径要覆盖。
 
-运行或部署入口以 [SELFHOST](../SELFHOST.md) 和[配置流程](../docs/configuration-guide.md)为准；已有数据升级见[迁移说明](../docs/tenant-ownership-migration.md)。
+运行或部署入口以 [SELFHOST](../SELFHOST.md) 和[配置流程](../docs/configuration-guide.md)为准；旧组织数据直接删除，升级清理行为见[配置流程](../docs/configuration-guide.md)。

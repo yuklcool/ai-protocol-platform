@@ -2,7 +2,7 @@ name: Real Provider Agent MCP acceptance
 
 on:
   push:
-    branches: [main]
+    branches: [main, refactor/user-owned-agent]
     paths:
       - backend/pyproject.toml
       - backend/uv.lock
@@ -10,7 +10,6 @@ on:
       - backend/protocols/a2ui_surface_action_run_routes.py
       - frontend/e2e/model-setup-live.spec.js
       - frontend/e2e/provider-agent-mcp-live.spec.js
-      - frontend/e2e/selfhost-fixtures.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   pull_request:
     paths:
@@ -21,7 +20,6 @@ on:
       - backend/protocols/a2ui_surface_action_run_routes.py
       - frontend/e2e/model-setup-live.spec.js
       - frontend/e2e/provider-agent-mcp-live.spec.js
-      - frontend/e2e/selfhost-fixtures.js
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
   workflow_call:
     inputs:
@@ -75,7 +73,7 @@ jobs:
     # Reusable workflows inherit the caller's github context; a call from the
     # release orchestrator therefore still reports event_name=push.
     # PRs intentionally run syntax-only checks and never receive the real secret.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.actor == github.repository_owner)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

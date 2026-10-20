@@ -32,15 +32,11 @@ on:
       - backend/tools/documents/**
       - backend/protocols/session_document_routes.py
       - backend/tests/fixtures/documents/**
-      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
-      - frontend/src/app/admin/tenants/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
-      - backend/admin/tenant_root_routes.py
       - backend/admin/usage_routes.py
       - backend/auth/local*.py
       - backend/observability/usage.py
@@ -52,24 +48,18 @@ on:
       - backend/admin/model_providers_routes.py
       - backend/admin/model_probe_routes.py
       - backend/admin/model_registry_settings_routes.py
-      - backend/admin/tenant_model_policy_routes.py
       - backend/admin/routes.py
       - backend/adk/agent.py
       - backend/config/model_provider_registry.py
       - backend/config/effective_models.py
       - backend/config/runtime_models.py
-      - backend/config/tenant_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
       - backend/tests/api_tests/test_admin_model_probe.py
       - backend/tests/api_tests/test_admin_model_registry_settings.py
-      - backend/tests/api_tests/test_admin_tenant_model_policy.py
-      - backend/tests/api_tests/test_tenant_models_route.py
-      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
       - backend/tests/unit/test_runtime_models.py
-      - backend/tests/unit/test_tenant_models.py
       - backend/tests/unit/test_model_runtime_routing.py
       - .github/workflows/model-provider-gate.yml
   push:
@@ -104,15 +94,11 @@ on:
       - backend/tools/documents/**
       - backend/protocols/session_document_routes.py
       - backend/tests/fixtures/documents/**
-      - frontend/e2e/selfhost-fixtures.js
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
-      - frontend/src/app/admin/tenants/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
-      - backend/admin/tenant_root_routes.py
       - backend/admin/usage_routes.py
       - backend/auth/local*.py
       - backend/observability/usage.py
@@ -124,24 +110,18 @@ on:
       - backend/admin/model_providers_routes.py
       - backend/admin/model_probe_routes.py
       - backend/admin/model_registry_settings_routes.py
-      - backend/admin/tenant_model_policy_routes.py
       - backend/admin/routes.py
       - backend/adk/agent.py
       - backend/config/model_provider_registry.py
       - backend/config/effective_models.py
       - backend/config/runtime_models.py
-      - backend/config/tenant_models.py
       - backend/protocols/models_route.py
       - backend/tests/api_tests/test_admin_model_providers.py
       - backend/tests/api_tests/test_admin_model_probe.py
       - backend/tests/api_tests/test_admin_model_registry_settings.py
-      - backend/tests/api_tests/test_admin_tenant_model_policy.py
-      - backend/tests/api_tests/test_tenant_models_route.py
-      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/unit/test_model_provider_registry.py
       - backend/tests/unit/test_effective_models.py
       - backend/tests/unit/test_runtime_models.py
-      - backend/tests/unit/test_tenant_models.py
       - backend/tests/unit/test_model_runtime_routing.py
       - .github/workflows/model-provider-gate.yml
 
@@ -159,7 +139,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Build backend
         run: docker compose build backend
-      - name: Run model-provider, tenant-policy and admin-scope tests
+      - name: Run model-provider, user-ownership and admin-role tests
         run: |
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=memory \
@@ -173,13 +153,9 @@ jobs:
               tests/api_tests/test_admin_model_probe.py \
               tests/api_tests/test_model_setup_flow.py \
               tests/api_tests/test_admin_model_registry_settings.py \
-              tests/api_tests/test_admin_tenant_model_policy.py \
-              tests/api_tests/test_tenant_models_route.py \
-              tests/api_tests/test_admin_cross_tenant_matrix.py \
               tests/unit/test_model_provider_registry.py \
               tests/unit/test_effective_models.py \
               tests/unit/test_runtime_models.py \
-              tests/unit/test_tenant_models.py \
               tests/unit/test_model_runtime_routing.py
 
   model-provider-frontend:
@@ -303,4 +279,3 @@ jobs:
         run: |
           docker rm -f model-setup-probe || true
           docker compose down -v --remove-orphans
-

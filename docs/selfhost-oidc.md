@@ -8,11 +8,11 @@
 
 后端执行 code exchange，浏览器不获取 client secret/PKCE verifier，也不需要直接跨域调用 IdP token endpoint。验证后的 ID token 保存在 `sessionStorage`，到期重新登录，当前没有静默 refresh-token 流程。
 
-IdP 负责认证，平台 PostgreSQL `auth_users` 负责租户和角色。外部邮箱、`tenant_id`、`groupTags` 或 `role` 声明不会自动创建租户/管理员；必须显式关联 `issuer + sub`。
+IdP 负责认证，平台 PostgreSQL `auth_users` 负责用户和角色。外部邮箱、`user_id`、`groupTags` 或 `role` 声明不会自动创建用户/管理员；必须显式关联 `issuer + sub`。
 
 ## 2. 切换前准备本地授权记录
 
-先在 `local-jwt` 模式创建平台用户、租户和授权，记录将关联的邮箱/UID。通过 IdP 获取真实 subject 后关联：
+先在 `local-jwt` 模式创建平台账号与角色，记录将关联的邮箱/UID。通过 IdP 获取真实 subject 后关联：
 
 ```bash
 cd backend
@@ -48,12 +48,12 @@ Compose 用 `up -d` 应用变更；源码前端认证模式属于构建参数，
 
 ## 4. 登录流程
 
-浏览器调用 `/api/auth/oidc/start`，后端创建一次性事务并跳转 IdP；IdP 回调 `/auth/oidc/callback`，浏览器把 code/state 交后端。后端消费 state、兑换并校验 ID token，然后通过映射加载 `auth_users` 的可信租户与角色。
+浏览器调用 `/api/auth/oidc/start`，后端创建一次性事务并跳转 IdP；IdP 回调 `/auth/oidc/callback`，浏览器把 code/state 交后端。后端消费 state、兑换并校验 ID token，然后通过映射加载 `auth_users` 的可信用户与角色。
 
 `GET /api/auth/provider` 返回非秘密配置、能力及可达 discovery 的端点，不返回 client secret。浏览器和后端都必须能访问配置的 issuer；不要混用不同主机名导致 issuer 不匹配。
 
 ## 5. 验收
 
-测试真实登录/回调、刷新恢复、过期重新登录、未关联 subject 拒绝、禁用账号拒绝、外部伪造管理员声明不能提升权限。还需验证目标租户资源隔离。
+测试真实登录/回调、刷新恢复、过期重新登录、未关联 subject 拒绝、禁用账号拒绝、外部伪造管理员声明不能提升权限。还需验证目标用户资源隔离。
 
-仓库包含真实 Keycloak 兼容工作流；它不自动证明每个 Entra ID/Okta 租户配置已经验收。外部 IdP 配置和目标环境网络需要单独验证。
+仓库包含真实 Keycloak 兼容工作流；它不自动证明每个 Entra ID/Okta 用户配置已经验收。外部 IdP 配置和目标环境网络需要单独验证。

@@ -17,17 +17,10 @@ type Stats = {
   estimatedCostUsd: number;
   unpricedCalls: number;
 };
-type TenantUsage = Stats & {
-  tenantId: string;
-  label: string;
-  quotaUsd: number | null;
-  chargedUsd: number;
-  heldUsd: number;
-  period: string;
-};
+type UserUsage = Stats & { userId: string };
 type Usage = {
   totals: Stats;
-  tenants: TenantUsage[];
+  users: UserUsage[];
   models: Array<Omit<Stats, "unpricedCalls"> & { modelId: string }>;
 };
 export function UsagePanel() {
@@ -37,7 +30,7 @@ export function UsagePanel() {
     [],
   );
   const [days, setDays] = useState("30");
-  const [tenant, setTenant] = useState("");
+  const [userId, setUserId] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
@@ -47,19 +40,19 @@ export function UsagePanel() {
     setNotice("");
     const params = new URLSearchParams({
       days,
-      ...(tenant ? { tenant_id: tenant } : {}),
+      ...(userId ? { user_id: userId } : {}),
     });
     consoleApi<Usage>(`/admin/usage?${params}`)
       .then((result) => {
         if (cancelled) return;
-        if (!result.totals || !Array.isArray(result.tenants))
+        if (!result.totals || !Array.isArray(result.users))
           throw new Error("Invalid usage response");
         setData(result);
-        if (!tenant)
+        if (!userId)
           setOptions(
-            result.tenants.map((row) => ({
-              id: row.tenantId,
-              label: row.label,
+            result.users.map((row) => ({
+              id: row.userId,
+              label: row.userId,
             })),
           );
       })
@@ -75,14 +68,14 @@ export function UsagePanel() {
     return () => {
       cancelled = true;
     };
-  }, [days, tenant, nonce]);
+  }, [days, userId, nonce]);
   const cost = (value: number) => `$${value.toFixed(6)}`;
   const totals = data?.totals;
   return (
     <section className="mb-6 space-y-4 glass-panel p-4">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="mr-auto text-base font-semibold">
-          {t("用量与额度", "Usage and budgets")}
+          {t("用量统计", "Usage")}
         </h2>
         <select
           aria-label={t("用量时间范围", "Usage time range")}
@@ -97,13 +90,13 @@ export function UsagePanel() {
           ))}
         </select>
         <select
-          aria-label={t("用量租户", "Usage tenant")}
+          aria-label={t("用户用量", "Usage user")}
           className={`${control} w-auto`}
-          value={tenant}
-          onChange={(e) => setTenant(e.target.value)}
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
         >
           <option value="">
-            {t("全部授权租户", "All authorized tenants")}
+            {t("全部用户", "All users")}
           </option>
           {options.map((option) => (
             <option key={option.id} value={option.id}>
@@ -121,8 +114,8 @@ export function UsagePanel() {
       </div>
       <p className="text-xs leading-5 text-muted-foreground">
         {t(
-          "Token 按模型返回的用量持久化记录；费用为估算值。历史记录从启用此版本后开始累计，未返回用量的调用不计入统计。额度占用包含尚未结算的预留金额。",
-          "Tokens use persisted provider-reported usage; costs are estimates. Accounting starts with this version. Calls without reported usage are excluded. Budget charges include unsettled holds.",
+          "Token 按模型返回的用量持久化记录；费用为估算值。历史记录从启用此版本后开始累计，未返回用量的调用不计入统计。",
+          "Tokens use persisted provider-reported usage; costs are estimates. Accounting starts with this version. Calls without reported usage are excluded.",
         )}
       </p>
       <Notice>{notice}</Notice>
@@ -165,11 +158,7 @@ export function UsagePanel() {
               <thead>
                 <tr>
                   {[
-                    t("租户", "Tenant"),
-                    t("估算费用", "Estimated cost"),
-                    t("周期额度", "Period cap"),
-                    t("已占用 / 其中预留", "Charged / held"),
-                    t("周期", "Period"),
+                    t("用户", "User"), t("模型调用", "Model calls"), t("输入 / 输出 Token", "Input / output tokens"), t("估算费用", "Estimated cost"),
                   ].map((label) => (
                     <th className="p-2 font-medium" key={label}>
                       {label}
@@ -178,32 +167,17 @@ export function UsagePanel() {
                 </tr>
               </thead>
               <tbody>
-                {data.tenants.map((row) => (
-                  <tr key={row.tenantId} className="border-t">
-                    <td className="p-2">{row.label}</td>
-                    <td className="p-2">{cost(row.estimatedCostUsd)}</td>
-                    <td className="p-2">
-                      {row.quotaUsd
-                        ? cost(row.quotaUsd)
-                        : t("不限额", "Unlimited")}
-                    </td>
-                    <td className="p-2">
-                      {cost(row.chargedUsd)} / {cost(row.heldUsd)}
-                    </td>
-                    <td className="p-2">
-                      {row.period === "daily"
-                        ? t("每日", "Daily")
-                        : row.period === "weekly"
-                          ? t("每周", "Weekly")
-                          : t("每月", "Monthly")}
-                    </td>
+                {data.users.map((row) => (
+                  <tr key={row.userId} className="border-t">
+                    <td className="p-2">{row.userId}</td>
+                    <td className="p-2">{row.calls}</td><td className="p-2">{row.inputTokens} / {row.outputTokens}</td><td className="p-2">{cost(row.estimatedCostUsd)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {data.tenants.length === 0 && (
+            {data.users.length === 0 && (
               <p className="p-3 text-sm text-muted-foreground">
-                {t("暂无租户用量。", "No tenant usage.")}
+                {t("暂无用户用量。", "No user usage.")}
               </p>
             )}
           </div>

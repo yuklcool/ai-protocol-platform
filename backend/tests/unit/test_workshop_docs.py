@@ -44,7 +44,7 @@ def test_index_includes_integration_howtos():
     docs = workshop_docs._load_index()
     paths = {d["path"] for d in docs}
     assert "docs/integrations/budget-enforcement.md" in paths
-    assert "docs/integrations/tenant-attribution.md" in paths
+    assert "docs/integrations/user-attribution.md" in paths
 
 
 def test_index_includes_canonical_talk_doc():

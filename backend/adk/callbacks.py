@@ -99,7 +99,25 @@ def make_permission_enforcer(
         elif root_agent:
             root = authorized_root_config(get_platform_config().agent, user)
             denied = set(root.permissions.get("deniedTools") or [])
-            allowed = tool_name not in denied and "*" not in denied
+            binding = getattr(tool, "_aitana_root_binding", tool_name)
+            origin = getattr(getattr(tool, "func", None), "__module__", "")
+            attachment_reader = (
+                tool_name == "read_attached_document"
+                and origin == "tools.documents.access"
+                and bool(tool_context.state.get("document_ids"))
+            )
+            interaction_tool = root.interaction.a2ui_enabled and (
+                type(tool).__module__ == "adk.a2ui"
+                or (tool_name == "request_confirmation" and origin == "adk.elicitation")
+            )
+            bound = (
+                binding in root.tools
+                or tool_name in _INTERNAL_CONTROL_TOOLS
+                or (tool_name == "search_agent_knowledge" and bool(root.knowledge))
+                or attachment_reader
+                or interaction_tool
+            )
+            allowed = bound and tool_name not in denied and binding not in denied and "*" not in denied
         else:
             # 独立后台任务仍执行其工具策略。MCP 不经过此路径。
             if (
@@ -129,7 +147,7 @@ def make_permission_enforcer(
                 for ref in refs:
                     if not isinstance(ref, str) or ref not in selected:
                         raise DocumentUnavailable("工具只能读取本轮明确选择的附件。")
-                    readable_document(ref, user_id=user.uid, tenant_id=user.tenant_id)
+                    readable_document(ref, user_id=user.uid)
 
         # TTFT: emit a STAGE_PROGRESS label per tool call so the UI can
         # show "Calling search…" instead of an indefinite cursor while
@@ -381,10 +399,10 @@ def make_document_injector(user: Any) -> Any:
         )
         if prompt_index is None:
             return
-        ids = validate_selection(list(state.get("document_ids") or []), user_id=user.uid, tenant_id=user.tenant_id)
+        ids = validate_selection(list(state.get("document_ids") or []), user_id=user.uid)
         allowance = 32000 // max(1, len(ids))
         for doc_id in ids:
-            row = readable_document(doc_id, user_id=user.uid, tenant_id=user.tenant_id)
+            row = readable_document(doc_id, user_id=user.uid)
             text = document_text(row)
             excerpt = text[:allowance]
             scope = (
@@ -421,7 +439,6 @@ def make_document_injector(user: Any) -> Any:
 # SESSION-scoped (#38). This gates "first turn of THIS session" — under `app:`
 # the first session to initialise set it for EVERY later session, so the
 # `_STATE_TURN_COUNT = 0` reset on the existing-row path never ran again and the
-# counter climbed forever across users (125→131 across two tenants on test).
 # The index row still appeared only because process_skill_request writes it
 # synchronously, which masked the skipped callback.
 _STATE_INITIALIZED = "chat_session_initialized"

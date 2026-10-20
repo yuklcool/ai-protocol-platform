@@ -207,40 +207,17 @@ async def _probe(model: dict, provider: dict, body: ModelProbeRequest) -> ModelP
 
 @router.get("/current")
 def current_root_model(scope: PlatformScope) -> dict:
-    from agents.root_runtime import effective_root_config
-    from config.effective_models import load_effective_models_config
     from config.models import active_residency_policy
-    from config.tenant_models import load_tenant_model_policy
-    from db.tenants import get_tenant
+    from config.runtime_models import entry_for
 
-    platform = get_platform_config().agent
-    tenant_id = scope.user.tenant_id or scope.user.domain
-    root = effective_root_config(platform, tenant_id)
-    cfg = load_effective_models_config()
-    policy = load_tenant_model_policy(tenant_id)
-
-    def resolve(ref: str):
-        variants = cfg.tier_variants.get(ref)
-        target = variants.get(active_residency_policy(), variants["default"]) if variants else ref
-        return next((entry for entry in cfg.models if entry.id == target), None)
-
-    platform_entry = resolve(platform.model)
-    tenant_entry = resolve(policy.default_model if root.model == "default" and policy.default_model else root.model)
-    tenant = get_tenant(tenant_id)
+    root = get_platform_config().agent
+    entry = entry_for(root.model)
     return {
         "residency_policy": active_residency_policy(),
-        "root_model": platform.model,
-        "root_model_id": platform_entry.id if platform_entry else None,
-        "root_api_name": platform_entry.api_name if platform_entry else None,
-        "tenant_model_id": tenant_entry.id if tenant_entry else None,
-        "tenant_api_name": tenant_entry.api_name if tenant_entry else None,
-        "tenant_allowed": bool(
-            tenant
-            and not tenant.disabled
-            and tenant_entry
-            and policy.allows(tenant_entry.id)
-            and (active_residency_policy() != "eu-strict" or tenant_entry.residency == "eu")
-        ),
+        "root_model": root.model,
+        "root_model_id": entry.id if entry else None,
+        "root_api_name": entry.api_name if entry else None,
+        "allowed": bool(entry and (active_residency_policy() != "eu-strict" or entry.residency == "eu")),
     }
 
 
@@ -280,7 +257,6 @@ def use_root_model(model_id: str, scope: PlatformScope) -> dict:
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
         action="use_root_model",
         target=model_id,
         before={"model": before.agent.model},

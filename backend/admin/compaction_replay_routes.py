@@ -81,122 +81,127 @@ class ReplayResult(BaseModel):
 @router.post("/replay", response_model=ReplayResult)
 async def replay_compaction(body: ReplayRequest, scope: PlatformScope) -> ReplayResult:
     """Replay a compaction over a recorded session. Never mutates it."""
-    from google.adk.apps.compaction import _events_to_compact_for_token_threshold
+    from observability.user_context import authorized_resource_user
 
-    from adk.agui import APP_NAME
-    from adk.session import get_compaction_config, get_session_service
+    with authorized_resource_user(body.user_id):
+        from google.adk.apps.compaction import _events_to_compact_for_token_threshold
 
-    notes: list[str] = []
-    session_service = get_session_service()
-    try:
-        session = await session_service.get_session(app_name=APP_NAME, user_id=body.user_id, session_id=body.session_id)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"could not read session: {exc}") from exc
-    if session is None:
-        raise HTTPException(status_code=404, detail="session not found for that user_id")
+        from adk.agui import APP_NAME
+        from adk.session import get_compaction_config, get_session_service
 
-    events = list(session.events or [])
-    existing = sum(1 for e in events if e.actions and getattr(e.actions, "compaction", None))
+        notes: list[str] = []
+        session_service = get_session_service()
+        try:
+            session = await session_service.get_session(
+                app_name=APP_NAME, user_id=body.user_id, session_id=body.session_id
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"could not read session: {exc}") from exc
+        if session is None:
+            raise HTTPException(status_code=404, detail="session not found for that user_id")
 
-    config = get_compaction_config("")  # deployment default; only retention is read below
-    retention = body.event_retention_size if body.event_retention_size is not None else config.event_retention_size
-    if retention is None:
-        retention = 0
-        notes.append("no event_retention_size configured; replaying with 0")
+        events = list(session.events or [])
+        existing = sum(1 for e in events if e.actions and getattr(e.actions, "compaction", None))
 
-    selected = _events_to_compact_for_token_threshold(events=events, event_retention_size=retention)
-    input_chars = sum(len(p.text or "") for e in selected if e.content and e.content.parts for p in e.content.parts)
+        config = get_compaction_config("")  # deployment default; only retention is read below
+        retention = body.event_retention_size if body.event_retention_size is not None else config.event_retention_size
+        if retention is None:
+            retention = 0
+            notes.append("no event_retention_size configured; replaying with 0")
 
-    if not selected:
-        notes.append(
-            f"nothing to compact: {len(events)} events, retention {retention}. "
-            "Candidates must EXCEED retention before compaction can fire at all."
-        )
-        return ReplayResult(
-            session_id=body.session_id,
-            total_events=len(events),
-            existing_compactions=existing,
-            selected_events=0,
-            input_chars=0,
-            notes=notes,
-        )
+        selected = _events_to_compact_for_token_threshold(events=events, event_retention_size=retention)
+        input_chars = sum(len(p.text or "") for e in selected if e.content and e.content.parts for p in e.content.parts)
 
-    if not body.summarize:
-        notes.append("selection only — no model call made")
-        return ReplayResult(
-            session_id=body.session_id,
-            total_events=len(events),
-            existing_compactions=existing,
-            selected_events=len(selected),
-            input_chars=input_chars,
-            notes=notes,
-        )
+        if not selected:
+            notes.append(
+                f"nothing to compact: {len(events)} events, retention {retention}. "
+                "Candidates must EXCEED retention before compaction can fire at all."
+            )
+            return ReplayResult(
+                session_id=body.session_id,
+                total_events=len(events),
+                existing_compactions=existing,
+                selected_events=0,
+                input_chars=0,
+                notes=notes,
+            )
 
-    if body.prompt_template and "{conversation_history}" not in body.prompt_template:
-        # Would raise inside str.format during summarisation — reject up front
-        # rather than fail mid-call with a confusing KeyError.
-        raise HTTPException(status_code=422, detail="prompt_template must contain {conversation_history}")
+        if not body.summarize:
+            notes.append("selection only — no model call made")
+            return ReplayResult(
+                session_id=body.session_id,
+                total_events=len(events),
+                existing_compactions=existing,
+                selected_events=len(selected),
+                input_chars=input_chars,
+                notes=notes,
+            )
 
-    summarizer = _build_summarizer(body.model_ref, body.prompt_template, notes)
-    if summarizer is None:
-        raise HTTPException(status_code=503, detail="could not resolve a summariser model; see server logs")
+        if body.prompt_template and "{conversation_history}" not in body.prompt_template:
+            # Would raise inside str.format during summarisation — reject up front
+            # rather than fail mid-call with a confusing KeyError.
+            raise HTTPException(status_code=422, detail="prompt_template must contain {conversation_history}")
 
-    started = time.perf_counter()
-    try:
-        event = await summarizer.maybe_summarize_events(events=selected)
-    except Exception as exc:
+        summarizer = _build_summarizer(body.model_ref, body.prompt_template, notes)
+        if summarizer is None:
+            raise HTTPException(status_code=503, detail="could not resolve a summariser model; see server logs")
+
+        started = time.perf_counter()
+        try:
+            event = await summarizer.maybe_summarize_events(events=selected)
+        except Exception as exc:
+            elapsed = int((time.perf_counter() - started) * 1000)
+            notes.append(f"summarisation RAISED {type(exc).__name__}: {str(exc)[:200]}")
+            return ReplayResult(
+                session_id=body.session_id,
+                total_events=len(events),
+                existing_compactions=existing,
+                selected_events=len(selected),
+                input_chars=input_chars,
+                declined=True,
+                elapsed_ms=elapsed,
+                notes=notes,
+            )
         elapsed = int((time.perf_counter() - started) * 1000)
-        notes.append(f"summarisation RAISED {type(exc).__name__}: {str(exc)[:200]}")
+
+        if event is None:
+            notes.append(
+                "SUMMARISER DECLINED — returned None. In production this means history was NOT "
+                "compacted and the model call was paid for nothing (findings log §3.2)."
+            )
+            return ReplayResult(
+                session_id=body.session_id,
+                total_events=len(events),
+                existing_compactions=existing,
+                selected_events=len(selected),
+                input_chars=input_chars,
+                declined=True,
+                elapsed_ms=elapsed,
+                notes=notes,
+            )
+
+        comp = event.actions.compaction
+        text = "".join(p.text or "" for p in (comp.compacted_content.parts or []))
+        log.info(
+            "admin.compaction_replay: uid=%s session=%s selected=%d in=%d out=%d %dms",
+            scope.user.uid,
+            body.session_id,
+            len(selected),
+            input_chars,
+            len(text),
+            elapsed,
+        )
         return ReplayResult(
             session_id=body.session_id,
             total_events=len(events),
             existing_compactions=existing,
             selected_events=len(selected),
             input_chars=input_chars,
-            declined=True,
+            summary_chars=len(text),
+            summary=text,
             elapsed_ms=elapsed,
             notes=notes,
         )
-    elapsed = int((time.perf_counter() - started) * 1000)
-
-    if event is None:
-        notes.append(
-            "SUMMARISER DECLINED — returned None. In production this means history was NOT "
-            "compacted and the model call was paid for nothing (findings log §3.2)."
-        )
-        return ReplayResult(
-            session_id=body.session_id,
-            total_events=len(events),
-            existing_compactions=existing,
-            selected_events=len(selected),
-            input_chars=input_chars,
-            declined=True,
-            elapsed_ms=elapsed,
-            notes=notes,
-        )
-
-    comp = event.actions.compaction
-    text = "".join(p.text or "" for p in (comp.compacted_content.parts or []))
-    log.info(
-        "admin.compaction_replay: uid=%s session=%s selected=%d in=%d out=%d %dms",
-        scope.user.uid,
-        body.session_id,
-        len(selected),
-        input_chars,
-        len(text),
-        elapsed,
-    )
-    return ReplayResult(
-        session_id=body.session_id,
-        total_events=len(events),
-        existing_compactions=existing,
-        selected_events=len(selected),
-        input_chars=input_chars,
-        summary_chars=len(text),
-        summary=text,
-        elapsed_ms=elapsed,
-        notes=notes,
-    )
 
 
 def _build_summarizer(model_ref: str | None, prompt_template: str | None, notes: list[str]):

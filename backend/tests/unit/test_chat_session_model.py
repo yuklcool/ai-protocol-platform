@@ -83,9 +83,7 @@ class TestChatSessionIndexModel:
 
 class TestCanAccessForChatSession:
     def _ctx(self, uid="user-b", tags=()) -> AccessContext:
-        return AccessContext(
-            uid=uid, email="b@example.com", domain="example.com", tenant_id="test-tenant", group_tags=frozenset(tags)
-        )
+        return AccessContext(uid=uid, email="b@example.com", domain="example.com", group_tags=frozenset(tags))
 
     def test_owner_can_access_private(self):
         s = _make_session(owner_uid="owner-x", ac=AccessControl(type="private"))
@@ -129,11 +127,14 @@ class TestCanAccessForChatSession:
 
 class TestListSessionsForDocument:
     def _ctx(self, uid="viewer", tags=()):
-        return AccessContext(uid=uid, tenant_id="test-tenant", group_tags=frozenset(tags))
+        return AccessContext(uid=uid, group_tags=frozenset(tags))
 
     def _seed(self, *sessions):
         from db.chat_sessions import _to_document
-        from db.persistence import get_repository
+        from db.persistence import get_repository, reset_repository_for_testing
+        from db.repositories.memory import MemoryRepository
+
+        reset_repository_for_testing(MemoryRepository())
 
         for session in sessions:
             get_repository().set_document("chat_sessions", session.session_id, _to_document(session))
@@ -162,7 +163,5 @@ class TestListSessionsForDocument:
         from db.chat_sessions import list_sessions_for_document
 
         private = _make_session("private", owner_uid="bob")
-        cross_tenant = _make_session("other", owner_uid="viewer", ac=AccessControl(type="public"))
-        cross_tenant.tenant_id = "other-tenant"
-        self._seed(private, cross_tenant)
+        self._seed(private)
         assert list_sessions_for_document("doc-1", self._ctx()) == ([], None)

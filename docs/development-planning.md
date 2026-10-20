@@ -78,7 +78,7 @@ Task 用于 Feature 内部仍需独立跟踪的实现工作，例如：
 - 数据模型大改
 - 多 Agent runtime
 - 新基础设施依赖
-- 安全边界/租户模型变化
+- 安全边界/用户模型变化
 
 RFC 被接受后，再拆 Epic / Feature Issue。
 
@@ -100,7 +100,7 @@ Testing / Acceptance
 Done
 ```
 
-Issue 关闭前必须满足其“验收标准”。PR merge 不自动等于产品验收完成；涉及真实 Provider、Tenant、MCP、发布链路的能力必须保留真实验收证据。
+Issue 关闭前必须满足其“验收标准”。PR merge 不自动等于产品验收完成；涉及真实 Provider、User、MCP、发布链路的能力必须保留真实验收证据。
 
 ## 3. Pull Request 与 Issue 关联
 
@@ -141,7 +141,7 @@ Closes #123
 - mcp
 - provider
 - auth
-- tenant
+- user
 - storage
 - observability
 - infra/release
@@ -153,7 +153,7 @@ Feature / Task 只有在适用条件全部满足后才应关闭：
 - [ ] 实现已进入 main
 - [ ] 单元/集成测试通过
 - [ ] 相关 CI gate 通过
-- [ ] 跨租户/权限/失败路径测试已覆盖（如适用）
+- [ ] 跨用户/权限/失败路径测试已覆盖（如适用）
 - [ ] 真实 Provider / MCP / 浏览器 E2E 已验证（如适用）
 - [ ] migration / rollback 已验证（如适用）
 - [ ] 文档已同步
@@ -178,7 +178,7 @@ Feature / Task 只有在适用条件全部满足后才应关闭：
 | Status | Backlog / Ready / In Progress / Review / Testing / Done |
 | Priority | P0 / P1 / P2 / P3 |
 | Type | Epic / Feature / Task / Bug / RFC |
-| Area | Agent / Skill / MCP / Provider / Auth / Tenant / Infra / ... |
+| Area | Agent / Skill / MCP / Provider / Auth / User / Infra / ... |
 | Target Version | v1.0.x / v1.1 / v1.2 / ... |
 | Start Date | date |
 | Target Date | date |

@@ -7,7 +7,7 @@ from admin.accounts_routes import account_view
 from admin.scope import Scope
 from agents.root_runtime import _configured_ref
 from auth.access_context import build_access_context
-from auth.capability_access import authorized_root_config, refresh_authorization, user_groups
+from auth.capability_access import authorized_root_config, refresh_authorization
 from auth.local_jwt import get_local_user_by_email
 from auth.models import User
 from config.platform_config import get_platform_config
@@ -25,15 +25,13 @@ def check_access(body: AccessCheckRequest, scope: Scope) -> dict:
     row = get_local_user_by_email(body.email)
     if row is None:
         raise HTTPException(404, "账号不存在")
-    scope.assert_may_tenant(row.get("tenantId"))
     if row.get("disabled"):
-        return {"account": account_view(row), "groups": [], "skills": [], "mcpServers": [], "reason": "账号已停用"}
+        return {"account": account_view(row), "skills": [], "mcpServers": [], "reason": "账号已停用"}
     user = refresh_authorization(
         User(
             uid=row["uid"],
             email=row["email"],
             domain=row.get("domain", ""),
-            tenant_id=row["tenantId"],
             auth_mode="local-jwt",
         )
     )
@@ -46,8 +44,7 @@ def check_access(body: AccessCheckRequest, scope: Scope) -> dict:
             skills.append({"id": skill.skill_id, "label": skill.display_name or skill.name})
     return {
         "account": account_view(row),
-        "groups": [group.model_dump(by_alias=True) for group in user_groups(user)],
         "skills": skills,
         "mcpServers": root.mcp_servers,
-        "reason": "当前 Root、租户允许资源和权限组合集的交集, Skills 另受资源 ACL 约束",
+        "reason": "Agent 公共能力与用户专有 Skill 的合并结果, Skills 受资源 ACL 约束",
     }

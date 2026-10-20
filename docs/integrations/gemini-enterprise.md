@@ -457,14 +457,14 @@ curl -X PATCH .../agents/<id>?updateMask=metadata \
 Returns: `INVALID_ARGUMENT: Unknown name "metadata" at 'agent': Cannot find field.`
 
 **Root cause.** Discovery Engine's Agent resource schema is fixed. The
-`metadata` field would have been ideal for tenant-scoped configuration
+`metadata` field would have been ideal for user-scoped configuration
 that travels with the registration; it doesn't exist.
 
 **Fix.** Two options:
-1. **Per-deploy env var** (single-tenant; the template default) — set
+1. **Per-deploy env var** (single-user; the template default) — set
    `A2A_AGENT_DOCUMENTS_BUCKET=gs://...` in your `cloudbuild.yaml`. All
    registrations pointing at this deploy share the same bucket.
-2. **Per-call peer-identity header lookup** (multi-tenant) — inspect
+2. **Per-call peer-identity header lookup** (multi-user) — inspect
    request headers for a stable peer ID (none observed from GE yet),
    look up bindings in Firestore. Not in the template; fork extension.
 

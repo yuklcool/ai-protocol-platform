@@ -7,7 +7,6 @@ export interface OidcUser {
   uid: string;
   email: string;
   domain: string;
-  tenantId?: string;
   groupTags: string[];
   authMode: string;
 }

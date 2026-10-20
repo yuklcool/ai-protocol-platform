@@ -683,7 +683,7 @@ def _demo_skills(now: float) -> list[dict]:
                 "    (with implementation details, axiom scores, success "
                 "    metrics, gotchas)\n"
                 "  - Fork-adoption howtos for budget enforcement, artefact "
-                "    review, tenant attribution, anonymous-group auth, "
+                "    review, user attribution, anonymous-group auth, "
                 "    channels, multi-surface rendering\n"
                 "  - The canonical living talk doc "
                 "    (`docs/talks/ai-ui-protocol-stack.md`) with the "

@@ -9,10 +9,10 @@ from adk.callbacks import make_document_injector
 from auth.models import User
 from db.persistence import reset_repository_for_testing
 from db.repositories.memory import MemoryRepository
-from observability.tenant_context import set_tenant_context
+from observability.user_context import set_user_context
 from tools.documents.access import DocumentUnavailable, read_attached_document
 
-USER = User(uid="same", email="u@local.test", tenant_id="tenant-a")
+USER = User(uid="same", email="u@local.test")
 
 
 @pytest.fixture()
@@ -85,8 +85,8 @@ async def test_reparse_or_edits_do_not_reuse_stale_artifacts(repo):
 
 
 @pytest.mark.asyncio
-async def test_same_uid_other_tenant_cannot_read_content(repo):
-    other = USER.model_copy(update={"tenant_id": "tenant-b"})
+async def test_other_user_cannot_read_content(repo):
+    other = USER.model_copy(update={"uid": "other-user"})
     with pytest.raises(DocumentUnavailable):
         await make_document_injector(other)(SimpleNamespace(state={"document_ids": ["a"]}), request())
 
@@ -117,7 +117,7 @@ async def test_long_content_declares_scope_and_is_readable_by_offset(repo):
     await make_document_injector(USER)(context, req)
     assert "当前仅提供前" in texts(req) and "UNIQUE-END-119" not in texts(req)
     assert len(texts(req)) < 33000
-    set_tenant_context(USER)
+    set_user_context(USER)
     result = read_attached_document("a", offset=78000, tool_context=context)
     assert "UNIQUE-END-119" in result["text"] and result["hasMore"] is False
     with pytest.raises(DocumentUnavailable):

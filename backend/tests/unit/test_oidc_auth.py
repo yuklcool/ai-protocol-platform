@@ -113,7 +113,6 @@ async def test_verified_subject_maps_to_server_authoritative_local_user(
     local = create_local_user(
         email="owner@example.com",
         password="correct horse battery staple",
-        tenant_id="tenant-a",
         group_tags={"tenant-admin:tenant-a"},
     )
     link_oidc_subject(
@@ -132,10 +131,8 @@ async def test_verified_subject_maps_to_server_authoritative_local_user(
 
     assert user.uid == local.uid
     assert user.email == "owner@example.com"
-    assert user.tenant_id == "tenant-a"
     assert user.group_tags == frozenset({"tenant-admin:tenant-a"})
     assert user.auth_mode == "oidc"
-    assert user.tenant_id != "attacker-tenant"
     assert "aitana-admin" not in user.group_tags
 
 
@@ -156,7 +153,6 @@ async def test_disabled_local_user_is_rejected(monkeypatch: pytest.MonkeyPatch) 
     create_local_user(
         email="owner@example.com",
         password="correct horse battery staple",
-        tenant_id="tenant-a",
     )
     link_oidc_subject(
         issuer="https://idp.example.test",
@@ -166,7 +162,6 @@ async def test_disabled_local_user_is_rejected(monkeypatch: pytest.MonkeyPatch) 
     create_local_user(
         email="owner@example.com",
         password="another strong password",
-        tenant_id="tenant-a",
         disabled=True,
         overwrite=True,
     )
@@ -255,7 +250,6 @@ async def test_callback_verifies_nonce_and_consumes_state_once(
     local = create_local_user(
         email="owner@example.com",
         password="correct horse battery staple",
-        tenant_id="tenant-a",
         group_tags={"tenant-admin:tenant-a"},
     )
     link_oidc_subject(
@@ -285,7 +279,6 @@ async def test_callback_verifies_nonce_and_consumes_state_once(
 
     result = await complete_oidc_authorization_code(code="authorization-code", state=state)
     assert result["user"].uid == local.uid
-    assert result["user"].tenant_id == "tenant-a"
     assert result["return_to"] == "/chat"
     assert result["access_token"] == id_token
 
@@ -300,7 +293,6 @@ async def test_callback_rejects_nonce_mismatch_and_still_consumes_state(
     create_local_user(
         email="owner@example.com",
         password="correct horse battery staple",
-        tenant_id="tenant-a",
     )
     link_oidc_subject(
         issuer="https://idp.example.test",

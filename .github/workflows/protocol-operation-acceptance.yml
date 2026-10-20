@@ -9,8 +9,6 @@ on:
       - backend/**
       - frontend/**
       - docker-compose.yml
-      - scripts/smoke-tenant-provider-acceptance.mjs
-      - .github/workflows/tenant-real-provider-acceptance.yml
       - .github/workflows/real-provider-agent-mcp-acceptance.yml
       - .github/workflows/protocol-operation-acceptance.yml
       - .github/workflows/release-images.yml
@@ -30,16 +28,7 @@ jobs:
       # Same explicit gateway/model used by this repository's previous real
       # acceptance. Repository variables can replace them for another deploy.
       provider_base_url: ${{ vars.REAL_PROVIDER_BASE_URL || 'https://sub2api.yukl.qzz.io/v1' }}
-      model_api_name: ${{ vars.REAL_PROVIDER_MODEL || 'gpt-5.6-luna' }}
-      supports_reasoning: true
-    secrets:
-      REAL_PROVIDER_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}
-
-  tenant-real-provider:
-    uses: ./.github/workflows/tenant-real-provider-acceptance.yml
-    with:
-      provider_base_url: ${{ vars.REAL_PROVIDER_BASE_URL || 'https://sub2api.yukl.qzz.io/v1' }}
-      model_api_name: ${{ vars.REAL_PROVIDER_MODEL || 'gpt-5.6-luna' }}
-      supports_reasoning: true
+      model_api_name: ${{ vars.REAL_PROVIDER_MODEL || 'gpt-6-luna' }}
+      supports_reasoning: false
     secrets:
       REAL_PROVIDER_API_KEY: ${{ secrets.REAL_PROVIDER_API_KEY }}

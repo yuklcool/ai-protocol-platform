@@ -407,6 +407,8 @@ def get_session_service() -> BaseSessionService:
     if _session_service_singleton is not None:
         return _session_service_singleton
 
+    from adk.user_session_service import UserScopedSessionService
+
     backend = session_backend_name()
     if backend == "postgres":
         # google-adk 1.31.1 already ships this implementation. Reusing it keeps
@@ -414,9 +416,7 @@ def get_session_service() -> BaseSessionService:
         # the SDK instead of maintaining a second home-grown session store.
         from google.adk.sessions import DatabaseSessionService
 
-        from adk.tenant_session_service import TenantScopedSessionService
-
-        _session_service_singleton = TenantScopedSessionService(DatabaseSessionService(db_url=_adk_postgres_url()))
+        _session_service_singleton = UserScopedSessionService(DatabaseSessionService(db_url=_adk_postgres_url()))
         logger.info("session-service: PostgreSQL (ADK DatabaseSessionService)")
         return _session_service_singleton
 
@@ -426,15 +426,16 @@ def get_session_service() -> BaseSessionService:
             raise RuntimeError("AGENT_ENGINE_ID is required when SESSION_BACKEND=vertex")
         from adk.resilient_session import ResilientVertexSessionService
 
-        _session_service_singleton = ResilientVertexSessionService(
+        delegate = ResilientVertexSessionService(
             project=require_gcp_project(),
             location=os.environ["GOOGLE_CLOUD_LOCATION"],
             agent_engine_id=_normalize_agent_engine_id(agent_engine_id),
         )
+        _session_service_singleton = UserScopedSessionService(delegate)
         logger.info("session-service: Vertex Agent Engine (resilient), engine=%s", agent_engine_id)
         return _session_service_singleton
 
-    _session_service_singleton = InMemorySessionService()
+    _session_service_singleton = UserScopedSessionService(InMemorySessionService())
     logger.warning("session-service: IN-MEMORY — sessions are NOT durable on this instance")
     return _session_service_singleton
 
@@ -449,7 +450,7 @@ def get_memory_service() -> BaseMemoryService:
     if backend == "postgres":
         from adk.postgres_memory import PostgresMemoryService
 
-        _memory_service_singleton = PostgresMemoryService(_database_url("MEMORY_DATABASE_URL"), require_tenant=True)
+        _memory_service_singleton = PostgresMemoryService(_database_url("MEMORY_DATABASE_URL"), require_user=True)
         logger.info("memory-service: PostgreSQL (platform repository)")
         return _memory_service_singleton
 

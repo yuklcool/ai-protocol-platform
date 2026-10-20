@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 
 import protocols.voice_routes as voice_routes
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 from voice.cache import CacheKey
 
 _USER = User(uid="user_a", email="alice@example.com", domain="example.com")
@@ -70,7 +71,7 @@ class _FakeTTSProvider:
 def client_authed() -> TestClient:
     app = FastAPI()
     app.include_router(voice_routes.router)
-    app.dependency_overrides[get_current_user] = lambda: _USER
+    app.dependency_overrides[get_current_user] = identity_dependency(_USER)
     return TestClient(app)
 
 

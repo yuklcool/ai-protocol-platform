@@ -1,5 +1,4 @@
 const { test, expect } = require("@playwright/test");
-const { provisionAdminTenant } = require("./selfhost-fixtures");
 const { randomUUID } = require("node:crypto");
 
 const FRONTEND_URL = process.env.PROVIDER_E2E_FRONTEND_URL || "http://localhost:3456";
@@ -122,16 +121,6 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
     let sessionCreated = false;
     let context = null;
     const originalPlatform = await authedApi(token, "/api/admin/platform-config");
-    const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
-    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
-    const grantTenant = (skills) => authedApi(token, tenantPath, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        enabled_skills: [...new Set([...(originalTenant.enabledSkills || []), ...skills])],
-        enabled_mcp_servers: [...new Set([...originalTenant.enabledMcpServers, SERVER_ID])],
-      }),
-    });
     let rootTouched = false;
     const uiSessionId = `real-e2e-ui-${RUN_ID}`;
 
@@ -186,7 +175,6 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await putJson(token, `/api/admin/mcp-servers/${SERVER_ID}`, {
         url: UPSTREAM_URL,
         transport: "streamable-http",
-        scope: "platform",
         enabled: true,
         description: "real Provider -> Agent -> MCP acceptance",
       });
@@ -217,7 +205,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       });
       skillId = skill.skillId;
       expect(skillId).toBeTruthy();
-      await grantTenant([skillId]);
+
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: "smart", skills: [skillId], tools: [], mcpServers: [SERVER_ID],
         interaction: { ...originalPlatform.agent?.interaction, a2uiEnabled: true,
@@ -259,7 +247,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       const persistedRoot = await authedApi(token, "/api/admin/platform-config");
       expect(persistedRoot.agent?.model).toBe(MODEL_ID);
 
-      // Create the real tenant-scoped session explicitly before browser chat.
+      // Create the real user-owned session explicitly before browser chat.
       // Fresh-chat UI also bootstraps a session, but doing that asynchronously
       // while the E2E is switching from Studio to Chat introduced a race where
       // the page was still in its bootstrap state when the composer assertion
@@ -350,7 +338,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         }),
       });
       actionSkillId = actionSkill.skillId;
-      await grantTenant([skillId, actionSkillId]);
+
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: MODEL_ID, skills: [skillId, actionSkillId], tools: [], mcpServers: [SERVER_ID],
         instructions: actionInstructions,
@@ -528,14 +516,6 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       if (context) await context.close();
       await authedApi(token, `/api/sessions/${uiSessionId}`, { method: "DELETE" }).catch(() => {});
       if (rootTouched) await putJson(token, "/api/admin/platform-config", { agent: originalPlatform.agent });
-      await authedApi(token, tenantPath, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          enabled_skills: originalTenant.enabledSkills || [],
-          enabled_mcp_servers: originalTenant.enabledMcpServers,
-        }),
-      });
       if (actionSessionCreated) {
         await authedApi(token, `/api/sessions/${ACTION_SESSION_ID}`, { method: "DELETE" }).catch(() => {});
       }

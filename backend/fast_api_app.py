@@ -345,14 +345,11 @@ from adk.stream_invariants import redact_privileged_results, session_is_lower_tr
 from admin.access_routes import router as admin_access_router  # noqa: E402
 from admin.analytics_routes import router as admin_analytics_router  # noqa: E402
 from admin.audit_routes import router as admin_audit_router  # noqa: E402
-from admin.clients import me_router as clients_me_router  # noqa: E402
 from admin.compaction_replay_routes import router as admin_compaction_replay_router  # noqa: E402
 from admin.compaction_second_pass_routes import router as admin_compaction_second_pass_router  # noqa: E402
-from admin.groups_routes import router as admin_groups_router  # noqa: E402
 from admin.platform_config_routes import router as admin_platform_config_router  # noqa: E402
 from admin.prewarm_routes import router as admin_prewarm_router  # noqa: E402
 from admin.routes import router as admin_router  # noqa: E402
-from admin.tenants import router as admin_tenants_router  # noqa: E402
 from agents.root_runtime import (  # noqa: E402
     ROOT_AGENT_ID,
     RootCapabilityDenied,
@@ -396,16 +393,13 @@ app.include_router(root_agent_router)
 app.include_router(buckets_router)
 app.include_router(admin_router)
 app.include_router(admin_prewarm_router)
-app.include_router(admin_tenants_router)
 app.include_router(admin_analytics_router)
 app.include_router(admin_audit_router)  # v6.16.0 P4 audit reader
-app.include_router(admin_groups_router)
 app.include_router(admin_access_router)  # v6.9.0 9.3 effective-access dry-run
 app.include_router(admin_platform_config_router)  # v6.14.0 platform preamble admin plane
 app.include_router(admin_compaction_replay_router)  # compaction replay — read-only tuning tool
 app.include_router(admin_compaction_second_pass_router)  # second-pass recompact — MUTATES; admin/CLI path (1e)
 app.include_router(internal_tasks_recompact_router)  # Cloud Tasks OIDC-gated target (1e)
-app.include_router(clients_me_router)
 app.include_router(documents_router)
 app.include_router(documents_import_router)
 app.include_router(doc_folders_router)
@@ -690,9 +684,7 @@ async def stream_skill(
         from tools.documents.access import DocumentUnavailable, validate_selection
 
         try:
-            extracted_doc_ids = validate_selection(
-                extracted_doc_ids or [], user_id=user.uid, tenant_id=access.tenant_id
-            )
+            extracted_doc_ids = validate_selection(extracted_doc_ids or [], user_id=user.uid)
         except DocumentUnavailable as exc:
             raise HTTPException(status_code=409, detail={"code": "DOCUMENT_UNAVAILABLE", "message": str(exc)}) from exc
     extracted_surface_state = _extract_a2ui_surface_state(body) if not is_read_only else None
@@ -813,12 +805,6 @@ async def stream_root_agent(
     request: Request,
     user: User = Depends(get_current_user),  # noqa: B008
 ) -> StreamingResponse:
-    """SSE endpoint for the single user-facing Root Agent.
-
-    The client may send a capability hint, but it cannot grant itself access:
-    the resolver intersects the Root Agent ceiling with tenant narrowing and
-    the authenticated user's resource ACL before one capability is composed.
-    """
     action = (body.forwardedProps or {}).get("a2ui_action")
     if action is not None:
         # The production UI uses its existing AG-UI HttpAgent for actions as
@@ -854,9 +840,9 @@ async def stream_root_agent(
         )
     except RootCapabilityDenied as exc:
         _log.warning(
-            "root-agent capability denied uid=%s tenant=%s requested=%s reason=%s",
+            "root-agent capability denied uid=%s user=%s requested=%s reason=%s",
             user.uid,
-            request.state.access.tenant_id,
+            request.state.access.uid,
             requested_ref or "(default)",
             exc,
         )

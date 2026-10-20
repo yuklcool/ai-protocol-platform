@@ -98,7 +98,7 @@ if ! git merge --no-commit --no-ff "$REMOTE/$BRANCH"; then
   echo "CONFLICTS — resolve each conflict explicitly; do not blanket-choose ours/theirs:" >&2
   git diff --name-only --diff-filter=U | sed 's/^/  /' >&2
   echo >&2
-  echo "Use UPSTREAM.md to preserve Self-host/Tenant/Provider/MCP invariants." >&2
+  echo "Use UPSTREAM.md to preserve Self-host/User/Provider/MCP invariants." >&2
   exit 1
 fi
 

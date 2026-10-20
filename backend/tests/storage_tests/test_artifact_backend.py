@@ -7,23 +7,17 @@ from google.genai import types
 
 from adk import artifact_backend
 from adk import session as session_mod
-from adk.tenant_artifact_service import TenantScopedArtifactService
+from adk.user_artifact_service import UserScopedArtifactService
 from auth import User
-from observability.tenant_context import (
-    clear_tenant_enrichers,
-    get_current_tenant_id,
-    register_tenant_enricher,
-    set_tenant_context,
-)
+from observability.user_context import set_user_context
 
 
-def _bind(tenant_id: str) -> None:
-    set_tenant_context(
+def _bind(user_id: str) -> None:
+    set_user_context(
         User(
             uid="user-a",
             email="user-a@example.com",
             domain="example.com",
-            tenant_id=tenant_id,
         )
     )
 
@@ -32,26 +26,10 @@ def _bind(tenant_id: str) -> None:
 def _reset():
     artifact_backend._reset_artifact_service_for_tests()
     session_mod._reset_artifact_service_for_tests()
-    clear_tenant_enrichers()
-    _bind("tenant-test")
+    _bind("user-test")
     yield
-    clear_tenant_enrichers()
     session_mod._reset_artifact_service_for_tests()
     artifact_backend._reset_artifact_service_for_tests()
-
-
-def test_enricher_cannot_override_verified_tenant_identity() -> None:
-    register_tenant_enricher(lambda _user: {"tenant.id": "legacy-domain", "trace.cohort": "blue"})
-    set_tenant_context(
-        User(
-            uid="user-a",
-            email="user-a@example.com",
-            domain="legacy-domain",
-            tenant_id="tenant-explicit",
-        ),
-        extra={"tenant.id": "request-spoof", "trace.request": "yes"},
-    )
-    assert get_current_tenant_id() == "tenant-explicit"
 
 
 @pytest.mark.asyncio
@@ -62,7 +40,7 @@ async def test_local_artifact_survives_service_reconstruction(tmp_path: Path, mo
     monkeypatch.delenv("ARTIFACT_BACKEND", raising=False)
     monkeypatch.delenv("ADK_ARTIFACT_BUCKET", raising=False)
 
-    _bind("tenant-a")
+    _bind("user-a")
     first = artifact_backend.get_artifact_service()
     version = await first.save_artifact(
         app_name="aitana_platform",
@@ -74,7 +52,7 @@ async def test_local_artifact_survives_service_reconstruction(tmp_path: Path, mo
     assert version == 0
 
     artifact_backend._reset_artifact_service_for_tests()
-    _bind("tenant-a")
+    _bind("user-a")
     second = artifact_backend.get_artifact_service()
     restored = await second.load_artifact(
         app_name="aitana_platform",
@@ -94,51 +72,16 @@ async def test_local_artifact_survives_service_reconstruction(tmp_path: Path, mo
 
 
 @pytest.mark.asyncio
-async def test_same_uid_cannot_read_artifact_from_another_tenant(tmp_path: Path, monkeypatch):
+async def test_artifact_access_without_context_fails_closed(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
     monkeypatch.setenv("ADK_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
     monkeypatch.delenv("ARTIFACT_BACKEND", raising=False)
 
-    service = artifact_backend.get_artifact_service()
-
-    _bind("tenant-a")
-    await service.save_artifact(
-        app_name="aitana_platform",
-        user_id="same-uid",
-        session_id="same-session",
-        filename="secret.txt",
-        artifact=types.Part.from_text(text="tenant-a only"),
-    )
-
-    _bind("tenant-b")
-    foreign = await service.load_artifact(
-        app_name="aitana_platform",
-        user_id="same-uid",
-        session_id="same-session",
-        filename="secret.txt",
-    )
-    assert foreign is None
-    assert (
-        await service.list_artifact_keys(
-            app_name="aitana_platform",
-            user_id="same-uid",
-            session_id="same-session",
-        )
-        == []
-    )
-
-
-@pytest.mark.asyncio
-async def test_artifact_access_without_tenant_context_fails_closed(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
-    monkeypatch.setenv("ADK_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
-    monkeypatch.delenv("ARTIFACT_BACKEND", raising=False)
-
-    service = TenantScopedArtifactService(
+    service = UserScopedArtifactService(
         artifact_backend._build_delegate("local", str(tmp_path / "artifacts-direct")),
-        tenant_resolver=lambda: "",
+        user_resolver=lambda: "",
     )
-    with pytest.raises(PermissionError, match="stable tenant context"):
+    with pytest.raises(PermissionError, match="stable user context"):
         await service.list_artifact_keys(
             app_name="aitana_platform",
             user_id="user-a",
@@ -146,18 +89,18 @@ async def test_artifact_access_without_tenant_context_fails_closed(tmp_path: Pat
         )
 
 
-def test_selfhost_object_backend_selects_tenant_scoped_file_artifacts(tmp_path: Path, monkeypatch):
+def test_selfhost_object_backend_selects_user_scoped_file_artifacts(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
     monkeypatch.setenv("ADK_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
     monkeypatch.delenv("ARTIFACT_BACKEND", raising=False)
 
     service = artifact_backend.get_artifact_service()
-    assert isinstance(service, TenantScopedArtifactService)
+    assert isinstance(service, UserScopedArtifactService)
     assert type(service.delegate).__name__ == "FileArtifactService"
     assert artifact_backend.get_artifact_service_uri().startswith("file://")
 
 
-def test_session_facade_uses_same_tenant_scoped_local_artifact_backend(tmp_path: Path, monkeypatch):
+def test_session_facade_uses_same_user_scoped_local_artifact_backend(tmp_path: Path, monkeypatch):
     """Production AG-UI/FastAPI callers import artifacts through adk.session."""
     monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
     monkeypatch.setenv("ADK_ARTIFACT_ROOT", str(tmp_path / "runtime-artifacts"))
@@ -165,7 +108,7 @@ def test_session_facade_uses_same_tenant_scoped_local_artifact_backend(tmp_path:
     monkeypatch.delenv("ADK_ARTIFACT_BUCKET", raising=False)
 
     service = session_mod.get_artifact_service()
-    assert isinstance(service, TenantScopedArtifactService)
+    assert isinstance(service, UserScopedArtifactService)
     assert type(service.delegate).__name__ == "FileArtifactService"
     assert session_mod.get_artifact_service_uri().startswith("file://")
     assert service is artifact_backend.get_artifact_service()
@@ -180,11 +123,11 @@ def test_existing_gcs_bucket_keeps_cloud_default(monkeypatch):
     assert artifact_backend.get_artifact_service_uri() == "gs://existing-cloud-bucket"
 
 
-def test_explicit_memory_remains_available_behind_tenant_boundary(monkeypatch):
+def test_explicit_memory_remains_available_behind_user_boundary(monkeypatch):
     monkeypatch.setenv("ARTIFACT_BACKEND", "memory")
     monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
 
     service = artifact_backend.get_artifact_service()
-    assert isinstance(service, TenantScopedArtifactService)
+    assert isinstance(service, UserScopedArtifactService)
     assert type(service.delegate).__name__ == "InMemoryArtifactService"
     assert artifact_backend.get_artifact_service_uri() is None

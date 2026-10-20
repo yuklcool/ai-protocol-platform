@@ -119,7 +119,7 @@ it" is answerable; every admin mutation writes an append-only audit record.
 |---|---|
 | [skill-administration.md](skill-administration.md) (9.2) | Skill CRUD/publish/access from the UI (close the Studio `accessControl`/slug/tags gap), platform-skill vs template drift, durable skill creation without a redeploy, marketplace `featured`/`usage_count`. |
 | [user-group-administration.md](user-group-administration.md) (9.3) | Per-user tag grant/revoke, the tag registry, wiring the stubbed group/user/access endpoints, effective-access visibility, tool-permission admin, token-refresh propagation, unify the 4 admin definitions. |
-| [domain-tenant-administration.md](domain-tenant-administration.md) (9.4) | Tenant CRUD UI, onboarding orchestration (doc + bucket + IAM + validation), unmapped-domain fallback fix, per-tenant caching/branding considerations, audit. |
+| domain-tenant-administration.md (9.4) | Tenant CRUD UI, onboarding orchestration (doc + bucket + IAM + validation), unmapped-domain fallback fix, per-tenant caching/branding considerations, audit. |
 | [analytics-and-reporting.md](../analytics-and-reporting.md) (9.5) | Turn the natively-captured interaction data (OTel→Cloud Trace/Logging/BigQuery, full content capture, session mirror) into product: a chat-history/trace viewer, usage/cost analytics, and a report-template engine (the AIPLA teacher-report generalisation) — all access-scoped, inside the GCP edge. |
 
 ### Cross-cutting: the confidential-content boundary
@@ -168,8 +168,8 @@ Each builds on Phase 1. 9.3 (user/group) is the most acute gap (no path at all t
 
 ## Related Documents
 
-- [skill-administration.md](skill-administration.md), [user-group-administration.md](user-group-administration.md), [domain-tenant-administration.md](domain-tenant-administration.md)
-- [auth-and-permissions.md](../../v6.0.0/implemented/auth-and-permissions.md), [resource-access-control.md](../../v6.0.0/implemented/resource-access-control.md), [client-tenant-management.md](../../v6.3.0/implemented/client-tenant-management.md)
+- [skill-administration.md](skill-administration.md), [user-group-administration.md](user-group-administration.md), domain-tenant-administration.md
+- [auth-and-permissions.md](../../v6.0.0/implemented/auth-and-permissions.md), [resource-access-control.md](../../v6.0.0/implemented/resource-access-control.md), client-tenant-management.md
 
 ---
 

@@ -30,6 +30,7 @@ from db.models import SkillConfig
 from db.models.access import AccessControl
 from db.models.chat_session import ChatSessionIndex
 from protocols.a2ui_surface_action_routes import router
+from tests.support.identity import identity_dependency
 
 # ---------------------------------------------------------------------------
 # Test app + auth fixtures (mirror of iframe_context test scaffolding)
@@ -41,10 +42,8 @@ def _make_client(uid: str = "viewer", tags: frozenset[str] = frozenset()) -> Tes
         uid=uid,
         email=f"{uid}@example.com",
         domain="example.com",
-        tenant_id="tenant-a",
-        permission_group_ids=frozenset({"protocol-tests"}),
     )
-    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, tenant_id="tenant-a", group_tags=tags)
+    ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=tags)
 
     test_app = FastAPI()
     test_app.include_router(router)
@@ -54,7 +53,7 @@ def _make_client(uid: str = "viewer", tags: frozenset[str] = frozenset()) -> Tes
         request.state.access = ctx
         return await call_next(request)
 
-    test_app.dependency_overrides[get_current_user] = lambda: user
+    test_app.dependency_overrides[get_current_user] = identity_dependency(user)
     return TestClient(test_app)
 
 
@@ -373,12 +372,10 @@ class TestSchemaAndSize:
 
 @pytest.fixture(autouse=True)
 def configured_root_for_protocol_tests():
-    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
     from config.platform_config import invalidate_cache, update_platform_config
     from db.models.root_agent import RootAgentConfig
     from db.persistence import reset_repository_for_testing
     from db.repositories.memory import MemoryRepository
-    from db.tenants import TenantConfig, TenantDirectory
 
     repo = MemoryRepository()
     reset_repository_for_testing(repo)
@@ -389,14 +386,6 @@ def configured_root_for_protocol_tests():
     _cache.clear()
     for ref in ids:
         repo.set_document("skills", ref, _make_skill(skill_id=ref).model_dump(by_alias=True))
-    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledSkills=ids))
-    repo.set_document(
-        GROUP_COLLECTION,
-        "protocol-tests",
-        PermissionGroup(id="protocol-tests", tenantId="tenant-a", label="protocol tests", skills=ids).model_dump(
-            by_alias=True
-        ),
-    )
     update_platform_config(
         {
             "agent": RootAgentConfig(

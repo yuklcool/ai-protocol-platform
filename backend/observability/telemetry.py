@@ -27,17 +27,16 @@ def setup_telemetry() -> str | None:
         logging.getLogger(noisy).setLevel(logging.CRITICAL)
 
     # Install the SDK TracerProvider + Cloud Trace exporter FIRST (issue #39).
-    # Order matters: the tenant-attribution wire-up below needs a provider that
     # HAS add_span_processor, and the OTel default (ProxyTracerProvider) does
     # not. ADK never installed one, so for the platform's whole life that
     # wire-up silently no-op'd and every span ADK emitted was dropped — Cloud
     # Trace held 2 traces for test across seven days.
     install_trace_export()
 
-    # Sprint 2.14 — register TenantAttributeSpanProcessor on whichever
+    # Sprint 2.14 — register UserAttributeSpanProcessor on whichever
     # TracerProvider is active. Now that install_trace_export() has run this
     # normally succeeds; it stays best-effort for forks that disable export.
-    _attach_tenant_span_processor()
+    _attach_user_span_processor()
 
     bucket = os.environ.get("LOGS_BUCKET_NAME")
     capture_content = os.environ.get("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "false")
@@ -66,8 +65,8 @@ def setup_telemetry() -> str | None:
     return bucket
 
 
-def _attach_tenant_span_processor() -> None:
-    """Register TenantAttributeSpanProcessor on the active TracerProvider.
+def _attach_user_span_processor() -> None:
+    """Register UserAttributeSpanProcessor on the active TracerProvider.
 
     Sprint 2.14. Best-effort: the default OTel ProxyTracerProvider does
     NOT have ``add_span_processor`` — only the SDK ``TracerProvider``
@@ -78,18 +77,18 @@ def _attach_tenant_span_processor() -> None:
     """
     from opentelemetry import trace as otel_trace
 
-    from observability.tenant_span_processor import TenantAttributeSpanProcessor
+    from observability.user_span_processor import UserAttributeSpanProcessor
 
     provider = otel_trace.get_tracer_provider()
     add_span_processor = getattr(provider, "add_span_processor", None)
     if add_span_processor is None:
         logging.info(
-            "tenant attribution: TracerProvider is %s — no add_span_processor; "
-            "spans will not carry tenant.* attrs. (Forks needing tenant attribution "
+            "user attribution: TracerProvider is %s — no add_span_processor; "
+            "spans will not carry user.* attrs. (Forks needing user attribution "
             "in environments without ADK auto-instrumentation should set up their "
             "own SDK TracerProvider before calling setup_telemetry.)",
             type(provider).__name__,
         )
         return
-    add_span_processor(TenantAttributeSpanProcessor())
-    logging.info("tenant attribution: TenantAttributeSpanProcessor registered on %s", type(provider).__name__)
+    add_span_processor(UserAttributeSpanProcessor())
+    logging.info("user attribution: UserAttributeSpanProcessor registered on %s", type(provider).__name__)

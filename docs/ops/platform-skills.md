@@ -1,11 +1,11 @@
 # Platform-owned skills — seed + ownership
 
-Every tenant ships with a small set of default skills (doc extraction,
+Every user ships with a small set of default skills (doc extraction,
 data extractor, web researcher, code assistant, general assistant). They
 are owned by the **platform sentinel** — a non-Firebase pseudo-uid
 `aitana-platform` — so:
 
-- Every tenant sees them (via `accessControl.type = "public"`).
+- Every user sees them (via `accessControl.type = "public"`).
 - Nobody can mutate them. PUT/DELETE on a platform skill returns
   **403 "Platform-owned skills are read-only. Fork to customize."**
 - Users who want to customize one call `POST /api/skills/{id}/fork` to

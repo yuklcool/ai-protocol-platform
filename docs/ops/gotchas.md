@@ -37,7 +37,7 @@ The lookup falls through to domain → wildcard as expected.
 
 旧版 `useDocBrowser`、`useDocument` 直接调用 `onSnapshot`，匿名组模式没有 Firebase 用户时会持续产生 permission-denied。
 
-当前实现统一调用认证 REST，身份和租户权限在后端校验；不再通过按认证模式跳过订阅来修补。检查文件列表、预览和附件恢复时，应核对 `fetchWithAuth`、文档 REST 及会话附件接口。不要恢复旧的 Firestore 监听器或用户级附件缓存。
+当前实现统一调用认证 REST，身份和用户权限在后端校验；不再通过按认证模式跳过订阅来修补。检查文件列表、预览和附件恢复时，应核对 `fetchWithAuth`、文档 REST 及会话附件接口。不要恢复旧的 Firestore 监听器或用户级附件缓存。
 
 当前操作见[文件上传与分析](../chat-file-analysis.md)。
 

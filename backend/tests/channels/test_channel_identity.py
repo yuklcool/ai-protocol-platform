@@ -127,19 +127,6 @@ class TestAuthoritativeResolution:
 
         assert user.group_tags == frozenset()
 
-    def test_derived_domain_tags_cannot_grant_channel_permissions(self, enrichment_on: None) -> None:
-        """Reuses `_apply_derived_group_tags` — same union as the JWT path."""
-        with (
-            patch(
-                "firebase_admin.auth.get_user",
-                return_value=_record(email="u@acmeenergy.com", claims={"groupTags": ["BASE"]}),
-            ),
-            patch("db.clients.resolve_derived_group_tags", return_value=frozenset({"ONE"})),
-        ):
-            user = _build_channel_user("uid-1")
-
-        assert user.group_tags == frozenset({"BASE"})
-
     def test_malformed_claim_grants_nothing(self, enrichment_on: None) -> None:
         """A non-iterable groupTags claim must not raise or grant."""
         with patch(
@@ -165,19 +152,6 @@ class TestFailClosed:
 
         assert user.group_tags == frozenset()
         assert user.email == ""
-
-    def test_derived_tag_lookup_failure_does_not_block(self, enrichment_on: None) -> None:
-        """Firestore trouble degrades to base claims, never to an exception."""
-        with (
-            patch(
-                "firebase_admin.auth.get_user",
-                return_value=_record(email="u@corp.test", claims={"groupTags": ["BASE"]}),
-            ),
-            patch("db.clients.resolve_derived_group_tags", side_effect=RuntimeError("firestore down")),
-        ):
-            user = _build_channel_user("uid-1")
-
-        assert user.group_tags == frozenset({"BASE"})
 
 
 class TestFeatureFlag:

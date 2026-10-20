@@ -563,22 +563,11 @@ async def get_recent_session(
     request: Request,
     user: User = Depends(get_current_user),  # noqa: B008
 ):
-    """Most-recent non-archived session whose skill is still visible + enabled
-    for the caller, or 204 when none qualify.
-
-    Powers the homepage redirect: a returning user lands back in their last
-    chat. Owner-scoped to the JWT uid; skips sessions whose skill was since
-    hidden or removed from the tenant's `enabled_skills` so we never route a
-    user into a chat they can no longer open.
-    """
     # Function-local imports keep the protocols package import-light + avoid a
     # cycle with the skills package.
-    from db.clients import resolve_enabled_skills
     from skills import platform, skill_config
 
     ctx = request.state.access
-    enabled = resolve_enabled_skills(user)
-    allowed = set(enabled) if enabled is not None else None
 
     for idx in most_recent_session_for_user(user.uid, limit=10):
         if idx.skill_id == "root-agent" and ctx.can_access(idx):
@@ -588,8 +577,6 @@ async def get_recent_session(
             )
         skill = skill_config.get_skill(idx.skill_id)
         if skill is None or not ctx.can_access_skill(skill):
-            continue
-        if allowed is not None and (skill.slug is None or skill.slug not in allowed):
             continue
         trace.get_current_span().set_attribute("landing.outcome", "resumed")
         return RecentSessionResponse(
@@ -687,11 +674,12 @@ async def get_session_messages(
         raise HTTPException(status_code=403, detail="Access denied")
 
     session_service = get_messages_session_service()
-    session = await session_service.get_session(
-        app_name=app_name_for_session(idx),
-        user_id=idx.owner_uid,
-        session_id=session_id,
-    )
+    from observability.user_context import authorized_resource_user
+
+    with authorized_resource_user(idx.owner_uid):
+        session = await session_service.get_session(
+            app_name=app_name_for_session(idx), user_id=idx.owner_uid, session_id=session_id
+        )
     events = session.events if session is not None else []
     state = session.state if session is not None else None
 
@@ -741,11 +729,12 @@ async def get_session_activity(
         raise HTTPException(status_code=403, detail="Access denied")
 
     session_service = get_messages_session_service()
-    session = await session_service.get_session(
-        app_name=app_name_for_session(idx),
-        user_id=idx.owner_uid,
-        session_id=session_id,
-    )
+    from observability.user_context import authorized_resource_user
+
+    with authorized_resource_user(idx.owner_uid):
+        session = await session_service.get_session(
+            app_name=app_name_for_session(idx), user_id=idx.owner_uid, session_id=session_id
+        )
     events = session.events if session is not None else []
     tool_calls = _events_to_tool_activity(events)
     if view == "digest":
@@ -786,11 +775,12 @@ async def get_session_state(
 
     session_service = get_session_service()
     # app_name must be APP_NAME, not skill_id — same fix as iframe_context_routes.py
-    session = await session_service.get_session(
-        app_name=app_name_for_session(idx),
-        user_id=idx.owner_uid,
-        session_id=session_id,
-    )
+    from observability.user_context import authorized_resource_user
+
+    with authorized_resource_user(idx.owner_uid):
+        session = await session_service.get_session(
+            app_name=app_name_for_session(idx), user_id=idx.owner_uid, session_id=session_id
+        )
     if session is None:
         return {}
     return dict(session.state) if session.state else {}

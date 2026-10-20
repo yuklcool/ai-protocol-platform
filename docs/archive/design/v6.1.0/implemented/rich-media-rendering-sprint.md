@@ -61,7 +61,7 @@ Add SVG, image, and PDF reference rendering to `ChatMarkdown` so agent output di
 
 **ChatMarkdown `code` renderer:** The existing renderer checks `className?.startsWith("language-")` for block detection. Extend it: if `className` is `language-svg` or `language-xml` and content `.trimStart().startsWith('<svg')`, delegate to `SVGBlock`. Otherwise fall through to existing code block rendering.
 
-**ChatMarkdown `img` renderer:** Currently not in the `components` object — react-markdown uses its default (which passes through). Add an explicit `img` renderer delegating to `InlineImage`. This replaces the existing test at line 80-84 (`<img src=x onerror=alert(1)>` was raw HTML, which is still stripped by the `html()` renderer — markdown `![alt](url)` is separate).
+**ChatMarkdown `img` renderer:** Currently not in the `components` object — react-markdown uses its default (which passes through). Add an explicit `img` renderer delegating to `InlineImage`. This replaces the existing test at line 80-84 (`<img src=x onerror=alert(1)>` was raw HTML, which is still stripped by the `html()` renderer — markdown `!alt` is separate).
 
 **ChatMarkdown `a` renderer:** Extend existing `a` renderer: if `href` ends in `.pdf`, render `<PDFCard url={href} />` instead of an anchor. Preserve existing aitana:// and external https/http/mailto paths.
 

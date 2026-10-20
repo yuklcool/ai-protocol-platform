@@ -22,7 +22,7 @@ from db.models.chat_session import ChatSessionIndex
 
 
 def _make_user() -> User:
-    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com", tenant_id="test-tenant")
+    return User(uid="caller-uid", email="caller@yourcompany.com", domain="yourcompany.com")
 
 
 def _session(session_id: str, skill_id: str, minutes_ago: int) -> ChatSessionIndex:
@@ -61,6 +61,9 @@ def client(app):
     async def _override(request: Request) -> User:
         user = _make_user()
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = _override
@@ -75,7 +78,6 @@ def test_returns_newest_qualifying_session(client):
             return_value=[_session("s-new", "skill-a", 30)],
         ),
         mock.patch("skills.skill_config.get_skill", return_value=_skill("skill-a", "ppa-expert")),
-        mock.patch("db.clients.resolve_enabled_skills", return_value=None),
     ):
         resp = client.get("/api/sessions/recent")
     assert resp.status_code == 200
@@ -91,23 +93,6 @@ def test_204_when_no_sessions(client):
     assert resp.status_code == 204
 
 
-def test_skips_session_whose_skill_is_not_enabled(client):
-    # Newest session is for a skill no longer in enabled_skills; the next one is.
-    sessions = [_session("s-disabled", "skill-x", 40), _session("s-ok", "skill-a", 20)]
-
-    def _get_skill(sid):
-        return {"skill-x": _skill("skill-x", "old-skill"), "skill-a": _skill("skill-a", "ppa-expert")}[sid]
-
-    with (
-        mock.patch("protocols.sessions_route.most_recent_session_for_user", return_value=sessions),
-        mock.patch("skills.skill_config.get_skill", side_effect=_get_skill),
-        mock.patch("db.clients.resolve_enabled_skills", return_value=["ppa-expert"]),
-    ):
-        resp = client.get("/api/sessions/recent")
-    assert resp.status_code == 200
-    assert resp.json()["session_id"] == "s-ok"
-
-
 def test_skips_session_whose_skill_was_deleted(client):
     with (
         mock.patch(
@@ -115,7 +100,6 @@ def test_skips_session_whose_skill_was_deleted(client):
             return_value=[_session("s-gone", "skill-deleted", 10)],
         ),
         mock.patch("skills.skill_config.get_skill", return_value=None),
-        mock.patch("db.clients.resolve_enabled_skills", return_value=None),
     ):
         resp = client.get("/api/sessions/recent")
     assert resp.status_code == 204

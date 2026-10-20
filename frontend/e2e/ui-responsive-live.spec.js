@@ -1,11 +1,10 @@
 // Synthetic account, real self-host API, real browser. No API responses are mocked.
 const { test, expect } = require("@playwright/test");
-const { provisionAdminTenant } = require("./selfhost-fixtures");
 const FRONTEND = process.env.MODEL_STUDIO_FRONTEND_URL || "http://localhost:3456";
 const BACKEND = process.env.MODEL_STUDIO_BACKEND_URL || "http://127.0.0.1:1956";
 const ROUTES = [
   "/agent", "/skills", "/skills/studio/new", "/chat/root-agent", "/admin",
-  "/admin/tenants", "/admin/users", "/admin/groups", "/admin/mcp-servers",
+   "/admin/users",  "/admin/mcp-servers",
   "/admin/model-providers", "/admin/analytics", "/admin/audit", "/admin/settings",
   "/dev/a2ui", "/dev/mcp-apps", "/dev/mcp-apps/active", "/dev/mcp-apps/passive", "/group",
 ];
@@ -31,7 +30,7 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
   test.setTimeout(420_000);
   const loginResponse=await fetch(`${BACKEND}/api/auth/login`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:process.env.SELFHOST_ADMIN_EMAIL || "admin@example.com",password:process.env.SELFHOST_ADMIN_PASSWORD})});
   expect(loginResponse.ok).toBe(true); const login=await loginResponse.json();
-  await provisionAdminTenant(BACKEND,login);
+
   const context=await browser.newContext({colorScheme:"light",reducedMotion:"reduce"});
   await context.addInitScript(({login})=>{sessionStorage.setItem("aitana:local_jwt_session",JSON.stringify({token:login.access_token,expiresAt:Date.now()+login.expires_in*1000,user:login.user}));localStorage.setItem("ai-protocol-platform.locale","zh-CN");},{login});
   const page=await context.newPage(); page.setDefaultTimeout(20_000); page.setDefaultNavigationTimeout(20_000); const errors=[];page.on("pageerror",e=>errors.push(e.message));
@@ -49,7 +48,7 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
       }
     }
     await page.setViewportSize(sizes[2]);
-    await page.goto(`${FRONTEND}/admin/tenants`);
+    await page.goto(`${FRONTEND}/admin/users`);
     const trigger=page.getByRole("button",{name:"打开主导航",exact:true});await trigger.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("dialog").getByRole("link",{name:"模型服务",exact:true})).toBeVisible();

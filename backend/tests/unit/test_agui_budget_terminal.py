@@ -34,9 +34,9 @@ async def test_real_background_adapter_preserves_typed_budget_error():
     )
     before, _ = make_budget_callbacks(
         enforcer,
-        user=User(uid="owner", tenant_id="tenant-a"),
+        user=User(uid="owner"),
         skill_id="root-agent",
-        budget_config=BudgetConfig(identity_key="tenant_id"),
+        budget_config=BudgetConfig(identity_key="uid"),
     )
     try:
         agent = Agent(name="root_probe", model=NeverCalledModel(model="local-stub"), before_model_callback=before)

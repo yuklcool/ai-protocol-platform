@@ -3,7 +3,6 @@ const { test, expect } = require("@playwright/test");
 const { randomUUID } = require("node:crypto");
 const path = require("node:path");
 const { readFileSync } = require("node:fs");
-const { provisionAdminTenant } = require("./selfhost-fixtures");
 const FRONTEND = process.env.PROVIDER_E2E_FRONTEND_URL || "http://localhost:3456";
 const BACKEND = process.env.PROVIDER_E2E_BACKEND_URL || "http://127.0.0.1:1956";
 const REAL = Boolean(process.env.REAL_PROVIDER_BASE_URL && process.env.REAL_PROVIDER_MODEL);
@@ -17,7 +16,7 @@ async function api(token, route, method = "GET", body) {
 async function start(browser) {
   const response = await fetch(`${BACKEND}/api/auth/login`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({email:process.env.SELFHOST_ADMIN_EMAIL || "admin@example.com", password:process.env.SELFHOST_ADMIN_PASSWORD})});
   expect(response.ok).toBe(true); const login=await response.json();
-  await provisionAdminTenant(BACKEND, login);
+
   const context=await browser.newContext();
   await context.addInitScript(({login})=>window.sessionStorage.setItem("aitana:local_jwt_session",JSON.stringify({token:login.access_token,expiresAt:Date.now()+login.expires_in*1000,user:login.user})),{login});
   const page=await context.newPage(); page.setDefaultTimeout(30_000);

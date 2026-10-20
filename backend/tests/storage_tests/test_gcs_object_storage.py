@@ -60,26 +60,26 @@ class FakeClient:
         ]
 
 
-def test_gcs_fileobj_upload_uses_tenant_prefix() -> None:
+def test_gcs_fileobj_upload_uses_user_prefix() -> None:
     client = FakeClient()
     storage = GcsObjectStorage("docs", client=client)
 
     info = storage.put_fileobj("example.com", "users/u/docs/a.pdf", BytesIO(b"pdf-data"))
 
-    assert info.uri == "gs://docs/tenants/example.com/users/u/docs/a.pdf"
-    assert client.bucket("docs").data["tenants/example.com/users/u/docs/a.pdf"] == b"pdf-data"
+    assert info.uri == "gs://docs/users/example.com/users/u/docs/a.pdf"
+    assert client.bucket("docs").data["users/example.com/users/u/docs/a.pdf"] == b"pdf-data"
     assert storage.get_bytes("example.com", "users/u/docs/a.pdf") == b"pdf-data"
     assert [item.key for item in storage.list_objects("example.com")] == ["users/u/docs/a.pdf"]
 
 
-def test_gcs_tenants_do_not_share_same_key() -> None:
+def test_gcs_users_do_not_share_same_key() -> None:
     client = FakeClient()
     storage = GcsObjectStorage("docs", client=client)
-    storage.put_bytes("tenant-a", "same.txt", b"A")
-    storage.put_bytes("tenant-b", "same.txt", b"B")
+    storage.put_bytes("user-a", "same.txt", b"A")
+    storage.put_bytes("user-b", "same.txt", b"B")
 
-    assert storage.get_bytes("tenant-a", "same.txt") == b"A"
-    assert storage.get_bytes("tenant-b", "same.txt") == b"B"
+    assert storage.get_bytes("user-a", "same.txt") == b"A"
+    assert storage.get_bytes("user-b", "same.txt") == b"B"
 
 
 def test_legacy_adapter_reads_old_layout_but_refuses_writes() -> None:

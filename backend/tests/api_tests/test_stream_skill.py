@@ -49,7 +49,6 @@ def _make_session_index(owner_uid: str = "caller-uid", access_type: str = "publi
     now = datetime.now(UTC)
     return ChatSessionIndex(
         session_id="test-session-id",
-        tenant_id="test-tenant",
         skill_id="test-skill-id",
         owner_uid=owner_uid,
         access_control={"type": access_type},
@@ -80,8 +79,6 @@ def _make_user() -> User:
         uid="caller-uid",
         email="caller@yourcompany.com",
         domain="yourcompany.com",
-        tenant_id="test-tenant",
-        permission_group_ids=frozenset({"stream-tests"}),
     )
 
 
@@ -138,14 +135,15 @@ def client(app):
     async def _override(request: Request) -> User:
         user = _make_user()
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
-    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
     from config.platform_config import invalidate_cache, update_platform_config
     from db.models.root_agent import RootAgentConfig
     from db.persistence import reset_repository_for_testing
     from db.repositories.memory import MemoryRepository
-    from db.tenants import TenantConfig, TenantDirectory
 
     repo = MemoryRepository()
     reset_repository_for_testing(repo)
@@ -178,14 +176,6 @@ def client(app):
     _cache.clear()
     for ref in ids:
         repo.set_document("skills", ref, _make_skill(skill_id=ref).model_dump(by_alias=True))
-    TenantDirectory(repo).put(TenantConfig(tenantId="test-tenant", enabledSkills=ids))
-    repo.set_document(
-        GROUP_COLLECTION,
-        "stream-tests",
-        PermissionGroup(id="stream-tests", tenantId="test-tenant", label="stream tests", skills=ids).model_dump(
-            by_alias=True
-        ),
-    )
     update_platform_config({"agent": RootAgentConfig(skills=ids).model_dump(by_alias=True)}, updated_by="test")
     app.dependency_overrides[get_current_user] = _override
     # Both retained Skill URLs and /api/agent/stream resolve the same resource
@@ -1078,20 +1068,3 @@ def test_stream_skill_unknown_exception_still_raises(client):
         _pytest.raises(RuntimeError, match="programming error"),
     ):
         client.post("/api/skill/test-skill-id/stream", json={"message": "hello"})
-
-
-def test_stream_rejects_same_owner_public_session_in_other_tenant(client):
-    skill = _make_skill(skill_id="test-skill-id", access_type="public")
-    session = _make_session_index(owner_uid="caller-uid", access_type="public")
-    session.tenant_id = "other-tenant"
-    with (
-        patch("skills.skill_processor.get_skill", return_value=skill),
-        patch("db.chat_sessions.get_session_index", return_value=session),
-        patch("ag_ui_adk.ADKAgent.run") as run,
-    ):
-        response = client.post(
-            "/api/skill/test-skill-id/stream",
-            json={"message": "hello", "sessionId": "test-session-id"},
-        )
-    assert response.status_code == 403
-    run.assert_not_called()

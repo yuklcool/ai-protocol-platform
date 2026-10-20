@@ -230,7 +230,7 @@ The frontend's `ArtefactRefused` mount handler renders this 403 body as the same
 
 Hard timeouts aren't enforced — slow reviewers don't block render. The iframe sandbox is the safety net; a slow reviewer means worse UX but never broken UX.
 
-**If your reviewer is consistently slow:** the platform's existing OTel telemetry will surface it. Sprint 2.14 will land tenant attribution on every span so per-cohort reviewer latency is filterable.
+**If your reviewer is consistently slow:** the platform's existing OTel telemetry will surface it. Sprint 2.14 will land user attribution on every span so per-cohort reviewer latency is filterable.
 
 ---
 

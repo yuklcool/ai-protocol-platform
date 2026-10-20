@@ -1,6 +1,6 @@
 # OIDC 提供商配置示例
 
-先阅读[OIDC 接入](selfhost-oidc.md)，创建本地授权账号并关联 `issuer + sub`。外部声明不会自动创建租户或授予管理员权限。
+先阅读[OIDC 接入](selfhost-oidc.md)，创建本地授权账号并关联 `issuer + sub`。外部声明不会自动创建用户或授予管理员权限。
 
 ## 1. Keycloak 配置
 
@@ -28,11 +28,11 @@ OIDC_CLIENT_AUTH_METHOD=none
 
 ## 2. Microsoft Entra ID 配置
 
-创建应用注册，配置与平台完全一致的 Web 回调。单组织部署使用租户专属 v2 issuer：
+创建应用注册，配置与平台完全一致的 Web 回调。单组织部署使用用户专属 v2 issuer：
 
 ```env
 AUTH_BACKEND=oidc
-OIDC_ISSUER=https://login.microsoftonline.com/替换为租户ID/v2.0
+OIDC_ISSUER=https://login.microsoftonline.com/替换为用户ID/v2.0
 OIDC_CLIENT_ID=替换为应用client-id
 OIDC_AUDIENCE=替换为同一client-id
 OIDC_REDIRECT_URI=https://ai.example.com/auth/oidc/callback
@@ -41,7 +41,7 @@ OIDC_CLIENT_AUTH_METHOD=client_secret_post
 OIDC_CLIENT_SECRET=替换为真实secret
 ```
 
-不要在预期单一企业租户时直接使用 `common`。平台仍依据已验证 subject 的显式映射决定本地租户/权限。
+不要在预期单一企业用户时直接使用 `common`。平台仍依据已验证 subject 的显式映射决定本地用户/权限。
 
 ## 3. Okta 配置
 
@@ -70,4 +70,4 @@ uv run python scripts/link_oidc_subject.py \
   --email owner@example.com
 ```
 
-脚本使用当前数据库配置，应先在副本验证。仓库 `.github/workflows/oidc-keycloak-compatibility.yml` 启动真实 Keycloak，验证签名 ID token、discovery、JWKS、issuer/audience、subject 映射和本地权限重载；其他 IdP 与目标租户仍需实际验收。
+脚本使用当前数据库配置，应先在副本验证。仓库 `.github/workflows/oidc-keycloak-compatibility.yml` 启动真实 Keycloak，验证签名 ID token、discovery、JWKS、issuer/audience、subject 映射和本地权限重载；其他 IdP 与目标用户仍需实际验收。

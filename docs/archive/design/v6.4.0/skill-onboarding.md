@@ -462,7 +462,7 @@ Skill emits A2UI Card with action button
 - [docs/archive/design/v6.4.0/skill-driven-shell-modes.md](skill-driven-shell-modes.md) — 4.4 sibling; `SkillConfig.shell` and `SkillConfig.welcome` are sibling extensions that compose orthogonally
 - the deployment's demo-readiness doc (deployment-private) — 4.2; defined the `acmeenergy-docs` bucket binding this doc reuses for `welcome.bucket_browser`
 - [docs/archive/design/v6.3.0/implemented/rag-document-corpus.md](../v6.3.0/implemented/rag-document-corpus.md) — bucket-import path the picker reuses
-- [docs/archive/design/v6.3.0/implemented/client-tenant-management.md](../v6.3.0/implemented/client-tenant-management.md) — tenant bucket binding model
+- docs/archive/design/v6.3.0/implemented/client-tenant-management.md — tenant bucket binding model
 - [docs/archive/design/v6.1.0/implemented/local-dev-cli.md](../v6.1.0/local-dev-cli.md) — CLI parent doc
 - gde-ap-agent source: `<local-path>` (port) + `components/chat/SampleInvoicePicker.tsx` (pattern reference)
 - CPH UNI source: `<local-path>` — AI-introduction pattern reference

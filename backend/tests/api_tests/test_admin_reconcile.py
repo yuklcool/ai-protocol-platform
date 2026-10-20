@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 _PLATFORM = User(
     uid="admin-uid",
@@ -64,7 +65,7 @@ def _client() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: _PLATFORM
+    app.dependency_overrides[get_current_user] = identity_dependency(_PLATFORM)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -243,7 +244,7 @@ def test_reconcile_requires_admin(path: str) -> None:
     app = FastAPI()
     app.include_router(router)
     plain = User(uid="u", email="alex@acmeenergy.com", domain="acmeenergy.com", group_tags=frozenset())
-    app.dependency_overrides[get_current_user] = lambda: plain
+    app.dependency_overrides[get_current_user] = identity_dependency(plain)
     res = TestClient(app, raise_server_exceptions=False).get(path)
     assert res.status_code == 403
 
@@ -313,6 +314,6 @@ def test_mark_lost_requires_admin() -> None:
     app = FastAPI()
     app.include_router(router)
     plain = User(uid="u", email="l@acmeenergy.com", domain="acmeenergy.com", group_tags=frozenset())
-    app.dependency_overrides[get_current_user] = lambda: plain
+    app.dependency_overrides[get_current_user] = identity_dependency(plain)
     res = TestClient(app, raise_server_exceptions=False).post("/api/admin/analytics/sessions-mark-transcript-lost")
     assert res.status_code == 403

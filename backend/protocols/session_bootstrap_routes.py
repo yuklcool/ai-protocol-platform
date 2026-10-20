@@ -1,8 +1,8 @@
-"""Session bootstrap — pre-create tenant-scoped ChatSessionIndex + ADK session.
+"""Session bootstrap — pre-create user-scoped ChatSessionIndex + ADK session.
 
 Called before the first agent turn so iframe/A2UI context has a durable index
-row to bind to. Bootstrap is idempotent only inside the authenticated tenant;
-a reused session id from another tenant is rejected before any ADK session is
+row to bind to. Bootstrap is idempotent only inside the authenticated user;
+a reused session id from another user is rejected before any ADK session is
 touched.
 """
 
@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from adk.agui import APP_NAME, ROOT_AGENT_APP_NAME
 from adk.session import get_session_service
 from auth import User, get_current_user
-from db.chat_sessions import create_session_index, get_session_index, owner_domain_of, session_in_tenant
+from db.chat_sessions import create_session_index, get_session_index, owner_domain_of
 from db.models.access import AccessControl
 
 logger = logging.getLogger(__name__)
@@ -42,13 +42,10 @@ async def bootstrap_session(
     request: Request,
     user: User = Depends(get_current_user),  # noqa: B008
 ) -> BootstrapResponse:
-    """Pre-create a session inside the caller's stable tenant scope."""
+    """Pre-create a session inside the caller's stable user scope."""
     ctx = request.state.access
     existing = get_session_index(session_id)
     if existing is not None:
-        if not session_in_tenant(existing, ctx.tenant_id):
-            # Do not disclose whether a foreign tenant owns this opaque id.
-            raise HTTPException(status_code=403, detail="Session unavailable in this tenant")
         if existing.owner_uid != user.uid:
             raise HTTPException(status_code=403, detail="Session owned by another user")
         return BootstrapResponse(session_id=session_id, created=False)
@@ -56,7 +53,7 @@ async def bootstrap_session(
     from tools.documents.access import DocumentUnavailable, validate_selection
 
     try:
-        validate_selection(body.document_ids, user_id=user.uid, tenant_id=ctx.tenant_id)
+        validate_selection(body.document_ids, user_id=user.uid)
     except DocumentUnavailable as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -65,7 +62,6 @@ async def bootstrap_session(
             session_id=session_id,
             skill_id=body.skill_id,
             owner_uid=user.uid,
-            tenant_id=ctx.tenant_id,
             owner_domain=owner_domain_of(user.email),
             access_control=AccessControl(type="private"),
             document_ids=body.document_ids,
@@ -74,8 +70,8 @@ async def bootstrap_session(
             provisional=True,
         )
     except (ValueError, PermissionError) as exc:
-        logger.warning("session_bootstrap: tenant boundary rejected %s: %s", session_id, exc)
-        raise HTTPException(status_code=403, detail="Session unavailable in this tenant") from exc
+        logger.warning("session_bootstrap: user boundary rejected %s: %s", session_id, exc)
+        raise HTTPException(status_code=403, detail="Session unavailable in this user") from exc
 
     session_service = get_session_service()
     try:
@@ -91,9 +87,9 @@ async def bootstrap_session(
         )
 
     logger.info(
-        "session_bootstrap: pre-created session %s for skill %s tenant=%s",
+        "session_bootstrap: pre-created session %s for skill %s user=%s",
         session_id,
         body.skill_id,
-        ctx.tenant_id,
+        ctx.uid,
     )
     return BootstrapResponse(session_id=session_id, created=True)
