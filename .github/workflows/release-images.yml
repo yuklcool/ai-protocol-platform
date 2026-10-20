@@ -21,26 +21,96 @@ on:
       - infrastructure/mcp-sandbox/**
       - scripts/smoke-selfhost.sh
       - .github/workflows/release-images.yml
+      - .github/workflows/recover-release.yml
   push:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing stable release tag to publish from main"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
 
 permissions:
   contents: write
+  actions: read
   packages: write
   attestations: write
   id-token: write
 
 concurrency:
-  group: selfhost-release-${{ github.ref }}
+  group: selfhost-release-${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
+  resolve:
+    name: Validate immutable release source
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      version: ${{ steps.source.outputs.version }}
+      publish: ${{ steps.source.outputs.publish }}
+      enabled: ${{ steps.source.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve and validate source
+        id: source
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "source_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version="$INPUT_RELEASE_TAG"
+          if [[ -z "$version" && "$GITHUB_REF" == refs/tags/* ]]; then
+            version="$GITHUB_REF_NAME"
+          fi
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo 'Select an existing stable vX.Y.Z tag; branch snapshots cannot be released.' >&2
+            exit 1
+          }
+          source_sha="$(git rev-parse "refs/tags/${version}^{commit}")"
+          git merge-base --is-ancestor "$source_sha" origin/main || {
+            echo 'Release source must already be merged into main.' >&2
+            exit 1
+          }
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+          export RELEASE_VERSION="$version"
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          const url = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}/releases/tags/${encodeURIComponent(process.env.RELEASE_VERSION)}`;
+          const response = await fetch(url, { headers: { authorization: `Bearer ${process.env.GH_TOKEN}`, accept: 'application/vnd.github+json' } });
+          if (![200, 404].includes(response.status)) throw new Error(`Release lookup HTTP ${response.status}`);
+          if (response.status === 200) {
+            const release = await response.json();
+            if (release.draft) throw new Error('Inspect the existing draft release before rebuilding.');
+            console.log('Release already published; preserving its immutable image tags.');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${response.status === 404}\n`);
+          JS
+
   release-gate:
+    needs: resolve
+    if: needs.resolve.outputs.enabled == 'true'
     name: Release self-host gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -59,17 +129,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
 
-      - name: Validate release tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release tag: ${GITHUB_REF_NAME}" >&2
-            echo "Expected a stable SemVer tag such as v1.2.3" >&2
-            exit 1
-          fi
+      - name: Require exact-source operation and persistence gates
+        if: needs.resolve.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+        run: GITHUB_SHA="$RELEASE_SOURCE_SHA" node .github/scripts/wait-release-checks.mjs
 
       - name: Validate source and release Compose models
         run: |
@@ -118,15 +186,15 @@ jobs:
         if: always()
         run: docker compose down -v --remove-orphans
 
-  images:
-    name: Build ${{ matrix.name }} image
-    needs: release-gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  image-platform:
+    name: Build ${{ matrix.image.name }} (${{ matrix.platform.arch }})
+    needs: [resolve, release-gate]
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        include:
+        image:
           - name: backend
             image: ai-protocol-platform-backend
             context: ./backend
@@ -139,47 +207,47 @@ jobs:
             image: ai-protocol-platform-mcp-sandbox
             context: ./infrastructure/mcp-sandbox
             dockerfile: ./infrastructure/mcp-sandbox/Dockerfile
-
+        platform:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+      - name: Verify native architecture
+        env:
+          TARGET_ARCH: ${{ matrix.platform.arch }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_ARCH:$(uname -m)" in
+            amd64:x86_64|arm64:aarch64) ;;
+            *) echo 'Native runner does not match target architecture.' >&2; exit 1 ;;
+          esac
+      - uses: docker/setup-buildx-action@v3
       - name: Login to GHCR
-        if: github.event_name != 'pull_request'
+        if: needs.resolve.outputs.publish == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ github.token }}
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
-          tags: |
-            type=raw,value=sha-${{ github.sha }}
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
-
-      - name: Build or publish image
+      - name: Build native image
+        id: build
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          platforms: linux/${{ matrix.platform.arch }}
+          load: ${{ needs.resolve.outputs.publish != 'true' }}
+          tags: ${{ needs.resolve.outputs.publish == 'true' && format('{0}/{1}/{2}', env.REGISTRY, github.repository_owner, matrix.image.image) || format('{0}/{1}/{2}:sha-{3}-{4}', env.REGISTRY, github.repository_owner, matrix.image.image, needs.resolve.outputs.source_sha, matrix.platform.arch) }}
+          outputs: ${{ needs.resolve.outputs.publish == 'true' && format('type=image,name={0}/{1}/{2},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY, github.repository_owner, matrix.image.image) || '' }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.source_sha }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.version || needs.resolve.outputs.source_sha }}
+            org.opencontainers.image.licenses=Apache-2.0
           build-args: |
             SKIP_QUALITY_CHECKS=true
             NEXT_PUBLIC_LOCAL_MODE=0
@@ -187,15 +255,15 @@ jobs:
             NEXT_PUBLIC_AUTH_MODE=__aip_auth_mode_runtime__
             NEXT_PUBLIC_MCP_SANDBOX_URL=https://mcp-sandbox.runtime.invalid
             NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
-          sbom: ${{ github.event_name != 'pull_request' }}
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-
-      - name: Verify frontend release image accepts runtime public configuration
-        if: github.event_name == 'pull_request' && matrix.name == 'frontend'
+          sbom: ${{ needs.resolve.outputs.publish == 'true' }}
+          provenance: ${{ needs.resolve.outputs.publish == 'true' && 'mode=max' || 'false' }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}-${{ matrix.platform.arch }}
+      - name: Verify frontend runtime public configuration
+        if: needs.resolve.outputs.publish != 'true' && matrix.image.name == 'frontend'
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.image }}:sha-${{ needs.resolve.outputs.source_sha }}-${{ matrix.platform.arch }}
         run: |
-          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/${{ matrix.image }}:sha-${GITHUB_SHA}"
           docker run --rm \
             -e MCP_SANDBOX_PUBLIC_URL=https://mcp.release-ci.example \
             -e AUTH_BACKEND=oidc-runtime-ci-marker \
@@ -204,21 +272,96 @@ jobs:
               && ! grep -RIl "https://mcp-sandbox.runtime.invalid" /app/.next >/dev/null \
               && grep -RIl "oidc-runtime-ci-marker" /app/.next >/dev/null \
               && ! grep -RIl "__aip_auth_mode_runtime__" /app/.next >/dev/null'
-
-      - name: Scan image for HIGH/CRITICAL vulnerabilities
+      - name: Scan native image for HIGH/CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:sha-${{ github.sha }}
+          image-ref: ${{ needs.resolve.outputs.publish == 'true' && format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository_owner, matrix.image.image, steps.build.outputs.digest) || format('{0}/{1}/{2}:sha-{3}-{4}', env.REGISTRY, github.repository_owner, matrix.image.image, needs.resolve.outputs.source_sha, matrix.platform.arch) }}
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore.yaml
           exit-code: "1"
+      - name: Export scanned image digest
+        if: needs.resolve.outputs.publish == 'true'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - name: Preserve scanned image digest
+        if: needs.resolve.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 7
+
+  images:
+    name: Publish ${{ matrix.image }} manifest
+    needs: [resolve, image-platform]
+    if: needs.resolve.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [backend, frontend, mcp-sandbox]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digests-${{ matrix.image }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Docker metadata for the validated source
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ai-protocol-platform-${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=sha-${{ needs.resolve.outputs.source_sha }}
+            type=raw,value=${{ needs.resolve.outputs.version }}
+            type=semver,pattern={{version}},value=${{ needs.resolve.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve.outputs.version }}
+            type=raw,value=latest
+      - name: Merge only the two scanned native digests
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ai-protocol-platform-${{ matrix.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          digests=("$RUNNER_TEMP/digests/"*)
+          [[ "${#digests[@]}" == 2 ]] || { echo 'Expected both native image digests.' >&2; exit 1; }
+          sources=()
+          for file in "${digests[@]}"; do
+            digest="${file##*/}"
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || exit 1
+            sources+=("$IMAGE@sha256:$digest")
+          done
+          tags=()
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then tags+=(-t "$tag"); fi
+          done <<< "$TAGS"
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          docker buildx imagetools inspect --raw "$IMAGE:${{ needs.resolve.outputs.version }}" > "$RUNNER_TEMP/version-manifest.json"
+          docker buildx imagetools inspect --raw "$IMAGE:latest" > "$RUNNER_TEMP/latest-manifest.json"
+          cmp "$RUNNER_TEMP/version-manifest.json" "$RUNNER_TEMP/latest-manifest.json"
+          jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | unique | sort == ["amd64", "arm64"]' "$RUNNER_TEMP/version-manifest.json"
 
   public-pull:
+    env:
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     name: Verify anonymous GHCR pulls
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: images
+    if: needs.resolve.outputs.publish == 'true'
+    needs: [resolve, images]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -232,13 +375,15 @@ jobs:
             ai-protocol-platform-frontend \
             ai-protocol-platform-mcp-sandbox; do
             DOCKER_CONFIG="$anonymous_config" docker pull \
-              "ghcr.io/${GITHUB_REPOSITORY_OWNER}/${image}:${GITHUB_REF_NAME}"
+              "ghcr.io/${GITHUB_REPOSITORY_OWNER}/${image}:${RELEASE_VERSION}"
           done
 
   no-clone-cold-start:
+    env:
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     name: Verify no-clone release cold start
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [images, public-pull]
+    if: needs.resolve.outputs.publish == 'true'
+    needs: [resolve, images, public-pull]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -248,7 +393,7 @@ jobs:
           set -euo pipefail
           workdir="$(mktemp -d)"
           echo "RELEASE_WORKDIR=${workdir}" >> "${GITHUB_ENV}"
-          raw_base="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}"
+          raw_base="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${RELEASE_VERSION}"
           curl -fsSL "${raw_base}/docker-compose.release.yml" -o "${workdir}/docker-compose.release.yml"
           curl -fsSL "${raw_base}/.env.selfhost.example" -o "${workdir}/.env"
 
@@ -257,7 +402,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "${RELEASE_WORKDIR}"
-          sed -i "s/^APP_VERSION=.*/APP_VERSION=${GITHUB_REF_NAME}/" .env
+          sed -i "s/^APP_VERSION=.*/APP_VERSION=${RELEASE_VERSION}/" .env
           sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=release-cold-start-db-password/" .env
           sed -i "s#^DATABASE_URL=.*#DATABASE_URL=postgresql://aip:release-cold-start-db-password@postgres:5432/aip#" .env
           sed -i "s/^JWT_SIGNING_KEY=.*/JWT_SIGNING_KEY=release-cold-start-signing-key-at-least-32-bytes/" .env
@@ -315,13 +460,17 @@ jobs:
           fi
 
   release:
+    env:
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [images, public-pull, no-clone-cold-start]
+    if: needs.resolve.outputs.publish == 'true'
+    needs: [resolve, images, public-pull, no-clone-cold-start]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
 
       - name: Stage pinned deployment assets
         shell: bash
@@ -329,9 +478,9 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           cp docker-compose.release.yml release-assets/docker-compose.release.yml
-          sed "s/^APP_VERSION=.*/APP_VERSION=${GITHUB_REF_NAME}/" \
+          sed "s/^APP_VERSION=.*/APP_VERSION=${RELEASE_VERSION}/" \
             .env.selfhost.example > release-assets/.env.selfhost.example
-          grep -Fx "APP_VERSION=${GITHUB_REF_NAME}" release-assets/.env.selfhost.example
+          grep -Fx "APP_VERSION=${RELEASE_VERSION}" release-assets/.env.selfhost.example
 
       - name: Publish generated release notes and deployment assets
         env:
@@ -343,10 +492,10 @@ jobs:
             'On first upgrade, retired tenant directories, tenant-owned resources and old Session/Memory data are deleted directly. No ownership migration is performed. Account credentials and shared platform configuration are retained.' \
             'See docs/configuration-guide.md for configuration and cleanup details.' \
             > "${RUNNER_TEMP}/release-upgrade.md"
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "${RELEASE_VERSION}" \
             --verify-tag \
             --generate-notes \
             --notes-file "${RUNNER_TEMP}/release-upgrade.md" \
-            --title "AI Protocol Platform ${GITHUB_REF_NAME}" \
+            --title "AI Protocol Platform ${RELEASE_VERSION}" \
             release-assets/docker-compose.release.yml \
             release-assets/.env.selfhost.example

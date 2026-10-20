@@ -1,0 +1,81 @@
+name: Recover unpublished release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-images.yml
+      - .github/workflows/recover-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  actions: read
+  attestations: write
+  id-token: write
+
+jobs:
+  candidate:
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.candidate.outputs.version }}
+      needed: ${{ steps.candidate.outputs.needed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Recover only an accepted unpublished tag
+        id: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(jq -r '.version' .github/release-candidate.json)"
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if ! git show-ref --verify --quiet "refs/tags/$version"; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "No existing release tag to recover: $version"
+            exit 0
+          fi
+          source_sha="$(git rev-parse "refs/tags/${version}^{commit}")"
+          git merge-base --is-ancestor "$source_sha" origin/main
+          GITHUB_SHA="$source_sha" node .github/scripts/wait-release-checks.mjs
+          export RELEASE_VERSION="$version" RECOVERY_SOURCE_SHA="$source_sha"
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          const base = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}`;
+          const headers = { authorization: `Bearer ${process.env.GH_TOKEN}`, accept: 'application/vnd.github+json' };
+          const release = await fetch(`${base}/releases/tags/${encodeURIComponent(process.env.RELEASE_VERSION)}`, { headers });
+          if (![200, 404].includes(release.status)) throw new Error(`Release lookup HTTP ${release.status}`);
+          if (release.status === 200) {
+            appendFileSync(process.env.GITHUB_OUTPUT, 'needed=false\n');
+            console.log('Release already exists; no recovery needed.');
+          } else {
+            const response = await fetch(`${base}/actions/workflows/release-images.yml/runs?head_sha=${process.env.RECOVERY_SOURCE_SHA}&per_page=100`, { headers });
+            if (!response.ok) throw new Error(`Release runs HTTP ${response.status}`);
+            const { workflow_runs: runs } = await response.json();
+            for (const run of runs || []) {
+              if (run.head_sha !== process.env.RECOVERY_SOURCE_SHA || run.head_branch !== process.env.RELEASE_VERSION || run.status === 'completed' || String(run.id) === process.env.GITHUB_RUN_ID) continue;
+              const cancelled = await fetch(`${base}/actions/runs/${run.id}/cancel`, { method: 'POST', headers });
+              if (cancelled.status !== 202) {
+                const current = await fetch(`${base}/actions/runs/${run.id}`, { headers });
+                if (!current.ok || (await current.json()).status !== 'completed') throw new Error(`Cancel superseded release HTTP ${cancelled.status}`);
+              }
+              console.log(`Superseded tag build: ${run.id}`);
+            }
+            appendFileSync(process.env.GITHUB_OUTPUT, 'needed=true\n');
+          }
+          JS
+
+  recover:
+    needs: candidate
+    if: needs.candidate.outputs.needed == 'true'
+    uses: ./.github/workflows/release-images.yml
+    with:
+      release_tag: ${{ needs.candidate.outputs.version }}
