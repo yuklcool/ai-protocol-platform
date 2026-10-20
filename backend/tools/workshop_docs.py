@@ -198,11 +198,8 @@ def search_workshop_docs(query: str, max_results: int = 4) -> str:
 
     if not scored:
         return (
-            f"No documents matched **{query}**. The workshop helper's "
-            "knowledge base covers `docs/workshop/`, `docs/integrations/`, "
-            "every shipped sprint design in `docs/archive/design/v6.X.Y/implemented/`, "
-            "and the canonical talk doc at "
-            "`docs/talks/ai-ui-protocol-stack.md`."
+            f"No documents matched **{query}**. Try keywords from the current "
+            "configuration, file analysis, protocol or workshop guides."
         )
 
     scored.sort(key=lambda pair: pair[0], reverse=True)
