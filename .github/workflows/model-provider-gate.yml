@@ -35,7 +35,6 @@ on:
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
       - backend/admin/usage_routes.py
@@ -98,7 +97,6 @@ on:
       - frontend/src/components/admin/**
       - frontend/src/components/agent/**
       - frontend/src/app/admin/users/**
-      - frontend/src/app/admin/groups/**
       - backend/agents/**
       - backend/admin/accounts_routes.py
       - backend/admin/usage_routes.py

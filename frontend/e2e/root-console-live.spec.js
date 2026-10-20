@@ -46,7 +46,7 @@ test("administrator and member can edit user-owned Skills and information", asyn
     await page.getByRole("button", { name: "创建用户", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: EMAIL })).toBeVisible();
     const member = await api("/api/auth/login", null, "POST", { email: EMAIL, password: MEMBER_PASSWORD });
-    skill = await api("/api/skills", member.access_token, "POST", { name: `personal-${randomUUID().slice(0, 8)}`, displayName: "专有技能", instructions: "MEMBER-ONLY", accessControl: { type: "private" } });
+    skill = await api("/api/skills", member.access_token, "POST", { name: `personal-${randomUUID().slice(0, 8)}`, displayName: "专有技能", description: "Member-owned private acceptance skill", instructions: "MEMBER-ONLY", accessControl: { type: "private" } });
     memberContext = await signedContext(browser, member);
     const memberPage = await memberContext.newPage();
     await memberPage.goto(`${FRONTEND}/settings/personal`);
