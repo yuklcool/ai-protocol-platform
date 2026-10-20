@@ -6,6 +6,8 @@
 
 每个稳定版本发布三个应用镜像，均包含 `linux/amd64`、`linux/arm64`：
 
+两种架构分别在原生 runner 构建和扫描，通过后才合并清单并更新版本及 `latest` 标签。发布失败时，可在主分支运行 `Recover unpublished release`：只恢复已合并、通过同提交门禁且尚未创建 Release 的候选标签；不会重写源码标签或已发布版本。
+
 ```text
 ghcr.io/yuklcool/ai-protocol-platform-backend:v2.0.0
 ghcr.io/yuklcool/ai-protocol-platform-frontend:v2.0.0
