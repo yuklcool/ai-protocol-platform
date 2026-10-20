@@ -9,11 +9,9 @@ on:
       - backend/protocols/mcp_proxy.py
       - backend/tests/api_tests/test_admin_mcp_servers.py
       - backend/tests/api_tests/test_admin_mcp_diagnostics.py
-      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/api_tests/test_mcp_enabled_state.py
       - backend/tests/api_tests/test_mcp_proxy.py
       - backend/tests/unit/test_mcp_diagnostics.py
-      - backend/tests/unit/test_mcp_tenant_isolation.py
       - frontend/src/app/admin/mcp-servers/**
       - frontend/src/app/admin/page.tsx
       - docker-compose.yml
@@ -29,11 +27,9 @@ on:
       - backend/protocols/mcp_proxy.py
       - backend/tests/api_tests/test_admin_mcp_servers.py
       - backend/tests/api_tests/test_admin_mcp_diagnostics.py
-      - backend/tests/api_tests/test_admin_cross_tenant_matrix.py
       - backend/tests/api_tests/test_mcp_enabled_state.py
       - backend/tests/api_tests/test_mcp_proxy.py
       - backend/tests/unit/test_mcp_diagnostics.py
-      - backend/tests/unit/test_mcp_tenant_isolation.py
       - frontend/src/app/admin/mcp-servers/**
       - frontend/src/app/admin/page.tsx
       - docker-compose.yml
@@ -68,11 +64,9 @@ jobs:
             backend uv run pytest -q \
               tests/api_tests/test_admin_mcp_servers.py \
               tests/api_tests/test_admin_mcp_diagnostics.py \
-              tests/api_tests/test_admin_cross_tenant_matrix.py \
               tests/api_tests/test_mcp_enabled_state.py \
               tests/api_tests/test_mcp_proxy.py \
               tests/unit/test_mcp_diagnostics.py \
-              tests/unit/test_mcp_tenant_isolation.py
 
   mcp-admin-frontend:
     runs-on: ubuntu-latest

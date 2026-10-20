@@ -21,12 +21,11 @@ const en = {
     "Root Agent settings require platform administrator access.",
   "rootAgent.compatibility":
     "Root Agent owns the runtime configuration. Skills provide authorized instructions and reference material.",
-  "rootAgent.nav.budget": "Tenant budgets",
+  "rootAgent.nav.budget": "Usage control",
   "rootAgent.budget.enabled":
-    "Enforce tenant budgets on every Root Agent model call",
+    "Use the configured budget enforcer for model calls",
   "rootAgent.budget.hint":
-    "Applies to chat and A2UI actions, including legacy capability links. Configure each tenant before enabling. A missing tenant is rejected; a zero or missing cap is unlimited. No restart is required.",
-  "rootAgent.budget.tenants": "Configure tenant budgets and models",
+    "Applies the deployment budget enforcer to model calls. Configure BUDGET_ENFORCER before enabling.",
   "rootAgent.budget.usage": "View tokens, estimated cost and quota usage",
   "rootAgent.nav.overview": "Overview",
   "rootAgent.nav.model": "Model",
@@ -43,7 +42,7 @@ const en = {
     "This is the only agent users select in the product.",
   "rootAgent.overview.displayName": "Display name",
   "rootAgent.overview.description": "Description",
-  "rootAgent.overview.activeCapabilities": "Active capabilities",
+  "rootAgent.overview.activeCapabilities": "Shared bindings",
   "rootAgent.overview.capabilitySummary":
     "{skills} Skills · {tools} Tools · {mcp} MCP servers",
   "rootAgent.model.label": "Language model",
@@ -52,9 +51,9 @@ const en = {
   "rootAgent.prompt.label": "System instructions",
   "rootAgent.prompt.hint":
     "Shared instructions for the Root Agent. Skill instructions are resolved after permissions are applied.",
-  "rootAgent.skills.title": "Effective Skills",
+  "rootAgent.skills.title": "Shared Skills",
   "rootAgent.skills.description":
-    "Select the capabilities the Root Agent may load. Tenant, group and user policies still apply at runtime.",
+    "Select shared capabilities. Users can add their own private Skills in personal settings.",
   "rootAgent.skills.empty": "No Skills are visible in the current scope.",
   "rootAgent.tools.title": "Native Tools",
   "rootAgent.tools.description":
@@ -79,7 +78,7 @@ const en = {
   "rootAgent.interaction.welcome": "Welcome message",
   "rootAgent.permissions.title": "Permission boundary",
   "rootAgent.permissions.description":
-    "The saved bindings are only a ceiling. Skills and MCP access is limited by the effective tenant Root, tenant allowlists and permission groups.",
+    "Agent bindings control shared Skills, tools and MCP. Personal Skills cannot grant tools, MCP access or change the model.",
   "rootAgent.permissions.failClosed":
     "Unbound or unauthorized capabilities are always denied",
   "rootAgent.advanced.title": "Advanced",
@@ -150,7 +149,7 @@ const en = {
   "home.hero.lineA": "Build AI agents",
   "home.hero.lineB": "on open protocols",
   "home.hero.body":
-    "Run Skills, AG-UI, A2UI and MCP Apps on a self-hosted platform with durable identity, storage and tenant boundaries.",
+    "Run Skills, AG-UI, A2UI and MCP Apps on a self-hosted platform with durable identity, storage and user ownership.",
   "home.hero.ctaPrimary": "Open the assistant",
   "home.hero.ctaSecondary": "Explore skills",
   "home.builtOn": "Built on",
@@ -176,7 +175,7 @@ const en = {
   "home.pillar.extract.tagline": "Prompts, tools and runtime policy",
   "home.pillar.compare.label": "Model Providers",
   "home.pillar.compare.tagline": "Dynamic routing and capabilities",
-  "home.pillar.benchmark.label": "Tenant isolation",
+  "home.pillar.benchmark.label": "User privacy",
   "home.pillar.benchmark.tagline": "Server-authoritative boundaries",
   "home.pillar.compliance.label": "MCP integrations",
   "home.pillar.compliance.tagline": "Tools, resources and Apps",
@@ -191,22 +190,13 @@ const en = {
     "We couldn’t reach the admin service. This is a connection problem rather than a permission decision. Reload and try again.",
   "admin.only": "Admins only",
   "admin.onlyDescription":
-    "The administration area requires platform administrator or tenant administrator permission.",
+    "The administration area requires administrator permission.",
   "admin.justGranted":
     "Granted access just now? Refresh your access context to pick up the new server-side role immediately.",
   "admin.recheck": "Re-check my access",
   "admin.title": "Administration",
   "admin.subtitle":
-    "Manage tenants, skills, access, MCP integrations, model Providers and analytics.",
-  "admin.scopedTo": "Scoped to {domains} — you’re seeing your tenant only.",
-  "admin.area.tenant.title": "Your tenant",
-  "admin.area.tenant.question":
-    "What is my tenant configured to do, and what do my users actually see?",
-  "admin.area.tenant.config": "Tenant config",
-  "admin.area.tenant.configNote":
-    "enabled skills, landing skill, group tags and model policy",
-  "admin.area.tenant.effective": "What your users actually see",
-  "admin.area.tenant.effectiveNote": "effective access for one user",
+    "Manage users, skills, access, MCP integrations, model Providers and analytics.",
   "admin.area.people.title": "People & access",
   "admin.area.people.question": "Who is here, and what may they use?",
   "admin.area.people.users": "Users",
@@ -214,7 +204,7 @@ const en = {
   "admin.area.people.groups": "Permission groups",
   "admin.area.people.groupsNote": "grant Skills and MCP to groups",
   "admin.area.people.tools": "Tool permissions",
-  "admin.area.people.toolsNote": "which tools a user or tenant may call",
+  "admin.area.people.toolsNote": "which tools the Agent may call",
   "admin.area.skills.title": "Skills & MCP",
   "admin.area.skills.question":
     "What is published, what can it call, and to whom?",
@@ -231,7 +221,7 @@ const en = {
   "admin.area.activity.audit": "Audit trail",
   "admin.area.activity.auditNote": "who changed what, and when",
   "admin.area.platform.title": "Platform",
-  "admin.area.platform.question": "Settings that apply across every tenant.",
+  "admin.area.platform.question": "Settings that apply across the installation.",
   "admin.area.platform.models": "Model Providers",
   "admin.area.platform.modelsNote":
     "endpoints, models, completion and Tool Calling tests",
@@ -263,11 +253,10 @@ const zhCN = {
   "rootAgent.adminOnly": "Root Agent 配置需要平台管理员权限。",
   "rootAgent.compatibility":
     "Root Agent 统一管理运行配置；Skills 提供经授权的指令与参考资料。",
-  "rootAgent.nav.budget": "租户额度",
-  "rootAgent.budget.enabled": "对所有 Root Agent 模型调用执行租户额度控制",
+  "rootAgent.nav.budget": "用量控制",
+  "rootAgent.budget.enabled": "对所有 Root Agent 模型调用执行用量控制控制",
   "rootAgent.budget.hint":
-    "覆盖普通聊天、A2UI 操作及旧能力链接。启用前请创建租户并设置额度；租户不存在时拒绝调用，额度为零或未设置时不限额。保存后无需重启。",
-  "rootAgent.budget.tenants": "配置租户额度与模型策略",
+    "使用部署配置的预算执行器控制模型调用。启用前请配置 BUDGET_ENFORCER。",
   "rootAgent.budget.usage": "查看 Token、估算费用和额度使用情况",
   "rootAgent.nav.overview": "概览",
   "rootAgent.nav.model": "模型",
@@ -291,9 +280,9 @@ const zhCN = {
   "rootAgent.prompt.label": "系统指令",
   "rootAgent.prompt.hint":
     "Root Agent 的全局指令；Skill 指令会在权限计算后被加载。",
-  "rootAgent.skills.title": "生效 Skills",
+  "rootAgent.skills.title": "公共 Skills",
   "rootAgent.skills.description":
-    "选择 Root Agent 可以加载的专业能力；运行时仍会应用租户、用户组和用户权限。",
+    "选择 Agent 公共能力。用户可在个人设置中补充自己专有的 Skill。",
   "rootAgent.skills.empty": "当前权限范围内没有可用 Skill。",
   "rootAgent.tools.title": "原生 Tools",
   "rootAgent.tools.description": "为 Root Agent 绑定可复用的平台工具。",
@@ -317,7 +306,7 @@ const zhCN = {
   "rootAgent.interaction.welcome": "欢迎消息",
   "rootAgent.permissions.title": "权限边界",
   "rootAgent.permissions.description":
-    "绑定后仍需租户允许并由权限组授权，Skill 还受资源访问控制约束。",
+    "Agent 统一绑定公共 Skill、工具和 MCP。个人 Skill 不能额外授予工具、MCP 或模型权限。",
   "rootAgent.permissions.failClosed":
     "未绑定或未授权的能力始终拒绝，不提供兼容回退",
   "rootAgent.advanced.title": "高级",
@@ -386,7 +375,7 @@ const zhCN = {
   "home.hero.lineA": "构建 AI 智能体",
   "home.hero.lineB": "连接开放协议",
   "home.hero.body":
-    "在可自托管的平台上运行 Skills、AG-UI、A2UI 与 MCP Apps，并获得持久化身份、存储和租户隔离能力。",
+    "在可自托管的平台上运行 Skills、AG-UI、A2UI 与 MCP Apps，并获得持久化身份、存储和用户数据隔离能力。",
   "home.hero.ctaPrimary": "打开智能体",
   "home.hero.ctaSecondary": "浏览技能",
   "home.builtOn": "核心能力",
@@ -412,7 +401,7 @@ const zhCN = {
   "home.pillar.extract.tagline": "提示词、工具与运行策略",
   "home.pillar.compare.label": "模型 Provider",
   "home.pillar.compare.tagline": "动态路由与能力配置",
-  "home.pillar.benchmark.label": "租户隔离",
+  "home.pillar.benchmark.label": "用户数据隔离",
   "home.pillar.benchmark.tagline": "服务端权威边界",
   "home.pillar.compliance.label": "MCP 集成",
   "home.pillar.compliance.tagline": "工具、资源与 Apps",
@@ -426,20 +415,13 @@ const zhCN = {
   "admin.accessConnectionProblem":
     "当前无法连接管理服务，这是连接问题而不是权限判定。请刷新页面后重试。",
   "admin.only": "仅管理员可访问",
-  "admin.onlyDescription": "管理区域需要平台管理员或当前租户管理员权限。",
+  "admin.onlyDescription": "管理区域需要管理员权限。",
   "admin.justGranted":
     "如果刚刚获得管理员权限，请重新检查访问上下文，以立即获取服务端最新角色。",
   "admin.recheck": "重新检查权限",
   "admin.title": "管理中心",
   "admin.subtitle":
-    "统一管理租户、技能、访问权限、MCP 集成、模型 Provider 与审计分析。",
-  "admin.scopedTo": "当前范围：{domains} — 你只能看到自己租户的数据。",
-  "admin.area.tenant.title": "租户管理",
-  "admin.area.tenant.question": "当前租户配置了什么能力，用户最终能看到什么？",
-  "admin.area.tenant.config": "租户配置",
-  "admin.area.tenant.configNote": "启用技能、首页技能、用户组与模型策略",
-  "admin.area.tenant.effective": "用户实际可见内容",
-  "admin.area.tenant.effectiveNote": "查看单个用户的最终访问结果",
+    "统一管理用户、技能、访问权限、MCP 集成、模型 Provider 与审计分析。",
   "admin.area.people.title": "用户与权限",
   "admin.area.people.question": "有哪些用户，他们可以使用哪些能力？",
   "admin.area.people.users": "用户",
@@ -447,7 +429,7 @@ const zhCN = {
   "admin.area.people.groups": "权限组",
   "admin.area.people.groupsNote": "为组选择 Skills 与 MCP 并分配成员",
   "admin.area.people.tools": "工具权限",
-  "admin.area.people.toolsNote": "用户或租户可以调用哪些工具",
+  "admin.area.people.toolsNote": "Agent 可以调用哪些工具",
   "admin.area.skills.title": "技能与 MCP",
   "admin.area.skills.question": "发布了哪些技能、可以调用什么、开放给谁？",
   "admin.area.skills.studio": "Skill Studio",
@@ -462,7 +444,7 @@ const zhCN = {
   "admin.area.activity.audit": "审计日志",
   "admin.area.activity.auditNote": "记录谁在什么时候修改了什么",
   "admin.area.platform.title": "平台配置",
-  "admin.area.platform.question": "对所有租户生效的平台级设置。",
+  "admin.area.platform.question": "对所有用户生效的平台级设置。",
   "admin.area.platform.models": "模型 Provider",
   "admin.area.platform.modelsNote":
     "Endpoint、模型、Completion 与 Tool Calling 测试",

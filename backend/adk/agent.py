@@ -726,7 +726,9 @@ def _resolve_search_tools(
 
     result = []
     if wants_web:
-        result.append(GoogleSearchAgentTool(create_web_search_agent()))
+        search_tool = GoogleSearchAgentTool(create_web_search_agent())
+        search_tool._aitana_root_binding = "google_search"
+        result.append(search_tool)
     if wants_enterprise:
         # Accept both `datastore_id` (the canonical key — matches resource_ids.py,
         # the wiring test, and docs/ops/adk-search-tools.md) and the shorthand
@@ -768,7 +770,9 @@ def _resolve_search_tools(
                     e,
                 )
                 expanded = datastore_id
-            result.append(AgentTool(create_enterprise_search_agent(expanded), propagate_grounding_metadata=True))
+            search_tool = AgentTool(create_enterprise_search_agent(expanded), propagate_grounding_metadata=True)
+            search_tool._aitana_root_binding = "ai_search"
+            result.append(search_tool)
         else:
             logger.warning(
                 "ai_search tool requested but no datastore configured "
@@ -941,6 +945,8 @@ def create_agent(
     if a2ui_cfg.enabled:
         tools.append(make_a2ui_toolset(config=a2ui_cfg))
     code_executor, code_tools = _resolve_code_executor(md.tools, effective_model_api)
+    for code_tool in code_tools:
+        code_tool._aitana_root_binding = "code_execution"
     tools.extend(code_tools)
     # v6.12.0 — the agent-authored elicitation path. Give the model
     # `request_confirmation` so it can raise its OWN A2UI chat form (confirm /
@@ -1120,11 +1126,12 @@ def create_agent(
     from budget.callback import make_budget_callbacks
 
     _enforcer = get_registered_enforcer()
-    if (md.tool_configs.get("root_agent") or {}).get("budget_enabled"):
-        from budget.tenant_repository_enforcer import TenantRepositoryBudgetEnforcer
-        from db.persistence import get_repository
-
-        _enforcer = TenantRepositoryBudgetEnforcer(get_repository())
+    root_policy = md.tool_configs.get("root_agent") or {}
+    if root_policy.get("enabled"):
+        if not root_policy.get("budget_enabled"):
+            _enforcer = None
+        elif _enforcer is None:
+            raise ValueError("Configure BUDGET_ENFORCER before enabling Agent budget control")
     _budget_before, _budget_after = make_budget_callbacks(
         _enforcer,
         user=user,

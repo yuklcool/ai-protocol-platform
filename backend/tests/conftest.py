@@ -48,18 +48,18 @@ _collection_credentials_patch = None
 def _isolate_repository_and_memory_cache():
     from adk.session import _reset_memory_service_for_tests
     from db.persistence import reset_repository_for_testing
-    from observability.tenant_context import _tenant_context
+    from observability.user_context import _context
 
     if os.environ.get("RUN_LIVE_GCP") == "1":
         yield
         return
     reset_repository_for_testing()
     _reset_memory_service_for_tests()
-    _tenant_context.set(None)
+    _context.set(None)
     yield
     reset_repository_for_testing()
     _reset_memory_service_for_tests()
-    _tenant_context.set(None)
+    _context.set(None)
 
 
 def pytest_sessionstart(session):
@@ -240,19 +240,6 @@ def _stub_firestore_client():
     fs._client = fake
     yield fake
     fs._client = saved
-
-
-@pytest.fixture(autouse=True)
-def _reset_client_config_cache():
-    """Clear the in-process client-config cache (db/clients.py, v6.9.0 M4)
-    before and after each test so a cached ClientConfig never leaks across
-    tests. The durable Firestore tier is already stubbed empty per test by
-    ``_stub_firestore_client`` above."""
-    import db.clients as _clients
-
-    _clients._reset_client_cache()
-    yield
-    _clients._reset_client_cache()
 
 
 @pytest.fixture(autouse=True)

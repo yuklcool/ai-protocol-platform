@@ -17,9 +17,9 @@ def _database_url() -> str:
     if not value:
         pytest.skip("DATABASE_URL is required for PostgreSQL integration test")
     from auth import User
-    from observability.tenant_context import set_tenant_context
+    from observability.user_context import set_user_context
 
-    set_tenant_context(User(uid="ci-persistence", tenant_id="ci-persistence"))
+    set_user_context(User(uid="ci-persistence"))
     return value
 
 

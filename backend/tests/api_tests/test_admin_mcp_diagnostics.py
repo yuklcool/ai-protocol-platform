@@ -48,7 +48,7 @@ def tenant_admin() -> TestClient:
     return _client(_TENANT_ADMIN)
 
 
-def test_health_runs_real_diagnostic_boundary_for_visible_server(tenant_admin: TestClient) -> None:
+def test_health_runs_real_diagnostic_boundary_for_visible_server(platform_admin: TestClient) -> None:
     config = {
         "url": "http://mcp-sandbox:8080/mcp",
         "transport": "streamable-http",
@@ -66,7 +66,7 @@ def test_health_runs_real_diagnostic_boundary_for_visible_server(tenant_admin: T
         patch("admin.mcp_servers_routes.get_document", return_value=config),
         patch("admin.mcp_servers_routes.check_mcp_server", diagnostic),
     ):
-        response = tenant_admin.post("/api/admin/mcp-servers/sandbox/health")
+        response = platform_admin.post("/api/admin/mcp-servers/sandbox/health")
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
@@ -77,7 +77,9 @@ def test_health_runs_real_diagnostic_boundary_for_visible_server(tenant_admin: T
 
 
 def test_health_returns_structured_authentication_failure(platform_admin: TestClient) -> None:
-    config = {"url": "https://mcp.example.test/mcp", "scope": "platform"}
+    config = {
+        "url": "https://mcp.example.test/mcp",
+    }
     diagnostic = AsyncMock(side_effect=McpDiagnosticError("authentication", "401 Unauthorized"))
     with (
         patch("admin.mcp_servers_routes.get_document", return_value=config),
@@ -94,25 +96,10 @@ def test_health_returns_structured_authentication_failure(platform_admin: TestCl
     }
 
 
-def test_tenant_cannot_probe_foreign_private_server(tenant_admin: TestClient) -> None:
-    config = {
-        "url": "https://foreign.example.test/mcp",
-        "scope": "tenant",
-        "tenantId": "b.com",
-    }
-    diagnostic = AsyncMock()
-    with (
-        patch("admin.mcp_servers_routes.get_document", return_value=config),
-        patch("admin.mcp_servers_routes.check_mcp_server", diagnostic),
-    ):
-        response = tenant_admin.post("/api/admin/mcp-servers/foreign/health")
-
-    assert response.status_code == 404
-    diagnostic.assert_not_awaited()
-
-
 def test_discover_returns_tools_resources_prompts_and_mcp_apps(platform_admin: TestClient) -> None:
-    config = {"url": "https://mcp.example.test/mcp", "scope": "platform"}
+    config = {
+        "url": "https://mcp.example.test/mcp",
+    }
     diagnostic = AsyncMock(
         return_value={
             "ok": True,
@@ -143,7 +130,6 @@ def test_discover_returns_tools_resources_prompts_and_mcp_apps(platform_admin: T
 def test_discover_returns_schema_failure_without_leaking_config(platform_admin: TestClient) -> None:
     config = {
         "url": "https://mcp.example.test/mcp",
-        "scope": "platform",
         "headers": {"Authorization": "Bearer super-secret"},
     }
     diagnostic = AsyncMock(side_effect=McpDiagnosticError("schema", "tools/list returned an invalid schema"))

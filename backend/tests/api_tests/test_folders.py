@@ -76,6 +76,9 @@ def client(app: FastAPI) -> TestClient:
 def _install_user(app: FastAPI, user: User) -> Callable[[], None]:
     async def _override(request: Request) -> User:
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = _override

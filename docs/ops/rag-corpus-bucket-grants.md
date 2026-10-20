@@ -54,7 +54,7 @@ Read-only, two roles (`legacyBucketReader` supplies the failing `storage.buckets
 >   internal users — `db/clients.py` `DOCUMENTS_BUCKET` default; lives in legacy
 >   project `aitana-documents`) — ⏳ **pending all 3 envs**, found 2026-07-23 when
 >   an internal tester's uploaded doc degraded RAG search on test (4× `403 failed
->   to list files, folders`). Any tenant-mapped `documents_bucket` added in
+>   to list files, folders`). Any user-mapped `documents_bucket` added in
 >   Firestore `clients/{domain}` needs the same treatment.
 
 > **This applies to EVERY bucket RAG imports from — run the block once per
@@ -64,7 +64,7 @@ Read-only, two roles (`legacyBucketReader` supplies the failing `storage.buckets
 >   internal users — `db/clients.py` `DOCUMENTS_BUCKET` default; lives in legacy
 >   project `aitana-documents`) — ⏳ **pending all 3 envs**, found 2026-07-23 when
 >   an internal tester's uploaded doc degraded RAG search on test (4× `403 failed
->   to list files, folders`). Any tenant-mapped `documents_bucket` added in
+>   to list files, folders`). Any user-mapped `documents_bucket` added in
 >   Firestore `clients/{domain}` needs the same treatment.
 
 ```bash

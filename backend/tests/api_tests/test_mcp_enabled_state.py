@@ -8,19 +8,18 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 _PLATFORM_ADMIN = User(
     uid="platform-admin",
     email="owner@platform.test",
     domain="platform.test",
-    tenant_id="platform",
     group_tags=frozenset({"aitana-admin"}),
 )
 _TENANT_USER = User(
     uid="tenant-user",
     email="user@example.com",
     domain="example.com",
-    tenant_id="tenant-a",
 )
 
 
@@ -42,7 +41,7 @@ def _proxy_client() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: _TENANT_USER
+    app.dependency_overrides[get_current_user] = identity_dependency(_TENANT_USER)
     return TestClient(app)
 
 
@@ -58,7 +57,6 @@ def test_admin_can_persist_disabled_server() -> None:
             json={
                 "url": "http://mcp-example-map:8080/mcp",
                 "transport": "streamable-http",
-                "scope": "platform",
                 "enabled": False,
             },
         )
@@ -73,7 +71,6 @@ def test_admin_legacy_row_without_enabled_is_reported_enabled() -> None:
     legacy = {
         "url": "https://mcp.example.test/mcp",
         "transport": "http",
-        "scope": "platform",
     }
     with patch("admin.mcp_servers_routes.get_document", return_value=legacy):
         response = _admin_client().get("/api/admin/mcp-servers/legacy")
@@ -86,7 +83,6 @@ def test_disabled_server_is_hidden_from_runtime_proxy() -> None:
     disabled = {
         "url": "https://mcp.example.test/mcp",
         "transport": "http",
-        "scope": "platform",
         "enabled": False,
     }
     with patch("protocols.mcp_proxy.get_document", return_value=disabled):

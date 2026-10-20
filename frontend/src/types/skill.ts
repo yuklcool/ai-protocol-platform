@@ -152,10 +152,7 @@ export interface ExamplePrompt {
 }
 
 export interface BucketBrowserConfig {
-  /** OPTIONAL — empty means "the viewer's own tenant documents_bucket", filled
-   * per-request by the skills API (`_fill_welcome_buckets`). Skill Studio always
-   * leaves this empty: an author picks a FOLDER, never a bucket, so a skill can
-   * never point at another tenant's storage. */
+
   bucket?: string;
   rootPath?: string;
   label?: string;

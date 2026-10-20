@@ -1,29 +1,3 @@
-"""Skill-level budget config: typed view over ``tool_configs.budget``.
-
-Sprint 2.12 (v6.2.0) M2. Mirrors ``A2uiToolConfig.from_tool_configs``
-shape so the parsing pattern is uniform across all per-tool config
-blocks.
-
-Skills opt in by declaring:
-
-    tool_configs:
-      budget:
-        identity_key: group_id   # which User field the enforcer keys on
-        cost_multiplier: 1.0     # default 1.0; >1 to scale expensive skills
-        exempt: false            # default false; true bypasses the gate
-        missing_identity_policy: skip  # legacy-compatible default
-
-Tenant-scoped quotas should fail closed when the authenticated identity does
-not carry a stable tenant id:
-
-    tool_configs:
-      budget:
-        identity_key: tenant_id
-        missing_identity_policy: block
-
-Skills without a ``budget`` block are exempt by absence.
-"""
-
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -38,7 +12,7 @@ class BudgetConfig(BaseModel):
         ...,
         description=(
             "Which ``User`` field the budget enforcer keys on. "
-            "Examples: ``tenant_id`` for tenant quotas, ``group_id`` for "
+            "Examples: ``uid`` for user quotas, ``group_id`` for "
             "cohorts/classrooms, ``uid`` for per-user budgets, or ``domain`` "
             "for legacy org-level budgets. Required — there's no sensible default."
         ),
@@ -66,8 +40,8 @@ class BudgetConfig(BaseModel):
         description=(
             "How to handle a missing/blank identity field. ``skip`` preserves "
             "the historical fail-open behaviour. ``block`` fails closed before "
-            "the model call and is recommended for ``identity_key: tenant_id`` "
-            "in multi-tenant deployments."
+            "the model call and is recommended for ``identity_key: uid`` "
+            "in multi-user deployments."
         ),
     )
 

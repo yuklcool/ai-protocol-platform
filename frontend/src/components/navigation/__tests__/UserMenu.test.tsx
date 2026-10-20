@@ -8,6 +8,7 @@ import { fetchWithAuth } from "@/lib/apiClient";
 // flip user state between cases.
 const auth = {
   user: null as {
+    uid?: string;
     displayName?: string;
     email?: string;
     photoURL?: string | null;
@@ -42,7 +43,7 @@ describe("UserMenu", () => {
   it("shows the avatar menu with name/email and Sign out when logged in", () => {
     auth.user = {
       displayName: "Mark",
-      email: "owner@yourcompany.com",
+      uid: "test-user", email: "owner@yourcompany.com",
       photoURL: null,
     };
     render(<UserMenu />);
@@ -55,7 +56,7 @@ describe("UserMenu", () => {
   });
 
   it("falls back to an initial chip when there is no photoURL", () => {
-    auth.user = { displayName: "Zara", email: "z@x.com", photoURL: null };
+    auth.user = { displayName: "Zara", uid: "test-user", email: "z@x.com", photoURL: null };
     render(<UserMenu />);
     // The trigger shows the uppercase initial.
     expect(screen.getByLabelText("Account menu").textContent).toBe("Z");
@@ -64,7 +65,7 @@ describe("UserMenu", () => {
   it("reveals an Admin link for a platform admin", async () => {
     auth.user = {
       displayName: "Mark",
-      email: "owner@yourcompany.com",
+      uid: "test-user", email: "owner@yourcompany.com",
       photoURL: null,
     };
     vi.mocked(fetchWithAuth).mockResolvedValue({
@@ -80,27 +81,8 @@ describe("UserMenu", () => {
     expect(fetchWithAuth).toHaveBeenCalledWith("/api/proxy/api/admin/whoami");
   });
 
-  it("reveals an Admin link for a TENANT admin (the v6.16.0 fix)", async () => {
-    // The whole point of the whoami probe: this user used to see nothing,
-    // because the old probe hit a platform-only endpoint and got a 403.
-    auth.user = {
-      displayName: "Ops",
-      email: "ops@acmeenergy.com",
-      photoURL: null,
-    };
-    vi.mocked(fetchWithAuth).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ scope: "tenant", tenantIds: ["acmeenergy.com"] }),
-    } as unknown as Response);
-    render(<UserMenu />);
-    fireEvent.click(screen.getByLabelText("Account menu"));
-    const adminLink = await screen.findByText("Admin");
-    expect(adminLink.getAttribute("href")).toBe("/admin");
-  });
-
   it("hides the Admin link for a non-admin (scope 'none')", async () => {
-    auth.user = { displayName: "Zed", email: "zed@x.com", photoURL: null };
+    auth.user = { displayName: "Zed", uid: "test-user", email: "zed@x.com", photoURL: null };
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       status: 200,

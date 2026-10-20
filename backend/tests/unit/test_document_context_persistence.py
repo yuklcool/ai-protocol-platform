@@ -5,18 +5,16 @@ from unittest.mock import patch
 import pytest
 
 from auth import User
-from observability.tenant_context import _tenant_context, set_tenant_context
+from observability.user_context import _context, set_user_context
 from tools.documents.context import build_document_context
 
 
 @pytest.fixture(autouse=True)
 def document_identity():
-    token = _tenant_context.set(None)
-    set_tenant_context(
-        User(uid="context-user", email="user@example.com", domain="example.com", tenant_id="context-tenant")
-    )
+    token = _context.set(None)
+    set_user_context(User(uid="context-user", email="user@example.com", domain="example.com"))
     yield
-    _tenant_context.reset(token)
+    _context.reset(token)
 
 
 def test_build_document_context_reads_repository_facade() -> None:

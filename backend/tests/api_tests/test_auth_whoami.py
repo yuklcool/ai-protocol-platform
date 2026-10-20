@@ -42,7 +42,6 @@ def test_whoami_valid_token_echoes_identity(client: TestClient) -> None:
         "uid": "mark-uid",
         "email": "owner@yourcompany.com",
         "domain": "yourcompany.com",
-        "tenantId": "yourcompany.com",
         "authMode": "firebase",
         "groupTags": ["aitana-admin", "ops"],
     }
@@ -57,7 +56,6 @@ def test_whoami_missing_group_tags_returns_empty_list(client: TestClient) -> Non
         "uid": "other-uid",
         "email": "other@example.com",
         "domain": "example.com",
-        "tenantId": "example.com",
         "authMode": "firebase",
         "groupTags": [],
     }

@@ -37,7 +37,7 @@ function mockWhoAmI(body: { scope: string; tenantIds?: string[] }) {
 describe("useAdminScope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    auth.user = { email: "u@x.com" };
+    auth.user = { uid: "test-user", email: "u@x.com" };
     auth.loading = false;
   });
 
@@ -49,16 +49,6 @@ describe("useAdminScope", () => {
     expect(result.current.isPlatform).toBe(true);
   });
 
-  it("resolves tenant scope with its tenantIds", async () => {
-    mockWhoAmI({ scope: "tenant", tenantIds: ["a.com"] });
-    const { result } = renderHook(() => useAdminScope());
-    await waitFor(() => expect(result.current.state).toBe("tenant"));
-    expect(result.current.isAdmin).toBe(true);
-    // A tenant admin is an admin, but NOT a platform admin — platform-only
-    // surfaces gate on this distinction.
-    expect(result.current.isPlatform).toBe(false);
-    expect(result.current.tenantIds).toEqual(["a.com"]);
-  });
 
   it("resolves 'none' for a signed-in non-admin", async () => {
     mockWhoAmI({ scope: "none", tenantIds: [] });
@@ -118,10 +108,4 @@ describe("useAdminScope", () => {
     expect(fetchWithAuth).toHaveBeenCalledTimes(1);
   });
 
-  it("tolerates a malformed tenantIds field", async () => {
-    mockWhoAmI({ scope: "tenant", tenantIds: undefined });
-    const { result } = renderHook(() => useAdminScope());
-    await waitFor(() => expect(result.current.state).toBe("tenant"));
-    expect(result.current.tenantIds).toEqual([]);
-  });
 });

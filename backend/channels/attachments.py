@@ -205,7 +205,7 @@ class AttachmentPipeline:
         """
         from google.cloud import storage as gcs
 
-        from db.clients import resolve_channel_bucket
+        from config.document_storage import resolve_channel_bucket
 
         bucket_name = resolve_channel_bucket()
         client = gcs.Client()

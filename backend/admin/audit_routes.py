@@ -1,16 +1,4 @@
-"""GET /api/admin/audit — read the admin audit trail (v6.16.0 Phase 4).
-
-The trail has been written since v6.9.0 and readable by nobody: records
-accumulated in ``admin_audit`` and were reachable only via raw Firestore. An
-audit trail the admin it concerns cannot read does not discharge the
-accountability promise that justified building it — especially once client-side
-tenant admins are operating their own tenant.
-
-Tenant-scoped: a tenant admin sees actions explicitly attributed to their stable tenant; a
-platform admin sees everything. Read-only, so no audit row is written for
-reading — consistent with ``access_routes`` (the trail is for changes; this is
-an inspection).
-"""
+"""Administrator audit trail."""
 
 from __future__ import annotations
 
@@ -33,8 +21,6 @@ class AuditRow(BaseModel):
 
     id: str = ""
     ts: str = ""
-    tenant_id: str = Field(default="", alias="tenantId")
-    actor_tenant_id: str = Field(default="", alias="actorTenantId")
     actor_uid: str = Field(default="", alias="actorUid")
     actor_email: str = Field(default="", alias="actorEmail")
     action: str = ""
@@ -47,7 +33,7 @@ class AuditRow(BaseModel):
 
 class AuditResponse(BaseModel):
     entries: list[AuditRow] = Field(default_factory=list)
-    # Count within authorized tenant scope, before action filtering.
+    # Count within audit trail, before action filtering.
     scanned: int = 0
     scope: str = "platform"
 
@@ -61,13 +47,11 @@ def read_audit(
     action: str | None = Query(None, description="Exact-match filter on the action verb."),
 ) -> AuditResponse:
     """Return the audit trail in scope, newest first."""
-    rows, scanned = list_admin_actions(domains=scope.tenant_ids, limit=limit, action=action)
+    rows, scanned = list_admin_actions(limit=limit, action=action)
     entries = [
         AuditRow(
             id=str(r.get("__id", "") or ""),
             ts=str(r.get("ts", "") or ""),
-            tenantId=str(r.get("tenantId", "") or ""),
-            actorTenantId=str(r.get("actorTenantId", "") or ""),
             actorUid=str(r.get("actorUid", "") or ""),
             actorEmail=str(r.get("actorEmail", "") or ""),
             action=str(r.get("action", "") or ""),
@@ -80,14 +64,14 @@ def read_audit(
     log.info(
         "admin.audit: read by uid=%s scope=%s returned=%d scanned=%d",
         scope.user.uid,
-        "platform" if scope.is_platform else "tenant",
+        "platform",
         len(entries),
         scanned,
     )
     return AuditResponse(
         entries=entries,
         scanned=scanned,
-        scope="platform" if scope.is_platform else "tenant",
+        scope="platform",
     )
 
 

@@ -1,6 +1,6 @@
 """Optional OpenID Connect identity provider for self-hosted deployments.
 
-OIDC is an authentication source only. Tenant, domain and role/group data are
+OIDC is an authentication source only. Account status and roles are
 reloaded from authoritative local auth_users records after token verification.
 
 The browser flow uses Authorization Code + PKCE. The backend creates and stores
@@ -206,15 +206,12 @@ def _local_user_from_subject(*, issuer: str, subject: str) -> User:
         raise jwt.InvalidTokenError("linked local account identity changed")
 
     domain = str(record.get("domain") or (email.rsplit("@", 1)[1] if "@" in email else "")).strip().lower()
-    tenant_id = str(record.get("tenantId") or domain).strip()
     tags = frozenset(str(tag) for tag in (record.get("groupTags") or []))
     return User(
         uid=str(record.get("uid") or ""),
         email=email,
         domain=domain,
-        tenant_id=tenant_id,
         group_tags=tags,
-        permission_group_ids=frozenset(record.get("permissionGroupIds") or []),
         auth_mode=AUTH_MODE,
     )
 
@@ -516,7 +513,7 @@ async def get_current_user_oidc(request: Request) -> User:
         logger.info("auth: rejected oidc token (%s)", type(exc).__name__)
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     request.state.access = build_access_context(user)
-    logger.info("auth: oidc uid=%s tenant=%s", user.uid, user.tenant_id or user.domain)
+    logger.info("auth: oidc uid=%s", user.uid)
     return user
 
 

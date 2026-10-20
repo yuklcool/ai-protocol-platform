@@ -9,7 +9,7 @@ someone who is not `aitana-admin`, and reorganises it around operator tasks.
 
 | # | Doc | Priority | Est. | Depends on | Notes |
 |---|-----|----------|------|------------|-------|
-| 1 | [admin-console-tenant-readiness](admin-console-tenant-readiness.md) | P0 (Ph.1) / P1 (Ph.2–4) | ~8–11d | v6.9.0 admin suite ✅ | Phase 1 is the release gate — tenant scoping + cross-tenant data boundary. Phases 2–4 each independently shippable behind the same flag. |
+| 1 | admin-console-tenant-readiness | P0 (Ph.1) / P1 (Ph.2–4) | ~8–11d | v6.9.0 admin suite ✅ | Phase 1 is the release gate — tenant scoping + cross-tenant data boundary. Phases 2–4 each independently shippable behind the same flag. |
 
 ## Timeline estimate
 

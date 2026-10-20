@@ -1,6 +1,5 @@
 const { test, expect } = require("@playwright/test");
 const { randomUUID } = require("node:crypto");
-const { provisionAdminTenant } = require("./selfhost-fixtures");
 const FRONTEND =
   process.env.MODEL_STUDIO_FRONTEND_URL || "http://localhost:3456";
 const BACKEND = process.env.MODEL_STUDIO_BACKEND_URL || "http://127.0.0.1:1956";
@@ -37,7 +36,7 @@ test("中文模型接入、持久化、失效重测、手机布局和 Root 实�
     expect(response.ok, `${method} ${path}: ${response.status}`).toBe(true);
     return response.status === 204 ? null : response.json();
   };
-  await provisionAdminTenant(BACKEND, login);
+
   const original = await api("/api/admin/platform-config");
   const originalRouting = await api("/api/admin/model-registry/settings");
   const tag = randomUUID().slice(0, 8);

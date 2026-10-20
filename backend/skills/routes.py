@@ -21,7 +21,6 @@ from auth import User, admin_roles, get_current_user
 from auth.capability_access import authorized_root_config
 from config.platform_config import PlatformConfigUnavailable, get_platform_config
 from db.chat_sessions import list_sessions_for_skill
-from db.clients import resolve_enabled_skills
 from db.models import SkillConfig
 from protocols.sessions_route import ListSessionsResponse, _to_summary
 from skills import skill_config
@@ -32,13 +31,11 @@ from skills.visibility import visible_configs
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
 # Group tags that see the full skill set (incl. WIP / demo skills excluded from
-# a tenant's enabled_skills) and may manage skills they don't own. `one-admin` =
 # deploy admin, `aitana-admin` = platform. Sourced from the unified role model.
 _SKILL_ADMIN_TAGS = admin_roles.SKILL_ADMIN_TAGS
 
 # Platform admins (`aitana-admin`) may edit platform-owned skills in place;
 # deploy admins (`one-admin`) and everyone else must fork. Platform skills are
-# cross-tenant, so only the platform role can mutate the canonical copy.
 _PLATFORM_ADMIN_TAGS = frozenset({admin_roles.PLATFORM_ADMIN_TAG})
 
 
@@ -125,7 +122,6 @@ class SkillResponse(BaseModel):
     owner_id: str = Field(alias="ownerId")
     owner_email: str = Field(alias="ownerEmail")
     # Presentation classification only; authorization remains accessControl
-    # plus the tenant visibility evaluator.
     kind: str = "skill"
     protocols: dict
     initial_message: str = Field(alias="initialMessage")
@@ -171,7 +167,6 @@ class SkillDetailResponse(SkillResponse):
 
 class EffectiveAccessGates(BaseModel):
     skill_access: bool = Field(alias="skillAccess")
-    tenant_visibility: bool = Field(alias="tenantVisibility")
     root_binding: bool = Field(alias="rootBinding")
     reason: str
 
@@ -200,33 +195,15 @@ class EffectiveAccessResponse(BaseModel):
 
 
 def _fill_welcome_buckets(resp: SkillResponse, user: User) -> SkillResponse:
-    """Fill empty welcome-library buckets — VIEWER-INDEPENDENTLY when the skill
-    declares whose library it is.
-
-    A shared SKILL.md leaves ``example_documents`` / ``bucket_browser`` ``bucket``
-    EMPTY so each env resolves it per-env (no hardcoded bucket, no customer
-    project). Resolution order:
-      1. ``welcome.documentsTenant`` set (e.g. ONE's ``acmeenergy.com``) →
-         that TENANT's per-env `documents_bucket` (the env llmops bucket aitana3
-         indexes). This is the correct source for a shared library: it does NOT
-         depend on who is viewing, so a platform admin sees ONE's PPAs just like a
-         ONE user does. (The earlier per-viewer fill 404'd for non-ONE viewers,
-         who fell back to the deployment-default bucket — 2026-07-23.)
-      2. No ``documentsTenant`` → the VIEWER's own ``documents_bucket``
-         (back-compat for skills whose library is the caller's own docs).
-    Only empties are filled; a skill that pins an explicit bucket is untouched.
-    Best-effort: a resolution failure leaves the value empty, never 500s the fetch."""
+    """Fill empty library buckets from deployment configuration."""
     w = resp.welcome
     if not w:
         return resp
     try:
-        from db.clients import documents_bucket_for_domain, resolve_documents_bucket
+        from config.document_storage import resolve_documents_bucket
 
-        tenant = (w.get("documentsTenant") or "").strip()
-        bucket = documents_bucket_for_domain(tenant) if tenant else None
-        if not bucket:
-            bucket = resolve_documents_bucket(user)
-    except Exception:  # unmapped tenant / fail-closed — leave empty, don't 500 the fetch
+        bucket = resolve_documents_bucket(user)
+    except Exception:  # unmapped user / fail-closed — leave empty, don't 500 the fetch
         return resp
     if not bucket:
         return resp
@@ -279,7 +256,6 @@ def create_skill(req: CreateSkillRequest, user: User = Depends(get_current_user)
         description=req.description,
         instructions=req.instructions,
         owner_id=user.uid,
-        tenant_id=user.tenant_id or user.domain,
         owner_email=user.email,
         displayName=req.display_name or req.name,
         avatar=req.avatar,
@@ -309,14 +285,12 @@ def list_skills(
     access = request.state.access
     configs = skill_config.list_skills(owner_id=owner_id, tag=tag, access_type=access_type, limit=limit)
 
-    # Visibility is decided by three planes (accessControl, the tenant's
     # enabled_skills narrowing, and the skill-admin bypass of that narrowing).
     # v6.16.0: that combination now lives in ONE evaluator shared with
     # /api/admin/access/check, so the "what do my users actually see" screen
     # cannot drift from what this endpoint really returns. Do not re-inline the
     # filter here — see skills/visibility.py for why.
-    enabled = resolve_enabled_skills(user)
-    visible = visible_configs(configs, access, enabled)
+    visible = visible_configs(configs, access)
 
     return [SkillResponse.from_config(c) for c in visible]
 
@@ -372,22 +346,14 @@ def get_effective_access(
     request: Request,
     user: User = Depends(get_current_user),  # noqa: B008
 ) -> EffectiveAccessResponse:
-    """Explain the current user's saved Root Agent capability boundary.
-
-    This is intentionally authenticated and skill-scoped, rather than reusing
-    the admin dry-run endpoint. Studio authors should see the same saved
-    decision that their next Root Agent turn will enforce, without gaining a
-    way to inspect another user's access or tenant data.
-    """
     config = skill_config.get_skill(skill_id) or skill_config.resolve_skill_ref(skill_id, getattr(user, "uid", None))
     if config is None or not request.state.access.can_access_skill(config):
         raise HTTPException(status_code=404, detail="Skill not found")
 
     access = request.state.access
-    enabled = resolve_enabled_skills(user)
     from skills.visibility import evaluate_visibility
 
-    visibility = evaluate_visibility([config], access, enabled)[0]
+    visibility = evaluate_visibility([config], access)[0]
     try:
         platform = get_platform_config()
     except PlatformConfigUnavailable as exc:
@@ -412,10 +378,9 @@ def get_effective_access(
 
     return EffectiveAccessResponse(
         skill={"skillId": config.skill_id, "label": config.display_name or config.name},
-        viewer={"tenantId": access.tenant_id or "", "domain": access.domain or ""},
+        viewer={"userId": access.uid},
         gates=EffectiveAccessGates(
             skillAccess=visibility.access_allowed,
-            tenantVisibility=visibility.visible,
             rootBinding=root_bound,
             reason=visibility.reason,
         ),
@@ -429,7 +394,7 @@ def get_effective_access(
         ),
         knowledge={
             "folderPath": folder,
-            "tenantScoped": bool(folder and not config.welcome.bucket_browser.bucket)
+            "userScoped": bool(folder and not config.welcome.bucket_browser.bucket)
             if config.welcome and config.welcome.bucket_browser
             else False,
         },
@@ -466,7 +431,6 @@ def update_skill(
     # Platform-owned skills are read-only — EXCEPT for platform admins
     # (`aitana-admin`). Everyone else must fork. Note: platform skills are
     # seeded from admin/platform_seed.py, so a direct edit here can be
-    # overwritten by a re-seed — the fork path is the durable one for tenants.
     if config.owner_id == PLATFORM_OWNER_UID:
         if not _is_platform_admin(request.state.access):
             raise HTTPException(
@@ -545,7 +509,6 @@ def fork_skill(
         description=source.description,
         instructions=source.instructions,
         owner_id=user.uid,
-        tenant_id=user.tenant_id or user.domain,
         owner_email=user.email,
         displayName=f"{source.display_name} (Fork)" if source.display_name else "",
         avatar=source.avatar,

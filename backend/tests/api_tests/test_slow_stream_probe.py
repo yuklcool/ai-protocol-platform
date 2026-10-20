@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def app_module():
 @pytest.fixture
 def client(app_module) -> TestClient:
     user = User(uid="probe-tester", email="probe@test.local")
-    app_module.app.dependency_overrides[get_current_user] = lambda: user
+    app_module.app.dependency_overrides[get_current_user] = identity_dependency(user)
     try:
         yield TestClient(app_module.app)
     finally:

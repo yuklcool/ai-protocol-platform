@@ -12,7 +12,6 @@ from unittest.mock import patch
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from admin.audit import list_admin_actions
 from auth import User, get_current_user
 
 _PLATFORM = User(
@@ -73,29 +72,6 @@ class TestScoping:
         assert r.status_code == 200
         assert {e["id"] for e in r.json()["entries"]} == {"1", "2", "3", "4", "5", "6"}
 
-    def test_tenant_sees_only_its_own_domain_and_users(self):
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            r = _app(_TENANT_A).get("/api/admin/audit")
-        assert r.status_code == 200
-        assert {e["id"] for e in r.json()["entries"]} == {"1", "3"}
-
-    def test_tenant_never_sees_platform_level_actions(self):
-        """The wildcard doc and the tag registry belong to no tenant. Showing
-        them would leak the existence of platform config a tenant admin has no
-        part in — and they can't act on it either."""
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            ids = {e["id"] for e in _app(_TENANT_A).get("/api/admin/audit").json()["entries"]}
-        assert "5" not in ids  # wildcard tool-permission
-        assert "6" not in ids  # group-tag registry
-
-    def test_scanned_reports_only_authorized_tenant_count(self):
-        """Another tenant's activity must not be observable through counts."""
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            body = _app(_TENANT_A).get("/api/admin/audit").json()
-        assert body["scanned"] == 2
-        assert len(body["entries"]) == 2
-        assert body["scope"] == "tenant"
-
 
 class TestFiltersAndLimits:
     def test_action_filter(self):
@@ -111,11 +87,6 @@ class TestFiltersAndLimits:
     def test_limit_cannot_be_raised_without_bound(self):
         r = _app(_PLATFORM).get("/api/admin/audit?limit=99999")
         assert r.status_code == 422
-
-    def test_a_filter_cannot_re_admit_an_out_of_scope_row(self):
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            r = _app(_TENANT_A).get("/api/admin/audit?action=upsert_client")
-        assert {e["id"] for e in r.json()["entries"]} == {"1"}
 
 
 class TestDegradation:
@@ -135,19 +106,4 @@ class TestDegradation:
 
 
 class TestHelperDirectly:
-    def test_platform_domains_none_means_everything(self):
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            rows, scanned = list_admin_actions(domains=None, limit=100)
-        assert len(rows) == 6
-        assert scanned == 6
-
-    def test_multi_domain_tenant_admin(self):
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            rows, _ = list_admin_actions(domains=frozenset({"tenant-a", "tenant-b"}), limit=100)
-        assert {r["__id"] for r in rows} == {"1", "2", "3", "4"}
-
-    def test_empty_domain_set_yields_nothing(self):
-        """An empty set is not 'unset' — it must not fall through to allow-all."""
-        with patch("admin.audit.query_documents", return_value=[dict(r) for r in _ROWS]):
-            rows, _ = list_admin_actions(domains=frozenset(), limit=100)
-        assert rows == []
+    pass

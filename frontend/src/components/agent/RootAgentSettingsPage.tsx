@@ -477,7 +477,7 @@ function renderSection(section: Section, c: RenderContext) {
         items={c.servers.map((server) => ({
           id: server.server_id,
           label: server.server_id,
-          detail: `${server.transport || "MCP"} · ${server.scope || "tenant"}${server.enabled === false ? " · disabled" : ""}`,
+          detail: `${server.transport || "MCP"} · ${"shared"}${server.enabled === false ? " · disabled" : ""}`,
           disabled: server.enabled === false,
         }))}
         selected={c.selectedMcp}
@@ -504,12 +504,6 @@ function renderSection(section: Section, c: RenderContext) {
           />
           {t("rootAgent.budget.enabled")}
         </label>
-        <Link
-          href="/admin/tenants"
-          className="block text-sm text-primary underline"
-        >
-          {t("rootAgent.budget.tenants")}
-        </Link>
         <Link
           href="/admin/analytics"
           className="block text-sm text-primary underline"

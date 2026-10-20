@@ -124,13 +124,13 @@ Required changes (estimate; verify against
   accepts Firebase-mediated Google identity or requires direct OAuth.
 - **Account provisioning webhook** — Marketplace posts an
   account-creation event when a customer installs; we create the
-  matching `users/{uid}` + tenant scaffold without the user having
+  matching `users/{uid}` + user scaffold without the user having
   to sign up manually.
 - **Account linking** for existing platform users who later install
   through Marketplace — UX decision: silently merge, or prompt to
   confirm. Probably prompt; silent merge is a security surprise.
 - **Entitlement check** — every request from a Marketplace-installed
-  tenant carries a Marketplace entitlement we must validate (and
+  user carries a Marketplace entitlement we must validate (and
   refuse service if the entitlement is suspended for non-payment).
 
 This is the heaviest phase by far. Pattern A/B fork operators handle
@@ -139,7 +139,7 @@ customer.
 
 **Open questions:**
 
-- How do we represent a "Marketplace-installed tenant" in our
+- How do we represent a "Marketplace-installed user" in our
   `clients/{domain}` model? New `installSource: "marketplace"` field,
   or separate collection?
 - Does Marketplace expect us to enforce the per-seat licence count
@@ -190,7 +190,7 @@ public. Until that command runs, the listing is reviewable but invisible.
   deployment for Patterns A/B.
 - **Firebase Auth with Google provider** — partial coverage of
   Phase 3's sign-in requirement.
-- **Per-tenant client scaffolding** — `clients/{domain}` Firestore
+- **Per-user client scaffolding** — `clients/{domain}` Firestore
   model + `aiplatform client` CLI (v6.3.0). Probably extensible to a
   Marketplace install-source.
 

@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 _USER = User(uid="user1", email="alice@example.com", domain="example.com")
 _GS_BUCKET = "multivac-acme-energy-bucket"
@@ -31,7 +32,7 @@ def client() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: _USER
+    app.dependency_overrides[get_current_user] = identity_dependency(_USER)
     return TestClient(app)
 
 

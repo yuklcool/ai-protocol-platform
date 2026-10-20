@@ -522,11 +522,11 @@ class TestHeaderSecretResolution:
 @pytest.fixture(autouse=True)
 def _verified_mcp_tenant():
     from auth import User
-    from observability.tenant_context import set_tenant_context
+    from observability.user_context import set_user_context
     from tools.mcp.registry import clear_registry_cache
 
-    set_tenant_context(User(uid="viewer", tenant_id="tenant-a"))
+    set_user_context(User(uid="viewer"))
     clear_registry_cache()
     yield
     clear_registry_cache()
-    set_tenant_context(User(uid=""))
+    set_user_context(User(uid=""))

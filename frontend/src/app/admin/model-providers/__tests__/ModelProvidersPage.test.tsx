@@ -118,9 +118,7 @@ beforeEach(() => {
         root_model: root,
         root_api_name: root === "custom" ? "service-chat" : "预置模型",
         root_model_id: root,
-        tenant_model_id: root,
-        tenant_api_name: "当前租户模型",
-        tenant_allowed: true,
+        allowed: true,
       });
     return reply({});
   });
@@ -132,7 +130,7 @@ async function open() {
 it("租户管理员无权读取平台模型配置", () => {
   scope.isPlatform = false;
   render(<ModelProvidersPage />);
-  expect(screen.getByText(/此页面仅限平台管理员/)).toBeInTheDocument();
+  expect(screen.getByText(/此页面仅限管理员/)).toBeInTheDocument();
   expect(fetcher).not.toHaveBeenCalled();
 });
 it("默认只显示管理列表，高级路由折叠且没有展开编辑表单", async () => {

@@ -7,9 +7,9 @@
 每个稳定版本发布三个应用镜像，均包含 `linux/amd64`、`linux/arm64`：
 
 ```text
-ghcr.io/yuklcool/ai-protocol-platform-backend:v1.1.1
-ghcr.io/yuklcool/ai-protocol-platform-frontend:v1.1.1
-ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox:v1.1.1
+ghcr.io/yuklcool/ai-protocol-platform-backend:v2.0.0
+ghcr.io/yuklcool/ai-protocol-platform-frontend:v2.0.0
+ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox:v2.0.0
 ```
 
 另有精确源码标签 `sha-<完整提交SHA>`。生产使用明确版本，`latest` 不宜作为回滚基线。Compose 中 `BACKEND_IMAGE`、`FRONTEND_IMAGE`、`MCP_SANDBOX_IMAGE` 是镜像仓库名，统一由 `APP_VERSION` 追加标签，不要在这三个变量后重复填写标签。
@@ -19,14 +19,14 @@ ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox:v1.1.1
 ```bash
 mkdir -p ai-protocol-platform-deploy
 cd ai-protocol-platform-deploy
-release_version=v1.1.1
+release_version=v2.0.0
 curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/docker-compose.release.yml" -o docker-compose.release.yml
 curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/default.env.selfhost.example" -o .env
 chmod 600 .env
 openssl rand -base64 48
 ```
 
-Release 资产名为 `default.env.selfhost.example`，保存为 `.env`；仓库源文件仍为 `.env.selfhost.example`。发布资产已固定 `APP_VERSION=v1.1.1`。
+Release 资产名为 `default.env.selfhost.example`，保存为 `.env`；仓库源文件仍为 `.env.selfhost.example`。发布资产已固定 `APP_VERSION=v2.0.0`。
 
 编辑 JWT 密钥、首次管理员、数据库密码及匹配连接串、模型密钥和浏览器源，然后启动：
 
@@ -55,7 +55,7 @@ ALLOW_ORIGINS=https://ai.example.com
 
 后端镜像已包含 SQL 文件，在账号初始化和 Uvicorn 前执行 `scripts/apply_selfhost_migrations.py`。已执行文件名记录于 `platform_schema_migrations`；重复启动不会重复执行已记录 migration。
 
-不要删除或重命名已发布 SQL migration。自动 schema 更新不包含完整 ownership 或 Session/Memory namespace 搬迁。
+不要删除或重命名已发布 SQL 文件。`002_user_owned_reset.sql` 直接清理旧组织目录、专属资源和旧运行状态，不迁移或重分配数据。
 
 固定卷名：
 
@@ -68,21 +68,19 @@ ALLOW_ORIGINS=https://ai.example.com
 
 ## 5. 升级和回滚
 
-升级前记录旧镜像版本/digest，备份数据库、对象卷、配置和签名密钥，先在真实数据副本完成迁移、隔离、协议及恢复演练。新模板另存为 `.env.new`，不能覆盖旧 `.env`。
+升级前记录旧镜像版本/digest，备份数据库、对象卷、配置和签名密钥，先验证当前用户隔离、协议和恢复行为。新模板另存为 `.env.new`，不能覆盖旧 `.env`。
 
-满足迁移前置条件后，在 `.env` 修改 `APP_VERSION`，执行：
+在 `.env` 修改 `APP_VERSION`，执行：
 
 ```bash
 docker compose -f docker-compose.release.yml pull
 docker compose -f docker-compose.release.yml up -d
 ```
 
-应用回退时恢复旧 `APP_VERSION` 再执行同样命令。若 schema 不兼容，还需恢复匹配的数据库和对象备份。ownership journal 只撤销其记录的变更，不能替代 namespace 回滚或整库恢复。详见[完整升级流程](configuration-guide.md#12-已有部署升级迁移与回滚)。
+应用回退时恢复旧 `APP_VERSION` 再执行同样命令。若 schema 不兼容，还需恢复匹配的数据库和对象备份。本次改造不提供 ownership journal 或旧组织数据迁移工具。详见[完整升级流程](configuration-guide.md#7-旧部署升级)。
 
-## 6. 发布验收证据与范围
+## 6. 发布验收范围
 
-[v1.1.1 发布工作流](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295) 已通过三个镜像构建、可修复 HIGH/CRITICAL 漏洞扫描、匿名拉取、全新无源码启动及管理员登录。BuildKit 生成 SBOM 和 provenance。正式 Release 在拉取/冷启动通过后创建。
+v2.0.0 发布门禁包含同提交的用户归属、模型 Provider、MCP、A2UI、PostgreSQL、镜像构建、漏洞扫描、匿名拉取和全新启动验证。正式 Release 在这些检查通过后创建。
 
-冷启动使用占位模型配置；真实 Provider、MCP、A2UI 操作及双租户额度由[同提交协议工作流](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)分别证明。两者基线均为 `29688543e0b4c1749210a8be90b0c94a207ca87e`。
-
-多架构构建不等于目标 ARM64 主机运行已验收；新环境验收也不等于存量升级已完成。[Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9) 保留目标历史迁移和回滚要求。
+旧数据直接清理的行为由 `002_user_owned_reset.sql` 和真实 PostgreSQL 集成测试验证。发布不会访问或自动重启用户的运行中服务器；目标主机拉取并启动新版本时才执行数据库升级。

@@ -1,13 +1,4 @@
-"""Backend-neutral repository helpers for ChatSessionIndex.
-
-Chat-session metadata follows ``DATA_BACKEND`` and carries an explicit stable
-``tenantId``. Tenant isolation is enforced independently of ordinary sharing
-ACLs: a public/tagged/domain session is still invisible outside its tenant.
-
-Legacy rows without ``tenantId`` are not trusted merely because their
-``ownerDomain`` resembles the caller. The domain must resolve through the
-first-class tenant directory; an unmapped legacy row is therefore fail-closed.
-"""
+"""User-owned chat indexes with explicit sharing ACLs."""
 
 from __future__ import annotations
 
@@ -25,8 +16,7 @@ from db.persistence import (
     set_document,
     update_document,
 )
-from db.tenants import normalize_tenant_id, tenant_id_for_domain
-from observability.tenant_context import get_current_tenant_id
+from observability.user_context import get_resource_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -37,68 +27,11 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-# ---------------------------------------------------------------------------
-# Tenant boundary
-# ---------------------------------------------------------------------------
-
-
-def resolved_session_tenant_id(idx: ChatSessionIndex) -> str:
-    """Return a row's stable tenant id, resolving legacy domain rows safely."""
-    explicit = normalize_tenant_id(idx.tenant_id)
-    if explicit:
-        return explicit
-    if not idx.owner_domain:
-        return ""
-    return normalize_tenant_id(tenant_id_for_domain(idx.owner_domain) or "")
-
-
-def session_in_tenant(idx: ChatSessionIndex, tenant_id: str) -> bool:
-    expected = normalize_tenant_id(tenant_id)
-    if not expected:
-        return False
-    return resolved_session_tenant_id(idx) == expected
-
-
-def session_tenant_allowed(idx: ChatSessionIndex, viewer_ctx: AccessContext) -> bool:
-    return session_in_tenant(idx, viewer_ctx.tenant_id)
-
-
-def _write_tenant_id(explicit: str | None = None) -> str:
-    tenant_id = normalize_tenant_id(explicit or get_current_tenant_id())
-    if not tenant_id:
-        raise ValueError("tenant_id is required for chat-session writes")
-    return tenant_id
-
-
-def _read_tenant_id(explicit: str | None = None) -> str:
-    """Resolve tenant scope for request-facing list/recent helpers.
-
-    Existing call sites do not need to thread a second identity parameter:
-    authenticated requests inherit the context set by ``get_current_user``.
-    Tests/background callers may still pass an explicit tenant id.
-    """
-    tenant_id = normalize_tenant_id(explicit or get_current_tenant_id())
-    if not tenant_id:
-        raise ValueError("tenant_id is required for tenant-aware session reads")
-    return tenant_id
-
-
-def _assert_current_tenant(idx: ChatSessionIndex) -> None:
-    current = normalize_tenant_id(get_current_tenant_id())
-    if current and not session_in_tenant(idx, current):
-        raise PermissionError("chat session belongs to another tenant")
-
-
 def _assert_mutation_scope(session_id: str) -> ChatSessionIndex | None:
     idx = get_session_index(session_id)
-    if idx is not None:
-        _assert_current_tenant(idx)
+    if idx is not None and idx.owner_uid != get_resource_user_id():
+        raise PermissionError("Session belongs to another user")
     return idx
-
-
-# ---------------------------------------------------------------------------
-# Write helpers
-# ---------------------------------------------------------------------------
 
 
 def owner_domain_of(email: str | None) -> str:
@@ -112,7 +45,6 @@ def create_session_index(
     skill_id: str,
     owner_uid: str,
     access_control: AccessControl,
-    tenant_id: str | None = None,
     agent_id: str = "aitana_platform",
     app_name: str = "aitana_platform",
     document_ids: list[str] | None = None,
@@ -120,17 +52,17 @@ def create_session_index(
     owner_domain: str = "",
     provisional: bool = False,
 ) -> ChatSessionIndex:
-    """Persist a new tenant-scoped ChatSessionIndex row."""
-    stable_tenant_id = _write_tenant_id(tenant_id)
+    """Persist an authenticated user-owned chat index."""
+    if not owner_uid or owner_uid != get_resource_user_id():
+        raise PermissionError("Authenticated session owner required")
 
     existing = get_session_index(session_id)
-    if existing is not None and not session_in_tenant(existing, stable_tenant_id):
-        raise PermissionError("refusing to overwrite a chat session from another tenant")
+    if existing is not None and existing.owner_uid != owner_uid:
+        raise PermissionError("refusing to overwrite a chat session from another user")
 
     now = first_message_at or _utcnow()
     idx = ChatSessionIndex(
         sessionId=session_id,
-        tenantId=stable_tenant_id,
         documentIds=list(document_ids) if document_ids else [],
         documentTabs=[{"id": ref, "included": True} for ref in (document_ids or [])],
         agentId=agent_id,
@@ -244,8 +176,6 @@ def list_sessions_for_document(
     results: list[ChatSessionIndex] = []
     last_id: str | None = None
     for row_id, idx in _hydrate_rows(rows):
-        if not session_tenant_allowed(idx, viewer_ctx):
-            continue
         if not can_access(idx.access_control, viewer_ctx, idx.owner_uid):
             continue
         if filter == "mine" and idx.owner_uid != viewer_ctx.uid:
@@ -267,12 +197,12 @@ def list_sessions_for_skill(
     skill_id: str | None,
     owner_uid: str,
     *,
-    tenant_id: str | None = None,
     page_size: int = 20,
     cursor: str | None = None,
 ) -> tuple[list[ChatSessionIndex], str | None]:
-    """List one user's same-tenant, non-archived sessions, newest first."""
-    stable_tenant_id = _read_tenant_id(tenant_id)
+    """List one user's non-archived sessions, newest first."""
+    if owner_uid != get_resource_user_id():
+        raise PermissionError("Session belongs to another user")
     filters: list[tuple[str, str, object]] = [("ownerUid", "==", owner_uid), ("archivedAt", "==", None)]
     if skill_id is not None:
         filters.insert(0, ("skillId", "==", skill_id))
@@ -289,8 +219,6 @@ def list_sessions_for_skill(
     results: list[ChatSessionIndex] = []
     last_id: str | None = None
     for row_id, idx in _hydrate_rows(rows):
-        if not session_in_tenant(idx, stable_tenant_id):
-            continue
         if idx.provisional:
             last_id = row_id
             continue
@@ -305,10 +233,10 @@ def list_sessions_for_skill(
 def most_recent_session_for_user(
     owner_uid: str,
     *,
-    tenant_id: str | None = None,
     limit: int = 10,
 ) -> list[ChatSessionIndex]:
-    stable_tenant_id = _read_tenant_id(tenant_id)
+    if owner_uid != get_resource_user_id():
+        raise PermissionError("Session belongs to another user")
     rows = query_documents(
         _COLLECTION,
         filters=[("ownerUid", "==", owner_uid), ("archivedAt", "==", None)],
@@ -318,8 +246,6 @@ def most_recent_session_for_user(
     )
     out: list[ChatSessionIndex] = []
     for _, idx in _hydrate_rows(rows):
-        if not session_in_tenant(idx, stable_tenant_id):
-            continue
         if idx.provisional:
             continue
         out.append(idx)
@@ -349,15 +275,6 @@ def _from_document(data: dict, doc_id: str) -> ChatSessionIndex:
     if "sessionId" not in clean:
         clean = {**clean, "sessionId": doc_id}
 
-    # Migration bridge: hydrate a stable tenant id only from an explicit domain
-    # mapping/legacy client record. Unknown ownerDomain stays empty and the
-    # tenant-aware AccessContext denies the resource.
-    if not str(clean.get("tenantId") or "").strip():
-        legacy_domain = str(clean.get("ownerDomain") or "").strip()
-        mapped = tenant_id_for_domain(legacy_domain) if legacy_domain else None
-        if mapped:
-            clean = {**clean, "tenantId": mapped}
-
     return ChatSessionIndex.model_validate(clean)
 
 
@@ -375,9 +292,6 @@ __all__ = [
     "list_sessions_for_skill",
     "most_recent_session_for_user",
     "owner_domain_of",
-    "resolved_session_tenant_id",
-    "session_in_tenant",
-    "session_tenant_allowed",
     "set_session_skill",
     "soft_delete_session",
     "update_session_fields",

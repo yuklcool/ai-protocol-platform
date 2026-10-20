@@ -13,14 +13,13 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from admin.audit import record_admin_action
 from admin.scope import Scope
 from db.persistence import delete_document, get_document, query_documents, set_document
 from tools.mcp.diagnostics import McpDiagnosticError, check_mcp_server, discover_mcp_server
 from tools.mcp.registry import clear_registry_cache
-from tools.mcp.tenant_scope import PLATFORM_SCOPE, TENANT_SCOPE, normalize_mcp_scope
 
 # Included under admin.routes' /api/admin prefix.
 router = APIRouter(prefix="/mcp-servers", tags=["admin-mcp-servers"])
@@ -30,10 +29,9 @@ _ALLOWED_TRANSPORTS = {"http", "streamable-http", "sse"}
 
 
 class McpServerWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     url: str
     transport: Literal["http", "streamable-http", "sse"] = "http"
-    scope: Literal["platform", "tenant"] = "tenant"
-    tenant_id: str | None = None
     enabled: bool = True
     headers: dict[str, str] | None = Field(
         default=None,
@@ -46,8 +44,6 @@ class McpServerView(BaseModel):
     server_id: str
     url: str
     transport: str
-    scope: str
-    tenant_id: str | None = None
     enabled: bool = True
     description: str = ""
     header_names: list[str] = []
@@ -107,8 +103,6 @@ def _to_view(server_id: str, data: dict[str, Any]) -> McpServerView:
         server_id=server_id,
         url=str(data.get("url") or ""),
         transport=str(data.get("transport") or "http"),
-        scope=normalize_mcp_scope(data),
-        tenant_id=str(data.get("tenantId") or "") or None,
         enabled=data.get("enabled", True) is not False,
         description=str(data.get("description") or ""),
         header_names=sorted(str(k) for k in headers),
@@ -116,34 +110,15 @@ def _to_view(server_id: str, data: dict[str, Any]) -> McpServerView:
     )
 
 
-def _may_read(scope: Scope, data: dict[str, Any]) -> bool:
-    """Admin visibility ignores enabled state so disabled servers remain repairable."""
-    resource_scope = normalize_mcp_scope(data)
-    if scope.is_platform:
-        return True
-    if resource_scope == PLATFORM_SCOPE:
-        return True
-    return resource_scope == TENANT_SCOPE and scope.may_tenant(str(data.get("tenantId") or ""))
-
-
 def _assert_may_mutate(scope: Scope, data: dict[str, Any]) -> None:
-    resource_scope = normalize_mcp_scope(data)
-    if resource_scope == PLATFORM_SCOPE:
-        scope.assert_platform()
-        return
-    if resource_scope == TENANT_SCOPE:
-        scope.assert_may_tenant(str(data.get("tenantId") or ""))
-        return
-    # Legacy unscoped records fail closed at runtime and are repairable only by
-    # a platform admin, never by a tenant admin guessing ownership.
     scope.assert_platform()
 
 
 def _visible_config(server_id: str, scope: Scope) -> tuple[str, dict[str, Any]]:
     server_id = _validate_server_id(server_id)
     data = get_document(_COLLECTION, server_id)
-    if data is None or not _may_read(scope, data):
-        # Do not disclose existence of another tenant's private endpoint.
+    if data is None:
+        # Do not disclose existence of a missing endpoint.
         raise HTTPException(status_code=404, detail="MCP server not found")
     return server_id, data
 
@@ -154,7 +129,7 @@ def list_mcp_servers(scope: Scope) -> list[McpServerView]:
     for raw in query_documents(_COLLECTION):
         data = dict(raw)
         server_id = str(data.pop("__id", "") or data.pop("serverId", ""))
-        if not server_id or not _may_read(scope, data):
+        if not server_id:
             continue
         result.append(_to_view(server_id, data))
     result.sort(key=lambda row: row.server_id.casefold())
@@ -209,20 +184,6 @@ def upsert_mcp_server(server_id: str, body: McpServerWrite, scope: Scope) -> Mcp
     if transport not in _ALLOWED_TRANSPORTS:
         raise HTTPException(status_code=422, detail="Unsupported MCP transport")
 
-    tenant_id = (body.tenant_id or "").strip()
-    if body.scope == PLATFORM_SCOPE:
-        scope.assert_platform()
-        tenant_id = ""
-    else:
-        if not tenant_id:
-            # A tenant admin may omit tenant_id because their scope contains a
-            # single stable tenant id. Platform admins must be explicit.
-            if scope.tenant_ids is not None and len(scope.tenant_ids) == 1:
-                tenant_id = next(iter(scope.tenant_ids))
-            else:
-                raise HTTPException(status_code=422, detail="tenant_id is required for tenant-scoped MCP servers")
-        scope.assert_may_tenant(tenant_id)
-
     before = get_document(_COLLECTION, server_id)
     if before is not None:
         _assert_may_mutate(scope, before)
@@ -232,12 +193,9 @@ def upsert_mcp_server(server_id: str, body: McpServerWrite, scope: Scope) -> Mcp
         # Registry treats non-SSE transports as Streamable HTTP; retain the
         # explicit value so the admin UI can accurately show operator intent.
         "transport": transport,
-        "scope": body.scope,
         "enabled": body.enabled,
         "description": body.description.strip(),
     }
-    if tenant_id:
-        data["tenantId"] = tenant_id
     if body.headers is not None:
         data["headers"] = {str(k).strip(): str(v) for k, v in body.headers.items() if str(k).strip()}
     elif before is not None and isinstance(before.get("headers"), dict):
@@ -249,8 +207,6 @@ def upsert_mcp_server(server_id: str, body: McpServerWrite, scope: Scope) -> Mcp
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
-        tenant_id=tenant_id,
         action="upsert_mcp_server",
         target=server_id,
         before=_redacted_snapshot(before),
@@ -267,14 +223,11 @@ def delete_mcp_server(server_id: str, scope: Scope) -> McpServerView:
         raise HTTPException(status_code=404, detail="MCP server not found")
     _assert_may_mutate(scope, data)
 
-    tenant_id = str(data.get("tenantId") or "").strip()
     delete_document(_COLLECTION, server_id)
     clear_registry_cache()
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
-        tenant_id=tenant_id,
         action="delete_mcp_server",
         target=server_id,
         before=_redacted_snapshot(data),

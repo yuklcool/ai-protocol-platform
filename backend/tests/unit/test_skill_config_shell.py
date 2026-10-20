@@ -193,7 +193,8 @@ def test_skill_response_omits_shell_when_null() -> None:
 # === Span attribute (Cloud Trace grouping) ===
 
 
-def test_record_shell_mode_sets_span_attribute() -> None:
+def test_record_shell_mode_sets_span_attribute(monkeypatch) -> None:
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
     """record_shell_mode tags the active span; doc-compare skill -> 'doc-compare',
     no-shell skill -> 'chat-primary'."""
     from opentelemetry.sdk.trace import TracerProvider

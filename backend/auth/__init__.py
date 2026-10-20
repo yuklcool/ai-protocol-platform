@@ -9,7 +9,6 @@ Firebase Admin into the core identity path.
 """
 
 import logging
-import os
 
 import jwt
 from fastapi import HTTPException, Request
@@ -20,7 +19,6 @@ from auth.group_id_auth import AnonymousGroupAuth, GroupRevoked, InvalidGroupTok
 from auth.identity import auth_backend
 from auth.models import User
 from auth.permissions import ToolPermissionDenied, can_use_tool
-from config.local_mode import is_local_mode
 
 logger = logging.getLogger(__name__)
 
@@ -49,65 +47,14 @@ async def _group_auth_get_current_user(request: Request, token: str) -> User:
     return user
 
 
-_ALLOWLIST_TRUTHY = {"1", "true", "yes", "on"}
-
-
-def _require_known_domain() -> bool:
-    return os.environ.get("AUTH_REQUIRE_KNOWN_DOMAIN", "").strip().lower() in _ALLOWLIST_TRUTHY
-
-
-def _operator_domains() -> frozenset[str]:
-    raw = os.environ.get("AUTH_OPERATOR_DOMAINS", "")
-    return frozenset(d.strip().lower() for d in raw.split(",") if d.strip())
-
-
-def _domain_allowed(user: User) -> bool:
-    domain = (user.domain or "").strip().lower()
-    if not domain:
-        return False
-    if domain in _operator_domains():
-        return True
-    from db.clients import get_client_cached
-
-    return get_client_cached(domain) is not None
-
-
-def _enforce_domain_allowlist(user: User) -> None:
-    if not _require_known_domain():
-        return
-    if is_local_mode():
-        return
-    if user.auth_mode == _GROUP_AUTH_MODE:
-        return
-    if _domain_allowed(user):
-        return
-    if not _operator_domains():
-        logger.error(
-            "AUTH_OPERATOR_DOMAINS_MISSING: AUTH_REQUIRE_KNOWN_DOMAIN is on but "
-            "AUTH_OPERATOR_DOMAINS is empty — only mapped tenants can authenticate. "
-            "Set it in this env's deployment configuration (uid=%s domain=%s)",
-            user.uid,
-            user.domain or "(none)",
-        )
-    logger.info("auth: rejected domain uid=%s domain=%s", user.uid, user.domain or "(none)")
-    raise HTTPException(
-        status_code=403,
-        detail={
-            "code": "DOMAIN_NOT_PERMITTED",
-            "message": "This account's domain isn't permitted on this deployment.",
-        },
-    )
-
-
 async def get_current_user(request: Request) -> User:
-    """Authenticate once, enforce deployment policy, and bind tenant tracing."""
+    """Authenticate once, enforce deployment policy, and bind user tracing."""
     from auth.capability_access import refresh_authorization
-    from observability.tenant_context import set_tenant_context
+    from observability.user_context import set_user_context
 
     user = refresh_authorization(await _resolve_user(request))
     request.state.access = build_access_context(user)
-    _enforce_domain_allowlist(user)
-    set_tenant_context(user)
+    set_user_context(user)
     return user
 
 

@@ -54,18 +54,6 @@ def make_budget_callbacks(
     skill_id: str,
     budget_config: BudgetConfig | None,
 ) -> tuple[Any, Any]:
-    """Build the (before_model, after_model) callback pair for one agent.
-
-    Returns no-op pair when:
-      - no enforcer is registered (``enforcer is None``)
-      - the skill has no ``tool_configs.budget`` (``budget_config is None``)
-      - the skill is marked exempt (``budget_config.exempt is True``)
-
-    When the configured identity field is missing, historical configs keep the
-    ``skip`` (fail-open) behaviour. Multi-tenant quota configs can opt into
-    ``missing_identity_policy: block`` so an unresolved ``tenant_id`` fails
-    closed before any LLM spend occurs.
-    """
     if enforcer is None or budget_config is None or budget_config.exempt:
         return _no_op_callbacks()
 

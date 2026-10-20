@@ -73,15 +73,6 @@ describe("AuditPage", () => {
     expect(screen.getByText("a.com")).toBeTruthy();
   });
 
-  it("distinguishes 'nothing happened' from 'nothing concerns your tenant'", async () => {
-    // Out-of-scope entries exist — say so, don't imply an empty platform.
-    mockAudit({ entries: [], scanned: 42, scope: "tenant" });
-    render(<AuditPage />);
-    await waitFor(() =>
-      expect(screen.getByText(/42 entries exist platform-wide/i)).toBeTruthy(),
-    );
-  });
-
   it("says plainly when nothing has been recorded at all", async () => {
     mockAudit({ entries: [], scanned: 0, scope: "platform" });
     render(<AuditPage />);
@@ -89,14 +80,6 @@ describe("AuditPage", () => {
       expect(
         screen.getByText(/no admin changes have been recorded/i),
       ).toBeTruthy(),
-    );
-  });
-
-  it("tells a tenant admin their view is scoped when rows are filtered out", async () => {
-    mockAudit({ entries: [ENTRY], scanned: 10, scope: "tenant" });
-    render(<AuditPage />);
-    await waitFor(() =>
-      expect(screen.getByText(/of 10 platform-wide/i)).toBeTruthy(),
     );
   });
 

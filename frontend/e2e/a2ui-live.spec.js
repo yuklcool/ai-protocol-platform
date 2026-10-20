@@ -1,5 +1,4 @@
 const { test, expect } = require("@playwright/test");
-const { provisionAdminTenant } = require("./selfhost-fixtures");
 const { randomUUID } = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
@@ -81,10 +80,8 @@ test.describe("A2UI persisted surface live acceptance", () => {
     const userId = login.user?.uid || login.user?.userId || login.user?.id;
     expect(token).toBeTruthy();
     expect(userId, JSON.stringify(login.user)).toBeTruthy();
-    const tenantPath = `/api/admin/tenants/${encodeURIComponent(login.user.tenantId)}`;
-    const rootPath = `/api/admin/tenant-root/${encodeURIComponent(login.user.tenantId)}`;
-    const originalTenant = await provisionAdminTenant(BACKEND_URL, login);
-    const originalRoot = await authedApi(token, rootPath);
+    const rootPath = "/api/admin/platform-config";
+    const originalRoot = (await authedApi(token, rootPath)).agent;
 
     let skillId = null;
     let context = null;
@@ -104,18 +101,13 @@ test.describe("A2UI persisted surface live acceptance", () => {
       });
       skillId = skill.skillId;
       expect(skillId).toBeTruthy();
-      await authedApi(token, tenantPath, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled_skills: [...(originalTenant.enabledSkills || []), skillId] }),
-      });
       await authedApi(token, rootPath, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ override: {
-          ...originalRoot.override,
-          skills: [...originalRoot.effective.skills, skillId],
-          interaction: { ...originalRoot.effective.interaction, a2uiEnabled: true, allowSurfaceContextWrites: true },
+        body: JSON.stringify({ agent: {
+          ...originalRoot,
+          skills: [...originalRoot.skills, skillId],
+          interaction: { ...originalRoot.interaction, a2uiEnabled: true, allowSurfaceContextWrites: true },
         } }),
       });
 
@@ -208,12 +200,7 @@ test.describe("A2UI persisted surface live acceptance", () => {
       await authedApi(token, rootPath, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ override: originalRoot.override }),
-      });
-      await authedApi(token, tenantPath, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled_skills: originalTenant.enabledSkills || [] }),
+        body: JSON.stringify({ agent: originalRoot }),
       });
       if (skillId) {
         await authedApi(token, `/api/skills/${skillId}`, { method: "DELETE" }).catch(() => {});

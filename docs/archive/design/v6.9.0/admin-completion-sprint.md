@@ -3,7 +3,7 @@
 **Status**: Proposed (planning only — user picks what executes)
 **Created**: 2026-07-16
 **Scope**: Fullstack (backend-heavy foundation, then parallel per-domain work)
-**Design docs**: [9.1](implemented/administration-overview.md) · [9.2](implemented/skill-administration.md) · [9.3](implemented/user-group-administration.md) · [9.4](implemented/domain-tenant-administration.md) · [9.5](analytics-and-reporting.md)
+**Design docs**: [9.1](implemented/administration-overview.md) · [9.2](implemented/skill-administration.md) · [9.3](implemented/user-group-administration.md) · 9.4 · [9.5](analytics-and-reporting.md)
 
 ## Summary
 

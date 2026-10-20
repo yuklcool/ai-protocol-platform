@@ -13,7 +13,6 @@ import {
   type McpAdminTranslationKey,
 } from "@/lib/i18n/mcpAdmin";
 
-type Scope = "platform" | "tenant";
 type Transport = "http" | "streamable-http" | "sse";
 type PageTranslator = (
   key: McpAdminTranslationKey,
@@ -24,8 +23,6 @@ type McpServer = {
   server_id: string;
   url: string;
   transport: Transport | string;
-  scope: Scope | string;
-  tenant_id: string | null;
   enabled: boolean;
   description: string;
   header_names: string[];
@@ -51,8 +48,6 @@ type FormState = {
   serverId: string;
   url: string;
   transport: Transport;
-  scope: Scope;
-  tenantId: string;
   enabled: boolean;
   description: string;
   headersText: string;
@@ -61,13 +56,11 @@ type FormState = {
 
 const API = "/api/proxy/api/admin/mcp-servers";
 
-function emptyForm(isPlatform: boolean, tenantId = ""): FormState {
+function emptyForm(): FormState {
   return {
     serverId: "",
     url: "",
     transport: "streamable-http",
-    scope: isPlatform ? "platform" : "tenant",
-    tenantId,
     enabled: true,
     description: "",
     headersText: "",
@@ -104,13 +97,12 @@ async function errorDetail(
 export default function McpServersPage() {
   const { user, loading } = useAuth();
   const { locale } = useI18n();
-  const { state, tenantIds, isAdmin, isPlatform } = useAdminScope(
+  const { state, isAdmin } = useAdminScope(
     !loading && !!user,
   );
-  const defaultTenant = tenantIds[0] ?? "";
 
   const [servers, setServers] = useState<McpServer[]>([]);
-  const [form, setForm] = useState<FormState>(() => emptyForm(false));
+  const [form, setForm] = useState<FormState>(() => emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -137,14 +129,14 @@ export default function McpServersPage() {
 
   useEffect(() => {
     if (loading || !user || !isAdmin) return;
-    setForm(emptyForm(isPlatform, defaultTenant));
+    setForm(emptyForm());
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, user, isAdmin, isPlatform, defaultTenant, locale]);
+  }, [loading, user, isAdmin, locale]);
 
   const resetForm = () => {
     setEditingId(null);
-    setForm(emptyForm(isPlatform, defaultTenant));
+    setForm(emptyForm());
   };
 
   const edit = (server: McpServer) => {
@@ -158,8 +150,6 @@ export default function McpServersPage() {
           : server.transport === "http"
             ? "http"
             : "streamable-http",
-      scope: server.scope === "platform" ? "platform" : "tenant",
-      tenantId: server.tenant_id ?? defaultTenant,
       enabled: server.enabled,
       description: server.description ?? "",
       headersText: "",
@@ -176,11 +166,6 @@ export default function McpServersPage() {
       const body: Record<string, unknown> = {
         url: form.url.trim(),
         transport: form.transport,
-        scope: isPlatform ? form.scope : "tenant",
-        tenant_id:
-          isPlatform && form.scope === "tenant"
-            ? form.tenantId.trim() || null
-            : undefined,
         enabled: form.enabled,
         description: form.description.trim(),
       };
@@ -249,8 +234,6 @@ export default function McpServersPage() {
     const body: Record<string, unknown> = {
       url: server.url,
       transport: server.transport,
-      scope: server.scope,
-      tenant_id: server.tenant_id,
       enabled: !server.enabled,
       description: server.description,
       // headers intentionally omitted: backend preserves write-only credentials.
@@ -344,11 +327,6 @@ export default function McpServersPage() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {t("description")}
           </p>
-          {!isPlatform && tenantIds.length > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("scoped", { domains: tenantIds.join(", ") })}
-            </p>
-          )}
         </div>
         <NextLink
           href="/admin"
@@ -384,13 +362,6 @@ export default function McpServersPage() {
                         <span className="font-mono text-sm font-medium">
                           {server.server_id}
                         </span>
-                        <Badge>
-                          {server.scope === "platform"
-                            ? t("form.platform")
-                            : server.scope === "tenant"
-                              ? t("form.tenant")
-                              : server.scope}
-                        </Badge>
                         <Badge>{server.transport}</Badge>
                         <Badge>
                           {server.enabled
@@ -404,11 +375,6 @@ export default function McpServersPage() {
                       <p className="mt-1 break-all text-xs text-muted-foreground">
                         {server.url}
                       </p>
-                      {server.tenant_id && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {t("registry.tenant", { tenant: server.tenant_id })}
-                        </p>
-                      )}
                       {server.description && (
                         <p className="mt-2 text-sm">{server.description}</p>
                       )}
@@ -498,33 +464,7 @@ export default function McpServersPage() {
                   <option value="sse">SSE</option>
                 </select>
               </Field>
-              <Field label={t("form.scope")}>
-                <select
-                  className="w-full rounded-md border px-3 py-2 text-sm"
-                  value={isPlatform ? form.scope : "tenant"}
-                  disabled={!isPlatform}
-                  onChange={(event) =>
-                    setForm({ ...form, scope: event.target.value as Scope })
-                  }
-                >
-                  <option value="tenant">{t("form.tenant")}</option>
-                  {isPlatform && (
-                    <option value="platform">{t("form.platform")}</option>
-                  )}
-                </select>
-              </Field>
             </div>
-            {isPlatform && form.scope === "tenant" && (
-              <Field label={t("form.tenantId")}>
-                <input
-                  className="w-full rounded-md border px-3 py-2 text-sm font-mono"
-                  value={form.tenantId}
-                  onChange={(event) =>
-                    setForm({ ...form, tenantId: event.target.value })
-                  }
-                />
-              </Field>
-            )}
             <Field label={t("form.description")}>
               <input
                 className="w-full rounded-md border px-3 py-2 text-sm"

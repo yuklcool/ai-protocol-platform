@@ -2,8 +2,8 @@
 
 The adapter works with AWS S3 and S3-compatible endpoints such as Cloudflare
 R2, MinIO/AIStor, Ceph RGW, Garage and LocalStack. Objects always live beneath
-``tenants/<tenant_id>/`` so switching providers does not weaken the platform's
-tenant namespace boundary.
+``users/<user_id>/`` so switching providers does not weaken the platform's
+user namespace boundary.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any, BinaryIO
 from urllib.parse import urlparse
 
 from object_storage.base import ObjectInfo
-from object_storage.local import _validate_key, _validate_tenant_id
+from object_storage.local import _validate_key, _validate_user_id
 
 _MIN_MULTIPART_CHUNK = 5 * 1024 * 1024
 _NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound"}
@@ -41,7 +41,7 @@ def _validate_presign_expiry(expires_in: int) -> int:
 
 
 class S3ObjectStorage:
-    """Store tenant objects in an S3-compatible bucket.
+    """Store user objects in an S3-compatible bucket.
 
     Explicit credentials are optional. When access/secret keys are omitted,
     boto3's normal credential provider chain is used (for example IAM roles in
@@ -120,27 +120,27 @@ class S3ObjectStorage:
             self._client = boto3.client("s3", **kwargs)
         return self._client
 
-    def _object_name(self, tenant_id: str, key: str) -> tuple[str, str]:
-        tenant = _validate_tenant_id(tenant_id)
+    def _object_name(self, user_id: str, key: str) -> tuple[str, str]:
+        user = _validate_user_id(user_id)
         normalized = _validate_key(key).as_posix()
-        return f"tenants/{tenant}/{normalized}", normalized
+        return f"users/{user}/{normalized}", normalized
 
-    def _info(self, tenant_id: str, normalized: str, object_name: str, size: int) -> ObjectInfo:
+    def _info(self, user_id: str, normalized: str, object_name: str, size: int) -> ObjectInfo:
         return ObjectInfo(
-            tenant_id=tenant_id,
+            user_id=user_id,
             key=normalized,
             size=int(size),
             uri=f"s3://{self.bucket_name}/{object_name}",
         )
 
-    def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:
+    def put_bytes(self, user_id: str, key: str, data: bytes) -> ObjectInfo:
         from io import BytesIO
 
-        return self.put_fileobj(tenant_id, key, BytesIO(data))
+        return self.put_fileobj(user_id, key, BytesIO(data))
 
     def put_fileobj(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         fileobj: BinaryIO,
         *,
@@ -156,7 +156,7 @@ class S3ObjectStorage:
                 "install the backend with the S3 dependency enabled"
             ) from exc
 
-        object_name, normalized = self._object_name(tenant_id, key)
+        object_name, normalized = self._object_name(user_id, key)
         transfer_chunk = max(chunk_size, _MIN_MULTIPART_CHUNK)
         config = TransferConfig(
             multipart_threshold=transfer_chunk,
@@ -167,10 +167,10 @@ class S3ObjectStorage:
         client = self._get_client()
         client.upload_fileobj(fileobj, self.bucket_name, object_name, Config=config)
         head = client.head_object(Bucket=self.bucket_name, Key=object_name)
-        return self._info(tenant_id, normalized, object_name, int(head.get("ContentLength", 0) or 0))
+        return self._info(user_id, normalized, object_name, int(head.get("ContentLength", 0) or 0))
 
-    def get_bytes(self, tenant_id: str, key: str) -> bytes:
-        object_name, _ = self._object_name(tenant_id, key)
+    def get_bytes(self, user_id: str, key: str) -> bytes:
+        object_name, _ = self._object_name(user_id, key)
         body = self._get_client().get_object(Bucket=self.bucket_name, Key=object_name)["Body"]
         try:
             return body.read()
@@ -179,10 +179,10 @@ class S3ObjectStorage:
             if callable(close):
                 close()
 
-    def iter_bytes(self, tenant_id: str, key: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
+    def iter_bytes(self, user_id: str, key: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
-        object_name, _ = self._object_name(tenant_id, key)
+        object_name, _ = self._object_name(user_id, key)
         body = self._get_client().get_object(Bucket=self.bucket_name, Key=object_name)["Body"]
         try:
             while True:
@@ -195,8 +195,8 @@ class S3ObjectStorage:
             if callable(close):
                 close()
 
-    def exists(self, tenant_id: str, key: str) -> bool:
-        object_name, _ = self._object_name(tenant_id, key)
+    def exists(self, user_id: str, key: str) -> bool:
+        object_name, _ = self._object_name(user_id, key)
         try:
             self._get_client().head_object(Bucket=self.bucket_name, Key=object_name)
             return True
@@ -205,16 +205,16 @@ class S3ObjectStorage:
                 return False
             raise
 
-    def delete(self, tenant_id: str, key: str) -> None:
-        object_name, _ = self._object_name(tenant_id, key)
+    def delete(self, user_id: str, key: str) -> None:
+        object_name, _ = self._object_name(user_id, key)
         # S3 DELETE is idempotent for a missing key, so no pre-flight HEAD is
         # needed (and avoiding it also removes a race between HEAD and DELETE).
         self._get_client().delete_object(Bucket=self.bucket_name, Key=object_name)
 
-    def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]:
-        tenant = _validate_tenant_id(tenant_id)
+    def list_objects(self, user_id: str, *, prefix: str = "") -> list[ObjectInfo]:
+        user = _validate_user_id(user_id)
         normalized_prefix = _validate_key(prefix).as_posix() if prefix else ""
-        namespace = f"tenants/{tenant}/"
+        namespace = f"users/{user}/"
         paginator = self._get_client().get_paginator("list_objects_v2")
         result: list[ObjectInfo] = []
         for page in paginator.paginate(Bucket=self.bucket_name, Prefix=namespace + normalized_prefix):
@@ -227,7 +227,7 @@ class S3ObjectStorage:
                     continue
                 result.append(
                     self._info(
-                        tenant_id,
+                        user_id,
                         key,
                         name,
                         int(item.get("Size", 0) or 0),
@@ -238,14 +238,14 @@ class S3ObjectStorage:
 
     def generate_presigned_download_url(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         expires_in: int = 900,
     ) -> str:
-        """Return a time-limited GET URL scoped to one tenant object."""
+        """Return a time-limited GET URL scoped to one user object."""
 
-        object_name, _ = self._object_name(tenant_id, key)
+        object_name, _ = self._object_name(user_id, key)
         return str(
             self._get_client().generate_presigned_url(
                 "get_object",
@@ -256,15 +256,15 @@ class S3ObjectStorage:
 
     def generate_presigned_upload_url(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         expires_in: int = 900,
         content_type: str | None = None,
     ) -> str:
-        """Return a time-limited PUT URL scoped to one tenant object."""
+        """Return a time-limited PUT URL scoped to one user object."""
 
-        object_name, _ = self._object_name(tenant_id, key)
+        object_name, _ = self._object_name(user_id, key)
         params: dict[str, str] = {"Bucket": self.bucket_name, "Key": object_name}
         if content_type:
             params["ContentType"] = content_type

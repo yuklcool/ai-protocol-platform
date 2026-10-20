@@ -75,14 +75,13 @@ def build_document_context(
     section: str | None = None,
 ) -> tuple[str, list[dict[str, Any]] | None]:
     """Load parsed content from the configured repository for agent use."""
-    from observability.tenant_context import get_tenant_context
+    from observability.user_context import get_user_context
     from tools.documents.access import readable_document
 
-    identity = get_tenant_context() or {}
+    identity = get_user_context() or {}
     raw = readable_document(
         doc_id,
-        user_id=identity.get("tenant.uid", ""),
-        tenant_id=identity.get("tenant.id", ""),
+        user_id=identity.get("user.id", ""),
     )
 
     original_filename = raw.get("originalFilename", "Unknown document")

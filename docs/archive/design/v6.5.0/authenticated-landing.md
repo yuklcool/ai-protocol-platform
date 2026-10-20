@@ -86,7 +86,7 @@ Three pieces: (1) a backend "most-recent session for this user" resolver; (2) an
 - New helper `most_recent_session_for_user(uid)` in [db/chat_sessions.py](../../../../backend/db/chat_sessions.py) (sibling of `list_sessions_for_skill`). Needs a Firestore composite index `(ownerUid ASC, lastMessageAt DESC)`.
 
 **`ClientConfig.default_skill`:**
-- New optional field (`default_skill: str | None`) on [admin/clients.py](../../../../backend/admin/clients.py) `ClientConfig` — the skill slug a signed-in user lands on with no prior chat. Same null/merge semantics as `enabled_skills`. Resolved via the existing domain→client lookup. Fallback when unset: `enabled_skills[0]`, else marketplace.
+- New optional field (`default_skill: str | None`) on admin/clients.py `ClientConfig` — the skill slug a signed-in user lands on with no prior chat. Same null/merge semantics as `enabled_skills`. Resolved via the existing domain→client lookup. Fallback when unset: `enabled_skills[0]`, else marketplace.
 
 **Data Model Changes:** `default_skill` on the `clients` collection (additive nullable). New composite index for the recent-session query (add to `firestore.indexes.json`).
 

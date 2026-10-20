@@ -64,7 +64,7 @@ describe("AdminHub IA", () => {
   it("renders five task-shaped areas for a platform admin", async () => {
     render(<AdminHub />);
     for (const title of [
-      "Your tenant",
+      "Root Agent",
       "People & access",
       "Skills & MCP",
       "Activity & audit",
@@ -76,30 +76,9 @@ describe("AdminHub IA", () => {
 
   it("names the question each area answers, not the API it wraps", () => {
     render(<AdminHub />);
-    expect(screen.getByText(/what do my users actually see/i)).toBeTruthy();
     expect(
       screen.getByText(/who is here, and what may they use/i),
     ).toBeTruthy();
-  });
-
-  it("surfaces the effective-access entry point", () => {
-    render(<AdminHub />);
-    expect(screen.getByText("What your users actually see")).toBeTruthy();
-  });
-
-  it("hides the Platform area from a tenant admin (no door that always slams)", () => {
-    asTenant();
-    render(<AdminHub />);
-    expect(screen.queryByText("Platform")).toBeNull();
-    expect(screen.queryByText("Model Providers")).toBeNull();
-    expect(screen.getByText("Your tenant")).toBeTruthy();
-    expect(screen.getByText("People & access")).toBeTruthy();
-  });
-
-  it("tells a tenant admin their view is scoped, so a short list isn't confusing", () => {
-    asTenant("acmeenergy.com");
-    render(<AdminHub />);
-    expect(screen.getByText(/scoped to acmeenergy\.com/i)).toBeTruthy();
   });
 
   it("keeps current admin routes reachable", () => {
@@ -108,9 +87,9 @@ describe("AdminHub IA", () => {
       a.getAttribute("href"),
     );
     for (const route of [
-      "/admin/tenants",
+
       "/admin/users",
-      "/admin/groups",
+
       "/admin/analytics",
       "/admin/audit",
       "/admin/settings",

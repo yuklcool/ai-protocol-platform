@@ -2,7 +2,6 @@
 //
 // The trail has been written since v6.9.0 and readable by nobody: records piled
 // up in `admin_audit` and were reachable only via raw Firestore. This is the
-// read surface, scoped by the backend to the caller's tenants.
 //
 // Lives under the "Activity & audit" area of the console IA.
 
@@ -113,21 +112,13 @@ export default function AuditPage() {
       {state.kind === "ready" && (
         <>
           {state.data.entries.length === 0 ? (
-            // "Nothing has happened" and "nothing here concerns your tenant" are
-            // different facts. `scanned` lets us say which, instead of showing an
-            // empty table that implies the first.
             <p className="text-sm text-muted-foreground">
-              {state.data.scanned > 0
-                ? `No audit entries for your tenant. ${state.data.scanned} entries exist platform-wide, outside your scope.`
-                : "No admin changes have been recorded yet."}
+              No admin changes have been recorded yet.
             </p>
           ) : (
             <>
               <p className="mb-2 text-xs text-muted-foreground">
                 Showing {state.data.entries.length}
-                {state.data.scope === "tenant" && state.data.scanned > state.data.entries.length && (
-                  <> of {state.data.scanned} platform-wide — scoped to your tenant</>
-                )}
               </p>
               <div className="overflow-x-auto rounded border">
                 <table className="w-full text-left text-sm">

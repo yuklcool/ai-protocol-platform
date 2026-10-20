@@ -63,7 +63,7 @@ def _make_user(
     domain: str = "yourcompany.com",
     group_tags: frozenset[str] = frozenset(),
 ) -> User:
-    return User(uid=uid, email=email, domain=domain, tenant_id="test-tenant", group_tags=group_tags)
+    return User(uid=uid, email=email, domain=domain, group_tags=group_tags)
 
 
 @pytest.fixture()
@@ -93,6 +93,9 @@ def _install_user(app: FastAPI, user: User) -> Callable[[], None]:
 
     async def _override(request: Request) -> User:
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = _override

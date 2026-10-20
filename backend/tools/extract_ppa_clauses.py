@@ -355,7 +355,7 @@ async def extract_ppa_clauses(
                     "error": (
                         f"Document '{doc_id}' not found in parsed_documents. Use "
                         "list_documents to see uploaded documents, or list_documents_in_bucket "
-                        "to discover unparsed files in the tenant bucket."
+                        "to discover unparsed files in the user bucket."
                     ),
                     "doc_id": doc_id,
                 }

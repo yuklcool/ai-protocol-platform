@@ -4,9 +4,9 @@
 
 平台只有一个面向用户的 Root Agent。模型、工具、MCP、知识和交互行为由 Root Agent 统一配置；Skill 用于复用指令、参考资料和资源文件。用户从普通对话进入，智能体可以调用工具、生成交互表单，并在刷新后恢复会话和界面状态。
 
-**界面设计：**全站浅色、淡紫与薄荷绿的玻璃风格，规范见 [DESIGN.md](DESIGN.md)，逐页验收见[界面检查清单](docs/design/ui-redesign-acceptance.md)。本次源码改版尚未包含在既有 v1.1.1 发布镜像中。
+**界面设计：**全站浅色、淡紫与薄荷绿的玻璃风格，规范见 [DESIGN.md](DESIGN.md)，逐页验收见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
 
-**第一次使用请从[完整中文配置流程](docs/configuration-guide.md)开始。**手册按“部署 → 登录 → 模型 → 租户与账号 → Skill/工具/MCP → 知识 → A2UI → 额度 → 验收”的顺序说明在哪里配置、怎样填写以及如何确认生效。
+**第一次使用请从[完整中文配置流程](docs/configuration-guide.md)开始。**手册按“部署 → 登录 → 模型 → 用户与账号 → Skill/工具/MCP → 知识 → A2UI → 额度 → 验收”的顺序说明在哪里配置、怎样填写以及如何确认生效。
 
 ## 功能与入口
 
@@ -19,19 +19,19 @@
 | MCP 与 MCP Apps | 服务管理、健康检查、能力发现、工具调用及独立源沙箱渲染 |
 | 对话附件 | 在普通对话上传 TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；选择参与本轮分析，恢复会话附件状态 |
 | 知识检索 | 上传并解析资料，在 Root Agent 中创建、绑定和检索知识来源 |
-| 多租户管理 | 稳定租户 ID、账号与权限组、模型策略、租户 Root 覆盖和有效权限预览 |
+| 用户与个人配置 | 公共 Agent 能力、个人 Skill/信息与用户数据隔离 |
 | 持久化与统计 | PostgreSQL 保存业务数据、会话、记忆和用量；持久卷保存文件与 Artifact |
 
-对话附件的配置、格式范围、故障处理和验收要求见[文件上传与分析说明](docs/chat-file-analysis.md)。附件整改属于后续源码修改，不能据此推断 `v1.1.1` 镜像已经包含。
+对话附件的配置、格式范围、故障处理和验收要求见[文件上传与分析说明](docs/chat-file-analysis.md)。
 
 ## 运行架构
 
 | 层次 | 组件与职责 |
 | --- | --- |
 | 浏览器 | Next.js / React、统一对话与工作台、AG-UI 客户端、A2UI 渲染器 |
-| 应用后端 | FastAPI、身份认证、租户授权、模型/MCP 管理和协议接口 |
+| 应用后端 | FastAPI、身份认证、用户授权、模型/MCP 管理和协议接口 |
 | 智能体运行时 | Google ADK、Root Agent、Skill 指令加载、原生工具、MCP 和 A2A |
-| 数据存储 | PostgreSQL：平台配置、租户、账号、Session、Memory 和账本 |
+| 数据存储 | PostgreSQL：平台配置、用户账号、Session、Memory 和账本 |
 | 文件与沙箱 | 持久卷：文件和 Artifact；独立浏览器源：MCP Apps 沙箱 |
 
 默认部署包含 `frontend`、`backend`、`postgres`、`mcp-sandbox` 四个服务，不要求 GCP、Firebase、Redis、MinIO 或 Keycloak。
@@ -40,14 +40,14 @@
 
 以下命令用于**全新安装**。已有部署先阅读[升级、迁移与回滚](docs/configuration-guide.md#12-已有部署升级迁移与回滚)，保留现有配置和数据卷。
 
-### 使用 v1.1.1 发布镜像
+### 使用 v2.0.0 发布镜像
 
 需要 Docker Engine、Compose v2，以及到 GHCR 和模型服务的网络连接。
 
 ```bash
 mkdir -p ai-protocol-platform-deploy
 cd ai-protocol-platform-deploy
-release_version=v1.1.1
+release_version=v2.0.0
 curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/docker-compose.release.yml" -o docker-compose.release.yml
 curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/default.env.selfhost.example" -o .env
 chmod 600 .env
@@ -58,7 +58,7 @@ openssl rand -base64 48
 
 | 配置项 | 填写要求 |
 | --- | --- |
-| `APP_VERSION` | 确认为 `v1.1.1`，生产环境使用明确版本 |
+| `APP_VERSION` | 确认为 `v2.0.0`，生产环境使用明确版本 |
 | `JWT_SIGNING_KEY` | 上一步生成的随机密钥，后续重启保持稳定 |
 | `SELFHOST_ADMIN_EMAIL` | 首次启动的平台管理员邮箱 |
 | `SELFHOST_ADMIN_PASSWORD` | 首次管理员密码，至少 12 个字符 |
@@ -93,15 +93,14 @@ docker compose up -d --build
 
 ## 部署后的配置顺序
 
-以下控制台流程对应当前源码。v1.1.1 发布镜像尚未包含本次模型接入改版；使用该镜像时仍需在原页面注册并测试模型，再到 Root 配置选择模型。
+以下流程对应当前源码；发布镜像以对应版本的发布说明为准。
 
-1. **模型**：在“模型接入”添加服务，填写 API 根地址与后端密钥变量名；读取或手动填写模型名称，测试普通生成和工具调用，通过后点击“用于平台 Root”。内部标识自动生成，单模型无需填写层级映射。
-2. **租户与账号**：创建稳定租户 ID，配置模型白名单、额度和账号归属；使用权限预览核对结果。
-3. **能力**：创建 Skill 内容，注册并发现 MCP 服务；通过当前 Root、租户允许资源和权限组分配给用户。
-4. **Root Agent**：选择模型，绑定已授权的 Skills、Tools、MCP 和知识来源，保存配置。
-5. **交互**：需要表单操作时，同时开启 A2UI、界面上下文写入和操作触发运行。
-6. **额度**：配置租户额度和模型价格，主动启用 Root 预算；Root 会直接使用持久化租户执行器。
-7. **验收**：普通聊天、实际工具调用、MCP App、A2UI 提交、刷新恢复和双租户隔离均通过后开放使用。
+1. **模型**：注册服务和模型，测试普通生成与工具调用，再应用到 Root Agent。
+2. **用户**：创建账号，无需组织、权限组或模型白名单。
+3. **公共能力**：在 Agent 中绑定公共 Skill、原生工具、MCP 和知识。
+4. **个人配置**：用户绑定自己专有的 Skill，保存个人信息与偏好。
+5. **交互与验收**：验证聊天、MCP、A2UI 操作、刷新恢复及跨用户拒绝。
+6. **用量**：按用户和模型查看 Token 与估算费用。
 
 逐字段示例和排错见[完整中文配置流程](docs/configuration-guide.md)。
 
@@ -123,13 +122,9 @@ docker compose up -d --build
 
 ## 版本状态与升级边界
 
-v1.1.1 发布基线为 `29688543e0b4c1749210a8be90b0c94a207ca87e`：
+v2.0.0 使用“Agent 公共能力 + 用户个人 Skill 与信息”的配置模型。首次升级直接清理旧组织数据，不迁移或重新分配归属；账号凭据与公共平台配置保留。详见[升级清理说明](docs/configuration-guide.md#7-旧部署升级)。
 
-- [正式 Release](https://github.com/yuklcool/ai-protocol-platform/releases/tag/v1.1.1)：三个应用镜像支持 `linux/amd64` 和 `linux/arm64`。
-- [镜像发布验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100933295)：构建、扫描、匿名拉取、全新环境启动和管理员登录成功。
-- [真实 Provider 与协议验收](https://github.com/yuklcool/ai-protocol-platform/actions/runs/39100531719)：真实 MCP 调用、A2UI 操作/刷新恢复及 A/B 租户额度隔离成功。
-
-上述记录证明发布和受测环境能力。**已有部署的历史 ownership、ADK Session、Memory namespace 迁移与回滚仍由 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9) 跟踪，不能用全新安装成功代替。**
+[正式 Release](https://github.com/yuklcool/ai-protocol-platform/releases/tag/v2.0.0) 提供后端、前端和 MCP 沙箱镜像及固定版本的部署配置。发布由同提交的模型、浏览器、数据库、构建与安全检查控制。
 
 当前 A2UI 支持范围为 **v0.9 + SDK basic catalog**；AG-UI 后端桥接锁定 `ag-ui-adk==0.6.5`、`google-adk==1.31.1`。知识检索为解析文本上的关键词检索，用量费用是估算值。
 
@@ -142,10 +137,9 @@ v1.1.1 发布基线为 `29688543e0b4c1749210a8be90b0c94a207ca87e`：
 | [版本化镜像部署](docs/selfhost-release-images.md) | 下载、版本、镜像来源、升级与回滚 |
 | [模型接入](docs/selfhost-openai-compatible.md) | 地址、密钥引用、模型 ID、能力与价格 |
 | [MCP 配置](docs/selfhost-mcp-server.md) | 注册、凭证、健康检查、发现、绑定和验证 |
-| [Root 控制台](docs/root-console-completion.md) | 知识、账号、租户策略、预算和用量边界 |
+| [Root 控制台](docs/root-console-completion.md) | 知识、账号、用户策略、预算和用量边界 |
 | [协议验收](docs/protocol-operation-acceptance.md) | A2UI / AG-UI 操作验收 |
-| [真实 Provider 验收](docs/real-provider-acceptance.md) | 真实模型和 A/B 租户工作流 |
-| [历史归属迁移](docs/tenant-ownership-migration.md) | dry-run、审核、apply、verify 和 rollback |
+| [真实 Provider 验收](docs/real-provider-acceptance.md) | 真实模型和 A/B 用户工作流 |
 | [OIDC 接入](docs/selfhost-oidc.md) | 企业认证与显式账号关联 |
 | [OIDC 示例](docs/oidc-providers.md) | Keycloak、Entra ID 和 Okta |
 | [S3 兼容存储](docs/s3-object-storage.md) | 可选对象存储及 Compose 变量传递 |

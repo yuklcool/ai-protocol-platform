@@ -337,9 +337,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          printf '%s\n' \
+            '## Upgrade behavior' \
+            'v2 uses shared Agent capabilities and user-owned private Skills and information.' \
+            'On first upgrade, retired tenant directories, tenant-owned resources and old Session/Memory data are deleted directly. No ownership migration is performed. Account credentials and shared platform configuration are retained.' \
+            'See docs/configuration-guide.md for configuration and cleanup details.' \
+            > "${RUNNER_TEMP}/release-upgrade.md"
           gh release create "${GITHUB_REF_NAME}" \
             --verify-tag \
             --generate-notes \
+            --notes-file "${RUNNER_TEMP}/release-upgrade.md" \
             --title "AI Protocol Platform ${GITHUB_REF_NAME}" \
             release-assets/docker-compose.release.yml \
             release-assets/.env.selfhost.example

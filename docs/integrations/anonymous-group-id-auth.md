@@ -197,7 +197,7 @@ group_auth: joined group=PHYS-7K2N uid=anon-PHYS7K2N-deadbeef session_n=3
 group_auth: revoked group=PHYS-7K2N by uid=teacher-uid
 ```
 
-For per-cohort research / analytics (AIPLA's case), pair this with sprint 2.14's tenant-ID span attribute — `tenant.group_id` lands on every OTel span emitted during the cohort's sessions, making BigQuery / Cloud Trace filtering trivial.
+For per-cohort research / analytics (AIPLA's case), pair this with sprint 2.14's user-ID span attribute — `user.group_id` lands on every OTel span emitted during the cohort's sessions, making BigQuery / Cloud Trace filtering trivial.
 
 ### Persistence
 
@@ -242,5 +242,5 @@ Carried from the design doc:
 
 - [Sprint 2.11 design doc](../archive/design/v6.2.0/implemented/anonymous-group-id-auth.md) — full threat model + axiom alignment.
 - [Sprint 2.12 budget-enforcement](../archive/design/v6.2.0/implemented/budget-enforcement.md) — uses `User.group_id` from sprint 2.11 as the budget identity key.
-- [Sprint 2.14 tenant-id-span-attribute](../archive/design/v6.2.0/implemented/tenant-id-span-attribute.md) — drops `tenant.group_id` on every OTel span so per-cohort research data lands cleanly.
+- Sprint 2.14 user-id-span-attribute — drops `user.group_id` on every OTel span so per-cohort research data lands cleanly.
 - [AIPLA ADR-001](https://www.sunholo.com/aipla/architecture.html#adr-001-student-identity-no-auth-anonymous-group-ids) — the originating request.

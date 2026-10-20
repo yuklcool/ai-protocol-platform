@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 _USER_A = User(uid="user_a", email="alice@example.com", domain="example.com")
 _USER_B = User(uid="user_b", email="bob@example.com", domain="example.com")
@@ -30,7 +31,7 @@ def _app_for(user: User) -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_current_user] = identity_dependency(user)
     return TestClient(app)
 
 

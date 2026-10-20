@@ -1,7 +1,7 @@
-"""Tenant-isolated local filesystem object storage.
+"""User-isolated local filesystem object storage.
 
 Self-hosted deployments mount a persistent Docker volume at ``/data`` and use
-this adapter by default. Files live under ``<root>/tenants/<tenant_id>/<key>``.
+this adapter by default. Files live under ``<root>/users/<user_id>/<key>``.
 Writes are atomic and both upload/download paths support bounded-memory chunks.
 """
 
@@ -17,15 +17,15 @@ from object_storage.base import ObjectInfo
 
 
 class StoragePathError(ValueError):
-    """Raised when a tenant id or object key would escape its storage scope."""
+    """Raised when a user id or object key would escape its storage scope."""
 
 
-def _validate_tenant_id(tenant_id: str) -> str:
-    value = tenant_id.strip()
+def _validate_user_id(user_id: str) -> str:
+    value = user_id.strip()
     if not value:
-        raise StoragePathError("tenant_id must not be empty")
+        raise StoragePathError("user_id must not be empty")
     if "\x00" in value or "/" in value or "\\" in value or value in {".", ".."}:
-        raise StoragePathError("tenant_id contains an unsafe path segment")
+        raise StoragePathError("user_id contains an unsafe path segment")
     return value
 
 
@@ -53,33 +53,33 @@ class LocalObjectStorage:
         self.root_dir = Path(root_dir).expanduser().resolve()
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
-    def _tenant_root(self, tenant_id: str) -> Path:
-        safe_tenant = _validate_tenant_id(tenant_id)
-        root = (self.root_dir / "tenants" / safe_tenant).resolve(strict=False)
+    def _user_root(self, user_id: str) -> Path:
+        safe_user = _validate_user_id(user_id)
+        root = (self.root_dir / "users" / safe_user).resolve(strict=False)
         root.mkdir(parents=True, exist_ok=True)
         return root
 
-    def _resolve(self, tenant_id: str, key: str) -> tuple[Path, str]:
-        tenant_root = self._tenant_root(tenant_id)
+    def _resolve(self, user_id: str, key: str) -> tuple[Path, str]:
+        user_root = self._user_root(user_id)
         normalized = _validate_key(key).as_posix()
-        candidate = (tenant_root / normalized).resolve(strict=False)
+        candidate = (user_root / normalized).resolve(strict=False)
         try:
-            candidate.relative_to(tenant_root.resolve())
+            candidate.relative_to(user_root.resolve())
         except ValueError as exc:
-            raise StoragePathError("object key escapes tenant storage namespace") from exc
+            raise StoragePathError("object key escapes user storage namespace") from exc
         return candidate, normalized
 
-    def _info(self, tenant_id: str, key: str, path: Path) -> ObjectInfo:
-        return ObjectInfo(tenant_id=tenant_id, key=key, size=path.stat().st_size, uri=path.resolve().as_uri())
+    def _info(self, user_id: str, key: str, path: Path) -> ObjectInfo:
+        return ObjectInfo(user_id=user_id, key=key, size=path.stat().st_size, uri=path.resolve().as_uri())
 
-    def put_bytes(self, tenant_id: str, key: str, data: bytes) -> ObjectInfo:
+    def put_bytes(self, user_id: str, key: str, data: bytes) -> ObjectInfo:
         from io import BytesIO
 
-        return self.put_fileobj(tenant_id, key, BytesIO(data))
+        return self.put_fileobj(user_id, key, BytesIO(data))
 
     def put_fileobj(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         fileobj: BinaryIO,
         *,
@@ -87,7 +87,7 @@ class LocalObjectStorage:
     ) -> ObjectInfo:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
-        path, normalized = self._resolve(tenant_id, key)
+        path, normalized = self._resolve(user_id, key)
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.parent / f".{path.name}.tmp-{uuid.uuid4().hex}"
         try:
@@ -103,16 +103,16 @@ class LocalObjectStorage:
         finally:
             if temp.exists():
                 temp.unlink(missing_ok=True)
-        return self._info(tenant_id, normalized, path)
+        return self._info(user_id, normalized, path)
 
-    def get_bytes(self, tenant_id: str, key: str) -> bytes:
-        path, _ = self._resolve(tenant_id, key)
+    def get_bytes(self, user_id: str, key: str) -> bytes:
+        path, _ = self._resolve(user_id, key)
         return path.read_bytes()
 
-    def iter_bytes(self, tenant_id: str, key: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
+    def iter_bytes(self, user_id: str, key: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be > 0")
-        path, _ = self._resolve(tenant_id, key)
+        path, _ = self._resolve(user_id, key)
         with path.open("rb") as handle:
             while True:
                 chunk = handle.read(chunk_size)
@@ -120,75 +120,75 @@ class LocalObjectStorage:
                     break
                 yield chunk
 
-    def exists(self, tenant_id: str, key: str) -> bool:
-        path, _ = self._resolve(tenant_id, key)
+    def exists(self, user_id: str, key: str) -> bool:
+        path, _ = self._resolve(user_id, key)
         return path.is_file()
 
-    def delete(self, tenant_id: str, key: str) -> None:
-        path, _ = self._resolve(tenant_id, key)
+    def delete(self, user_id: str, key: str) -> None:
+        path, _ = self._resolve(user_id, key)
         if not path.exists():
             return
         if not path.is_file():
             raise StoragePathError("object key does not resolve to a regular file")
         path.unlink()
-        tenant_root = self._tenant_root(tenant_id).resolve()
+        user_root = self._user_root(user_id).resolve()
         parent = path.parent
-        while parent != tenant_root:
+        while parent != user_root:
             try:
                 parent.rmdir()
             except OSError:
                 break
             parent = parent.parent
 
-    def list_objects(self, tenant_id: str, *, prefix: str = "") -> list[ObjectInfo]:
-        tenant_root = self._tenant_root(tenant_id)
+    def list_objects(self, user_id: str, *, prefix: str = "") -> list[ObjectInfo]:
+        user_root = self._user_root(user_id)
         if prefix:
             prefix_path = _validate_key(prefix)
-            scan_root = (tenant_root / prefix_path).resolve(strict=False)
+            scan_root = (user_root / prefix_path).resolve(strict=False)
             try:
-                scan_root.relative_to(tenant_root.resolve())
+                scan_root.relative_to(user_root.resolve())
             except ValueError as exc:
-                raise StoragePathError("prefix escapes tenant storage namespace") from exc
+                raise StoragePathError("prefix escapes user storage namespace") from exc
         else:
-            scan_root = tenant_root
+            scan_root = user_root
         if not scan_root.exists():
             return []
         if scan_root.is_file():
-            rel = scan_root.relative_to(tenant_root).as_posix()
-            return [self._info(tenant_id, rel, scan_root)]
+            rel = scan_root.relative_to(user_root).as_posix()
+            return [self._info(user_id, rel, scan_root)]
         result: list[ObjectInfo] = []
         for path in sorted(scan_root.rglob("*")):
             if not path.is_file() or (path.name.startswith(".") and ".tmp-" in path.name):
                 continue
             resolved = path.resolve()
             try:
-                rel = resolved.relative_to(tenant_root.resolve()).as_posix()
+                rel = resolved.relative_to(user_root.resolve()).as_posix()
             except ValueError as exc:
-                raise StoragePathError("storage tree contains a path outside the tenant namespace") from exc
-            result.append(self._info(tenant_id, rel, resolved))
+                raise StoragePathError("storage tree contains a path outside the user namespace") from exc
+            result.append(self._info(user_id, rel, resolved))
         return result
 
     def generate_presigned_download_url(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         expires_in: int = 900,
     ) -> str:
-        self._resolve(tenant_id, key)
+        self._resolve(user_id, key)
         raise NotImplementedError(
             "LocalObjectStorage uses authenticated application download endpoints instead of presigned URLs"
         )
 
     def generate_presigned_upload_url(
         self,
-        tenant_id: str,
+        user_id: str,
         key: str,
         *,
         expires_in: int = 900,
         content_type: str | None = None,
     ) -> str:
-        self._resolve(tenant_id, key)
+        self._resolve(user_id, key)
         raise NotImplementedError(
             "LocalObjectStorage uses authenticated application upload endpoints instead of presigned URLs"
         )

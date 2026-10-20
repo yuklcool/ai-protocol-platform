@@ -112,8 +112,8 @@ export function KnowledgePanel({
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
         {t(
-          "上传资料，选择可检索来源。来源按租户隔离，绑定后仍执行访问权限检查。",
-          "Upload documents and bind searchable sources. Tenant isolation and source permissions apply on every search.",
+          "上传资料，选择可检索来源。个人来源按用户归属保存，共享来源仍执行访问权限检查。",
+          "Upload documents and bind searchable sources. User ownership and source permissions apply on every search.",
         )}
       </p>
       <Notice>{notice}</Notice>
@@ -162,8 +162,8 @@ export function KnowledgePanel({
             onChange={(e) => setSharing(e.target.value)}
           >
             <option value="private">{t("仅我可用", "Only me")}</option>
-            <option value="tenant">
-              {t("同租户成员可检索", "Searchable by this tenant")}
+            <option value="public">
+              {t("所有用户成员可检索", "Searchable by all users")}
             </option>
           </select>
         </Field>
@@ -210,7 +210,7 @@ export function KnowledgePanel({
                     {source.status} ·{" "}
                     {source.accessControl.type === "private"
                       ? t("仅我", "Private")
-                      : t("同租户", "Tenant")}
+                      : t("所有用户", "Public")}
                   </span>
                 </span>
               </label>
@@ -222,7 +222,7 @@ export function KnowledgePanel({
                     value={
                       source.accessControl.type === "private"
                         ? "private"
-                        : "tenant"
+                        : "public"
                     }
                     disabled={busy}
                     onChange={async (event) => {
@@ -244,7 +244,7 @@ export function KnowledgePanel({
                     }}
                   >
                     <option value="private">{t("仅我", "Private")}</option>
-                    <option value="tenant">{t("同租户", "Tenant")}</option>
+                    <option value="public">{t("所有用户", "Public")}</option>
                   </select>
                   <button
                     type="button"

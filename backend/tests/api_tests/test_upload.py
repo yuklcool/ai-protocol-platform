@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
 from object_storage.factory import _reset_object_storage_for_tests
+from tests.support.identity import identity_dependency
 
 _USER = User(uid="user1", email="alice@example.com", domain="example.com")
 
@@ -30,7 +31,7 @@ def client() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: _USER
+    app.dependency_overrides[get_current_user] = identity_dependency(_USER)
     return TestClient(app)
 
 
@@ -64,17 +65,7 @@ class TestUploadStorage:
 
         assert resp.status_code == 200
         bucket_resolver.assert_not_called()
-        stored = (
-            root
-            / "tenants"
-            / "example.com"
-            / "users"
-            / "user1"
-            / "docs"
-            / "folder1"
-            / resp.json()["docId"]
-            / "test.docx"
-        )
+        stored = root / "users" / "user1" / "users" / "user1" / "docs" / "folder1" / resp.json()["docId"] / "test.docx"
         assert stored.read_bytes() == b"fake content"
 
     def test_gcs_backend_uses_fileobj_and_per_client_bucket(self, client: TestClient, monkeypatch):
@@ -104,7 +95,7 @@ class TestUploadStorage:
 
         assert resp.status_code == 200
         assert captured["bucket"] == "example-documents"
-        assert captured["tenant"] == "example.com"
+        assert captured["tenant"] == "user1"
         assert captured["key"].startswith("users/user1/docs/")
         assert captured["data"] == b"fake content"
 
@@ -124,7 +115,7 @@ class TestUploadStorage:
 
         def fake_store(doc_id, *, parse_result, **kwargs):
             if parse_result.status == "pending":
-                immediate_writes.append((doc_id, kwargs["tenant_id"], kwargs["storage_backend"]))
+                immediate_writes.append((doc_id, kwargs["user_id"], kwargs["storage_backend"]))
 
         with (
             patch("tools.documents.upload._run_parse_fileobj", return_value=("parsed", [], 10, None)),
@@ -135,7 +126,7 @@ class TestUploadStorage:
             client.post("/api/documents/upload", files=_file())
 
         assert len(immediate_writes) == 1
-        assert immediate_writes[0][1:] == ("example.com", "local")
+        assert immediate_writes[0][1:] == ("user1", "local")
 
     def test_auto_creates_folder_when_none_provided(self, client: TestClient, tmp_path: Path, monkeypatch):
         monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
@@ -155,7 +146,7 @@ class TestUploadStorage:
             resp = client.post("/api/documents/upload", files=_file())
 
         assert resp.status_code == 200
-        assert calls == [("user1", "example.com")]
+        assert calls == [("user1", None)]
 
     def test_large_payload_reaches_storage_without_upload_route_reading_bytes(
         self, client: TestClient, tmp_path: Path, monkeypatch
@@ -171,8 +162,8 @@ class TestUploadStorage:
         stored = (
             tmp_path
             / "objects"
-            / "tenants"
-            / "example.com"
+            / "users"
+            / "user1"
             / "users"
             / "user1"
             / "docs"

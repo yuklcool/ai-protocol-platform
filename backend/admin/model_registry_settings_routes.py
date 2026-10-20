@@ -125,7 +125,6 @@ def update_model_registry_settings(
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
-        actor_tenant_id=scope.user.tenant_id or "",
         action="update_model_registry_settings",
         target="default",
         before=before,

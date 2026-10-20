@@ -71,6 +71,9 @@ def client(app: FastAPI) -> TestClient:
 def _install_user(app: FastAPI, user: User) -> Callable[[], None]:
     async def _override(request: Request) -> User:
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = _override
@@ -232,7 +235,6 @@ def test_cross_tenant_read_denied_403(app: FastAPI, client: TestClient, verb_pat
     factory, _ = _mock_gcs_blob(_one_page_pdf_bytes(), "application/pdf")
     try:
         with (
-            patch("buckets.routes.resolve_documents_bucket", return_value="a-different-bucket"),
             patch("buckets.routes.bucket_config.find_by_gcs_name", return_value=None),
             patch("buckets.routes._gcs_storage.Client", factory),
         ):
@@ -242,22 +244,6 @@ def test_cross_tenant_read_denied_403(app: FastAPI, client: TestClient, verb_pat
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "BUCKET_NOT_AUTHORIZED"
     factory.assert_not_called()  # the SA read never happens for a denied caller
-
-
-def test_tenant_user_reads_own_bucket_200(app: FastAPI, client: TestClient) -> None:
-    """A ONE user reads the ONE llmops bucket (their resolved tenant bucket)."""
-    cleanup = _install_user(app, _one_user())
-    factory, _ = _mock_gcs_blob(b"%PDF-1.7 fake", "application/pdf")
-    try:
-        with (
-            patch("buckets.routes.resolve_documents_bucket", return_value=ONE_LLMOPS_BUCKET),
-            patch("buckets.routes._gcs_storage.Client", factory),
-        ):
-            resp = client.get(f"/api/buckets/{ONE_LLMOPS_BUCKET}/preview?object=ppa%2Fa.pdf")
-    finally:
-        cleanup()
-    assert resp.status_code == 200
-    assert resp.content == b"%PDF-1.7 fake"
 
 
 def test_platform_admin_reads_any_bucket_200(app: FastAPI, client: TestClient) -> None:
@@ -288,7 +274,6 @@ def test_registered_config_access_allows_200(app: FastAPI, client: TestClient) -
     factory, _ = _mock_gcs_blob(b"%PDF-1.7 fake", "application/pdf")
     try:
         with (
-            patch("buckets.routes.resolve_documents_bucket", return_value="not-this-bucket"),
             patch("buckets.routes.bucket_config.find_by_gcs_name", return_value=cfg),
             patch("buckets.routes._gcs_storage.Client", factory),
         ):
@@ -296,26 +281,6 @@ def test_registered_config_access_allows_200(app: FastAPI, client: TestClient) -
     finally:
         cleanup()
     assert resp.status_code == 200
-
-
-def test_fail_closed_unmapped_denied_403(app: FastAPI, client: TestClient) -> None:
-    """A fail-closed unmapped tenant (resolve raises) is denied, not 500."""
-    from db.clients import UnmappedTenantError
-
-    cleanup = _install_user(app, _make_user(uid="nomap", email="x@nomap.com", domain="nomap.com"))
-    factory, _ = _mock_gcs_blob(b"x", "application/pdf")
-    try:
-        with (
-            patch("buckets.routes.resolve_documents_bucket", side_effect=UnmappedTenantError("nomap.com")),
-            patch("buckets.routes.bucket_config.find_by_gcs_name", return_value=None),
-            patch("buckets.routes._gcs_storage.Client", factory),
-        ):
-            resp = client.get(f"/api/buckets/{ONE_LLMOPS_BUCKET}/list")
-    finally:
-        cleanup()
-    assert resp.status_code == 403
-    assert resp.json()["detail"]["code"] == "BUCKET_NOT_AUTHORIZED"
-    factory.assert_not_called()
 
 
 def test_anon_get_401(client: TestClient) -> None:
@@ -632,7 +597,6 @@ def test_self_registered_config_does_not_open_the_gate(app: FastAPI, client: Tes
     factory, _ = _mock_gcs_blob(b"%PDF-1.7 secret", "application/pdf")
     try:
         with (
-            patch("buckets.routes.resolve_documents_bucket", return_value="a-different-bucket"),
             patch("buckets.routes.bucket_config.find_by_gcs_name", return_value=self_made),
             patch("buckets.routes._gcs_storage.Client", factory),
         ):
@@ -655,7 +619,6 @@ def test_config_without_allowed_domains_fails_closed(app: FastAPI, client: TestC
     factory, _ = _mock_gcs_blob(b"%PDF-1.7 secret", "application/pdf")
     try:
         with (
-            patch("buckets.routes.resolve_documents_bucket", return_value="a-different-bucket"),
             patch("buckets.routes.bucket_config.find_by_gcs_name", return_value=legacy),
             patch("buckets.routes._gcs_storage.Client", factory),
         ):
@@ -688,7 +651,6 @@ def test_blessed_bucket_readable_by_its_domain(app: FastAPI, client: TestClient)
     factory, _ = _mock_gcs_blob(b"%PDF-1.7 fake", "application/pdf")
     try:
         with (
-            patch("buckets.routes.resolve_documents_bucket", return_value="a-different-bucket"),
             patch("buckets.routes.bucket_config.find_by_gcs_name", return_value=blessed),
             patch("buckets.routes._gcs_storage.Client", factory),
         ):

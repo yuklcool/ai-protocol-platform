@@ -33,8 +33,8 @@ review** — the bulk is M4's mechanical work, not M2's.
 
 | Was | Now | Why |
 |---|---|---|
-| `docs/archive/design/v6.4.0/multi-tenant-demo-readiness.md` | `docs/customers/one/demo-readiness.md` | Title is literally *"ONE Demo Readiness — This Deployment Is Acme Energy"*. Definitionally deployment-specific. 64 customer tokens in 938 lines. |
-| `…/multi-tenant-demo-readiness-sprint.md` | `docs/customers/one/demo-readiness-sprint.md` | Its sprint companion. |
+| `docs/archive/design/v6.4.0/multi-user-demo-readiness.md` | `docs/customers/one/demo-readiness.md` | Title is literally *"ONE Demo Readiness — This Deployment Is Acme Energy"*. Definitionally deployment-specific. 64 customer tokens in 938 lines. |
+| `…/multi-user-demo-readiness-sprint.md` | `docs/customers/one/demo-readiness-sprint.md` | Its sprint companion. |
 
 `docs/customers/` is now a single glob exclusion in the sanitizer, so a new
 customer doc is excluded **the day it is filed** rather than when someone

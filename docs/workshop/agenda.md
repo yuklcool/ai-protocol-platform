@@ -128,7 +128,7 @@ Attendees arrive having already run `make dev-local`. The room buzzes from minut
   - Auth dispatcher with 4 modes (Firebase, anonymous-group-id, LOCAL_MODE stub, Identity Platform)
   - Per-cohort budget enforcement (sprint 2.12) — typed `RUN_ERROR{code:"BUDGET_EXCEEDED"}` with retry-after
   - Artefact review hook (sprint 2.13) — defence-in-depth above the iframe sandbox
-  - Tenant attribution on every span (sprint 2.14) — PII rule, `tenant.uid_hash` not raw email
+  - User attribution on every span (sprint 2.14) — PII rule, `user.uid_hash` not raw email
   - **"All four ship as sprints — see SEQUENCE.md if you want the worked examples."**
 - "Where to take this next" closing slide:
   - Public template at [sunholo-data/ai-protocol-platform](https://github.com/sunholo-data/ai-protocol-platform) — clone with full history

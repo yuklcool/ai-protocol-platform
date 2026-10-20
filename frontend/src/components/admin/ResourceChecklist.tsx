@@ -26,7 +26,7 @@ export function ResourceChecklist({
       <legend className="px-1 text-sm font-medium">{label}</legend>
       {rows.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          暂无可选资源，请先配置租户和 Root 的允许资源。
+          暂无可选资源，请先创建 Skill。
         </p>
       )}
       {rows.map((option) => (

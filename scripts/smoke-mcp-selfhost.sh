@@ -1,202 +1,72 @@
 #!/usr/bin/env bash
-# Real self-host MCP acceptance against the Compose example server.
-#
-# Covers the non-LLM portion of Issue #11:
-#   Admin register -> initialize health -> discovery -> Root + tenant grants ->
-#   authenticated /mcp proxy -> tools/list -> MCP Apps resources/read.
-#
-# The final Agent-selected Tool Call and browser iframe rendering still require
-# a real model/browser acceptance and are intentionally not claimed here.
-
+# Administrator-managed shared MCP: registration, protocol, binding and revocation.
 set -euo pipefail
-
 BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:1956}"
 ADMIN_EMAIL="${SELFHOST_ADMIN_EMAIL:-admin@example.com}"
-ADMIN_PASSWORD="${SELFHOST_ADMIN_PASSWORD:-}"
+ADMIN_PASSWORD="${SELFHOST_ADMIN_PASSWORD:?SELFHOST_ADMIN_PASSWORD is required}"
 RUN_ID="${MCP_E2E_RUN_ID:-$(date +%s)-$RANDOM}"
 RUN_ID="$(printf '%s' "$RUN_ID" | tr '[:upper:]_' '[:lower:]-' | tr -cd 'a-z0-9-' | cut -c1-24)"
 SERVER_ID="mcp-live-${RUN_ID}"
-UPSTREAM_URL="http://mcp-example-map:8080/mcp"
-
-[ -n "$ADMIN_PASSWORD" ] || { echo "ERROR: SELFHOST_ADMIN_PASSWORD is required" >&2; exit 1; }
-[ -n "$RUN_ID" ] || { echo "ERROR: MCP_E2E_RUN_ID normalized to empty" >&2; exit 1; }
-for cmd in curl python3 docker; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: $cmd is required" >&2; exit 1; }
-done
-
-TMP_DIR="$(mktemp -d)"
+TASK_DIR="$(mktemp -d)"
 TOKEN=""
-SERVER_CREATED=0
-TENANT_SAVED=0
 ROOT_SAVED=0
-TENANT_PATH=""
-ROOT_PATH=""
-
-ok() { printf '✓ %s\n' "$1"; }
-fail() { printf '✗ %s\n' "$1" >&2; exit 1; }
-
-json_value() {
-  local expression="$1"
-  python3 -c 'import json,sys; d=json.load(sys.stdin); v=eval(sys.argv[1], {"__builtins__":{}}, {"d":d}); print("" if v is None else v)' "$expression"
-}
-
+SERVER_CREATED=0
+ROOT_PATH="$BACKEND_URL/api/admin/platform-config"
 cleanup() {
   set +e
   if [ "$ROOT_SAVED" = "1" ]; then
-    curl -sS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
-      -H 'content-type: application/json' --data-binary @"$TMP_DIR/root-original.json" "$ROOT_PATH" || true
+    curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary @"$TASK_DIR/root-original.json" "$ROOT_PATH"
   fi
-  if [ "$TENANT_SAVED" = "1" ]; then
-    curl -sS -o /dev/null -X PATCH -H "Authorization: Bearer $TOKEN" \
-      -H 'content-type: application/json' --data-binary @"$TMP_DIR/tenant-original.json" "$TENANT_PATH" || true
+  if [ "$SERVER_CREATED" = "1" ]; then
+    curl -fsS -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID"
   fi
-  if [ -n "$TOKEN" ] && [ "$SERVER_CREATED" = "1" ]; then
-    curl -sS -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" \
-      "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID" || true
-  fi
-  rm -rf "$TMP_DIR"
+  rm -rf "$TASK_DIR"
 }
 trap cleanup EXIT
-
-printf '\nAI Protocol Platform — real Self-host MCP acceptance\n'
-printf 'Backend: %s\nServer id: %s\nUpstream: %s\n\n' "$BACKEND_URL" "$SERVER_ID" "$UPSTREAM_URL"
-
-curl -fsS --max-time 10 "$BACKEND_URL/health" >/dev/null || fail "backend health unavailable"
-ok "Backend health"
-
-LOGIN_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"email":sys.argv[1],"password":sys.argv[2]}))' "$ADMIN_EMAIL" "$ADMIN_PASSWORD")"
-LOGIN="$(curl -fsS -H 'content-type: application/json' --data-binary "$LOGIN_PAYLOAD" "$BACKEND_URL/api/auth/login")"
-TOKEN="$(printf '%s' "$LOGIN" | json_value 'd.get("access_token","")')"
-[ -n "$TOKEN" ] || fail "platform admin login did not return a token"
-if ! printf '%s' "$LOGIN" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "aitana-admin" in d["user"]["groupTags"]'; then
-  fail "acceptance identity is not a platform admin"
-fi
-ok "Platform admin local-jwt login"
-
-TENANT_KEY="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys,urllib.parse; print(urllib.parse.quote(json.load(sys.stdin)["user"]["tenantId"], safe=""))')"
-TENANT_PATH="$BACKEND_URL/api/admin/tenants/$TENANT_KEY"
-ROOT_PATH="$BACKEND_URL/api/admin/tenant-root/$TENANT_KEY"
-TENANT_PAYLOAD="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys; print(json.dumps({"tenant_id":json.load(sys.stdin)["user"]["tenantId"],"display_name":"自托管验收租户"}))')"
-TENANT_CREATE_CODE="$(curl -sS -o "$TMP_DIR/tenant-create.json" -w '%{http_code}' -X POST \
-  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  --data-binary "$TENANT_PAYLOAD" "$BACKEND_URL/api/admin/tenants")"
-case "$TENANT_CREATE_CODE" in
-  201|409) ;;
-  *) cat "$TMP_DIR/tenant-create.json" >&2; fail "tenant provisioning failed with $TENANT_CREATE_CODE" ;;
-esac
-curl -fsS -H "Authorization: Bearer $TOKEN" "$TENANT_PATH" > "$TMP_DIR/tenant.json"
-curl -fsS -H "Authorization: Bearer $TOKEN" "$ROOT_PATH" > "$TMP_DIR/root.json"
-python3 - "$TMP_DIR" "$SERVER_ID" <<'PY'
-import json,pathlib,sys
-p=pathlib.Path(sys.argv[1]); server=sys.argv[2]
-tenant=json.loads((p/'tenant.json').read_text())
-root=json.loads((p/'root.json').read_text())
-original=tenant['enabledMcpServers']
-(p/'tenant-original.json').write_text(json.dumps({'enabled_mcp_servers':original}))
-(p/'tenant-grant.json').write_text(json.dumps({'enabled_mcp_servers':sorted(set(original+[server]))}))
-(p/'root-original.json').write_text(json.dumps({'override':root['override']}))
-(p/'root-grant.json').write_text(json.dumps({'override':{
-    **root['override'], 'mcpServers':sorted(set(root['effective']['mcpServers']+[server]))
-}}))
-PY
-
-SERVER_BODY_ENABLED="$(python3 -c 'import json,sys; print(json.dumps({"url":sys.argv[1],"transport":"streamable-http","scope":"platform","enabled":True,"description":"real self-host MCP acceptance"}))' "$UPSTREAM_URL")"
-SERVER="$(curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary "$SERVER_BODY_ENABLED" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID")"
-SERVER_CREATED=1
-if ! printf '%s' "$SERVER" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["server_id"] and d["scope"]=="platform" and d["enabled"] is True'; then
-  fail "MCP Admin create response is invalid"
-fi
-ok "MCP Server registered through Admin API"
-
-# Health must be a genuine initialize handshake.
-HEALTH="$(curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID/health")"
-if ! printf '%s' "$HEALTH" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d.get("server")'; then
-  echo "$HEALTH" >&2
-  fail "MCP initialize health did not succeed"
-fi
-ok "Admin Health completed a real MCP initialize"
-
-DISCOVERY="$(curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID/discover")"
-printf '%s' "$DISCOVERY" > "$TMP_DIR/discovery.json"
-if ! python3 - "$TMP_DIR/discovery.json" <<'PY'
+python3 - "$ADMIN_EMAIL" "$ADMIN_PASSWORD" > "$TASK_DIR/login.json" <<'PY'
 import json,sys
-p=json.load(open(sys.argv[1]))
-assert p['ok'] is True, p
-names=[str(t.get('name','')) for t in p.get('tools',[])]
-assert names and any('map' in n.lower() for n in names), names
-apps=p.get('mcp_apps') or {}
-assert apps.get('supported') is True, apps
-uris=[str(x) for x in apps.get('resourceUris',[])]
-assert any(uri.startswith('ui://') for uri in uris), uris
+print(json.dumps({'email':sys.argv[1],'password':sys.argv[2]}))
 PY
-then
-  cat "$TMP_DIR/discovery.json" >&2
-  fail "MCP Discovery did not expose tool + MCP Apps resource"
-fi
-UI_URI="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next(x for x in d["mcp_apps"]["resourceUris"] if x.startswith("ui://")))' "$TMP_DIR/discovery.json")"
-ok "Admin Discovery returned tools and MCP Apps ui:// resource"
-
-# Before a Root + tenant grant exists, the authenticated browser-facing proxy must
-# reject the server even though the admin can diagnose it.
-INIT_BODY='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mcp-live-acceptance","version":"1"}}}'
-PRE_BIND_CODE="$(curl -sS -o "$TMP_DIR/pre-bind.json" -w '%{http_code}' -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' \
-  --data-binary "$INIT_BODY" \
-  "$BACKEND_URL/mcp/$SERVER_ID")"
-[ "$PRE_BIND_CODE" = "403" ] || { cat "$TMP_DIR/pre-bind.json" >&2; fail "MCP proxy should be 403 before Root + tenant grant, got $PRE_BIND_CODE"; }
-ok "MCP proxy denies unbound server"
-
-curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  --data-binary @"$TMP_DIR/tenant-grant.json" "$TENANT_PATH" >/dev/null
-TENANT_SAVED=1
-TENANT_ONLY_CODE="$(curl -sS -o "$TMP_DIR/tenant-only.json" -w '%{http_code}' -X POST \
-  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' --data-binary "$INIT_BODY" "$BACKEND_URL/mcp/$SERVER_ID")"
-[ "$TENANT_ONLY_CODE" = "403" ] || fail "tenant grant alone must not bypass Root, got $TENANT_ONLY_CODE"
+curl -fsS -H 'content-type: application/json' --data-binary @"$TASK_DIR/login.json" "$BACKEND_URL/api/auth/login" > "$TASK_DIR/session.json"
+TOKEN="$(python3 - "$TASK_DIR/session.json" <<'PY'
+import json,sys
+session=json.load(open(sys.argv[1])); assert 'aitana-admin' in session['user']['groupTags']; print(session['access_token'])
+PY
+)"
+curl -fsS -H "Authorization: Bearer $TOKEN" "$ROOT_PATH" > "$TASK_DIR/root.json"
+python3 - "$TASK_DIR" "$SERVER_ID" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); root=json.loads((p/'root.json').read_text())['agent']
+(p/'root-original.json').write_text(json.dumps({'agent':root}))
+(p/'root-grant.json').write_text(json.dumps({'agent':{**root,'mcpServers':list(dict.fromkeys(root['mcpServers']+[sys.argv[2]]))}}))
+PY
 curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  --data-binary @"$TMP_DIR/root-grant.json" "$ROOT_PATH" >/dev/null
-ROOT_SAVED=1
-ok "MCP Server granted by both tenant and current Root"
-
-# Run the real MCP SDK against the platform proxy from inside the backend
-# container. This exercises Bearer auth, Root + tenant allowlist, streamable HTTP,
-# initialize, tools/list, resources/list and resources/read end-to-end.
-PROXY_RESULT="$(docker compose exec -T backend uv run python scripts/verify_mcp_proxy_live.py \
-  --proxy-url "http://127.0.0.1:1956/mcp/$SERVER_ID" \
-  --token "$TOKEN" \
-  --resource-uri "$UI_URI" | tail -n 1)"
-printf '%s' "$PROXY_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["htmlBytes"] > 0 and d["uiResource"].startswith("ui://")' || {
-  echo "$PROXY_RESULT" >&2
-  fail "real MCP proxy protocol verification failed"
+  --data '{"url":"http://mcp-example-map:8080/mcp","transport":"streamable-http","enabled":true,"description":"shared MCP acceptance"}' \
+  "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID" > "$TASK_DIR/server.json"
+SERVER_CREATED=1
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID/health" > "$TASK_DIR/health.json"
+python3 - "$TASK_DIR/health.json" <<'PY'
+import json,sys
+assert json.load(open(sys.argv[1]))['ok'] is True
+PY
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID/discover" > "$TASK_DIR/discovery.json"
+UI_URI="$(python3 - "$TASK_DIR/discovery.json" <<'PY'
+import json,sys
+result=json.load(open(sys.argv[1])); assert result['ok'] and result['tools']; print(next(x for x in result['mcp_apps']['resourceUris'] if x.startswith('ui://')))
+PY
+)"
+INIT_BODY='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"shared-mcp-acceptance","version":"1"}}}'
+proxy_status() {
+  curl -sS -o "$TASK_DIR/proxy.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' --data-binary "$INIT_BODY" "$BACKEND_URL/mcp/$SERVER_ID"
 }
-ok "Authenticated MCP proxy transported initialize/tools/resources/read and HTML app resource"
-
-curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  --data-binary @"$TMP_DIR/tenant-original.json" "$TENANT_PATH" >/dev/null
-REVOKED_CODE="$(curl -sS -o "$TMP_DIR/revoked.json" -w '%{http_code}' -X POST \
-  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' --data-binary "$INIT_BODY" "$BACKEND_URL/mcp/$SERVER_ID")"
-[ "$REVOKED_CODE" = "403" ] || fail "tenant revocation must affect the existing token, got $REVOKED_CODE"
-curl -fsS -X PATCH -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  --data-binary @"$TMP_DIR/tenant-grant.json" "$TENANT_PATH" >/dev/null
-ok "Tenant revocation immediately denies the existing token despite Root binding"
-
-# Disabled servers remain diagnosable by Admin but disappear from runtime/proxy.
-SERVER_BODY_DISABLED="$(python3 -c 'import json,sys; print(json.dumps({"url":sys.argv[1],"transport":"streamable-http","scope":"platform","enabled":False,"description":"real self-host MCP acceptance"}))' "$UPSTREAM_URL")"
-curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary "$SERVER_BODY_DISABLED" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID" >/dev/null
-DISABLED_HEALTH="$(curl -fsS -X POST -H "Authorization: Bearer $TOKEN" "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID/health")"
-printf '%s' "$DISABLED_HEALTH" | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"] is True' || fail "disabled MCP server should remain Admin-diagnosable"
-DISABLED_CODE="$(curl -sS -o "$TMP_DIR/disabled.json" -w '%{http_code}' -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' \
-  --data-binary "$INIT_BODY" \
-  "$BACKEND_URL/mcp/$SERVER_ID")"
-[ "$DISABLED_CODE" = "404" ] || { cat "$TMP_DIR/disabled.json" >&2; fail "disabled MCP proxy should fail closed with 404, got $DISABLED_CODE"; }
-ok "Disabled MCP stays diagnosable but runtime proxy fails closed"
-
-printf '\nReal non-LLM MCP acceptance passed.\n'
-printf 'Covered: Admin registration, real initialize Health, Discovery, Root + tenant grants and revocation, proxy allowlist, tools/list, resources/read, MCP Apps HTML transport, disabled fail-closed.\n'
-printf 'Still requires real model/browser acceptance: Agent-selected MCP Tool Call and iframe rendering.\n'
+[ "$(proxy_status)" = "403" ]
+curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary @"$TASK_DIR/root-grant.json" "$ROOT_PATH" > /dev/null
+ROOT_SAVED=1
+docker compose exec -T backend uv run python scripts/verify_mcp_proxy_live.py --proxy-url "http://127.0.0.1:1956/mcp/$SERVER_ID" --token "$TOKEN" --resource-uri "$UI_URI" > "$TASK_DIR/result.log"
+tail -n 1 "$TASK_DIR/result.log" | python3 -c 'import json,sys; result=json.load(sys.stdin); assert result["ok"] and result["htmlBytes"] > 0'
+curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary @"$TASK_DIR/root-original.json" "$ROOT_PATH" > /dev/null
+[ "$(proxy_status)" = "403" ]
+curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data-binary @"$TASK_DIR/root-grant.json" "$ROOT_PATH" > /dev/null
+curl -fsS -X PUT -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' --data '{"url":"http://mcp-example-map:8080/mcp","enabled":false}' "$BACKEND_URL/api/admin/mcp-servers/$SERVER_ID" > /dev/null
+[ "$(proxy_status)" = "404" ]
+printf 'Shared MCP acceptance passed: health, discovery, Agent binding, proxy tools/resources/Apps, immediate revocation and disabled access.\n'

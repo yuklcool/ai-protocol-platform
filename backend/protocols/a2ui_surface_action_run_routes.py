@@ -366,7 +366,7 @@ async def post_surface_action_run(
     from tools.documents.access import DocumentUnavailable, validate_selection
 
     try:
-        selected_documents = validate_selection(idx.document_ids, user_id=user.uid, tenant_id=ctx.tenant_id)
+        selected_documents = validate_selection(idx.document_ids, user_id=user.uid)
     except DocumentUnavailable as exc:
         raise HTTPException(409, {"code": "DOCUMENT_UNAVAILABLE", "message": str(exc)}) from exc
 

@@ -1,10 +1,10 @@
 # MCP 服务与 MCP Apps 配置
 
-通过 `/admin/mcp-servers` 管理持久化服务注册表，无需直接编辑数据库。普通产品路径由 Root Agent 统一绑定和调用，见[完整配置流程](configuration-guide.md#7-skill原生工具与-mcp)。
+通过 `/admin/mcp-servers` 管理持久化服务注册表，无需直接编辑数据库。普通产品路径由 Root Agent 统一绑定和调用，见[完整配置流程](configuration-guide.md#3-agent-公共能力)。
 
 ## 1. 注册服务
 
-填写稳定服务 ID、backend 可达 URL、服务要求的传输方式和作用域，启用并保存。私有集成选择 Tenant；明确共享的服务才选择 Platform，后者需要平台管理员权限。租户管理员只能管理自己的作用域。
+管理员填写稳定服务 ID、backend 可达 URL 和传输方式，启用并保存。MCP 服务器由 Agent 统一管理和绑定；用户个人配置只包含专有 Skill 与信息。
 
 HTTP/SSE/Streamable HTTP 按实际服务契约选择。容器中的 `localhost` 不能访问另一个容器；Docker 服务名也不是浏览器能直接解析的公共 URL。
 
@@ -19,7 +19,7 @@ X-Api-Key=${MCP_API_KEY}
 
 若服务要求 Bearer，可将变量值设为带 `Bearer ` 前缀的完整头值，或按服务表单支持格式填写。变量在建立传输前解析，缺失时拒绝调用。
 
-自定义变量需要在 backend 的 Compose `environment` 中显式传递，只有 `.env` 中定义并不够，见[变量示例](configuration-guide.md#10-可选配置与环境变量传递)。编辑时留空保留旧头，选择“保存时清除所有请求头”才移除。
+自定义变量需要在 backend 的 Compose `environment` 中显式传递，只有 `.env` 中定义并不够，见[变量示例](configuration-guide.md)。编辑时留空保留旧头，选择“保存时清除所有请求头”才移除。
 
 ## 3. 健康与能力发现
 
@@ -37,7 +37,7 @@ X-Api-Key=${MCP_API_KEY}
 
 ## 4. Root 绑定和工具权限
 
-在 `/agent` 或租户 Root 覆盖中绑定服务，保存；在租户允许资源中选中，再通过权限组分配给用户。使用 `/chat/root-agent` 提出具体任务，观察模型真实选择和执行工具。
+在 Agent 的 MCP 列表中选择已注册服务并保存；只有当前绑定且启用的服务可被调用。撤销绑定对原令牌立即生效。
 
 Skill 不配置 MCP 连接。旧“绑定 Skill”入口、运行时与代理中的 Skill 回退已删除；Skill 写入接口收到 `toolConfigs.mcp` 会返回 422。当前 Root 的 MCP 列表为空时不允许使用任何 MCP。MCP Apps 上下文写入也必须通过当前授权及 Root 交互开关，旧会话不能恢复旧绑定。
 

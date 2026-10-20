@@ -70,74 +70,6 @@ def test_list_redacts_header_values(platform_admin: TestClient) -> None:
     assert "${MCP_KEY}" not in response.text
 
 
-def test_tenant_list_sees_platform_and_own_private_only(tenant_admin: TestClient) -> None:
-    rows = [
-        {"__id": "shared", "url": "https://shared.test/mcp", "scope": "platform"},
-        {"__id": "mine", "url": "https://mine.test/mcp", "scope": "tenant", "tenantId": "a.com"},
-        {"__id": "foreign", "url": "https://foreign.test/mcp", "scope": "tenant", "tenantId": "b.com"},
-        {"__id": "legacy", "url": "https://legacy.test/mcp"},
-    ]
-    with patch("admin.mcp_servers_routes.query_documents", return_value=rows):
-        response = tenant_admin.get("/api/admin/mcp-servers")
-
-    assert response.status_code == 200
-    assert [row["server_id"] for row in response.json()] == ["mine", "shared"]
-
-
-def test_tenant_can_create_own_server_and_docker_service_url(tenant_admin: TestClient) -> None:
-    with (
-        patch("admin.mcp_servers_routes.get_document", return_value=None),
-        patch("admin.mcp_servers_routes.set_document") as write,
-        patch("admin.mcp_servers_routes.clear_registry_cache") as clear_cache,
-        patch("admin.mcp_servers_routes.record_admin_action"),
-    ):
-        response = tenant_admin.put(
-            "/api/admin/mcp-servers/local-tools",
-            json={
-                "url": "http://mcp-sandbox:8080/mcp",
-                "transport": "streamable-http",
-                "scope": "tenant",
-                "headers": {"Authorization": "${MCP_SANDBOX_TOKEN}"},
-            },
-        )
-
-    assert response.status_code == 200
-    written = write.call_args.args[2]
-    assert written["tenantId"] == "a.com"
-    assert written["url"] == "http://mcp-sandbox:8080/mcp"
-    assert written["headers"]["Authorization"] == "${MCP_SANDBOX_TOKEN}"
-    assert "headers" not in response.json()
-    clear_cache.assert_called_once_with()
-
-
-def test_tenant_cannot_create_platform_server(tenant_admin: TestClient) -> None:
-    with patch("admin.mcp_servers_routes.set_document") as write:
-        response = tenant_admin.put(
-            "/api/admin/mcp-servers/shared",
-            json={"url": "https://shared.test/mcp", "scope": "platform"},
-        )
-    assert response.status_code == 403
-    write.assert_not_called()
-
-
-def test_tenant_cannot_overwrite_foreign_server(tenant_admin: TestClient) -> None:
-    existing = {
-        "url": "https://foreign.test/mcp",
-        "scope": "tenant",
-        "tenantId": "b.com",
-    }
-    with (
-        patch("admin.mcp_servers_routes.get_document", return_value=existing),
-        patch("admin.mcp_servers_routes.set_document") as write,
-    ):
-        response = tenant_admin.put(
-            "/api/admin/mcp-servers/foreign",
-            json={"url": "https://mine.test/mcp", "scope": "tenant"},
-        )
-    assert response.status_code == 403
-    write.assert_not_called()
-
-
 def test_audit_snapshot_never_contains_header_values(platform_admin: TestClient) -> None:
     with (
         patch("admin.mcp_servers_routes.get_document", return_value=None),
@@ -149,7 +81,6 @@ def test_audit_snapshot_never_contains_header_values(platform_admin: TestClient)
             "/api/admin/mcp-servers/shared",
             json={
                 "url": "https://shared.test/mcp",
-                "scope": "platform",
                 "headers": {"Authorization": "Bearer do-not-log"},
             },
         )
@@ -164,7 +95,6 @@ def test_audit_snapshot_never_contains_header_values(platform_admin: TestClient)
 def test_omitted_headers_preserve_existing_credentials(platform_admin: TestClient) -> None:
     existing = {
         "url": "https://shared.test/old",
-        "scope": "platform",
         "headers": {"Authorization": "${SHARED_MCP_TOKEN}"},
     }
     with (
@@ -175,7 +105,9 @@ def test_omitted_headers_preserve_existing_credentials(platform_admin: TestClien
     ):
         response = platform_admin.put(
             "/api/admin/mcp-servers/shared",
-            json={"url": "https://shared.test/new", "scope": "platform"},
+            json={
+                "url": "https://shared.test/new",
+            },
         )
 
     assert response.status_code == 200
@@ -183,7 +115,9 @@ def test_omitted_headers_preserve_existing_credentials(platform_admin: TestClien
 
 
 def test_delete_clears_runtime_registry_cache(platform_admin: TestClient) -> None:
-    existing = {"url": "https://shared.test/mcp", "scope": "platform"}
+    existing = {
+        "url": "https://shared.test/mcp",
+    }
     with (
         patch("admin.mcp_servers_routes.get_document", return_value=existing),
         patch("admin.mcp_servers_routes.delete_document") as delete,

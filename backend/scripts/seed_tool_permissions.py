@@ -14,7 +14,7 @@ Presets / flags:
 
 * ``--one`` — seed the **acmeenergy.com** (ONE) domain doc. Grants ``["*"]``
   by default; ``--one --explicit`` uses the ``ONE_TOOLS`` allowlist instead.
-  ONE is a trusted customer tenant; the REAL access boundary is each skill's
+  ONE is a trusted installation; the REAL access boundary is each skill's
   ``access_control: tagged [ONE]`` gate (which decides what a ONE user can even
   load), so the tool-permission doc is defense-in-depth.
 

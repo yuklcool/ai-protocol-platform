@@ -56,7 +56,7 @@ Score each axiom per [Product Axioms](../../../../product-axioms.md). Net score 
 | 3 | SKILLS, NOT FEATURES | 0 | No new skill concept introduced; this is rendering infrastructure |
 | 4 | RIGHT MODEL, RIGHT MOMENT | 0 | No model changes |
 | 5 | GRACEFUL DEGRADATION | +1 | All render paths have fallbacks (broken image → icon + alt text; SVG parse failure → code block; PDF → plain link) |
-| 6 | PROTOCOL OVER CUSTOM | +1 | SVG is W3C standard; images use standard markdown `![alt](url)`; PDF card uses standard `<a>` links |
+| 6 | PROTOCOL OVER CUSTOM | +1 | SVG is W3C standard; images use standard markdown `!alt`; PDF card uses standard `<a>` links |
 | 7 | API FIRST | 0 | Frontend-only; one optional lightweight backend endpoint for PDF metadata |
 | 8 | OBSERVABLE BY DEFAULT | 0 | No new data capture surface |
 | 9 | SECURE BY CONSTRUCTION | +1 | DOMPurify replaces v5's unsanitized `dangerouslySetInnerHTML` for SVG; images served via Next.js `<Image>` or constrained `<img>` |
@@ -173,9 +173,9 @@ ChatMarkdown (react-markdown + remark-gfm)
       │
       ├─ SVG block/inline ──► SVGBlock ──► DOMPurify.sanitize() ──► dangerouslySetInnerHTML
       │
-      ├─ ![alt](url) ────────► InlineImage ──► <img loading="lazy"> + error fallback
+      ├─ !alt ────────► InlineImage ──► <img loading="lazy"> + error fallback
       │
-      └─ [text](*.pdf) ──────► PDFCard ──► usePDFInfo(url)
+      └─ text ──────► PDFCard ──► usePDFInfo(url)
                                                     │
                                                     └─► GET /api/media/pdf-info
                                                               │
@@ -238,7 +238,7 @@ This is a rendering-only frontend feature; no new developer-facing resources or 
 - [ ] `InlineImage`: onError replaces with icon + alt text
 - [ ] `PDFCard`: renders filename, shows spinner while fetching, shows page count on success
 - [ ] `PDFCard`: shows filename only on 404 from `/api/media/pdf-info`
-- [ ] `ChatMarkdown`: SVG code block → `SVGBlock`, `![alt](url)` → `InlineImage`, `[text](x.pdf)` → `PDFCard`
+- [ ] `ChatMarkdown`: SVG code block → `SVGBlock`, `!alt` → `InlineImage`, `text` → `PDFCard`
 
 ### Backend Tests (pytest)
 - [ ] `count_pdf_pages_from_uri`: valid PDF header returns integer

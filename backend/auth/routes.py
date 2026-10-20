@@ -37,7 +37,6 @@ def _user_payload(user: User) -> dict:
         "uid": user.uid,
         "email": user.email,
         "domain": user.domain,
-        "tenantId": user.tenant_id or user.domain,
         "groupTags": sorted(user.group_tags),
         "authMode": user.auth_mode,
     }
@@ -137,3 +136,20 @@ async def provider_status() -> dict:
 @router.get("/whoami")
 def whoami(user: User = Depends(get_current_user)) -> dict:  # noqa: B008
     return _user_payload(user)
+
+
+@router.get("/profile")
+def get_profile(user: User = Depends(get_current_user)) -> dict:  # noqa: B008
+    from db.user_profiles import get_user_profile
+
+    return get_user_profile(user.uid).model_dump()
+
+
+from db.user_profiles import UserProfile  # noqa: E402
+
+
+@router.put("/profile")
+def update_profile(body: UserProfile, user: User = Depends(get_current_user)) -> dict:  # noqa: B008
+    from db.user_profiles import save_user_profile
+
+    return save_user_profile(user.uid, body).model_dump()

@@ -91,13 +91,6 @@ async def process_skill_request(
     app_name: str = "aitana_platform",
     agent_cache_scope: str | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Yield AG-UI events for one turn of ``skill_id``.
-
-    The session preflight is intentionally inside this function rather than the
-    HTTP route: both the simple ``sessionId`` wire shape and AG-UI's always-set
-    ``threadId`` therefore hit the same tenant/ownership boundary before any
-    index mutation or ADK SessionService call.
-    """
     skill = runtime_skill or get_skill(skill_id)
     if skill is None:
         skill = resolve_skill_ref(skill_id, getattr(user, "uid", None))
@@ -120,28 +113,10 @@ async def process_skill_request(
 
     thread_id = session_id or f"thread-{uuid.uuid4().hex[:12]}"
 
-    # Phase 3 tenant hard-boundary. Do this BEFORE _ensure_session_index(),
-    # agent construction, or ADK SessionService access. AG-UI HttpAgent always
-    # supplies threadId, even when the legacy top-level sessionId field is empty,
-    # so route-only checks are insufficient. A same uid may legitimately exist
-    # in multiple tenants (OIDC federation/service identities); neither uid nor
-    # a public/tagged ACL may cross the stable tenant boundary.
-    from db.chat_sessions import get_session_index, session_in_tenant
+    from db.chat_sessions import get_session_index
 
     existing_session = get_session_index(thread_id)
     if existing_session is not None:
-        if not session_in_tenant(existing_session, access.tenant_id):
-            logger.warning(
-                "skill stream: rejected cross-tenant thread reuse thread=%s caller_tenant=%s",
-                thread_id,
-                access.tenant_id or "(none)",
-            )
-            yield {
-                "type": "RUN_ERROR",
-                "message": "This conversation is not available in the current workspace.",
-                "code": "SESSION_TENANT_MISMATCH",
-            }
-            return
         if not access.can_access(existing_session):
             logger.warning("skill stream: rejected inaccessible thread=%s uid=%s", thread_id, user.uid)
             yield {
@@ -159,12 +134,12 @@ async def process_skill_request(
             }
             return
 
-    from observability.tenant_context import set_tenant_context
+    from observability.user_context import set_user_context
     from tools.documents.access import DocumentUnavailable, validate_selection
 
-    set_tenant_context(user)
+    set_user_context(user)
     try:
-        document_ids = validate_selection(list(document_ids or []), user_id=user.uid, tenant_id=access.tenant_id)
+        document_ids = validate_selection(list(document_ids or []), user_id=user.uid)
     except DocumentUnavailable as exc:
         yield {"type": "RUN_ERROR", "code": "DOCUMENT_UNAVAILABLE", "message": str(exc)}
         return
@@ -302,12 +277,6 @@ def _ensure_session_index(
     agent_id: str = "aitana_platform",
     app_name: str = "aitana_platform",
 ) -> None:
-    """Synchronously create/update the chat-session index for this turn.
-
-    Tenant ownership is preflighted by ``process_skill_request`` before this
-    helper is reached. Deep mutation helpers independently enforce the current
-    tenant context as defense in depth.
-    """
     from db.chat_sessions import (
         clear_provisional,
         create_session_index,

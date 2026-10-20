@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 _USER_A = User(uid="user_a", email="alice@example.com", domain="example.com")
 _USER_B = User(uid="user_b", email="bob@example.com", domain="example.com")
@@ -20,7 +21,7 @@ def app_a() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: _USER_A
+    app.dependency_overrides[get_current_user] = identity_dependency(_USER_A)
     return TestClient(app)
 
 
@@ -30,7 +31,7 @@ def app_b() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: _USER_B
+    app.dependency_overrides[get_current_user] = identity_dependency(_USER_B)
     return TestClient(app)
 
 
@@ -57,7 +58,7 @@ class TestPostFolders:
             resp = app_a.post("/api/folders", json={"name": "Q1 Review"})
         assert resp.status_code == 201
         assert resp.json()["id"] == "folder1"
-        mock_create.assert_called_once_with(user_id="user_a", name="Q1 Review", tenant_id="example.com")
+        mock_create.assert_called_once_with(user_id="user_a", name="Q1 Review")
 
     def test_create_folder_passes_uid_and_tenant(self, app_a: TestClient):
         calls = []
@@ -75,7 +76,7 @@ class TestPostFolders:
 
         with patch("db.folders.create_folder", side_effect=capturing_create):
             app_a.post("/api/folders", json={"name": "My Folder"})
-        assert calls == [("user_a", "My Folder", "example.com")]
+        assert calls == [("user_a", "My Folder", None)]
 
     def test_requires_auth(self, app_anon: TestClient):
         assert app_anon.post("/api/folders", json={"name": "test"}).status_code == 401
@@ -88,7 +89,7 @@ class TestGetFolders:
             resp = app_a.get("/api/folders")
         assert resp.status_code == 200
         assert resp.json()["folders"][0]["id"] == "f1"
-        mock_list.assert_called_once_with(user_id="user_a", tenant_id="example.com")
+        mock_list.assert_called_once_with(user_id="user_a")
 
 
 class TestGetFolderDocuments:
@@ -101,8 +102,8 @@ class TestGetFolderDocuments:
             resp = app_a.get("/api/folders/f1/documents")
         assert resp.status_code == 200
         assert resp.json()["documents"][0]["parseStatus"] == "parsed"
-        mock_get.assert_called_once_with(user_id="user_a", folder_id="f1", tenant_id="example.com")
-        mock_docs.assert_called_once_with(user_id="user_a", folder_id="f1", tenant_id="example.com")
+        mock_get.assert_called_once_with(user_id="user_a", folder_id="f1")
+        mock_docs.assert_called_once_with(user_id="user_a", folder_id="f1")
 
     def test_other_users_folder_is_403(self, app_a: TestClient):
         with patch("db.folders.get_folder", return_value={"id": "f1", "userId": "user_b"}):
@@ -194,7 +195,7 @@ class TestPreviewAndDownload:
         with patch("tools.documents.routes._get_document_record", return_value=dict(_UNICODE_DOC)):
             assert app_b.get("/api/documents/docU/preview").status_code == 403
 
-    def test_cross_tenant_metadata_is_403(self, app_a: TestClient):
-        doc = {**_PARSED_DOC, "tenantId": "other.example"}
+    def test_foreign_user_metadata_is_403(self, app_a: TestClient):
+        doc = {**_PARSED_DOC, "userId": "other-user"}
         with patch("tools.documents.routes._get_document_record", return_value=doc):
             assert app_a.get("/api/documents/doc123/download").status_code == 403

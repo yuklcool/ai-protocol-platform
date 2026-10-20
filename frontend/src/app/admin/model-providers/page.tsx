@@ -336,7 +336,7 @@ export default function ModelProvidersPage() {
         method: "POST",
       });
       await load();
-      setNotice("已用于平台 Root。租户覆盖与模型权限仍按各租户配置生效。");
+      setNotice("已用于 Root Agent。");
     });
   }
   async function remove(kind: "service" | "model", id: string, name: string) {
@@ -379,7 +379,7 @@ export default function ModelProvidersPage() {
   if (!isAdmin || !isPlatform)
     return (
       <Message>
-        此页面仅限平台管理员，租户管理员请在租户设置中管理模型权限。
+        此页面仅限管理员。
       </Message>
     );
   const ready = activeModel?.readiness.ready === true;
@@ -436,11 +436,11 @@ export default function ModelProvidersPage() {
               </strong>
             </p>
             <p className="mt-2 text-muted-foreground">
-              当前账号所在租户：{current?.tenant_api_name || "未解析到可用模型"}
-              {current?.tenant_allowed
+              当前 Root 模型：{current?.root_api_name || "未解析到可用模型"}
+              {current?.allowed
                 ? ""
-                : "（尚不可用于对话，请核对租户开通状态和模型权限）"}
-              。平台选择不会覆盖租户自己的模型设置和白名单。
+                : "（尚不可用于对话，请核对模型配置和驻留策略）"}
+              。
             </p>
             <Link
               className="mt-2 inline-block text-primary underline"
@@ -887,7 +887,7 @@ export default function ModelProvidersPage() {
                   </div>
                   {ready &&
                     current?.root_model === modelId &&
-                    (current.tenant_allowed ? (
+                    (current.allowed ? (
                       <Link
                         href="/chat/root-agent"
                         className="inline-block button-primary px-4 py-2 text-sm "
@@ -896,13 +896,7 @@ export default function ModelProvidersPage() {
                       </Link>
                     ) : (
                       <p role="status" className="text-sm">
-                        平台模型已选择；当前账号所在租户仍需开通或授权该模型。
-                        <Link
-                          className="ml-1 text-primary underline"
-                          href="/admin/tenants"
-                        >
-                          检查租户配置
-                        </Link>
+                        模型已选择，请检查模型连接和驻留策略后重试。
                       </p>
                     ))}
                 </div>

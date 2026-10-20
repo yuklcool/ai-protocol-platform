@@ -65,7 +65,7 @@ async def import_by_reference(req: ImportByReferenceRequest, user: _CurrentUser)
 
     self_hits = query_documents(
         _COLLECTION,
-        filters=[("tenantId", "==", user.tenant_id), ("userId", "==", user.uid), ("sourceUrl", "==", gs_url)],
+        filters=[("userId", "==", user.uid), ("sourceUrl", "==", gs_url)],
         limit=1,
     )
     if self_hits and self_hits[0].get("parseStatus") == "parsed":
@@ -102,7 +102,6 @@ async def import_by_reference(req: ImportByReferenceRequest, user: _CurrentUser)
     _store_document(
         doc_id,
         user_id=user.uid,
-        tenant_id=user.tenant_id,
         storage_backend="gcs-legacy",
         skill_id=req.skill_id,
         gs_url=gs_url,
@@ -141,7 +140,6 @@ def _clone_sentinel_to_user(
     _store_document(
         doc_id,
         user_id=user.uid,
-        tenant_id=user.tenant_id,
         storage_backend="gcs-legacy",
         skill_id=skill_id,
         gs_url=gs_url,

@@ -1,15 +1,4 @@
-"""MCP toolset registry backed by persisted ``mcp_servers`` configs.
-
-Phase-3 tenant rules:
-- every config has an explicit ``scope``: ``platform`` or ``tenant``;
-- tenant-private configs must carry the exact stable ``tenantId``;
-- historical rows with no scope fail closed;
-- the in-process TTL cache is keyed by ``(tenant_id, server_id)`` so one
-  tenant can never reuse another tenant's resolved endpoint/headers.
-
-Secret-bearing header values of the form ``${ENV_VAR}`` are resolved from the
-process environment at build time and never persisted as raw secrets.
-"""
+"""Shared MCP registry with credential references and bounded config caching."""
 
 from __future__ import annotations
 
@@ -27,13 +16,12 @@ from google.adk.tools.mcp_tool.mcp_session_manager import (
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
 
 from db.persistence import get_document
-from observability.tenant_context import get_current_tenant_id
-from tools.mcp.tenant_scope import mcp_config_visible_to_tenant, require_stable_tenant_id
+from tools.mcp.scope import mcp_config_enabled
 
 log = logging.getLogger(__name__)
 _MCP_COLLECTION = "mcp_servers"
 _CONFIG_CACHE_TTL = 60.0
-_config_cache: dict[tuple[str, str], tuple[float, dict | None]] = {}
+_config_cache: dict[str, tuple[float, dict | None]] = {}
 
 
 def clear_registry_cache() -> None:
@@ -41,17 +29,14 @@ def clear_registry_cache() -> None:
 
 
 def _cached_server_config(server_id: str) -> dict | None:
-    """Resolve one server config inside the current stable tenant boundary."""
-    tenant_id = require_stable_tenant_id(get_current_tenant_id())
-    cache_key = (tenant_id, server_id)
+    cache_key = server_id
     now = time.time()
     entry = _config_cache.get(cache_key)
     if entry is not None and (now - entry[0]) < _CONFIG_CACHE_TTL:
         return entry[1]
 
     config = get_document(_MCP_COLLECTION, server_id)
-    if not mcp_config_visible_to_tenant(config, tenant_id):
-        # Cache the tenant-relative miss, never the raw foreign config.
+    if not mcp_config_enabled(config):
         config = None
     _config_cache[cache_key] = (now, config)
     return config
@@ -104,7 +89,6 @@ def get_mcp_tools(server_ids: list[str]) -> list[McpToolset]:
 
 
 def get_mcp_tools_with_status(server_ids: list[str]) -> tuple[list[McpToolset], list[str]]:
-    """Resolve only MCP servers visible in the current authenticated tenant."""
     resolved: list[McpToolset] = []
     missing: list[str] = []
     for server_id in server_ids:
@@ -117,7 +101,7 @@ def get_mcp_tools_with_status(server_ids: list[str]) -> tuple[list[McpToolset], 
 
         if config is None:
             log.warning(
-                "mcp_registry: server %r missing or outside current tenant scope; skipping",
+                "mcp_registry: server %r missing or outside current user scope; skipping",
                 server_id,
             )
             missing.append(server_id)

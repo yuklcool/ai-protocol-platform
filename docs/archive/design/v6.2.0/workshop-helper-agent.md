@@ -292,7 +292,7 @@ Lives in `backend/integrations/workshop_enforcer.py` as a worked-example fork-st
 - [`docs/archive/design/v6.2.0/implemented/anonymous-group-id-auth.md`](implemented/anonymous-group-id-auth.md) — sprint 2.11 ✅
 - [`docs/archive/design/v6.2.0/implemented/budget-enforcement.md`](implemented/budget-enforcement.md) — sprint 2.12 ✅
 - [`docs/archive/design/v6.2.0/implemented/artefact-render-hook.md`](implemented/artefact-render-hook.md) — sprint 2.13 ✅
-- [`docs/archive/design/v6.2.0/implemented/tenant-id-span-attribute.md`](implemented/tenant-id-span-attribute.md) — sprint 2.14 ✅
+- `docs/archive/design/v6.2.0/implemented/tenant-id-span-attribute.md` — sprint 2.14 ✅
 - [`docs/archive/design/v6.2.0/implemented/multi-surface-rendering.md`](implemented/multi-surface-rendering.md) — sprint 2.9 ✅
 - [`docs/archive/design/v6.2.0/implemented/a2ui-surface-context.md`](implemented/a2ui-surface-context.md) — sprint 2.10 ✅
 - [`docs/talks/ai-ui-protocol-stack.md`](../../../talks/ai-ui-protocol-stack.md) — the protocol talk this workshop is the lab session of

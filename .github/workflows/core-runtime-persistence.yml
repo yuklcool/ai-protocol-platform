@@ -19,12 +19,9 @@ on:
       - backend/tests/unit/test_tools_registry.py
       - backend/tests/unit/test_rag_corpus.py
       - backend/tests/unit/test_budget_bootstrap.py
-      - backend/tests/unit/test_tenant_repository_budget_enforcer.py
       - backend/tests/integration/test_budget_callback.py
-      - backend/tests/integration/test_postgres_tenant_budget.py
       - backend/tests/integration/conftest.py
       - backend/tests/api_tests/test_tools_route.py
-      - backend/tests/api_tests/test_admin_tenants.py
       - backend/tests/api_tests/test_admin_prewarm.py
       - backend/tests/api_tests/test_buckets.py
       - backend/tests/api_tests/test_folders.py
@@ -46,12 +43,9 @@ on:
       - backend/tests/unit/test_tools_registry.py
       - backend/tests/unit/test_rag_corpus.py
       - backend/tests/unit/test_budget_bootstrap.py
-      - backend/tests/unit/test_tenant_repository_budget_enforcer.py
       - backend/tests/integration/test_budget_callback.py
-      - backend/tests/integration/test_postgres_tenant_budget.py
       - backend/tests/integration/conftest.py
       - backend/tests/api_tests/test_tools_route.py
-      - backend/tests/api_tests/test_admin_tenants.py
       - backend/tests/api_tests/test_admin_prewarm.py
       - backend/tests/api_tests/test_buckets.py
       - backend/tests/api_tests/test_folders.py
@@ -124,22 +118,20 @@ jobs:
               tests/unit/test_rag_corpus.py \
               tests/unit/test_budget_enforcer.py \
               tests/unit/test_budget_bootstrap.py \
-              tests/unit/test_tenant_repository_budget_enforcer.py \
               tests/integration/test_budget_callback.py \
               tests/api_tests/test_tools_route.py \
-              tests/api_tests/test_admin_tenants.py \
               tests/api_tests/test_admin_prewarm.py \
               tests/api_tests/test_buckets.py \
               tests/api_tests/test_folders.py
 
-      - name: Verify tenant budget ledger against PostgreSQL
+      - name: Verify user-owned data against PostgreSQL
         run: |
           docker compose up -d --wait postgres
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
             -v "$PWD/backend/tests:/app/tests:ro" \
-            backend uv run pytest -q tests/integration/test_postgres_tenant_budget.py tests/integration/test_postgres_document_metadata.py
+            backend uv run pytest -q tests/integration/test_postgres_user_reset.py tests/integration/test_postgres_document_metadata.py
 
       - name: Verify migrated runtime domains against PostgreSQL
         run: |
@@ -168,7 +160,6 @@ jobs:
           from channels._default_skill import get_user_default_skill, set_user_default_skill
           from channels.identity import IdentityResolver
           from db.persistence import get_repository
-          from db.tenant_repository import TenantIsolationError, TenantRepository
           import rag.corpus as corpus_mod
 
           repo = get_repository()
@@ -178,21 +169,11 @@ jobs:
           repo.set_document("ci_acceptance", "root", {"kind": "root"}, merge=False)
           assert repo.get_document("ci_acceptance", "root")["kind"] == "root"
 
-          # TenantRepository must fail closed on real PostgreSQL, not only Memory.
-          tenant_a = TenantRepository(repo, "tenant-a")
-          tenant_b = TenantRepository(repo, "tenant-b")
-          tenant_a.set_document("ci_tenant_docs", "a-1", {"value": 1}, merge=False)
-          tenant_b.set_document("ci_tenant_docs", "b-1", {"value": 2}, merge=False)
-          assert tenant_a.get_document("ci_tenant_docs", "a-1")["value"] == 1
-          assert tenant_b.get_document("ci_tenant_docs", "b-1")["value"] == 2
-          assert [row["__id"] for row in tenant_a.query_documents("ci_tenant_docs")] == ["a-1"]
-          assert [row["__id"] for row in tenant_b.query_documents("ci_tenant_docs")] == ["b-1"]
-          try:
-              tenant_a.get_document("ci_tenant_docs", "b-1")
-          except TenantIsolationError:
-              pass
-          else:
-              raise AssertionError("cross-tenant read must fail closed")
+          from db.user_profiles import UserProfile, get_user_profile, save_user_profile
+          save_user_profile("ci-profile-a", UserProfile(information="alice-only"))
+          save_user_profile("ci-profile-b", UserProfile(information="bob-only"))
+          assert get_user_profile("ci-profile-a").information == "alice-only"
+          assert get_user_profile("ci-profile-b").information == "bob-only"
 
           # Bucket metadata CRUD uses PostgreSQL through db.persistence.
           bucket = create_bucket(
@@ -265,8 +246,6 @@ jobs:
           repo.delete_document("channel_identities", "discord_4242")
           repo.delete_document("user_profiles", "ci-rag-user")
           repo.delete_document("ci_acceptance", "root")
-          tenant_a.delete_document("ci_tenant_docs", "a-1")
-          tenant_b.delete_document("ci_tenant_docs", "b-1")
           print("Core runtime PostgreSQL persistence checks passed")
           PY
 

@@ -37,7 +37,7 @@ class TestArtifactServiceSingleton:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ADK_ARTIFACT_BUCKET", None)
             svc = get_artifact_service()
-        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert type(svc).__name__ == "UserScopedArtifactService"
         assert isinstance(svc.delegate, InMemoryArtifactService)
 
     def test_with_bucket_env_returns_gcs(self):
@@ -45,7 +45,7 @@ class TestArtifactServiceSingleton:
 
         with patch.dict(os.environ, {"ADK_ARTIFACT_BUCKET": "my-test-bucket", "ARTIFACT_BACKEND": "gcs"}):
             svc = get_artifact_service()
-        assert type(svc).__name__ == "TenantScopedArtifactService"
+        assert type(svc).__name__ == "UserScopedArtifactService"
         assert isinstance(svc.delegate, GcsArtifactService)
 
     def test_reset_clears_singleton(self):
@@ -67,7 +67,7 @@ class TestSessionServiceSingleton:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("AGENT_ENGINE_ID", None)
             svc = get_session_service()
-        assert isinstance(svc, InMemorySessionService)
+        assert isinstance(svc.delegate, InMemorySessionService)
 
 
 class TestLocalSessionEscapeHatch:
@@ -84,7 +84,9 @@ class TestLocalSessionEscapeHatch:
             {"AGENT_ENGINE_ID": "999", "AITANA_LOCAL_SESSION": "memory"},
         ):
             svc = get_session_service()
-        assert isinstance(svc, InMemorySessionService), "AITANA_LOCAL_SESSION=memory must override AGENT_ENGINE_ID"
+        assert isinstance(svc.delegate, InMemorySessionService), (
+            "AITANA_LOCAL_SESSION=memory must override AGENT_ENGINE_ID"
+        )
 
     def test_force_in_memory_also_applies_to_memory_service(self):
         from google.adk.memory import InMemoryMemoryService

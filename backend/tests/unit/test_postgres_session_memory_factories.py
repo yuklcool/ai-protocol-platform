@@ -57,7 +57,7 @@ def test_postgres_memory_backend_uses_same_database_and_is_singleton():
 
     assert first is sentinel
     assert second is sentinel
-    factory.assert_called_once_with("postgresql://user:pass@postgres:5432/aip", require_tenant=True)
+    factory.assert_called_once_with("postgresql://user:pass@postgres:5432/aip", require_user=True)
 
 
 def test_postgres_memory_uri_does_not_expose_database_credentials():

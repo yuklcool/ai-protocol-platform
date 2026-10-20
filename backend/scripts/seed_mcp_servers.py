@@ -18,7 +18,7 @@ Usage:
     # Dry run
     uv run python scripts/seed_mcp_servers.py --env test --dry-run
 
-注册后在当前 Root 的 mcpServers 中绑定服务, 再设置租户允许资源和权限组。
+注册后在 Agent 的 mcpServers 中绑定服务。
 Skill 不再配置 MCP 连接, 此脚本只负责注册服务。
 """
 

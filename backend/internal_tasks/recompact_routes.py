@@ -49,46 +49,51 @@ class RecompactTask(BaseModel):
 
 @router.post("/recompact")
 async def recompact(body: RecompactTask, caller: _TaskCaller) -> dict:
-    if not second_pass_enabled():
-        # Flag-off is total: the enqueue side is also disabled, so this only
-        # catches stragglers after a flag flip.
-        raise HTTPException(status_code=404, detail="Not found")
+    from observability.user_context import authorized_resource_user
 
-    from adk.agui import APP_NAME
-    from adk.compaction_summarizer import build_compaction_summarizer
-    from adk.session import get_session_service
+    with authorized_resource_user(body.user_id):
+        if not second_pass_enabled():
+            # Flag-off is total: the enqueue side is also disabled, so this only
+            # catches stragglers after a flag flip.
+            raise HTTPException(status_code=404, detail="Not found")
 
-    session_service = get_session_service()
-    try:
-        session = await session_service.get_session(app_name=APP_NAME, user_id=body.user_id, session_id=body.session_id)
-    except Exception as exc:
-        # Transient store trouble — retryable by definition.
-        raise HTTPException(status_code=503, detail=f"could not read session: {exc}") from exc
-    if session is None:
-        # Deleted since enqueue (user delete, sweep). Permanent: do not retry.
-        logger.info("internal_tasks.recompact: session %s gone; dropping task", body.session_id)
-        return {"dropped": "session not found"}
+        from adk.agui import APP_NAME
+        from adk.compaction_summarizer import build_compaction_summarizer
+        from adk.session import get_session_service
 
-    summarizer = build_compaction_summarizer()
-    if summarizer is None:
-        raise HTTPException(status_code=503, detail="no summariser model available")
+        session_service = get_session_service()
+        try:
+            session = await session_service.get_session(
+                app_name=APP_NAME, user_id=body.user_id, session_id=body.session_id
+            )
+        except Exception as exc:
+            # Transient store trouble — retryable by definition.
+            raise HTTPException(status_code=503, detail=f"could not read session: {exc}") from exc
+        if session is None:
+            # Deleted since enqueue (user delete, sweep). Permanent: do not retry.
+            logger.info("internal_tasks.recompact: session %s gone; dropping task", body.session_id)
+            return {"dropped": "session not found"}
 
-    try:
-        outcome = await run_second_pass(
-            session=session,
-            session_service=session_service,
-            summarizer=summarizer,
-            for_compaction_end_ts=body.compaction_end_ts,
-        )
-    except Exception as exc:
-        # Nothing was appended (the append is the final statement) — retry.
-        logger.warning("internal_tasks.recompact: pass raised %s: %s", type(exc).__name__, exc)
-        raise HTTPException(status_code=503, detail=f"second pass failed: {type(exc).__name__}") from exc
+        summarizer = build_compaction_summarizer()
+        if summarizer is None:
+            raise HTTPException(status_code=503, detail="no summariser model available")
 
-    if outcome.retryable:
-        raise HTTPException(status_code=503, detail="summariser declined; retrying")
+        try:
+            outcome = await run_second_pass(
+                session=session,
+                session_service=session_service,
+                summarizer=summarizer,
+                for_compaction_end_ts=body.compaction_end_ts,
+            )
+        except Exception as exc:
+            # Nothing was appended (the append is the final statement) — retry.
+            logger.warning("internal_tasks.recompact: pass raised %s: %s", type(exc).__name__, exc)
+            raise HTTPException(status_code=503, detail=f"second pass failed: {type(exc).__name__}") from exc
 
-    return _public(outcome)
+        if outcome.retryable:
+            raise HTTPException(status_code=503, detail="summariser declined; retrying")
+
+        return _public(outcome)
 
 
 def _public(outcome: SecondPassOutcome) -> dict:

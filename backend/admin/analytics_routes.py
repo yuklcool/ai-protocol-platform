@@ -1,14 +1,3 @@
-"""GET /api/admin/analytics/* — session & trace analytics for admins (9.5 Phase 1).
-
-Read-only, `aitana-admin`-gated. Lists chat sessions (the `chat_sessions` mirror)
-and reconstructs a session's full trace (messages, tool calls, delegations) by
-reusing the `sessions_route` reconstruction — no new capture. Access-scoped:
-Tenant-scoped by stable tenantId; legacy domains require a trusted mapping.
-Platform administrators can inspect attributed sessions across tenant scopes.
-
-See docs/archive/design/v6.9.0/analytics-and-reporting.md.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -21,8 +10,7 @@ from adk.agui import APP_NAME
 from admin.scope import AdminScope, Scope
 from db.chat_sessions import get_session_index, update_session_fields
 from db.persistence import get_document, query_documents
-from db.tenants import tenant_id_for_domain
-from observability.tenant_context import authorized_resource_tenant
+from observability.user_context import authorized_resource_user
 from protocols.sessions_route import (
     _author_agent_map,
     _earliest_event_ts,
@@ -39,21 +27,9 @@ router = APIRouter(prefix="/api/admin/analytics", tags=["admin-analytics"])
 _SESSIONS_COLLECTION = "chat_sessions"
 
 
-def _session_tenant(row: Any) -> str:
-    """Use explicit tenant ownership; legacy domains require a trusted mapping."""
-    if isinstance(row, dict):
-        tenant = row.get("tenantId") or row.get("tenant_id")
-        domain = row.get("ownerDomain") or row.get("owner_domain")
-    else:
-        tenant = getattr(row, "tenant_id", "") or getattr(row, "tenantId", "")
-        domain = getattr(row, "owner_domain", "") or getattr(row, "ownerDomain", "")
-    return str(tenant or (tenant_id_for_domain(domain) if domain else "") or "").strip()
-
-
 async def _canonical_session(idx: Any, session_id: str, owner: str, scope: AdminScope):
-    tenant = _session_tenant(idx)
-    scope.assert_may_tenant(tenant)
-    with authorized_resource_tenant(tenant):
+    scope.assert_platform()
+    with authorized_resource_user(owner):
         service = get_messages_session_service()
         return await service.get_session(
             app_name=getattr(idx, "app_name", "") or APP_NAME, user_id=owner, session_id=session_id
@@ -199,11 +175,6 @@ def list_sessions(
     q: str | None = Query(None, description="Substring match on title / owner / skill."),
     limit: int = Query(100, le=500),
 ) -> SessionListResponse:
-    """List chat sessions in scope (newest first), optionally filtered.
-
-    Tenant-scoped by explicit ownership, with trusted legacy domain mappings as
-    a migration bridge. Unattributed rows fail closed for all administrators.
-    """
     docs = query_documents(_SESSIONS_COLLECTION)
     rows: list[SessionRow] = []
     hidden_empty = 0
@@ -221,9 +192,6 @@ def list_sessions(
             archived=bool(d.get("archivedAt")),
             transcript_lost=bool(d.get("transcriptLost")),
         )
-        # Email domain is display metadata, never an inferred tenant grant.
-        if not scope.may_tenant(_session_tenant(d)):
-            continue
         # Never-used husks: a chat page was opened but nothing was ever sent.
         # Recent ones carry `provisional: true` (issue #38) and are already
         # hidden from user lists; the pre-flag ancestors (Apr-Jul 2026) are the
@@ -329,28 +297,6 @@ def _resolve_documents(doc_ids: list[str]) -> list[TraceDocument]:
 
 @router.get("/sessions/{session_id}", response_model=SessionTrace)
 async def get_session_trace(session_id: str, scope: Scope) -> SessionTrace:
-    """Reconstruct a session's full trace (messages + tool calls + delegations).
-
-    **Tenant-scoped.** A tenant admin may read the full transcript of sessions
-    belonging to their own domain; a platform admin may read any.
-
-    This was deliberately platform-only in Phase 1 pending a product ruling
-    (CHAT-TRANSCRIPT-ACCESS), because it returns whole conversations and
-    disclosing is not reversible. Ruled on 2026-07-21: the tenant is the data
-    controller for its own users' conversations, so its admins may read them.
-
-    Two consequences that follow from that ruling and are therefore intended:
-      * Tool ``argsJson`` is no longer redacted for tenant admins. Redacting the
-        arguments while serving the conversation they came from protected
-        nothing, and dead security code reads as a guarantee that isn't running.
-      * A tenant admin can see content that surfaced in a user's session even if
-        it came from a document that user owned privately. Same-tenant, and
-        implied by "full conversations", but worth knowing.
-
-    The tenant boundary itself is unchanged: ``assert_may`` still refuses a
-    session belonging to another domain, and a session with a blank
-    ``ownerDomain`` (pre-backfill, unattributable) fails closed for tenant scope.
-    """
     idx = get_session_index(session_id)
     if idx is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -358,7 +304,6 @@ async def get_session_trace(session_id: str, scope: Scope) -> SessionTrace:
     owner_domain = getattr(idx, "owner_domain", "") or getattr(idx, "ownerDomain", "") or ""
     skill_id = getattr(idx, "skill_id", "") or getattr(idx, "skillId", "")
     # Fail closed on unknown ownership: an unattributable session must not be
-    # readable by a tenant admin just because we can't say whose it is.
     session = await _canonical_session(idx, session_id, owner, scope)
     # A mirror row can outlive its canonical session (Agent-Engine eviction, a
     # turn that indexed but never persisted events). `session is None` is that
@@ -616,7 +561,7 @@ def _reconcile_findings(r: ReconcileReport) -> list[ReconcileFinding]:
         add(
             "OWNER_DOMAIN_BLANK",
             "warn",
-            "Blank ownerDomain — this session is INVISIBLE to tenant admins (scope fails closed) "
+            "Blank ownerDomain — this session is INVISIBLE to user admins (scope fails closed) "
             "and shows only to platform admins.",
         )
 
@@ -642,7 +587,6 @@ async def _build_reconcile(session_id: str, scope: AdminScope) -> ReconcileRepor
     r.mirror_turn_count = int(getattr(idx, "turn_count", 0) or 0)
     r.provisional = bool(getattr(idx, "provisional", False))
     r.archived = bool(getattr(idx, "archived_at", None))
-    # Same tenant boundary as the trace endpoint — a reconcile reports counts,
     # but it still names a session and its owner, so it is scoped identically.
     session = await _canonical_session(idx, session_id, r.owner_uid, scope)
     r.canonical_present = session is not None
@@ -705,8 +649,6 @@ async def reconcile_sweep(
     docs = query_documents(_SESSIONS_COLLECTION)
     rows = []
     for d in docs:
-        if not scope.may_tenant(_session_tenant(d)):
-            continue
         if skill_id and str(d.get("skillId", "") or "") != skill_id:
             continue
         rows.append((_ts(d.get("lastMessageAt")) or _ts(d.get("firstMessageAt")), str(d.get("__id", ""))))
@@ -774,8 +716,6 @@ async def mark_transcript_lost(
     docs = query_documents(_SESSIONS_COLLECTION)
     rows = []
     for d in docs:
-        if not scope.may_tenant(_session_tenant(d)):
-            continue
         rows.append((_ts(d.get("lastMessageAt")) or _ts(d.get("firstMessageAt")), str(d.get("__id", ""))))
     rows.sort(reverse=True)
 
@@ -803,9 +743,8 @@ async def mark_transcript_lost(
             continue
         marked.append(rep.session_id)
         if not dry_run:
-            tenant = _session_tenant(idx)
-            scope.assert_may_tenant(tenant)
-            with authorized_resource_tenant(tenant):
+            scope.assert_platform()
+            with authorized_resource_user(idx.owner_uid):
                 update_session_fields(rep.session_id, {"transcriptLost": True})
 
     log.info(

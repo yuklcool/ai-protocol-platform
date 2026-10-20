@@ -11,7 +11,7 @@
 | Order | Doc | Priority | Est | Depends on | Notes |
 |-------|-----|----------|-----|-----------|-------|
 | 3.1 ✅ | [rag-document-corpus.md](implemented/rag-document-corpus.md) | P1 | 3d | document-data-layer (v6.1.0 ✅), session-and-memory (v6.0.0 ✅) | Replaces ADK artifact layer for user documents with Vertex AI RAG Engine. Per-user corpus, persistent across backend restarts, semantic retrieval. Eliminates orphan probe + full-doc context injection. Adds `aiplatform docs` CLI commands. |
-| 3.2 ✅ | [client-tenant-management.md](implemented/client-tenant-management.md) | P1 | 1d | rag-document-corpus (3.1 ✅) | Admin CRUD API + `aiplatform client` CLI for `clients/{domain}` Firestore config. Closes the Firestore-console-as-interface gap; enables per-client GCS bucket routing without console access. |
+| 3.2 ✅ | client-tenant-management.md | P1 | 1d | rag-document-corpus (3.1 ✅) | Admin CRUD API + `aiplatform client` CLI for `clients/{domain}` Firestore config. Closes the Firestore-console-as-interface gap; enables per-client GCS bucket routing without console access. |
 
 ---
 
@@ -20,7 +20,7 @@
 | Sprint | Doc | Status |
 |--------|-----|--------|
 | 3.1 ✅ | [rag-document-corpus.md](implemented/rag-document-corpus.md) | Implemented 2026-06-01 |
-| 3.2 ✅ | [client-tenant-management.md](implemented/client-tenant-management.md) | Implemented 2026-06-02 |
+| 3.2 ✅ | client-tenant-management.md | Implemented 2026-06-02 |
 
 ---
 

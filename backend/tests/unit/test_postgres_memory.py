@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 from google.adk.events import Event
 from google.adk.sessions import Session
@@ -10,29 +8,6 @@ from google.genai import types
 from adk.postgres_memory import PostgresMemoryService
 from db.firestore_inmemory import InMemoryFirestoreClient
 from db.repositories.memory import MemoryRepository
-
-
-@pytest.mark.asyncio
-async def test_same_uid_and_session_id_are_isolated_by_trusted_tenant():
-    repository = _repository()
-    service = PostgresMemoryService(repository=repository, require_tenant=True)
-    for tenant in ("tenant-a", "tenant-b"):
-        with patch("adk.postgres_memory.get_current_tenant_id", return_value=tenant):
-            await service.add_session_to_memory(
-                Session(
-                    id="same-session",
-                    app_name="root-agent",
-                    user_id="same-uid",
-                    events=[_event(f"secret {tenant}")],
-                )
-            )
-    reconstructed = PostgresMemoryService(repository=repository, require_tenant=True)
-    with patch("adk.postgres_memory.get_current_tenant_id", return_value="tenant-b"):
-        response = await reconstructed.search_memory(app_name="root-agent", user_id="same-uid", query="secret")
-    assert [m.content.parts[0].text for m in response.memories] == ["secret tenant-b"]
-    with patch("adk.postgres_memory.get_current_tenant_id", return_value=""):
-        with pytest.raises(PermissionError):
-            await reconstructed.search_memory(app_name="root-agent", user_id="same-uid", query="secret")
 
 
 def _repository() -> MemoryRepository:

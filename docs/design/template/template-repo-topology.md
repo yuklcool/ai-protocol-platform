@@ -287,7 +287,7 @@ The good news is that most are cosmetic —
 ```
 backend/adk/callbacks.py:60         # comment example: "yourcompany.com and acmeenergy.com"
 AccessControlEditor.tsx:94          placeholder="acmeenergy.com"
-backend/auth/admin_roles.py:39      docstring: ``tenant-admin:acmeenergy.com``
+backend/auth/admin_roles.py:39      docstring: ``user-admin:acmeenergy.com``
 cli/aiplatform/commands/bq.py:46    _DATA_PROJECT = "your-entsoe-project"   ← genuinely functional
 ```
 

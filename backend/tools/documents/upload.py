@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 import db.folders as folders_db
 from auth import User, get_current_user
-from db.clients import UnmappedTenantError, resolve_documents_bucket
+from config.document_storage import resolve_documents_bucket
 from db.persistence import set_document
 from object_storage import get_object_storage, object_storage_backend_name
 from object_storage.gcs import GcsObjectStorage, LegacyGcsObjectStorage
@@ -51,26 +51,12 @@ def _resolve_content_type(filename: str, client_content_type: str | None) -> str
     )
 
 
-def _tenant_namespace(user: User) -> str:
-    """Return the trusted stable tenant scope for document persistence.
-
-    Explicit ``tenant_id`` wins. ``domain`` is retained only as the legacy
-    identity mapping used by pre-Phase-3 accounts; unlike the old implementation
-    we never parse an arbitrary email string or invent ``user-<uid>`` as a
-    pseudo-tenant. Missing scope fails closed.
-    """
-    tenant_id = (getattr(user, "tenant_id", None) or getattr(user, "domain", None) or "").strip()
-    if not tenant_id:
-        raise UnmappedTenantError("Authenticated identity has no stable tenant scope")
-    return tenant_id
-
-
 def _storage_for_user(user: User):
     backend = object_storage_backend_name()
-    tenant_id = _tenant_namespace(user)
+    storage_user_id = user.uid
     if backend == "gcs":
-        return GcsObjectStorage(resolve_documents_bucket(user)), tenant_id, backend
-    return get_object_storage(), tenant_id, backend
+        return GcsObjectStorage(resolve_documents_bucket(user)), storage_user_id, backend
+    return get_object_storage(), storage_user_id, backend
 
 
 class ParsedDocumentResponse(BaseModel):
@@ -168,14 +154,13 @@ def _store_document(
     folder_id: str | None,
     parse_result: _ParseResult,
     now: datetime,
-    tenant_id: str = "",
     source_url: str = "",
     storage_backend: str = "",
     content_type: str = "",
     gs_url: str | None = None,
 ) -> None:
-    if not tenant_id.strip():
-        raise PermissionError("stable tenant id is required to store a document")
+    if not user_id.strip():
+        raise PermissionError("User ID is required to store a document")
     if gs_url and not source_url:
         source_url = gs_url
     if not storage_backend and source_url.startswith("gs://"):
@@ -187,7 +172,6 @@ def _store_document(
     doc = {
         "skillId": skill_id,
         "userId": user_id,
-        "tenantId": tenant_id,
         "sourceUrl": source_url,
         "sourceFormat": source_format,
         "contentType": content_type,
@@ -245,20 +229,12 @@ async def upload_document(
         raise HTTPException(status_code=413, detail="文件超过 25 MB,请拆分后上传。")
 
     try:
-        storage, tenant_id, storage_backend = _storage_for_user(user)
-    except UnmappedTenantError as exc:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "TENANT_NOT_PROVISIONED",
-                "message": "Document storage is not provisioned for this organization.",
-            },
-        ) from exc
+        storage, storage_user_id, storage_backend = _storage_for_user(user)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=f"Object storage is not configured: {exc}") from exc
 
-    effective_folder_id = folder_id.strip() or folders_db.ensure_default_folder(user.uid, tenant_id=tenant_id)
-    if folder_id.strip() and folders_db.get_folder(user.uid, effective_folder_id, tenant_id=tenant_id) is None:
+    effective_folder_id = folder_id.strip() or folders_db.ensure_default_folder(user.uid)
+    if folder_id.strip() and folders_db.get_folder(user.uid, effective_folder_id) is None:
         raise HTTPException(status_code=404, detail="Folder not found")
 
     safe_filename = file.filename.replace("/", "_").replace("\\", "_")
@@ -269,7 +245,6 @@ async def upload_document(
     now = datetime.now(UTC)
     base = {
         "user_id": user.uid,
-        "tenant_id": tenant_id,
         "skill_id": skill_id,
         "storage_backend": storage_backend,
         "storage_path": storage_path,
@@ -283,7 +258,7 @@ async def upload_document(
 
     try:
         await file.seek(0)
-        object_info = await asyncio.to_thread(storage.put_fileobj, tenant_id, storage_path, file.file)
+        object_info = await asyncio.to_thread(storage.put_fileobj, storage_user_id, storage_path, file.file)
         source_url = object_info.uri
     except Exception as exc:
         _store_document(doc_id, source_url="", parse_result=_ParseResult("failed", [], str(exc), None), **base)
@@ -303,7 +278,6 @@ async def upload_document(
             effective_folder_id,
             doc_delta=1,
             parsed_delta=1 if parse_status == "parsed" else 0,
-            tenant_id=tenant_id,
         )
     except Exception as exc:
         log.warning("Failed to update folder counts for %s: %s", effective_folder_id, exc)

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import User, get_current_user
+from tests.support.identity import identity_dependency
 
 USER = User(uid="user_a", email="alice@example.com", domain="example.com")
 DOC = {
@@ -26,7 +27,7 @@ def client() -> TestClient:
 
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: USER
+    app.dependency_overrides[get_current_user] = identity_dependency(USER)
     return TestClient(app)
 
 
@@ -53,7 +54,6 @@ def test_delete_removes_binary_then_metadata() -> None:
         "f1",
         doc_delta=-1,
         parsed_delta=-1,
-        tenant_id="example.com",
     )
 
 

@@ -41,6 +41,7 @@ from protocols.artefact_review import (
     register_artefact_reviewer,
 )
 from protocols.mcp_proxy import router
+from tests.support.identity import identity_dependency
 
 
 def _make_client(uid: str = "viewer") -> TestClient:
@@ -48,8 +49,6 @@ def _make_client(uid: str = "viewer") -> TestClient:
         uid=uid,
         email=f"{uid}@example.com",
         domain="example.com",
-        tenant_id="tenant-a",
-        permission_group_ids=frozenset({"maps"}),
     )
     ctx = AccessContext(uid=uid, email=user.email, domain=user.domain, group_tags=frozenset())
 
@@ -61,12 +60,11 @@ def _make_client(uid: str = "viewer") -> TestClient:
         request.state.access = ctx
         return await call_next(request)
 
-    test_app.dependency_overrides[get_current_user] = lambda: user
+    test_app.dependency_overrides[get_current_user] = identity_dependency(user)
     return TestClient(test_app)
 
 
 _SERVER = {
-    "scope": "platform",
     "name": "test mcp",
     "transport": "http",
     "url": "https://upstream.example.com/mcp",
@@ -106,21 +104,11 @@ def _upstream_opaque_response(body: bytes = b'{"jsonrpc":"2.0","id":1,"result":{
 
 @pytest.fixture(autouse=True)
 def _reset_registry():
-    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
     from db.persistence import get_repository, reset_repository_for_testing
     from db.repositories.memory import MemoryRepository
-    from db.tenants import TenantConfig, TenantDirectory
 
     reset_repository_for_testing(MemoryRepository())
     repo = get_repository()
-    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledMcpServers=["map-server"]))
-    repo.set_document(
-        GROUP_COLLECTION,
-        "maps",
-        PermissionGroup(id="maps", tenantId="tenant-a", label="maps", mcpServers=["map-server"]).model_dump(
-            by_alias=True
-        ),
-    )
     repo.set_document("mcp_servers", "map-server", _SERVER)
     clear_registered_artefact_reviewer()
     yield

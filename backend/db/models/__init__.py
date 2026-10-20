@@ -27,7 +27,7 @@ from db.models.platform_config import (
     CompactionSettings,
     PlatformConfig,
 )
-from db.models.root_agent import RootAgentConfig, RootAgentInteraction, RootAgentTenantOverride
+from db.models.root_agent import RootAgentConfig, RootAgentInteraction
 
 # Agent Skills spec: lowercase kebab-case, no leading/trailing/consecutive hyphens
 _NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
@@ -196,7 +196,6 @@ class SkillMetadata(BaseModel):
     job: bool = False
     job_floor: DelegateFloor = Field(default="confirm", alias="jobFloor")
     # v6.11.0 — dropdown grouping. Free-form so forks define their own taxonomy;
-    # the ONE tenant uses `assistant` (general front doors), `specialist`
     # (domain experts — PPA, compare), `tool` (narrow utilities — researcher).
     # `None` falls into an "Other skills" bucket. This is a PRESENTATION hint
     # only (the skill dropdown groups by it); it never gates access — that stays
@@ -236,16 +235,6 @@ class Protocols(BaseModel):
 
 
 class ExampleDocument(BaseModel):
-    """One pre-loaded example document a skill offers in its WorkbenchPane
-    Workspace tab when a chat is fresh. Click → existing doc-import-by-reference
-    path (no upload). See docs/archive/design/v6.4.0/skill-onboarding.md.
-
-    ``bucket`` is OPTIONAL: when empty, the skills API fills it per-request from
-    the caller's tenant ``documents_bucket`` (``resolve_documents_bucket``), so a
-    shared SKILL.md points every env's library at that env's own llmops bucket
-    (which is what aitana3 indexes) — no hardcoded per-env bucket, no customer
-    project. See `_fill_welcome_buckets` in skills/routes.py."""
-
     bucket: str = ""
     object: str
     label: str
@@ -256,14 +245,6 @@ class ExampleDocument(BaseModel):
 
 
 class BucketBrowserConfig(BaseModel):
-    """Sidebar bucket-browser config — mounts a GCSFileBrowser in the
-    sidebar as a 3rd SidebarSection when set. SA must have read access
-    to the bucket (existing v6.3.0 client-tenant-management grants).
-
-    ``bucket`` is OPTIONAL — empty means "use the caller's tenant
-    ``documents_bucket``", filled per-request by the skills API (see
-    ``ExampleDocument``)."""
-
     bucket: str = ""
     root_path: str = Field(default="", alias="rootPath")
     label: str = ""
@@ -305,11 +286,7 @@ class WelcomeConfig(BaseModel):
     example_documents: list[ExampleDocument] = Field(default_factory=list, alias="exampleDocuments")
     example_prompts: list[ExamplePrompt] = Field(default_factory=list, alias="examplePrompts")
     bucket_browser: BucketBrowserConfig | None = Field(default=None, alias="bucketBrowser")
-    # Which TENANT owns this library — the skills API fills any empty
-    # example_documents / bucket_browser `bucket` from `clients/{documents_tenant}.
-    # documents_bucket` (that tenant's per-env llmops bucket), VIEWER-INDEPENDENT.
     # Empty = fall back to the viewer's own documents_bucket (back-compat).
-    documents_tenant: str = Field(default="", alias="documentsTenant")
 
     model_config = {"populate_by_name": True}
 
@@ -464,10 +441,7 @@ class SkillConfig(BaseModel):
     avatar: str = ""
     owner_email: str = Field(default="", alias="ownerEmail")
     owner_id: str = Field(default="", alias="ownerId")
-    # Stable tenant boundary. Platform-owned skills intentionally keep this
     # empty and are globally visible; user/domain-owned skills must carry the
-    # authenticated tenant before a tenant-aware request can use them.
-    tenant_id: str = Field(default="", alias="tenantId")
     access_control: AccessControl = Field(default_factory=AccessControl, alias="accessControl")
     protocols: Protocols = Field(default_factory=Protocols)
     initial_message: str = Field(default="", alias="initialMessage")
@@ -623,7 +597,6 @@ __all__ = [
     "Protocols",
     "RootAgentConfig",
     "RootAgentInteraction",
-    "RootAgentTenantOverride",
     "SkillConfig",
     "SkillMetadata",
     "UserProfile",

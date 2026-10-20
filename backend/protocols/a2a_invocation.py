@@ -75,7 +75,6 @@ class _A2APrincipal:
 
 
 def _a2a_owner_scope(context: Any) -> str:
-    """Partition A2A tasks by stable tenant and authenticated UID."""
     name = str(getattr(getattr(context, "user", None), "user_name", "") or "").strip()
     return name or "a2a:unauthenticated"
 
@@ -151,11 +150,8 @@ class A2AAuthMiddleware(BaseHTTPMiddleware):
         # Make the resolved user available downstream (e.g. for audit
         # logging). The A2A SDK's DefaultServerCallContextBuilder reads its
         # principal from request.scope['user'], not request.state, so populate
-        # both. The principal name is deliberately tenant+UID scoped; relying
-        # on UID alone reopens the same-UID cross-tenant task collision.
         request.state.user = user
-        tenant = (getattr(user, "tenant_id", "") or getattr(user, "domain", "") or "unknown").strip()
-        request.scope["user"] = _A2APrincipal(f"a2a:{tenant}:{user.uid}")
+        request.scope["user"] = _A2APrincipal(user.uid)
         return await call_next(request)
 
 
@@ -311,9 +307,7 @@ def build_a2a_app(
     request_handler = DefaultRequestHandler(
         agent_executor=executor,
         # The SDK's default owner resolver is user_name-only. Supply an
-        # explicit resolver together with the tenant-scoped principal set by
         # A2AAuthMiddleware so the same task id cannot be read or updated by a
-        # different authenticated user or tenant.
         task_store=OwnerScopedTaskStore(owner_resolver=_a2a_owner_scope),
         push_config_store=InMemoryPushNotificationConfigStore(),
     )

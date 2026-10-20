@@ -1,5 +1,3 @@
-"""会话附件标签与本轮选择;所有读取、变更均受租户和所有者边界约束。"""
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,7 +26,7 @@ def _owned_session(session_id: str, request: Request):
         raise HTTPException(404, "会话不存在。")
     access = request.state.access
     if not access.can_access(idx) or not access.is_owner(idx):
-        raise HTTPException(403, "只有当前租户中的会话所有者可以管理附件。")
+        raise HTTPException(403, "只有会话所有者可以管理附件。")
     return idx
 
 
@@ -38,7 +36,7 @@ def get_documents(session_id: str, request: Request, user: User = Depends(get_cu
     documents = []
     for tab in idx.document_tabs:
         try:
-            row = readable_document(tab["id"], user_id=user.uid, tenant_id=user.tenant_id, ready=False)
+            row = readable_document(tab["id"], user_id=user.uid, ready=False)
             documents.append(
                 {
                     "id": tab["id"],
@@ -76,7 +74,7 @@ def save_documents(
         raise HTTPException(422, "附件列表不能重复。")
     try:
         for item in body.documents:
-            readable_document(item.id, user_id=user.uid, tenant_id=user.tenant_id, ready=False)
+            readable_document(item.id, user_id=user.uid, ready=False)
     except DocumentUnavailable as exc:
         raise HTTPException(422, str(exc)) from exc
     update_session_fields(

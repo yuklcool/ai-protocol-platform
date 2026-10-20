@@ -53,7 +53,7 @@ def test_user_wins_over_domain():
     """User-level doc says yes, domain says no — user wins."""
     docs = {
         "owner@yourcompany.com": {"type": "user", "tools": ["search"], "denied": []},
-        "yourcompany.com": {"type": "domain", "tools": [], "denied": ["search"]},
+        "*": {"type": "domain", "tools": [], "denied": ["search"]},
     }
     with _mock_docs(docs):
         assert can_use_tool("owner@yourcompany.com", "yourcompany.com", "search") is True
@@ -63,7 +63,7 @@ def test_user_deny_wins_over_domain_allow():
     """User-level deny overrides domain-level allow."""
     docs = {
         "owner@yourcompany.com": {"type": "user", "tools": ["*"], "denied": ["dangerous_tool"]},
-        "yourcompany.com": {"type": "domain", "tools": ["dangerous_tool"], "denied": []},
+        "*": {"type": "domain", "tools": ["dangerous_tool"], "denied": []},
     }
     with _mock_docs(docs):
         assert can_use_tool("owner@yourcompany.com", "yourcompany.com", "dangerous_tool") is False
@@ -72,7 +72,7 @@ def test_user_deny_wins_over_domain_allow():
 def test_domain_only():
     """No user doc — falls through to domain."""
     docs = {
-        "yourcompany.com": {"type": "domain", "tools": ["search", "code_exec"], "denied": []},
+        "*": {"type": "domain", "tools": ["search", "code_exec"], "denied": []},
     }
     with _mock_docs(docs):
         assert can_use_tool("alice@yourcompany.com", "yourcompany.com", "search") is True
@@ -159,7 +159,7 @@ def test_cache_expiry(monkeypatch):
 def test_specific_tools_list():
     """tools contains specific names, not '*'."""
     docs = {
-        "yourcompany.com": {"type": "domain", "tools": ["search", "code_exec"], "denied": []},
+        "*": {"type": "domain", "tools": ["search", "code_exec"], "denied": []},
     }
     with _mock_docs(docs):
         assert can_use_tool("a@yourcompany.com", "yourcompany.com", "search") is True

@@ -1,0 +1,29 @@
+name: User ownership
+on:
+  pull_request:
+  push:
+    branches: [main, refactor/user-owned-agent]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  user-ownership:
+    runs-on: ubuntu-latest
+    env:
+      LOCAL_MODE: "1"
+      SELF_HOSTED_MODE: "1"
+      DATA_BACKEND: memory
+      AUTH_BACKEND: stub
+      AIP_TEST_ISOLATED_NETWORK: "1"
+      OTEL_SDK_DISABLED: "true"
+      TRACE_EXPORT_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - run: uv sync --dev --extra lint
+        working-directory: backend
+      - name: Verify shared capabilities and private ownership
+        working-directory: backend
+        run: uv run pytest -q tests/unit/test_user_profiles.py tests/unit/test_document_folders_persistence.py tests/api_tests/test_documents_reach_agent_e2e.py tests/storage_tests/test_artifact_backend.py tests/unit/test_postgres_memory.py

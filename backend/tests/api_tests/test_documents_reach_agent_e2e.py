@@ -19,8 +19,7 @@ from auth.access_context import build_access_context
 from config.platform_config import invalidate_cache
 from db.persistence import reset_repository_for_testing
 from db.repositories.memory import MemoryRepository
-from db.tenants import TenantConfig, TenantDirectory
-from observability.tenant_context import set_tenant_context
+from observability.user_context import set_user_context
 from tools.documents.access import read_attached_document
 
 
@@ -53,9 +52,7 @@ def stack(monkeypatch, tmp_path):
     repo = MemoryRepository()
     reset_repository_for_testing(repo)
     invalidate_cache(clear_last_known_good=True)
-    for ref in ("tenant-a", "tenant-b"):
-        TenantDirectory(repo).put(TenantConfig(tenantId=ref))
-    actor = {"user": User(uid="same-uid", email="member@local.test", tenant_id="tenant-a")}
+    actor = {"user": User(uid="same-uid", email="member@local.test")}
     probe = InputProbe()
     from fast_api_app import stream_root_agent
     from protocols.session_bootstrap_routes import router as bootstrap
@@ -86,7 +83,8 @@ def stack(monkeypatch, tmp_path):
     async def identity(request: Request):
         user = actor["user"]
         request.state.access = build_access_context(user)
-        set_tenant_context(user)
+        set_user_context(user)
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = identity
@@ -167,7 +165,7 @@ def test_all_selected_attachments_remain_visible_after_a_real_tool_roundtrip(sta
         assert "batch.txt" in context and "values.csv" in context
 
 
-def test_same_filename_is_independent_and_tenant_boundary_stops_model(stack):
+def test_same_filename_is_independent_and_user_boundary_stops_model(stack):
     client, probe, repo, actor = stack
     first = client.post("/api/documents/upload", files={"file": ("same.txt", b"FIRST-CONTENT", "text/plain")}).json()
     second = client.post("/api/documents/upload", files={"file": ("same.txt", b"SECOND-CONTENT", "text/plain")}).json()
@@ -178,7 +176,7 @@ def test_same_filename_is_independent_and_tenant_boundary_stops_model(stack):
     )
     response = run(client, [first["docId"]])
     assert response.status_code == 409 and not probe.inputs and "无法解析" in response.json()["detail"]["message"]
-    actor["user"] = actor["user"].model_copy(update={"tenant_id": "tenant-b"})
+    actor["user"] = actor["user"].model_copy(update={"uid": "another-user"})
     assert client.get(f"/api/documents/{second['docId']}").status_code == 403
-    response = run(client, [second["docId"]], thread="other-tenant")
+    response = run(client, [second["docId"]], thread="other-user")
     assert not probe.inputs and "DOCUMENT_UNAVAILABLE" in response.text

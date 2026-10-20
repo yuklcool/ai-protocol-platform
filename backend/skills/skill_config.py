@@ -102,7 +102,6 @@ def create_skill(
     instructions: str = "",
     owner_email: str = "",
     owner_id: str = "",
-    tenant_id: str = "",
     **kwargs: Any,
 ) -> SkillConfig:
     """Create a new skill and persist it through the selected backend."""
@@ -115,7 +114,6 @@ def create_skill(
         instructions=instructions,
         ownerEmail=owner_email,
         ownerId=owner_id,
-        tenantId=tenant_id,
         createdAt=now,
         updatedAt=now,
         **kwargs,

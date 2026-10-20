@@ -134,7 +134,7 @@ The just-shipped `_append_grounding_sources` callback
 ([backend/tools/search_agent.py](../../../../backend/tools/search_agent.py)) puts a
 `Sources:` block into the sub-agent's *text*. Extend it to **also** emit a
 `digest` A2UI surface item (`kind: "sources"`) built from the same
-`grounding_metadata.grounding_chunks` — one deterministic list of `[title](uri)`.
+`grounding_metadata.grounding_chunks` — one deterministic list of `title`.
 This means the Home digest and the chat text stay in sync, and "what are the
 sources?" is answered *visually* in Home, not re-derived by the model. Covers
 both `chunk.web` (google_search) and `chunk.retrieved_context` (Vertex AI Search),

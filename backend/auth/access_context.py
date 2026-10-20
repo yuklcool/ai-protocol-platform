@@ -1,15 +1,3 @@
-"""Request-scoped access context + pure-Python access evaluator.
-
-Tenant isolation is a hard boundary that runs *before* ordinary sharing ACLs.
-Any resource exposing a ``tenant_id`` attribute is tenant-aware: its tenant id
-must be non-empty and match the authenticated context. Public/domain/tagged
-sharing never crosses that boundary. Resources that have not yet migrated to a
-first-class tenant field keep the historical five-type ACL behaviour. A
-SkillConfig with a missing tenant id is legacy-only: it remains available to
-platform-owned skills and non-tenant background callers, but authenticated
-tenant requests fail closed until migration assigns ownership.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -17,7 +5,6 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from auth.admin_roles import is_platform_admin as _is_platform_admin_tags
 from auth.admin_roles import is_skill_admin as _is_skill_admin_tags
-from auth.admin_roles import is_tenant_admin as _is_tenant_admin_tags
 
 if TYPE_CHECKING:
     from auth.models import User
@@ -39,34 +26,12 @@ class AccessContext:
     uid: str
     email: str = ""
     domain: str = ""
-    tenant_id: str = ""
     group_tags: frozenset[str] = field(default_factory=frozenset)
 
-    def _tenant_allows(self, resource: object) -> bool:
-        """Hard-gate first-class tenant resources.
-
-        ``hasattr`` is intentional: legacy resource types without a tenant field
-        continue through their existing ACL path, while a migrated resource with
-        an empty tenant id is unattributable and therefore denied.
-        """
-        if not hasattr(resource, "tenant_id"):
-            return True
-        resource_tenant = str(getattr(resource, "tenant_id", "") or "").strip()
-        viewer_tenant = (self.tenant_id or "").strip()
-        if not resource_tenant:
-            # Canonical platform skills are intentionally tenant-global. A
-            # legacy user skill without tenantId is usable only by legacy
-            # background/test callers with no tenant context; an authenticated
-            # tenant request must not infer ownership from UID or domain.
-            return getattr(resource, "owner_id", "") == "aitana-platform" or not viewer_tenant
-        return bool(viewer_tenant and resource_tenant == viewer_tenant)
-
     def is_owner(self, resource: _HasAccess) -> bool:
-        return self._tenant_allows(resource) and bool(resource.owner_id) and resource.owner_id == self.uid
+        return bool(resource.owner_id) and resource.owner_id == self.uid
 
     def can_access(self, resource: _HasAccess) -> bool:
-        if not self._tenant_allows(resource):
-            return False
         return can_access(resource.access_control, self, resource.owner_id)
 
     def can_access_skill(self, skill: _HasAccess) -> bool:
@@ -76,21 +41,13 @@ class AccessContext:
         return self.is_owner(skill)
 
     def is_skill_admin(self, skill: _HasAccess) -> bool:
-        return self._tenant_allows(skill) and (
-            self.is_skill_owner(skill) or _is_skill_admin_tags(self.group_tags) or self.is_tenant_admin()
-        )
+        return self.is_skill_owner(skill) or _is_skill_admin_tags(self.group_tags)
 
     @property
     def is_platform_admin(self) -> bool:
         return _is_platform_admin_tags(self.group_tags)
 
-    def is_tenant_admin(self, tenant_id: str | None = None) -> bool:
-        scope = (tenant_id if tenant_id is not None else self.tenant_id).strip()
-        return _is_tenant_admin_tags(self.group_tags, scope)
-
     def can_access_folder(self, folder: object) -> bool:
-        if not self._tenant_allows(folder):
-            return False
         ac = getattr(folder, "effective_access", None)
         owner_id = getattr(folder, "owner_id", "")
         if ac is None:
@@ -99,18 +56,16 @@ class AccessContext:
 
 
 def build_access_context(user: User) -> AccessContext:
-    tenant_id = (user.tenant_id or user.domain).strip()
     return AccessContext(
         uid=user.uid,
         email=user.email,
         domain=user.domain,
-        tenant_id=tenant_id,
         group_tags=user.group_tags,
     )
 
 
 def can_access(ac: AccessControl, ctx: AccessContext, owner_id: str) -> bool:
-    """Pure five-type sharing evaluator. Tenant gating lives on AccessContext."""
+    """Pure five-type sharing evaluator. Ownership is checked before explicit sharing rules."""
     if ac.type == "public":
         return True
     if owner_id and owner_id == ctx.uid:

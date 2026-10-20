@@ -24,6 +24,8 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
+from tests.support.identity import identity_dependency
+
 # Ensure secret is set BEFORE module imports.
 os.environ.setdefault("GROUP_AUTH_SIGNING_SECRET", "test-secret-for-pytest-only")
 
@@ -54,7 +56,7 @@ def _make_teacher_client(uid: str = "teacher-1") -> TestClient:
         request.state.access = ctx
         return await call_next(request)
 
-    test_app.dependency_overrides[get_current_user] = lambda: user
+    test_app.dependency_overrides[get_current_user] = identity_dependency(user)
     return TestClient(test_app)
 
 

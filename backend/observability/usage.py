@@ -1,5 +1,3 @@
-"""Durable tenant-scoped token accounting without prompt content."""
-
 from __future__ import annotations
 
 import asyncio
@@ -30,8 +28,8 @@ def make_usage_callbacks(user: User, skill_id: str) -> tuple[Any, Any]:
         usage = getattr(response, "usage_metadata", None)
         if call is None or usage is None:
             return
-        tenant = (user.tenant_id or user.domain or "").strip()
-        if not tenant:
+        uid = user.uid.strip()
+        if not uid:
             return
         input_tokens = getattr(usage, "prompt_token_count", None)
         output_tokens = getattr(usage, "candidates_token_count", None)
@@ -39,7 +37,6 @@ def make_usage_callbacks(user: User, skill_id: str) -> tuple[Any, Any]:
             return
         call_id, model = call
         row = {
-            "tenantId": tenant,
             "userId": user.uid,
             "skillId": skill_id,
             "invocationId": context.invocation_id,
@@ -56,10 +53,10 @@ def make_usage_callbacks(user: User, skill_id: str) -> tuple[Any, Any]:
                 row["estimatedCostUsd"] = (row["inputTokens"] * rates[0] + row["outputTokens"] * rates[1]) / 1_000_000
                 row["pricingKnown"] = True
         except Exception:
-            log.exception("usage pricing unavailable tenant=%s call=%s", tenant, call_id)
+            log.exception("usage pricing unavailable user=%s call=%s", uid, call_id)
         try:
             await asyncio.to_thread(set_document, COLLECTION, call_id, row)
         except Exception:
-            log.exception("usage persistence failed tenant=%s call=%s", tenant, call_id)
+            log.exception("usage persistence failed user=%s call=%s", uid, call_id)
 
     return before, after

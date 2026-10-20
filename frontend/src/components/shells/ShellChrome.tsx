@@ -3,7 +3,6 @@
 import { type ReactNode } from "react";
 import type { User } from "@/lib/firebase";
 import { useUserSkills } from "@/hooks/useUserSkills";
-import { useTenantDefaultSkill } from "@/hooks/useTenantDefaultSkill";
 import { RootAgentBar } from "@/components/navigation/RootAgentBar";
 
 export interface ShellChromeProps {
@@ -22,8 +21,6 @@ export interface ShellChromeProps {
  */
 export function ShellChrome({ skillId, user, children }: ShellChromeProps) {
   const { skills } = useUserSkills(user.uid);
-  const defaultSkillId = useTenantDefaultSkill(skills);
-  const defaultSkill = skills.find((s) => s.skillId === defaultSkillId);
 
   return (
     // `h-full`, not `h-screen` (v6.19.0, AIPLA #23). Claiming 100vh here is
@@ -35,15 +32,12 @@ export function ShellChrome({ skillId, user, children }: ShellChromeProps) {
     <div className="flex h-full min-h-0 flex-col">
       <RootAgentBar
         skills={skills}
-        defaultSkill={defaultSkill}
         currentSkillId={skillId}
         // New chat opens a FRESH session, NEVER resuming. Route straight to a
         // skill with NO ?session= so useStableThreadId mints a new thread
-        // (X → null → fresh). Prefer the tenant DEFAULT skill (the front door —
         // ONE Assistant); if it isn't configured/resolved yet, fall back to a
         // fresh session of the CURRENT skill (always known), then the first
         // enabled skill — anything but "/", which useLandingTarget would RESUME
-        // the most-recent session on (the bug: a tenant with no default_skill
         // had New chat bounce back to the last thread). 2026-07-16.
       />
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>

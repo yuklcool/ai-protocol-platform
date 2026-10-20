@@ -1,51 +1,3 @@
-"""Host endpoint for MCP App ``ui/update-model-context`` pushes.
-
-Architecture (sprint 1.25, design doc
-docs/archive/design/v6.1.0/mcp-app-update-model-context.md):
-
-The MCP Apps spec defines TWO iframe→host RPC channels — sprint 1.7 wired
-the first (``ui/message`` → synthetic chat turns); this module wires the
-second. When an MCP App iframe (e.g. the Cesium globe in
-ext-apps/map-server) finishes positioning its view, it sends
-``ui/update-model-context`` over the bridge with structured content
-describing the current iframe state (view UUID, current bounds, label).
-The frontend ``<AppRenderer onUpdateModelContext>`` callback POSTs that
-content here; we validate, gate, and write it into the ADK session state
-under a namespaced key (``mcp_app_context.{server_id}.{tool_name}``) so
-the agent's NEXT turn can reference what's currently on screen.
-
-Without this endpoint the iframe receives ``MCP error -32601: No handler
-for method`` from the host bridge — non-fatal but pollutes the console
-and leaves the agent blind to iframe state, which collapses the
-multi-turn workshop demo ("now zoom to its old town" → confused).
-
-授权边界:验证身份和会话归属后,按当前租户 Root 的交互开关、MCP
-绑定及服务器启用状态验证。Skill 不再持有 MCP 连接或 context-writes 授权。
-
-Threat model (see design doc Conflict Justifications):
-  * The endpoint receives JSON from a trusted host context (the host's
-    own React handler) which got it from a sandboxed iframe via
-    postMessage. The iframe origin is checked at three boundaries
-    upstream (sandbox referrer, sandbox→host postMessage origin,
-    host→sandbox postMessage origin). This endpoint adds the auth +
-    skill-access + per-server opt-in checks.
-  * The merged content goes into a NAMESPACED key
-    (``mcp_app_context.{server_id}.{tool_name}``); the agent prompt
-    template references this namespace explicitly with framing prose
-    so the model treats it as iframe-state data, not user
-    instructions. Stops malicious iframe content from poisoning
-    arbitrary session keys.
-  * 4 KB cap on serialized ``structuredContent`` prevents context
-    flooding.
-
-Errors:
-  * 400 — schema mismatch (e.g. structuredContent not a dict)
-  * 401 — missing/invalid Firebase JWT (handled upstream)
-  * 403 — any of the four allowlist/access gates failed
-  * 404 — session_id not in the index
-  * 413 — structuredContent serialized > 4 KB
-"""
-
 from __future__ import annotations
 
 import json
@@ -63,7 +15,7 @@ from db.chat_sessions import app_name_for_session, get_session_index
 from db.models.chat_session import ChatSessionIndex
 from db.persistence import get_document
 from protocols._a2ui_surface_shared import _enforce_root_interaction
-from tools.mcp.tenant_scope import mcp_config_visible_to_tenant
+from tools.mcp.scope import mcp_config_enabled
 
 log = logging.getLogger(__name__)
 
@@ -158,7 +110,7 @@ async def post_iframe_context(
     servers = root_skill.skill_metadata.tool_configs["mcp"]["servers"]
     if body.server_id not in servers:
         raise HTTPException(403, "MCP server is not bound to the Root Agent")
-    if not mcp_config_visible_to_tenant(get_document("mcp_servers", body.server_id), ctx.tenant_id):
+    if not mcp_config_enabled(get_document("mcp_servers", body.server_id)):
         raise HTTPException(403, "MCP server is unavailable")
 
     # Gate 7: size cap

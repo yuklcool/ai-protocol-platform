@@ -25,10 +25,13 @@ def test_folder_document_and_agent_context_share_postgres(monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_URL", database_url)
     reset_repository_for_testing(None)
 
+    from auth import User
     from db import folders
+    from observability.user_context import set_user_context
     from tools.documents.context import build_document_context
 
-    folder = folders.create_folder(user_id, "Integration", tenant_id="example.com")
+    set_user_context(User(uid=user_id))
+    folder = folders.create_folder(user_id, "Integration")
     folder_id = folder["id"]
     repo = get_repository()
     repo.set_document(
@@ -36,7 +39,6 @@ def test_folder_document_and_agent_context_share_postgres(monkeypatch) -> None:
         doc_id,
         {
             "userId": user_id,
-            "tenantId": "example.com",
             "folderId": folder_id,
             "originalFilename": "integration.txt",
             "sourceFormat": "txt",
@@ -49,19 +51,19 @@ def test_folder_document_and_agent_context_share_postgres(monkeypatch) -> None:
         },
     )
 
-    folders.update_folder_counts(user_id, folder_id, doc_delta=1, parsed_delta=1, tenant_id="example.com")
-    listed = folders.list_folder_documents(user_id, folder_id, tenant_id="example.com")
+    folders.update_folder_counts(user_id, folder_id, doc_delta=1, parsed_delta=1)
+    listed = folders.list_folder_documents(user_id, folder_id)
     assert [item["__id"] for item in listed] == [doc_id]
 
-    stored_folder = folders.get_folder(user_id, folder_id, tenant_id="example.com")
+    stored_folder = folders.get_folder(user_id, folder_id)
     assert stored_folder is not None
     assert stored_folder["docCount"] == 1
     assert stored_folder["parsedCount"] == 1
 
     from auth import User
-    from observability.tenant_context import set_tenant_context
+    from observability.user_context import set_user_context
 
-    set_tenant_context(User(uid=user_id, email="postgres@example.com", tenant_id="example.com"))
+    set_user_context(User(uid=user_id, email="postgres@example.com"))
     context, blocks = build_document_context(doc_id)
     assert f"postgres-content-{suffix}" in context
     assert blocks is None
@@ -79,7 +81,7 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
     from auth import User, build_access_context
     from db.chat_sessions import create_session_index, get_session_index, set_session_documents
     from db.models.access import AccessControl
-    from observability.tenant_context import _tenant_context, set_tenant_context
+    from observability.user_context import _context, set_user_context
     from protocols.session_document_routes import DocumentSelection, get_documents, save_documents
     from tools.documents.access import DocumentUnavailable, readable_document
 
@@ -88,10 +90,10 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
     reset_repository_for_testing(None)
     suffix = uuid.uuid4().hex[:12]
     session_id, doc_id, other_id = (f"{prefix}-{suffix}" for prefix in ("session", "doc", "other"))
-    owner = User(uid=f"owner-{suffix}", email="owner@example.com", tenant_id=f"tenant-{suffix}")
-    other = owner.model_copy(update={"tenant_id": f"other-tenant-{suffix}"})
-    token = _tenant_context.set(None)
-    set_tenant_context(owner)
+    owner = User(uid=f"owner-{suffix}", email="owner@example.comtenant-{suffix}")
+    other = owner.model_copy(update={"uid": f"other-user-{suffix}"})
+    token = _context.set(None)
+    set_user_context(owner)
     request = SimpleNamespace(state=SimpleNamespace(access=build_access_context(owner)))
     repo = get_repository()
     try:
@@ -101,7 +103,6 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
                 key,
                 {
                     "userId": owner.uid,
-                    "tenantId": owner.tenant_id,
                     "originalFilename": f"{key}.txt",
                     "sourceFormat": "txt",
                     "parseStatus": "parsed",
@@ -114,7 +115,6 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
             owner_uid=owner.uid,
             access_control=AccessControl(type="private"),
             owner_domain="example.com",
-            tenant_id=owner.tenant_id,
             agent_id="root-agent",
         )
         selected = DocumentSelection(documents=[{"id": doc_id, "included": True}, {"id": other_id, "included": False}])
@@ -123,22 +123,19 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
         reset_repository_for_testing(None)
         restored = get_documents(session_id, request, owner)["documents"]
         assert [(row["id"], row["included"]) for row in restored] == [(doc_id, False), (other_id, True)]
-        assert (
-            readable_document(other_id, user_id=owner.uid, tenant_id=owner.tenant_id)["blocks"][0]["text"]
-            == f"persisted-{other_id}"
-        )
+        assert readable_document(other_id, user_id=owner.uid)["blocks"][0]["text"] == f"persisted-{other_id}"
         set_session_documents(session_id, [])
         reset_repository_for_testing(None)
         assert get_session_index(session_id).document_ids == []
         assert not any(row["included"] for row in get_documents(session_id, request, owner)["documents"])
-        set_tenant_context(other)
+        set_user_context(other)
         with pytest.raises(DocumentUnavailable):
-            readable_document(other_id, user_id=other.uid, tenant_id=other.tenant_id)
+            readable_document(other_id, user_id=other.uid)
         with pytest.raises(HTTPException) as denied:
             get_documents(session_id, SimpleNamespace(state=SimpleNamespace(access=build_access_context(other))), other)
         assert denied.value.status_code == 403
     finally:
-        set_tenant_context(owner)
+        set_user_context(owner)
         for collection, key in [
             ("chat_sessions", session_id),
             ("parsed_documents", doc_id),
@@ -146,4 +143,4 @@ def test_session_attachment_choices_survive_repository_restart_and_tenant_switch
         ]:
             get_repository().delete_document(collection, key)
         reset_repository_for_testing(None)
-        _tenant_context.reset(token)
+        _context.reset(token)

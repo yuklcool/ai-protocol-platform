@@ -20,30 +20,23 @@ PATH = "/api/sessions/session-a/iframe-context"
 
 @pytest.fixture
 def setup(monkeypatch):
-    user = User(uid="viewer", tenant_id="tenant-a", permission_group_ids=frozenset({"maps"}))
-    from auth.capability_access import GROUP_COLLECTION, PermissionGroup
+    user = User(uid="viewer")
     from db.persistence import get_repository, reset_repository_for_testing
     from db.repositories.memory import MemoryRepository
-    from db.tenants import TenantConfig, TenantDirectory
 
     reset_repository_for_testing(MemoryRepository())
     repo = get_repository()
     ids = ["map-server", "map", "private", "global"]
-    TenantDirectory(repo).put(TenantConfig(tenantId="tenant-a", enabledMcpServers=ids))
-    repo.set_document(
-        GROUP_COLLECTION,
-        "maps",
-        PermissionGroup(id="maps", tenantId="tenant-a", label="maps", mcpServers=ids).model_dump(by_alias=True),
-    )
     for ref in ids:
-        repo.set_document(
-            "mcp_servers", ref, {"scope": "platform", "enabled": True, "url": "https://mcp.example.test/mcp"}
-        )
+        repo.set_document("mcp_servers", ref, {"enabled": True, "url": "https://mcp.example.test/mcp"})
     app = FastAPI()
     app.include_router(routes.router)
 
     async def identity(request: Request):
         request.state.access = build_access_context(user)
+        from observability.user_context import set_user_context
+
+        set_user_context(user)
         return user
 
     app.dependency_overrides[get_current_user] = identity
@@ -59,7 +52,7 @@ def setup(monkeypatch):
         lastMessageAt=now,
     )
     root = RootAgentConfig(mcpServers=["map"], interaction={"allowSurfaceContextWrites": True})
-    server = {"scope": "tenant", "tenantId": "tenant-a", "enabled": True}
+    server = {"enabled": True}
     service = SimpleNamespace(get_session=AsyncMock(return_value=SimpleNamespace()), append_event=AsyncMock())
     monkeypatch.setattr("protocols._a2ui_surface_shared.get_platform_config", lambda: SimpleNamespace(agent=root))
     monkeypatch.setattr(routes, "get_session_index", lambda *_: index)
@@ -88,7 +81,7 @@ def test_revocation_and_isolation_take_effect_on_next_write(setup, change):
     elif change == "disabled":
         server["enabled"] = False
     elif change == "foreign":
-        server["tenantId"] = "tenant-b"
+        server["scope"] = "unavailable"
     else:
         index.owner_uid = "other"
         index.access_control.type = "public"
