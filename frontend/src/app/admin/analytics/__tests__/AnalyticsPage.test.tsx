@@ -141,7 +141,6 @@ function mockRoutes(overrides?: { sessions?: unknown; trace?: unknown }) {
               estimatedCostUsd: 0,
               unpricedCalls: 0,
             },
-            tenants: [],
             models: [],
           }
         : u.includes("/sessions/")

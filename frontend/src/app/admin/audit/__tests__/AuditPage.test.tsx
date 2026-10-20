@@ -1,9 +1,6 @@
 // Audit trail view (v6.16.0 Phase 4).
 //
-// The subtle property here is the EMPTY state. "Nothing has happened" and
-// "nothing here concerns your tenant" are different facts, and an empty table
-// silently asserts the first. The backend returns a true pre-filter `scanned`
-// count precisely so this page can tell them apart.
+// The empty state and a failed access check must remain distinct.
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +15,6 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 
 const scope = {
   state: "platform",
-  tenantIds: [] as string[],
   isAdmin: true,
   isPlatform: true,
 };
@@ -46,7 +42,7 @@ const ENTRY = {
   ts: "2026-07-21T10:00:00Z",
   actorUid: "u1",
   actorEmail: "owner@yourcompany.com",
-  action: "upsert_client",
+  action: "update_account",
   target: "a.com",
   before: { display_name: "Old" },
   after: { display_name: "New" },
@@ -59,7 +55,6 @@ describe("AuditPage", () => {
     auth.loading = false;
     Object.assign(scope, {
       state: "platform",
-      tenantIds: [],
       isAdmin: true,
       isPlatform: true,
     });
@@ -68,7 +63,7 @@ describe("AuditPage", () => {
   it("renders entries with who / what / target", async () => {
     mockAudit({ entries: [ENTRY], scanned: 1, scope: "platform" });
     render(<AuditPage />);
-    await waitFor(() => expect(screen.getByText("upsert_client")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("update_account")).toBeTruthy());
     expect(screen.getByText("owner@yourcompany.com")).toBeTruthy();
     expect(screen.getByText("a.com")).toBeTruthy();
   });

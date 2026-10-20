@@ -8,10 +8,6 @@ avatar: /images/avatars/skill-authoring-assistant.svg
 # opened up 2026-08-05 on request. The copilot is PROPOSE-ONLY — it drafts
 # configuration for a human to review and never saves anything itself — so
 # widening it to the team grants no write capability.
-# NOTE: this tag is only ONE of two gates. A tenant with an explicit
-# `clients/{domain}.enabled_skills` allowlist (acmeenergy.com has one) must
-# ALSO list this skill, or it stays filtered out of /api/skills regardless of
-# tags. See docs/ops/platform-skills.md.
 access_control:
   type: tagged
   tags:

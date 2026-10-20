@@ -3,7 +3,7 @@
 // The previous layout had one card per API surface, which mirrored the
 // backend's module structure rather than anything an operator asks. These tests
 // pin the two properties that matter: the areas are named for questions, and a
-// tenant admin never sees a platform-only door that would 403 them.
+// non-admin never sees a platform-only door that would 403 them.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,13 +20,11 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => auth }));
 const recheck = vi.fn(async () => {});
 const scope: {
   state: string;
-  tenantIds: string[];
   isAdmin: boolean;
   isPlatform: boolean;
   recheck: () => Promise<void>;
 } = {
   state: "platform",
-  tenantIds: [],
   isAdmin: true,
   isPlatform: true,
   recheck,
@@ -40,17 +38,8 @@ vi.mock("@/components/chat/SignInRequired", () => ({
 function asPlatform() {
   Object.assign(scope, {
     state: "platform",
-    tenantIds: [],
     isAdmin: true,
     isPlatform: true,
-  });
-}
-function asTenant(domain = "one.com") {
-  Object.assign(scope, {
-    state: "tenant",
-    tenantIds: [domain],
-    isAdmin: true,
-    isPlatform: false,
   });
 }
 
@@ -103,7 +92,6 @@ describe("AdminHub IA", () => {
   it("shows a distinct error state rather than implying no access", async () => {
     Object.assign(scope, {
       state: "error",
-      tenantIds: [],
       isAdmin: false,
       isPlatform: false,
     });
@@ -119,7 +107,6 @@ describe("AdminHub IA", () => {
   it("shows 'Admins only' for a genuine non-admin", () => {
     Object.assign(scope, {
       state: "none",
-      tenantIds: [],
       isAdmin: false,
       isPlatform: false,
     });
@@ -130,7 +117,6 @@ describe("AdminHub IA", () => {
   it("offers a token re-check after a just-granted role", () => {
     Object.assign(scope, {
       state: "none",
-      tenantIds: [],
       isAdmin: false,
       isPlatform: false,
     });

@@ -88,7 +88,7 @@ read interface to whatever you indexed:
 access_control:
   type: tagged
   tags:
-    - your-tenant-tag
+    - your-team-tag
 ```
 
 Users receive tags via Firebase JWT custom claims; see

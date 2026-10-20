@@ -71,7 +71,7 @@ describe("UserMenu", () => {
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ scope: "platform", tenantIds: [] }),
+      json: async () => ({ scope: "platform" }),
     } as unknown as Response);
     render(<UserMenu />);
     fireEvent.click(screen.getByLabelText("Account menu"));
@@ -86,7 +86,7 @@ describe("UserMenu", () => {
     vi.mocked(fetchWithAuth).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ scope: "none", tenantIds: [] }),
+      json: async () => ({ scope: "none" }),
     } as unknown as Response);
     render(<UserMenu />);
     fireEvent.click(screen.getByLabelText("Account menu"));

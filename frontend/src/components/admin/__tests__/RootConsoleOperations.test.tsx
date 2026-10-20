@@ -20,7 +20,6 @@ vi.mock("@/hooks/useAdminScope", () => ({
     isPlatform: true,
     isAdmin: true,
     state: "platform",
-    tenantIds: [],
   }),
 }));
 const response = (body: unknown) => ({
