@@ -31,14 +31,14 @@
 | 浏览器 | Next.js / React、统一对话与工作台、AG-UI 客户端、A2UI 渲染器 |
 | 应用后端 | FastAPI、身份认证、用户授权、模型/MCP 管理和协议接口 |
 | 智能体运行时 | Google ADK、Root Agent、Skill 指令加载、原生工具、MCP 和 A2A |
-| 数据存储 | PostgreSQL：平台配置、用户账号、Session、Memory 和账本 |
+| 数据存储 | PostgreSQL：平台配置、用户账号、Session 和 Memory |
 | 文件与沙箱 | 持久卷：文件和 Artifact；独立浏览器源：MCP Apps 沙箱 |
 
 默认部署包含 `frontend`、`backend`、`postgres`、`mcp-sandbox` 四个服务，不要求 GCP、Firebase、Redis、MinIO 或 Keycloak。
 
 ## 快速部署
 
-以下命令用于**全新安装**。已有部署先阅读[升级、迁移与回滚](docs/configuration-guide.md#12-已有部署升级迁移与回滚)，保留现有配置和数据卷。
+以下命令用于**全新安装**。已有部署先阅读[升级清理说明](docs/configuration-guide.md#7-旧部署升级)，保留现有配置和数据卷。
 
 ### 使用 v2.0.0 发布镜像
 

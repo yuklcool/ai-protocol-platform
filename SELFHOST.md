@@ -104,7 +104,16 @@ FRONTEND_PUBLIC_URL=https://ai.example.com
 
 ## 8. 环境变量传递
 
-`.env` 用于 Compose 插值，未列入服务 `environment`/`env_file` 的变量不会自动进入容器。默认传递常用模型/OIDC 参数；自定义模型密钥、MCP 密钥或 S3 参数需用额外 Compose 文件显式传递，见[配置流程](docs/configuration-guide.md#10-可选配置与环境变量传递)。
+`.env` 用于 Compose 插值，未列入服务 `environment`/`env_file` 的变量不会自动进入容器。默认传递常用模型/OIDC 参数；自定义模型密钥、MCP 密钥或 S3 参数需用额外 Compose 文件显式传递。例如 `compose.extra.yml`：
+
+```yaml
+services:
+  backend:
+    environment:
+      MY_MCP_KEY: ${MY_MCP_KEY}
+```
+
+把实际值填入 `.env`，启动及后续管理命令均追加 `-f compose.extra.yml`，例如 `docker compose -f docker-compose.release.yml -f compose.extra.yml up -d`。后端密钥引用填写 `${MY_MCP_KEY}`。
 
 ## 9. 日常检查
 

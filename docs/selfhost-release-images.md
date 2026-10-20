@@ -49,7 +49,7 @@ ALLOW_ORIGINS=https://ai.example.com
 
 前端与沙箱必须不同源。发布前端启动时替换沙箱 URL 和认证模式，不需要为换域名重建。语言/品牌的任意构建参数不属于通用运行时配置，定制品牌需自建前端镜像。
 
-模型密钥、MCP 密钥、S3 等自定义变量必须显式传入 backend，见[变量传递](configuration-guide.md#10-可选配置与环境变量传递)。额外 Compose 文件需在后续所有管理命令中一并使用。
+模型密钥、MCP 密钥、S3 等自定义变量必须显式传入 backend，见[变量传递](../SELFHOST.md#8-环境变量传递)。额外 Compose 文件需在后续所有管理命令中一并使用。
 
 ## 4. 数据与 SQL migration
 
