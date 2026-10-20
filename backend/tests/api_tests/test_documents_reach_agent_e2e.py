@@ -9,7 +9,8 @@ from google.adk.agents import LlmAgent
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.adk.sessions import InMemorySessionService
-from google.genai.types import Content, Part
+from google.adk.tools import FunctionTool
+from google.genai.types import Content, FunctionCall, Part
 from pydantic import Field
 
 from adk.callbacks import make_document_injector
@@ -20,14 +21,28 @@ from db.persistence import reset_repository_for_testing
 from db.repositories.memory import MemoryRepository
 from db.tenants import TenantConfig, TenantDirectory
 from observability.tenant_context import set_tenant_context
+from tools.documents.access import read_attached_document
 
 
 class InputProbe(BaseLlm):
     model: str = "document-input-probe"
     inputs: list[list[str]] = Field(default_factory=list)
+    read_doc_id: str | None = None
 
     async def generate_content_async(self, llm_request, stream=False) -> AsyncGenerator[LlmResponse, None]:
         self.inputs.append([part.text or "" for content in llm_request.contents for part in (content.parts or [])])
+        if self.read_doc_id and len(self.inputs) == 1:
+            yield LlmResponse(
+                content=Content(
+                    role="model",
+                    parts=[
+                        Part(
+                            function_call=FunctionCall(name="read_attached_document", args={"doc_id": self.read_doc_id})
+                        )
+                    ],
+                )
+            )
+            return
         yield LlmResponse(content=Content(role="model", parts=[Part.from_text(text="已收到本轮输入。")]))
 
 
@@ -56,6 +71,7 @@ def stack(monkeypatch, tmp_path):
         lambda *_args, **_kwargs: LlmAgent(
             name="document_probe",
             model=probe,
+            tools=[FunctionTool(read_attached_document)],
             before_model_callback=make_document_injector(actor["user"]),
         ),
     )
@@ -127,6 +143,28 @@ def test_real_upload_selection_clear_and_refresh_recovery_reach_model(stack):
     response = run(client, [], old_state={"document_ids": [a, b]})
     assert response.status_code == 200, response.text
     assert attached_input(probe) == ""
+
+
+def test_all_selected_attachments_remain_visible_after_a_real_tool_roundtrip(stack):
+    client, probe, _repo, _actor = stack
+    first = client.post(
+        "/api/documents/upload", files={"file": ("batch.txt", b"UNIQUE-BATCH-119", "text/plain")}
+    ).json()
+    second = client.post(
+        "/api/documents/upload", files={"file": ("values.csv", b"Before,After\n1297,817\n", "text/csv")}
+    ).json()
+    probe.read_doc_id = first["docId"]
+
+    response = run(client, [first["docId"], second["docId"]])
+
+    assert response.status_code == 200, response.text
+    assert "RUN_ERROR" not in response.text
+    assert len(probe.inputs) == 2
+    for parts in probe.inputs:
+        context = "\n".join(text for text in parts if text.startswith("【本轮附件"))
+        assert "UNIQUE-BATCH-119" in context
+        assert "1297" in context and "817" in context
+        assert "batch.txt" in context and "values.csv" in context
 
 
 def test_same_filename_is_independent_and_tenant_boundary_stops_model(stack):
