@@ -21,10 +21,6 @@ def _database_url() -> str:
     value = os.environ.get("DATABASE_URL", "").strip()
     if not value:
         pytest.skip("DATABASE_URL is required for PostgreSQL integration test")
-    from auth import User
-    from observability.user_context import set_user_context
-
-    set_user_context(User(uid="ci-persistence"))
     return value
 
 
@@ -63,6 +59,10 @@ async def test_a2ui_surface_and_client_edits_survive_postgres_reconstruction(mon
     suffix = uuid.uuid4().hex[:12]
     app_name = f"ci-a2ui-{suffix}"
     user_id = f"user-{suffix}"
+    from auth import User
+    from observability.user_context import set_user_context
+
+    set_user_context(User(uid=user_id))
     session_id = f"session-{suffix}"
     surface_id = f"obligation-analysis:{suffix}"
     state_key = f"{A2UI_SURFACE_STATE_PREFIX}{surface_id}"

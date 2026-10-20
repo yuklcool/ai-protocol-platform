@@ -25,7 +25,7 @@ on:
       - backend/config/models.yaml
       - backend/config/platform_config.py
       - backend/db/chat_sessions.py
-      - backend/db/clients.py
+      - backend/db/user_profiles.py
       - backend/db/folders.py
       - backend/db/persistence.py
       - backend/db/repository.py
@@ -44,10 +44,8 @@ on:
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
-      - backend/admin/clients.py
       - backend/admin/tool_permissions_routes.py
       - backend/admin/access_routes.py
-      - backend/admin/groups_routes.py
       - backend/auth/capability_access.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
@@ -100,7 +98,7 @@ on:
       - backend/config/models.yaml
       - backend/config/platform_config.py
       - backend/db/chat_sessions.py
-      - backend/db/clients.py
+      - backend/db/user_profiles.py
       - backend/db/folders.py
       - backend/db/persistence.py
       - backend/db/repository.py
@@ -119,10 +117,8 @@ on:
       - backend/scripts/seed_selfhost_persistence.py
       - backend/skills/skill_config.py
       - backend/admin/audit.py
-      - backend/admin/clients.py
       - backend/admin/tool_permissions_routes.py
       - backend/admin/access_routes.py
-      - backend/admin/groups_routes.py
       - backend/auth/capability_access.py
       - backend/tests/api_tests/test_sessions_recent.py
       - backend/tests/api_tests/test_sessions_route.py
@@ -257,7 +253,7 @@ jobs:
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
             -e GROUP_AUTH_SIGNING_SECRET=ci-group-auth-repository-secret \
-            backend uv run python -c "from skills import skill_config; from admin import audit, clients as admin_clients, accounts_routes, access_routes, groups_routes; from auth import group_id_auth, permissions; from config import platform_config; from db import chat_sessions, clients, folders; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); platform_config.invalidate_cache(); print('migrated persistence domains import OK')"
+            backend uv run python -c "from skills import skill_config; from admin import audit, accounts_routes, access_routes; from auth import group_id_auth, permissions; from config import platform_config; from db import chat_sessions, folders, user_profiles; from db.persistence import build_repository; from tools.documents import context; from tools.mcp import registry as mcp_registry; assert build_repository('memory').healthcheck(); mcp_registry.clear_registry_cache(); platform_config.invalidate_cache(); print('user-owned persistence domains import OK')"
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |

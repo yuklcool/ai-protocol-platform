@@ -16,10 +16,6 @@ def _database_url() -> str:
     value = os.environ.get("DATABASE_URL", "").strip()
     if not value:
         pytest.skip("DATABASE_URL is required for PostgreSQL integration test")
-    from auth import User
-    from observability.user_context import set_user_context
-
-    set_user_context(User(uid="ci-persistence"))
     return value
 
 
@@ -28,6 +24,10 @@ async def test_adk_session_and_memory_survive_service_reconstruction(monkeypatch
     suffix = uuid.uuid4().hex[:12]
     app_name = f"ci-session-{suffix}"
     user_id = f"user-{suffix}"
+    from auth import User
+    from observability.user_context import set_user_context
+
+    set_user_context(User(uid=user_id))
     session_id = f"session-{suffix}"
     remembered_phrase = f"controller-{suffix} uses DALI-2"
 

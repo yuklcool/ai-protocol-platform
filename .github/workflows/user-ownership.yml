@@ -12,6 +12,8 @@ jobs:
     env:
       LOCAL_MODE: "1"
       SELF_HOSTED_MODE: "1"
+      ADK_ARTIFACT_ROOT: ${{ runner.temp }}/user-artifacts
+      OBJECT_STORAGE_LOCAL_ROOT: ${{ runner.temp }}/user-objects
       DATA_BACKEND: memory
       AUTH_BACKEND: stub
       AIP_TEST_ISOLATED_NETWORK: "1"

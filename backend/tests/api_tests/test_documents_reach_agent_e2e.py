@@ -49,6 +49,7 @@ class InputProbe(BaseLlm):
 def stack(monkeypatch, tmp_path):
     monkeypatch.setenv("OBJECT_STORAGE_BACKEND", "local")
     monkeypatch.setenv("OBJECT_STORAGE_LOCAL_ROOT", str(tmp_path))
+    monkeypatch.setenv("ADK_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
     repo = MemoryRepository()
     reset_repository_for_testing(repo)
     invalidate_cache(clear_last_known_good=True)
