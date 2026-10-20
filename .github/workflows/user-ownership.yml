@@ -10,12 +10,14 @@ jobs:
   user-ownership:
     runs-on: ubuntu-latest
     env:
-      LOCAL_MODE: "1"
       SELF_HOSTED_MODE: "1"
-      ADK_ARTIFACT_ROOT: ${{ runner.temp }}/user-artifacts
-      OBJECT_STORAGE_LOCAL_ROOT: ${{ runner.temp }}/user-objects
+      ADK_ARTIFACT_ROOT: /tmp/aip-user-artifacts
+      OBJECT_STORAGE_LOCAL_ROOT: /tmp/aip-user-objects
       DATA_BACKEND: memory
-      AUTH_BACKEND: stub
+      AUTH_BACKEND: local-jwt
+      JWT_SIGNING_KEY: user-ownership-ci-signing-key-at-least-32-bytes
+      SESSION_BACKEND: memory
+      MEMORY_BACKEND: memory
       AIP_TEST_ISOLATED_NETWORK: "1"
       OTEL_SDK_DISABLED: "true"
       TRACE_EXPORT_ENABLED: "0"

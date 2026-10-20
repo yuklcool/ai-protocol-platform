@@ -257,7 +257,7 @@ jobs:
 
       - name: Verify PostgreSQL repository and fixture seed
         run: |
-          docker compose up -d postgres
+          docker compose up -d --wait postgres
           docker compose run --rm --no-deps \
             -e DATA_BACKEND=postgres \
             -e DATABASE_URL=postgresql://aip:aip-local-change-me@postgres:5432/aip \
