@@ -34,6 +34,9 @@ interface UseSkillSessionsReturn {
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
+  nextCursor: string | null;
+  loadMore: () => void;
+  isLoadingMore: boolean;
 }
 
 /**
@@ -51,42 +54,84 @@ interface UseSkillSessionsReturn {
  */
 export function useSkillSessions(skillFilter: string | null): UseSkillSessionsReturn {
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const generationRef = useRef(0);
+  const busyRef = useRef(false);
+  const cursorRef = useRef<string | null>(null);
+  const consumedRef = useRef(new Set<string>());
 
-  const fetch_ = useCallback(() => {
+  const request = useCallback((cursor: string | null) => {
+    if (cursor !== null && (busyRef.current || consumedRef.current.has(cursor))) return;
     abortRef.current?.abort();
+    const generation = ++generationRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
+    busyRef.current = true;
+    const isCurrent = () => generation === generationRef.current && !controller.signal.aborted;
 
-    setIsLoading(true);
+    setIsLoading(cursor === null);
+    setIsLoadingMore(cursor !== null);
     setError(null);
 
-    const qs = skillFilter ? `?skill_id=${encodeURIComponent(skillFilter)}` : "";
-    fetchWithAuth(`/api/proxy/api/sessions${qs}`, {
+    // 保留首屏原有 query，只有翻页才附加 cursor。
+    const filter = skillFilter ? `skill_id=${encodeURIComponent(skillFilter)}` : "";
+    const query = [filter, cursor === null ? "" : `cursor=${encodeURIComponent(cursor)}`].filter(Boolean).join("&");
+    fetchWithAuth(`/api/proxy/api/sessions${query ? `?${query}` : ""}`, {
       signal: controller.signal,
     })
       .then((res) => {
+        if (!isCurrent()) return;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<ListSessionsResponse>;
       })
       .then((data) => {
-        setSessions(data.sessions);
+        if (!isCurrent() || !data) return;
+        if (cursor === null) consumedRef.current.clear();
+        else consumedRef.current.add(cursor);
+        const next = data.next_cursor ?? null;
+        cursorRef.current = next !== null && consumedRef.current.has(next) ? null : next;
+        setNextCursor(cursorRef.current);
+        setSessions((previous) => {
+          if (!isCurrent()) return previous;
+          const rows = cursor === null ? data.sessions : [...previous, ...data.sessions];
+          const seen = new Set<string>();
+          return rows.filter((row) => {
+            if (seen.has(row.session_id)) return false;
+            seen.add(row.session_id);
+            return true;
+          });
+        });
       })
-      .catch((err: Error) => {
-        if (err.name !== "AbortError") {
-          setError("Failed to load sessions");
-        }
+      .catch(() => {
+        if (isCurrent()) setError("Failed to load sessions");
       })
       .finally(() => {
+        if (!isCurrent()) return;
+        busyRef.current = false;
         setIsLoading(false);
+        setIsLoadingMore(false);
       });
   }, [skillFilter]);
 
+  const fetch_ = useCallback(() => request(null), [request]);
+  const loadMore = useCallback(() => {
+    if (cursorRef.current !== null) request(cursorRef.current);
+  }, [request]);
+
   useEffect(() => {
+    setSessions([]);
+    setNextCursor(null);
+    cursorRef.current = null;
+    consumedRef.current.clear();
     fetch_();
-    return () => abortRef.current?.abort();
+    return () => {
+      abortRef.current?.abort();
+      busyRef.current = false;
+    };
   }, [fetch_]);
 
   useEffect(() => {
@@ -99,5 +144,5 @@ export function useSkillSessions(skillFilter: string | null): UseSkillSessionsRe
   // mutates, both hooks refetch. See lib/sessionEvents.ts.
   useEffect(() => subscribeSessionsChanged(fetch_), [fetch_]);
 
-  return { sessions, isLoading, error, refetch: fetch_ };
+  return { sessions, isLoading, error, refetch: fetch_, nextCursor, loadMore, isLoadingMore };
 }

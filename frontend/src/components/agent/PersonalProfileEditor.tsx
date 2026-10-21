@@ -16,9 +16,9 @@ export function PersonalProfileEditor({ uid, email }: { uid: string; email?: str
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setReady(false); setNotice(""); setNoticeTone("danger");
-    const skillPath = email ? `/admin/accounts/${encodeURIComponent(email)}/skills` : `/skills?owner_id=${encodeURIComponent(uid)}&limit=200`;
-    Promise.all([consoleApi<Profile>(path), consoleApi<Array<{skillId: string; displayName: string; name: string}>>(skillPath)])
-      .then(([value, skills]) => { if (!cancelled) { setReady(true); setProfile(value); setOptions(skills.map(skill => ({ id: skill.skillId, label: skill.displayName || skill.name }))); } })
+    const skillPath = email ? `/admin/accounts/${encodeURIComponent(email)}/skills` : `/skills?ownerId=${encodeURIComponent(uid)}&limit=200`;
+    Promise.all([consoleApi<Profile>(path), consoleApi<Array<{skillId: string; displayName: string; name: string; ownerId?: string}>>(skillPath)])
+      .then(([value, skills]) => { if (!cancelled) { setReady(true); setProfile(value); setOptions(skills.filter(skill => skill.ownerId === undefined || skill.ownerId === uid).map(skill => ({ id: skill.skillId, label: skill.displayName || skill.name }))); } })
       .catch(error => { if (!cancelled) setNotice(errorText(error)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

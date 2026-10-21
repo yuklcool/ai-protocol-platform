@@ -2,7 +2,7 @@
 
 基于 Google ADK 的开源智能体应用平台，将 **Root Agent、Skills、AG-UI、A2UI、MCP、MCP Apps 与 A2A** 接入统一运行链路，支持中文界面和私有化部署。
 
-平台只有一个面向用户的 Root Agent。模型、工具、MCP、知识和交互行为由 Root Agent 统一配置；Skill 用于复用指令、参考资料和资源文件。用户从普通对话进入，智能体可以调用工具、生成交互表单，并在刷新后恢复会话和界面状态。
+平台只有一个面向用户的 Root Agent。模型、工具、MCP、知识和交互行为由 Root Agent 统一配置；Skill 用于复用指令、参考资料和资源文件。登录后进入稳定工作台，选择开始任务、恢复会话或查找成果；智能体可以调用工具、生成交互表单，并在刷新后恢复会话和界面状态。
 
 **界面设计：**全站浅色、淡紫与薄荷绿的分层玻璃工作台，规范见 [DESIGN.md](DESIGN.md)，可查看[交互式设计示意稿](outputs/glass-workspace-design.html)。逐页覆盖及尚未运行验证的边界见[界面检查清单](docs/design/ui-redesign-acceptance.md)。
 
@@ -13,7 +13,9 @@
 | 能力 | 使用方式 |
 | --- | --- |
 | 统一智能体 | 在 `/agent` 配置模型、指令、能力绑定、权限与交互，在 `/chat/root-agent` 对话 |
-| 可复用技能 | 在 `/skills` 管理指令、参考资料、资源文件和访问控制 |
+| 工作台与历史 | `/workspace` 提供新任务和最近会话；`/sessions` 分页查找并回到原会话，搜索仅覆盖已加载记录 |
+| 我的成果 | `/results` 选择可访问会话后查看持久化 A2UI 交互成果摘要，再回原对话；不是全量文件索引，不包含上传附件 |
+| 可复用技能 | `/skills` 能力中心区分发现、个人启用与使用；Studio 开启时独立编辑指令、参考资料、资源文件和访问控制 |
 | 模型接入 | 在 `/admin/model-providers` 按步骤添加模型服务、选择模型、测试并用于平台 Root |
 | 交互式界面 | AG-UI 传递运行事件，A2UI 渲染表单、操作和状态更新 |
 | MCP 与 MCP Apps | 服务管理、健康检查、能力发现、工具调用及独立源沙箱渲染 |
@@ -109,8 +111,9 @@ docker compose up -d --build
 | 用途 | 默认地址或接口 |
 | --- | --- |
 | 前端 | `http://localhost:3456` |
+| 工作台 / 历史 / 成果 | `/workspace` / `/sessions` / `/results` |
 | Root 对话 | `/chat/root-agent` |
-| 管理入口 | `/admin` |
+| 管理就绪与资源接入 | `/admin`（展示真实配置与模型测试记录，不代替目标账号验收） |
 | 后端接口文档 | `http://localhost:1956/docs` |
 | 后端健康检查 | `GET /health` |
 | 统一 AG-UI 流 | `POST /api/agent/stream` |

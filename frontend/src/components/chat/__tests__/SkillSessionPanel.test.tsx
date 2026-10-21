@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import { I18nProvider } from "@/contexts/I18nContext";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { SkillSessionPanel } from "../SkillSessionPanel";
@@ -19,6 +20,48 @@ function makeSession(overrides: Partial<ChatSessionSummary> = {}): ChatSessionSu
     ...overrides,
   };
 }
+
+describe("SkillSessionPanel — 错误与分页", () => {
+  it("错误时显示可用键盘触发的重试而不是空状态", async () => {
+    const retry = vi.fn();
+    render(<SkillSessionPanel sessions={[]} activeSessionId={null} isLoading={false} error="Failed" onRetry={retry} onSelectSession={vi.fn()} />);
+    const button = within(screen.getByRole("alert")).getByRole("button", { name: "Try again" });
+    expect(screen.queryByText("No previous sessions")).not.toBeInTheDocument();
+    button.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("分页错误保留已有行和下一页入口，加载中阻止重复操作", async () => {
+    const loadMore = vi.fn();
+    const props = { sessions: [makeSession()], activeSessionId: null, isLoading: false, error: "Failed", onRetry: vi.fn(), nextCursor: "next", onLoadMore: loadMore, onSelectSession: vi.fn() };
+    const view = render(<SkillSessionPanel {...props} />);
+    expect(screen.getByText("Test session")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Load more conversations" }));
+    expect(loadMore).toHaveBeenCalledTimes(1);
+    view.rerender(<SkillSessionPanel {...props} isLoadingMore />);
+    expect(screen.getByRole("button", { name: "Loading more conversations…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeDisabled();
+    expect(screen.getByRole("navigation")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Loading more conversations…");
+  });
+
+  it("刷新已有行时不隐藏列表、不误报空", () => {
+    render(<SkillSessionPanel sessions={[makeSession()]} activeSessionId={null} isLoading onSelectSession={vi.fn()} />);
+    expect(screen.getByText("Test session")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Loading sessions");
+    expect(screen.queryByText("No previous sessions")).not.toBeInTheDocument();
+  });
+
+  it("中文模式下显示历史错误、重试和分页文案", () => {
+    window.localStorage.setItem("ai-protocol-platform.locale", "zh-CN");
+    render(<I18nProvider><SkillSessionPanel sessions={[makeSession()]} activeSessionId={null} isLoading={false} error="Failed" onRetry={vi.fn()} nextCursor="next" onLoadMore={vi.fn()} onSelectSession={vi.fn()} /></I18nProvider>);
+    expect(screen.getByRole("alert")).toHaveTextContent("无法加载历史会话，请重试。");
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "加载更多对话" })).toBeInTheDocument();
+    window.localStorage.removeItem("ai-protocol-platform.locale");
+  });
+});
 
 describe("SkillSessionPanel", () => {
   it("renders session titles", () => {

@@ -9,6 +9,27 @@ on:
       - frontend/src/components/studio/**
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/src/lib/modelSetup.ts
+      - frontend/src/app/workspace/**
+      - frontend/src/app/sessions/**
+      - frontend/src/app/results/**
+      - frontend/src/app/skills/page.tsx
+      - frontend/src/components/workspace/**
+      - frontend/src/components/skills/**
+      - frontend/src/components/home/**
+      - frontend/src/hooks/useLandingTarget.ts
+      - frontend/src/hooks/useSkillSessions.ts
+      - frontend/src/hooks/useUserSkills.ts
+      - frontend/src/hooks/__tests__/useLandingTarget.test.tsx
+      - frontend/src/hooks/__tests__/useSkillSessions.test.ts
+      - frontend/src/hooks/__tests__/useUserSkills.test.tsx
+      - frontend/src/lib/sessionHref.ts
+      - frontend/src/lib/__tests__/sessionHref.test.ts
+      - frontend/src/lib/i18n/chat.ts
+      - backend/config/platform_config.py
+      - backend/protocols/sessions_route.py
+      - backend/tests/api_tests/test_sessions_route.py
+      - backend/tests/api_tests/test_sessions_recent.py
+      - backend/tests/unit/test_platform_config.py
       - backend/config/model_readiness.py
       - backend/tests/api_tests/test_model_setup_flow.py
       - backend/tests/fixtures/model_setup_probe.py
@@ -71,6 +92,27 @@ on:
       - frontend/src/components/studio/**
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/src/lib/modelSetup.ts
+      - frontend/src/app/workspace/**
+      - frontend/src/app/sessions/**
+      - frontend/src/app/results/**
+      - frontend/src/app/skills/page.tsx
+      - frontend/src/components/workspace/**
+      - frontend/src/components/skills/**
+      - frontend/src/components/home/**
+      - frontend/src/hooks/useLandingTarget.ts
+      - frontend/src/hooks/useSkillSessions.ts
+      - frontend/src/hooks/useUserSkills.ts
+      - frontend/src/hooks/__tests__/useLandingTarget.test.tsx
+      - frontend/src/hooks/__tests__/useSkillSessions.test.ts
+      - frontend/src/hooks/__tests__/useUserSkills.test.tsx
+      - frontend/src/lib/sessionHref.ts
+      - frontend/src/lib/__tests__/sessionHref.test.ts
+      - frontend/src/lib/i18n/chat.ts
+      - backend/config/platform_config.py
+      - backend/protocols/sessions_route.py
+      - backend/tests/api_tests/test_sessions_route.py
+      - backend/tests/api_tests/test_sessions_recent.py
+      - backend/tests/unit/test_platform_config.py
       - backend/config/model_readiness.py
       - backend/tests/api_tests/test_model_setup_flow.py
       - backend/tests/fixtures/model_setup_probe.py
@@ -145,6 +187,8 @@ jobs:
             -e DATA_BACKEND=memory \
             -e SESSION_BACKEND=memory \
             -e MEMORY_BACKEND=memory \
+            -e MODEL_REGISTRY_BACKEND=database \
+            -e AIP_TEST_ISOLATED_NETWORK=1 \
             -e PLATFORM_OWNER_EMAIL=platform@ci.local \
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
@@ -152,6 +196,9 @@ jobs:
               tests/api_tests/test_admin_model_providers.py \
               tests/api_tests/test_admin_model_probe.py \
               tests/api_tests/test_model_setup_flow.py \
+              tests/api_tests/test_sessions_route.py \
+              tests/api_tests/test_sessions_recent.py \
+              tests/unit/test_platform_config.py \
               tests/api_tests/test_admin_model_registry_settings.py \
               tests/unit/test_model_provider_registry.py \
               tests/unit/test_effective_models.py \
@@ -180,8 +227,32 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
-      - name: Verify provider management interactions
-        run: CI=true npm run test:run -- src/app/admin/model-providers/__tests__/ModelProvidersPage.test.tsx src/app/admin/__tests__/AdminHub.test.tsx
+      - name: Verify provider management and workspace continuity
+        env:
+          CI: "true"
+        run: |
+          npm run test:run -- \
+            src/app/admin/model-providers/__tests__/ModelProvidersPage.test.tsx \
+            src/app/admin/__tests__/AdminHub.test.tsx \
+            src/components/admin/__tests__/AgentReadiness.test.tsx \
+            src/components/workspace/__tests__/ResultsPage.test.tsx \
+            src/components/workspace/__tests__/WorkspacePages.test.tsx \
+            src/components/navigation/__tests__/ConsoleSidebar.test.tsx \
+            src/components/navigation/__tests__/RootAgentBar.test.tsx \
+            src/components/navigation/__tests__/UserMenu.test.tsx \
+            src/components/home/__tests__/HomeGate.test.tsx \
+            src/hooks/__tests__/useLandingTarget.test.tsx \
+            src/hooks/__tests__/useSkillSessions.test.ts \
+            src/hooks/__tests__/useUserSkills.test.tsx \
+            src/components/agent/__tests__/PersonalProfileEditor.test.tsx \
+            src/components/studio/__tests__/StudioPage.test.tsx \
+            src/components/skills/__tests__/SkillsPage.test.tsx \
+            src/components/chat/__tests__/ChatShell.composer.test.tsx \
+            src/components/chat/__tests__/SkillSessionPanel.test.tsx \
+            src/components/chat/__tests__/ChatShell.workspaceHome.test.tsx \
+            src/components/chat/__tests__/ChatShell.closeArtefactTab.test.tsx \
+            src/components/chat/__tests__/ChatShell.pricesArtefact.test.tsx \
+            src/lib/__tests__/sessionHref.test.ts
       - name: Build frontend for local JWT
         run: npm run build
 

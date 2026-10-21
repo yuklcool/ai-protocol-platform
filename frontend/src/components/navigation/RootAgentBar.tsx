@@ -24,7 +24,11 @@ export function RootAgentBar({}: {
       className="app-toolbar flex min-h-14 shrink-0 items-center gap-2 px-3 sm:gap-3 sm:px-5"
       aria-label="Root Agent navigation"
     >
-      <Link href="/" className="flex shrink-0 items-center" aria-label="Home">
+      <Link
+        href="/workspace"
+        className="flex shrink-0 items-center"
+        aria-label={locale.startsWith("zh") ? "返回工作台" : "Back to workspace"}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={BRANDING.logo.chatAvatar}

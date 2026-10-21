@@ -4,7 +4,7 @@ import { useConsoleCopy } from "@/components/admin/ConsolePrimitives";
 /**
  * Top-right account area for the SkillsBar.
  *
- * - Signed out → a "Sign in" button (Google popup via AuthContext.signIn).
+ * - Signed out → the shared password / OIDC / Google authentication control.
  * - Signed in  → the user's avatar (photoURL, else an initial chip) that opens
  *   a small menu with their name/email and Sign out.
  *
@@ -16,10 +16,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAdminScope } from "@/hooks/useAdminScope";
 import { useAuth } from "@/contexts/AuthContext";
+import { SignInButton } from "@/components/SignInButton";
 
 export function UserMenu() {
   const t = useConsoleCopy();
-  const { user, loading, signIn, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   // Admin discoverability: the /admin area was URL-only. Ask the backend for
   // the caller's admin scope lazily on first menu-open and reveal an "Admin"
@@ -50,17 +51,7 @@ export function UserMenu() {
     );
   }
 
-  if (!user) {
-    return (
-      <button
-        type="button"
-        onClick={() => void signIn()}
-        className="shrink-0 rounded-md border px-3 py-1.5 text-sm text-foreground hover:bg-muted"
-      >
-        {t("登录", "Sign in")}
-      </button>
-    );
-  }
+  if (!user) return <SignInButton />;
 
   const name = user.displayName || user.email || "Account";
   const initial = (user.displayName || user.email || "?")

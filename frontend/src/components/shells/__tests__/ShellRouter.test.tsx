@@ -13,7 +13,7 @@ vi.mock("@/components/shells/WorkbenchShell", () => ({
   WorkbenchShell: () => <div data-testid="workbench-shell" />,
 }));
 
-// ShellChrome is NOT mocked — we want to prove the shared top nav (Home link)
+// ShellChrome is NOT mocked — we want to prove the shared workspace navigation
 // wraps every mode. It uses useRouter; user.uid is undefined so useUserSkills
 // no-ops (no fetch).
 vi.mock("next/navigation", () => ({
@@ -80,16 +80,14 @@ describe("ShellRouter dispatch", () => {
     expect(screen.queryByTestId("chat-shell")).not.toBeNull();
   });
 
-  // v6.6.0: the shared top nav (Home + skill switcher) wraps EVERY shell mode
-  // so a user routed into a specialised shell is never stranded without a way
-  // to navigate home or switch skills.
+  // Every shell mode keeps a route back to the signed-in workspace.
   it.each([
     ["chat-primary", "chat-shell"],
     ["doc-compare", "doc-compare-shell"],
     ["workbench-primary", "workbench-shell"],
-  ] as const)("renders ShellChrome (Home nav) around %s", (mode, testId) => {
+  ] as const)("renders ShellChrome (workspace nav) around %s", (mode, testId) => {
     renderWith({ mode });
     expect(screen.queryByTestId(testId)).not.toBeNull();
-    expect(screen.queryByLabelText("Home")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Back to workspace" })).toHaveAttribute("href", "/workspace");
   });
 });

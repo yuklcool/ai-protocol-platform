@@ -6,7 +6,7 @@
 
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -67,10 +67,12 @@ function StudioGate({ skillId }: { skillId: string }) {
 
 function StudioInner({ skillId }: { skillId: string }) {
   const { locale } = useI18n();
-  const isNew = skillId === "new";
   const router = useRouter();
   const [draft, setDraft] = useState<StudioDraft>(() => emptyDraft());
-  const [loadingSkill, setLoadingSkill] = useState(!isNew);
+  const createdSkillId = useRef<string | null>(null);
+  const saving = useRef(false);
+  const isNew = skillId === "new" && !draft.skillId;
+  const [loadingSkill, setLoadingSkill] = useState(skillId !== "new");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [pristine, setPristine] = useState<string>(() => JSON.stringify(emptyDraft()));
@@ -83,8 +85,10 @@ function StudioInner({ skillId }: { skillId: string }) {
   );
 
   useEffect(() => {
-    if (isNew) return;
+    if (skillId === "new" || skillId === createdSkillId.current) return;
+    createdSkillId.current = null;
     let cancelled = false;
+    setLoadError(null);
     setLoadingSkill(true);
     fetchWithAuth(`/api/proxy/api/skills/${skillId}`)
       .then(async (res) => {
@@ -104,15 +108,19 @@ function StudioInner({ skillId }: { skillId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [isNew, skillId]);
+  }, [skillId]);
 
   const handleSave = useCallback(async () => {
+    if (saving.current) return;
+    saving.current = true;
     setSaveState({ status: "saving" });
     try {
-      const body = buildSaveBody(draft, isNew);
-      const path = isNew ? "/api/proxy/api/skills" : `/api/proxy/api/skills/${skillId}`;
+      const targetId = skillId === "new" ? createdSkillId.current : skillId;
+      const creating = !targetId;
+      const body = buildSaveBody(draft, creating);
+      const path = creating ? "/api/proxy/api/skills" : `/api/proxy/api/skills/${targetId}`;
       const res = await fetchWithAuth(path, {
-        method: isNew ? "POST" : "PUT",
+        method: creating ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -128,10 +136,15 @@ function StudioInner({ skillId }: { skillId: string }) {
         return;
       }
       const saved = (await res.json()) as Skill;
+      if (typeof saved?.skillId !== "string" || !/^[A-Za-z0-9_-]+$/.test(saved.skillId) || saved.skillId === "new") {
+        throw new Error("保存响应缺少有效的 Skill ID");
+      }
       const savedDraft = skillToDraft(saved);
-      setDraft(savedDraft);
+      if (creating) createdSkillId.current = saved.skillId;
+      setDraft(current => current === draft ? savedDraft : { ...current, skillId: saved.skillId, ownerId: saved.ownerId });
       setPristine(JSON.stringify(savedDraft));
       setSaveState({ status: "ok", message: t("studio.saved") });
+      if (creating) router.replace(`/skills/studio/${saved.skillId}`);
     } catch (err) {
       setSaveState({
         status: "error",
@@ -139,8 +152,10 @@ function StudioInner({ skillId }: { skillId: string }) {
           ? t("builder.invalidFiles")
           : err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      saving.current = false;
     }
-  }, [draft, isNew, skillId, t]);
+  }, [draft, skillId, router, t]);
 
   const isDirty = useMemo(() => JSON.stringify(draft) !== pristine, [draft, pristine]);
 

@@ -2,6 +2,7 @@
 
 import NextLink from "next/link";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { AgentReadiness } from "@/components/admin/AgentReadiness";
 import { SignInRequired } from "@/components/chat/SignInRequired";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -109,7 +110,8 @@ const AREAS: Area[] = [
 ];
 
 export default function AdminHub() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const studioEnabled = process.env.NEXT_PUBLIC_ENABLE_SKILL_STUDIO === "true";
   const { user, loading } = useAuth();
   const { state, isAdmin, isPlatform, recheck } = useAdminScope(
     !loading && !!user,
@@ -129,6 +131,13 @@ export default function AdminHub() {
           <p className="text-sm text-muted-foreground">
             {t("admin.accessConnectionProblem")}
           </p>
+          <button
+            type="button"
+            onClick={() => void recheck()}
+            className="button-secondary mt-3 px-3 py-1.5 text-sm"
+          >
+            {t("admin.recheck")}
+          </button>
         </div>
       </Centered>
     );
@@ -166,34 +175,44 @@ export default function AdminHub() {
           <h1 className="page-header__title">{t("admin.title")}</h1>
           <p className="page-header__desc">{t("admin.subtitle")}</p>
         </div>
-        <div className="page-header__actions"><LanguageSwitcher /></div>
+        <div className="page-header__actions">
+          <NextLink href="/workspace" className="button-secondary px-3 py-2 text-sm">
+            {locale === "zh-CN" ? "返回工作台" : "Back to workspace"}
+          </NextLink>
+          <LanguageSwitcher />
+        </div>
       </header>
-      <div className="page-body grid gap-4 sm:grid-cols-2">
-        {areas.map((area) => (
-          <section key={area.title} className="glass-panel min-w-0 p-5">
-            <h2 className="font-medium">{t(area.title)}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t(area.question)}
-            </p>
-            <ul className="mt-3 space-y-1.5">
-              {area.links.map((link) => (
-                <li key={link.label}>
-                  <NextLink
-                    href={link.href}
-                    className="inline-flex rounded-md px-2 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    {t(link.label)}
-                  </NextLink>
-                  {link.note && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {t(link.note)}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+      <div className="page-body">
+        <AgentReadiness key={user.uid} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {areas.map((area) => (
+            <section key={area.title} className="glass-panel min-w-0 p-5">
+              <h2 className="font-medium">{t(area.title)}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(area.question)}
+              </p>
+              <ul className="mt-3 space-y-1.5">
+                {area.links
+                  .filter((link) => studioEnabled || link.href !== "/skills/studio/new")
+                  .map((link) => (
+                    <li key={link.label}>
+                      <NextLink
+                        href={link.href}
+                        className="inline-flex rounded-md px-2 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                      >
+                        {t(link.label)}
+                      </NextLink>
+                      {link.note && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {t(link.note)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       </div>
     </main>
   );
@@ -201,7 +220,7 @@ export default function AdminHub() {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="page-container flex min-h-screen items-center justify-center p-8">
+    <main className="page-container flex min-h-[100dvh] items-center justify-center p-8">
       {children}
     </main>
   );

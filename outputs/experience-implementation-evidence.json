@@ -1,0 +1,333 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-21T01:33:03.660Z",
+  "project": "ai-protocol-platform",
+  "branch": "feat/experience-continuity",
+  "baselineCommit": "03af5c3717a31f91e3646ca7cae854253c378453",
+  "verdict": "implementation-delivered-production-acceptance-blocked",
+  "claims": {
+    "frontendUnitPassed": 287,
+    "backendApiPassed": 144,
+    "backendConfigPassed": 10,
+    "localProductionBuildPassed": false,
+    "realBrowserExecuted": false,
+    "postgresAcceptanceExecuted": false,
+    "realExternalProviderCalled": false,
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  },
+  "observedChecks": [
+    {
+      "name": "JavaScript syntax: frontend/e2e/model-provider-studio-live.spec.js",
+      "passed": true
+    },
+    {
+      "name": "JavaScript syntax: frontend/e2e/ui-responsive-live.spec.js",
+      "passed": true
+    },
+    {
+      "name": "Scoped tracked diff whitespace check",
+      "passed": true
+    },
+    {
+      "name": "Workflow YAML, trigger paths, fixture order and 21 existing frontend test paths",
+      "passed": true
+    },
+    {
+      "name": "Backend CI database-registry mode and session/config regression paths",
+      "passed": true
+    }
+  ],
+  "historicalRuns": [
+    {
+      "id": "frontend-unit",
+      "taskId": "y77efu",
+      "status": "completed",
+      "passed": 287,
+      "sourceRecordId": "01a15c05-a9db-7853-a6bc-5c248850d798",
+      "command": "$env:CI=\"true\"; & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/vitest/vitest.mjs\" run --root \"D:/06git/01python/08A2UI/ai-protocol-platform/frontend\" --config \"D:/06git/01python/08A2UI/ai-protocol-platform/frontend/vitest.config.ts\" src/components/workspace/__tests__/ResultsPage.test.tsx src/components/workspace/__tests__/WorkspacePages.test.tsx src/components/navigation/__tests__/ConsoleSidebar.test.tsx src/components/navigation/__tests__/RootAgentBar.test.tsx src/components/navigation/__tests__/UserMenu.test.tsx src/components/home/__tests__/HomeGate.test.tsx src/hooks/__tests__/useLandingTarget.test.tsx src/hooks/__tests__/useSkillSessions.test.ts src/hooks/__tests__/useUserSkills.test.tsx src/components/agent/__tests__/PersonalProfileEditor.test.tsx src/components/studio/__tests__/StudioPage.test.tsx src/components/skills/__tests__/SkillsPage.test.tsx src/app/admin/__tests__/AdminHub.test.tsx src/components/admin/__tests__/AgentReadiness.test.tsx src/components/chat/__tests__/ChatShell.composer.test.tsx src/components/chat/__tests__/SkillSessionPanel.test.tsx src/components/chat/__tests__/ChatShell.workspaceHome.test.tsx src/components/chat/__tests__/ChatShell.closeArtefactTab.test.tsx src/components/chat/__tests__/ChatShell.pricesArtefact.test.tsx src/lib/__tests__/sessionHref.test.ts",
+      "recordedAt": "2026-10-21T01:13:57.453Z",
+      "output": "Shell ID: y77efu\nCommand: $env:CI=\"true\"; & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/vitest/vitest.mjs\" run --root \"D:/06git/01python/08A2UI/ai-protocol-platform/frontend\" --config \"D:/06git/01python/08A2UI/ai-protocol-platform/frontend/vitest.config.ts\" src/components/workspace/__tests__/ResultsPage.test.tsx src/components/workspace/__tests__/WorkspacePages.test.tsx src/components/navigation/__tests__/ConsoleSidebar.test.tsx src/components/navigation/__tests__/RootAgentBar.test.tsx src/components/navigation/__tests__/UserMenu.test.tsx src/components/home/__tests__/HomeGate.test.tsx src/hooks/__tests__/useLandingTarget.test.tsx src/hooks/__tests__/useSkillSessions.test.ts src/hooks/__tests__/useUserSkills.test.tsx src/components/agent/__tests__/PersonalProfileEditor.test.tsx src/components/studio/__tests__/StudioPage.test.tsx src/components/skills/__tests__/SkillsPage.test.tsx src/app/admin/__tests__/AdminHub.test.tsx src/components/admin/__tests__/AgentReadiness.test.tsx src/components/chat/__tests__/ChatShell.composer.test.tsx src/components/chat/__tests__/SkillSessionPanel.test.tsx src/components/chat/__tests__/ChatShell.workspaceHome.test.tsx src/components/chat/__tests__/ChatShell.closeArtefactTab.test.tsx src/components/chat/__tests__/ChatShell.pricesArtefact.test.tsx src/lib/__tests__/sessionHref.test.ts\nStatus: completed\nDuration: 57s\nTimestamp: 2026-10-21T01:13:57.453Z\n\nStdout (full snapshot; chars=0-1760; caught_up=true; more_expected=false):\n\n RUN  v1.6.1 D:/06git/01python/08A2UI/ai-protocol-platform/frontend\n\n ✓ src/components/chat/__tests__/ChatShell.composer.test.tsx  (30 tests) 3693ms\n ✓ src/components/skills/__tests__/SkillsPage.test.tsx  (25 tests) 3873ms\n ✓ src/components/chat/__tests__/ChatShell.workspaceHome.test.tsx  (9 tests) 2580ms\n ✓ src/components/chat/__tests__/SkillSessionPanel.test.tsx  (22 tests) 683ms\n ✓ src/components/chat/__tests__/ChatShell.closeArtefactTab.test.tsx  (9 tests) 2149ms\n ✓ src/components/admin/__tests__/AgentReadiness.test.tsx  (22 tests) 2477ms\n ✓ src/hooks/__tests__/useSkillSessions.test.ts  (14 tests) 1942ms\n ✓ src/components/workspace/__tests__/WorkspacePages.test.tsx  (14 tests) 872ms\n ✓ src/components/studio/__tests__/StudioPage.test.tsx  (14 tests) 2953ms\n ✓ src/components/chat/__tests__/ChatShell.pricesArtefact.test.tsx  (4 tests) 743ms\n ✓ src/components/workspace/__tests__/ResultsPage.test.tsx  (11 tests) 1119ms\n ✓ src/components/navigation/__tests__/UserMenu.test.tsx  (10 tests) 373ms\n ✓ src/app/admin/__tests__/AdminHub.test.tsx  (12 tests) 551ms\n ✓ src/components/navigation/__tests__/ConsoleSidebar.test.tsx  (68 tests) 5740ms\n ✓ src/hooks/__tests__/useUserSkills.test.tsx  (6 tests) 324ms\n ✓ src/components/agent/__tests__/PersonalProfileEditor.test.tsx  (3 tests) 295ms\n ✓ src/components/navigation/__tests__/RootAgentBar.test.tsx  (5 tests) 141ms\n ✓ src/components/home/__tests__/HomeGate.test.tsx  (4 tests) 18ms\n ✓ src/hooks/__tests__/useLandingTarget.test.tsx  (3 tests) 5ms\n ✓ src/lib/__tests__/sessionHref.test.ts  (2 tests) 4ms\n\n Test Files  20 passed (20)\n      Tests  287 passed (287)\n   Start at  09:12:52\n   Duration  55.01s (transform 3.19s, setup 978ms, collect 14.59s, tests 30.54s, environment 4.86s, prepare 958ms)\n\n\n\nStderr (full snapshot; chars=0-143; caught_up=true; more_expected=false):\nThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.\n"
+    },
+    {
+      "id": "backend-api",
+      "taskId": "hvzb43",
+      "status": "completed",
+      "passed": 144,
+      "sourceRecordId": "01a15c04-4129-7e37-a7f0-a96cb6948c6b",
+      "command": "$env:DATA_BACKEND=\"memory\"; $env:AIP_TEST_ISOLATED_NETWORK=\"1\"; $env:MODEL_REGISTRY_BACKEND=\"database\"; & \"D:/Program Files/Python/Python311/Scripts/uv.exe\" run --directory backend --no-sync pytest -q tests/api_tests/test_model_setup_flow.py tests/api_tests/test_admin_model_probe.py tests/api_tests/test_admin_model_providers.py tests/api_tests/test_sessions_route.py tests/api_tests/test_sessions_recent.py",
+      "recordedAt": "2026-10-21T01:12:25.114Z",
+      "output": "Shell ID: hvzb43\nCommand: $env:DATA_BACKEND=\"memory\"; $env:AIP_TEST_ISOLATED_NETWORK=\"1\"; $env:MODEL_REGISTRY_BACKEND=\"database\"; & \"D:/Program Files/Python/Python311/Scripts/uv.exe\" run --directory backend --no-sync pytest -q tests/api_tests/test_model_setup_flow.py tests/api_tests/test_admin_model_probe.py tests/api_tests/test_admin_model_providers.py tests/api_tests/test_sessions_route.py tests/api_tests/test_sessions_recent.py\nStatus: completed\nDuration: 38s\nTimestamp: 2026-10-21T01:12:25.114Z\n\nStdout (full snapshot; chars=0-3544; caught_up=true; more_expected=false):\n........................................................................ [ 50%]\r\n........................................................................ [100%]\r\n============================== warnings summary ===============================\r\n.venv\\Lib\\site-packages\\authlib\\_joserfc_helpers.py:8\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\.venv\\Lib\\site-packages\\authlib\\_joserfc_helpers.py:8: AuthlibDeprecationWarning: authlib.jose module is deprecated, please use joserfc instead.\r\n  It will be compatible before version 2.0.0.\r\n    from authlib.jose import ECKey\r\n\r\n.venv\\Lib\\site-packages\\google\\adk\\features\\_feature_decorator.py:72\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\.venv\\Lib\\site-packages\\google\\adk\\features\\_feature_decorator.py:72: UserWarning: [EXPERIMENTAL] feature FeatureName.PLUGGABLE_AUTH is enabled.\r\n    check_feature_enabled()\r\n\r\nadk\\session.py:77\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:77: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"gemini-\": EventsCompactionConfig(\r\n\r\nadk\\session.py:80\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:80: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"gpt-5.4\": EventsCompactionConfig(\r\n\r\nadk\\session.py:84\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:84: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"claude-\": EventsCompactionConfig(\r\n\r\nadk\\session.py:87\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:87: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"gpt-5\": EventsCompactionConfig(\r\n\r\nadk\\session.py:93\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:93: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    _DEFAULT_COMPACTION = EventsCompactionConfig(\r\n\r\ntests/api_tests/test_sessions_recent.py::test_returns_newest_qualifying_session\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\.venv\\Lib\\site-packages\\google\\adk\\cli\\fast_api.py:204: UserWarning: [EXPERIMENTAL] InMemoryCredentialService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    credential_service = InMemoryCredentialService()\r\n\r\ntests/api_tests/test_sessions_recent.py::test_returns_newest_qualifying_session\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\.venv\\Lib\\site-packages\\google\\adk\\auth\\credential_service\\in_memory_credential_service.py:33: UserWarning: [EXPERIMENTAL] BaseCredentialService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    super().__init__()\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n144 passed, 9 warnings in 28.44s\r\n\n\nStderr (full snapshot; chars=0-0; caught_up=true; more_expected=false):\n(no output)"
+    },
+    {
+      "id": "backend-config",
+      "taskId": "47xnge",
+      "status": "completed",
+      "passed": 10,
+      "sourceRecordId": "01a15c05-9296-7d07-a801-8cb55c744641",
+      "command": "$env:DATA_BACKEND=\"memory\"; $env:AIP_TEST_ISOLATED_NETWORK=\"1\"; & \"D:/Program Files/Python/Python311/Scripts/uv.exe\" run --directory backend --no-sync pytest -q tests/unit/test_platform_config.py",
+      "recordedAt": "2026-10-21T01:13:51.483Z",
+      "output": "Shell ID: 47xnge\nCommand: $env:DATA_BACKEND=\"memory\"; $env:AIP_TEST_ISOLATED_NETWORK=\"1\"; & \"D:/Program Files/Python/Python311/Scripts/uv.exe\" run --directory backend --no-sync pytest -q tests/unit/test_platform_config.py\nStatus: completed\nDuration: 26s\nTimestamp: 2026-10-21T01:13:51.483Z\n\nStdout (full snapshot; chars=0-2872; caught_up=true; more_expected=false):\n..........                                                               [100%]\r\n============================== warnings summary ===============================\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\.venv\\Lib\\site-packages\\authlib\\_joserfc_helpers.py:8: AuthlibDeprecationWarning: authlib.jose module is deprecated, please use joserfc instead.\r\n  It will be compatible before version 2.0.0.\r\n    from authlib.jose import ECKey\r\n\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\.venv\\Lib\\site-packages\\google\\adk\\features\\_feature_decorator.py:72: UserWarning: [EXPERIMENTAL] feature FeatureName.PLUGGABLE_AUTH is enabled.\r\n    check_feature_enabled()\r\n\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:77: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"gemini-\": EventsCompactionConfig(\r\n\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:80: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"gpt-5.4\": EventsCompactionConfig(\r\n\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:84: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"claude-\": EventsCompactionConfig(\r\n\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:87: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    \"gpt-5\": EventsCompactionConfig(\r\n\r\ntests/unit/test_platform_config.py::test_returns_code_default_when_no_doc\r\n  D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\backend\\adk\\session.py:93: UserWarning: [EXPERIMENTAL] EventsCompactionConfig: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.\r\n    _DEFAULT_COMPACTION = EventsCompactionConfig(\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n10 passed, 7 warnings in 17.66s\r\n\n\nStderr (full snapshot; chars=0-0; caught_up=true; more_expected=false):\n(no output)"
+    },
+    {
+      "id": "typescript",
+      "taskId": "6yw7xh",
+      "status": "completed",
+      "passed": null,
+      "sourceRecordId": "01a15c0b-f190-72bb-a3f2-561cb4b85683",
+      "command": "Get-ChildItem \"outputs\"; git diff --stat -- frontend backend README.md docs/configuration-guide.md docs/module-simplification.md; & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/typescript/bin/tsc\" --noEmit --project \"frontend/tsconfig.json\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+      "recordedAt": "2026-10-21T01:20:48.376Z",
+      "output": "Shell ID: 6yw7xh\nCommand: Get-ChildItem \"outputs\"; git diff --stat -- frontend backend README.md docs/configuration-guide.md docs/module-simplification.md; & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/typescript/bin/tsc\" --noEmit --project \"frontend/tsconfig.json\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nStatus: completed\nDuration: 35s\nTimestamp: 2026-10-21T01:20:48.376Z\n\nStdout (full snapshot; chars=0-2771; caught_up=true; more_expected=false):\n\r\n\r\n    Ŀ¼: D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\outputs\r\n\r\n\r\nMode                 LastWriteTime         Length Name                                                                 \r\n----                 -------------         ------ ----                                                                 \r\n-a----        2026/10/20     22:56          71305 experience-architecture-review.html                                  \r\n-a----        2026/10/20     22:57           1667 experience-architecture-validation.json                              \r\n-a----        2026/10/20     22:26          37748 glass-workspace-design.html                                          \r\n-a----        2026/10/20     22:56           7580 verify-experience-architecture.cjs                                   \r\n README.md                                          |   9 +-\n backend/admin/model_probe_routes.py                |   2 +\n backend/config/platform_config.py                  |   7 +\n backend/protocols/sessions_route.py                | 187 +++++++++-\n backend/tests/api_tests/test_model_setup_flow.py   | 148 ++++++++\n backend/tests/api_tests/test_sessions_route.py     | 306 ++++++++++++++++\n docs/configuration-guide.md                        |  14 +-\n docs/module-simplification.md                      |   6 +-\n frontend/src/app/admin/__tests__/AdminHub.test.tsx |  63 +++-\n frontend/src/app/admin/page.tsx                    |  77 ++--\n frontend/src/app/skills/page.tsx                   | 230 +++++++++---\n frontend/src/app/skills/studio/[skillId]/page.tsx  |  35 +-\n .../src/components/agent/PersonalProfileEditor.tsx |   6 +-\n .../agent/__tests__/PersonalProfileEditor.test.tsx |  25 ++\n frontend/src/components/chat/ChatShell.tsx         | 130 +++++--\n frontend/src/components/chat/SkillSessionPanel.tsx |  57 ++-\n .../chat/__tests__/ChatShell.composer.test.tsx     | 391 ++++++++++++++++++++-\n .../chat/__tests__/SkillSessionPanel.test.tsx      |  45 ++-\n frontend/src/components/home/HomeGate.tsx          |  29 +-\n .../components/home/__tests__/HomeGate.test.tsx    |  72 ++--\n .../src/components/navigation/ConsoleSidebar.tsx   |  68 ++--\n .../src/components/navigation/RootAgentBar.tsx     |   6 +-\n frontend/src/components/navigation/UserMenu.tsx    |  17 +-\n .../navigation/__tests__/UserMenu.test.tsx         |  90 ++++-\n .../src/hooks/__tests__/useLandingTarget.test.tsx  |  59 +---\n .../src/hooks/__tests__/useSkillSessions.test.ts   | 115 +++++-\n frontend/src/hooks/useLandingTarget.ts             |  70 +---\n frontend/src/hooks/useSkillSessions.ts             |  69 +++-\n frontend/src/hooks/useUserSkills.ts                |  64 ++--\n frontend/src/lib/i18n/chat.ts                      |  12 +\n 30 files changed, 1965 insertions(+), 444 deletions(-)\n\r\n\r\n\n\nStderr (full snapshot; chars=0-0; caught_up=true; more_expected=false):\n(no output)"
+    },
+    {
+      "id": "frontend-lint",
+      "taskId": "o5knsb",
+      "status": "completed",
+      "passed": null,
+      "sourceRecordId": "01a15c05-1205-770c-96a4-cb1f939e9b1d",
+      "command": "$files = @(git diff --name-only -- frontend); $files += @(git ls-files --others --exclude-standard -- frontend); $files = @($files | Where-Object { $_ -match '\\.(ts|tsx)$' } | Sort-Object -Unique | ForEach-Object { \"--file\"; $_ -replace '^frontend/', '' }); & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/next/dist/bin/next\" lint frontend $files --max-warnings 0",
+      "recordedAt": "2026-10-21T01:13:14.882Z",
+      "output": "Shell ID: o5knsb\nCommand: $files = @(git diff --name-only -- frontend); $files += @(git ls-files --others --exclude-standard -- frontend); $files = @($files | Where-Object { $_ -match '\\.(ts|tsx)$' } | Sort-Object -Unique | ForEach-Object { \"--file\"; $_ -replace '^frontend/', '' }); & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/next/dist/bin/next\" lint frontend $files --max-warnings 0\nStatus: completed\nDuration: 13s\nTimestamp: 2026-10-21T01:13:14.882Z\n\nStdout (full snapshot; chars=0-31; caught_up=true; more_expected=false):\n✔ No ESLint warnings or errors\n\n\nStderr (full snapshot; chars=0-489; caught_up=true; more_expected=false):\n`next lint` is deprecated and will be removed in Next.js 16.\nFor new projects, use create-next-app to choose your preferred linter.\nFor existing projects, migrate to the ESLint CLI:\nnpx @next/codemod@canary next-lint-to-eslint-cli .\n\nPages directory cannot be found at D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\pages or D:\\06git\\01python\\08A2UI\\ai-protocol-platform\\src\\pages. If using a custom path, please configure with the `no-html-link-for-pages` rule in your eslint config file.\n"
+    },
+    {
+      "id": "backend-ruff",
+      "taskId": "m00ics",
+      "status": "completed",
+      "passed": null,
+      "sourceRecordId": "01a15c03-a274-7d6a-86a0-d3a0b0f51d3d",
+      "command": "& \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/typescript/bin/tsc\" --noEmit --project \"frontend/tsconfig.json\"; & \"backend/.venv/Scripts/ruff.exe\" check backend/config/platform_config.py backend/admin/model_probe_routes.py backend/protocols/sessions_route.py backend/tests/api_tests/test_model_setup_flow.py backend/tests/api_tests/test_sessions_route.py; & \"backend/.venv/Scripts/ruff.exe\" format --check backend/config/platform_config.py backend/admin/model_probe_routes.py backend/protocols/sessions_route.py backend/tests/api_tests/test_model_setup_flow.py backend/tests/api_tests/test_sessions_route.py",
+      "recordedAt": "2026-10-21T01:11:44.488Z",
+      "output": "Shell ID: m00ics\nCommand: & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/typescript/bin/tsc\" --noEmit --project \"frontend/tsconfig.json\"; & \"backend/.venv/Scripts/ruff.exe\" check backend/config/platform_config.py backend/admin/model_probe_routes.py backend/protocols/sessions_route.py backend/tests/api_tests/test_model_setup_flow.py backend/tests/api_tests/test_sessions_route.py; & \"backend/.venv/Scripts/ruff.exe\" format --check backend/config/platform_config.py backend/admin/model_probe_routes.py backend/protocols/sessions_route.py backend/tests/api_tests/test_model_setup_flow.py backend/tests/api_tests/test_sessions_route.py\nStatus: completed\nDuration: 18s\nTimestamp: 2026-10-21T01:11:44.488Z\n\nStdout (full snapshot; chars=0-45; caught_up=true; more_expected=false):\nAll checks passed!\n5 files already formatted\n\n\nStderr (full snapshot; chars=0-0; caught_up=true; more_expected=false):\n(no output)"
+    },
+    {
+      "id": "production-build",
+      "taskId": "lcg0kw",
+      "status": "failed",
+      "passed": null,
+      "sourceRecordId": "01a15c06-a72c-784c-840b-6ece4cc60c7f",
+      "command": "$env:NEXT_TELEMETRY_DISABLED=\"1\"; & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/next/dist/bin/next\" build frontend",
+      "recordedAt": "2026-10-21T01:15:02.294Z",
+      "output": "Shell ID: lcg0kw\nCommand: $env:NEXT_TELEMETRY_DISABLED=\"1\"; & \"C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe\" \"frontend/node_modules/next/dist/bin/next\" build frontend\nStatus: failed\nDuration: 1m 36s\nTimestamp: 2026-10-21T01:15:02.294Z\n\nStdout (full snapshot; chars=0-52; caught_up=true; more_expected=false):\n   ▲ Next.js 15.5.24\n   - Environments: .env.local\n\n\n\nStderr (full snapshot; chars=0-641; caught_up=true; more_expected=false):\n\n> Build error occurred\nError: [safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {\"count\":50,\"threshold\":50,\"scope\":\"turn\",\"targets\":[\"D:\\\\06git\\\\01python\\\\08A2UI\\\\ai-protocol-platform\\\\frontend\\\\.next\\\\server\\\\vendor-chunks\\\\devlop.js\"],\"targetCount\":1}\n    at checkBulkDeleteGuard (D:\\Program Files\\WorkBuddyAI\\resources\\app.asar.unpacked\\cli\\vendor\\shim\\node-safe-delete-shim.cjs:243:19)\n    at tryTrash (D:\\Program Files\\WorkBuddyAI\\resources\\app.asar.unpacked\\cli\\vendor\\shim\\node-safe-delete-shim.cjs:595:5)\n    at Object.unlink (D:\\Program Files\\WorkBuddyAI\\resources\\app.asar.unpacked\\cli\\vendor\\shim\\node-safe-delete-shim.cjs:748:9)\n"
+    }
+  ],
+  "manifest": [
+    {
+      "file": ".github/workflows/model-provider-gate.yml",
+      "sha256": "15287c9f96f6bc2da105db6b3bc238cffabd7375fb15f43e139c08f6dc3b03e7"
+    },
+    {
+      "file": "README.md",
+      "sha256": "f36c5b1ccb5c7c771fe5599c190c6f9f698001130cf882e97d333da28608a2cb"
+    },
+    {
+      "file": "backend/admin/model_probe_routes.py",
+      "sha256": "9d6600e550e04603798b645346b889b8edf39a6f344537c7dab049ef25425d66"
+    },
+    {
+      "file": "backend/config/platform_config.py",
+      "sha256": "6b26f6c93215da8d510234989576277fbdfb9896aeb8f4c17f22f6bdeec8d947"
+    },
+    {
+      "file": "backend/protocols/sessions_route.py",
+      "sha256": "89ce38f8bca956a16d93de82621aa9f514599ed7b8a8b7d1cb59d2348b3b84fd"
+    },
+    {
+      "file": "backend/tests/api_tests/test_model_setup_flow.py",
+      "sha256": "44e84097508796135bb34ee7c22a24d83f714914edc81389d30a8406fde01cd2"
+    },
+    {
+      "file": "backend/tests/api_tests/test_sessions_route.py",
+      "sha256": "54817df7233dd010b1801fff23c6a0df376a133c75a6351026607ecd2d80c659"
+    },
+    {
+      "file": "docs/configuration-guide.md",
+      "sha256": "55f2c58d31d894e52e82e37fc0d11b95dfb9a6edd3fa184f1b0a979b5b6ba550"
+    },
+    {
+      "file": "docs/module-simplification.md",
+      "sha256": "c04864dc5093fc4d6c70551e58b2b751ba8b55ffd5fa1453bea9e9edb49d3831"
+    },
+    {
+      "file": "frontend/e2e/model-provider-studio-live.spec.js",
+      "sha256": "c76ba404ea402fa6fc296ace4aacf76b25ebaaa649a0ded165666c93e74bb9ad"
+    },
+    {
+      "file": "frontend/e2e/ui-responsive-live.spec.js",
+      "sha256": "64b313af0735cf16b2153fed9b2f2121b4e551cb1575dfe6c178496f0dadf69d"
+    },
+    {
+      "file": "frontend/src/app/admin/__tests__/AdminHub.test.tsx",
+      "sha256": "321aa3fa2bc6256573af9578173579c90408e1802056f432af638d1ec32806a0"
+    },
+    {
+      "file": "frontend/src/app/admin/page.tsx",
+      "sha256": "3f909c81e6368b69cffec724b3cf952ea171683f26969d3fc5435bfd49aa51d7"
+    },
+    {
+      "file": "frontend/src/app/results/page.tsx",
+      "sha256": "d0ca2fc1727991add0d4eae1033b6177b54b327d22321cda98c6e08851f3a7fa"
+    },
+    {
+      "file": "frontend/src/app/sessions/page.tsx",
+      "sha256": "59fae4e1f7e12dd3c114b7d0aed4b108f2f906c06c10775d89dc133d6fdfcc34"
+    },
+    {
+      "file": "frontend/src/app/skills/page.tsx",
+      "sha256": "261bc41214579e4d402e5ee184f05818244a15fadf45277935ef34b7e3a22657"
+    },
+    {
+      "file": "frontend/src/app/skills/studio/[skillId]/page.tsx",
+      "sha256": "9981b5d01589d96d0fba450b002c06d0b6a62dec34311bf8af1be6e373be4257"
+    },
+    {
+      "file": "frontend/src/app/workspace/page.tsx",
+      "sha256": "c64fa3579d76a083945a2273ff65fae21736d1ef98bce9c38526dc29a0f939b1"
+    },
+    {
+      "file": "frontend/src/components/admin/AgentReadiness.tsx",
+      "sha256": "cd7b0e2d91a15b382e3780c68c939a4637a90faa74c5be131dac15bee93663b2"
+    },
+    {
+      "file": "frontend/src/components/admin/__tests__/AgentReadiness.test.tsx",
+      "sha256": "bb40ac14153a7a9448b5f67c85ca0e645986a9fd102f599161da848c7410dac8"
+    },
+    {
+      "file": "frontend/src/components/agent/PersonalProfileEditor.tsx",
+      "sha256": "62085dbdc40c3687618356d321a00cb51052802bc9ae3d692c17030b5fa52464"
+    },
+    {
+      "file": "frontend/src/components/agent/__tests__/PersonalProfileEditor.test.tsx",
+      "sha256": "64b4ede524b5c613a643255ee1d4054397e4b2f7f99bc918d5a4619054e40682"
+    },
+    {
+      "file": "frontend/src/components/chat/ChatShell.tsx",
+      "sha256": "1a28e75a624db88b833796703a6fa34f158f61854ca2f97fcbff863bf5b768e1"
+    },
+    {
+      "file": "frontend/src/components/chat/SkillSessionPanel.tsx",
+      "sha256": "aedb3be617b62ab0b9dd49114eb800eb489e4eb5a3abaec1f58da3d5a4caf427"
+    },
+    {
+      "file": "frontend/src/components/chat/__tests__/ChatShell.composer.test.tsx",
+      "sha256": "737ccdd3a11fd826c1da0071af98faeaed7d310b29aabd945a2e7c2b95f0846e"
+    },
+    {
+      "file": "frontend/src/components/chat/__tests__/SkillSessionPanel.test.tsx",
+      "sha256": "0f787c59f94e5bf3a76d97e30a3793aa8aa0312548b3c87c0ca900f5155f492b"
+    },
+    {
+      "file": "frontend/src/components/home/HomeGate.tsx",
+      "sha256": "acdb74acf1161ff19fe359b17446b013681c8ef3792752f228a24b46a7d7c40c"
+    },
+    {
+      "file": "frontend/src/components/home/__tests__/HomeGate.test.tsx",
+      "sha256": "2ed447eddcccd45daa1e031dd745a3c15917a3927ad2025cac00c8f1d9de4f2a"
+    },
+    {
+      "file": "frontend/src/components/navigation/ConsoleSidebar.tsx",
+      "sha256": "94fe7759047aa544f0c07803120f017ed5ec9a8869c1d1d929f5965a154a920f"
+    },
+    {
+      "file": "frontend/src/components/navigation/RootAgentBar.tsx",
+      "sha256": "665f112afa90e47e00e88947cb615874f633a3dbb4d8d5d32fb626185d8bae54"
+    },
+    {
+      "file": "frontend/src/components/navigation/UserMenu.tsx",
+      "sha256": "efb8cd4ef0b8ed112da8d250e6501138040f964fb096950e4f0fb907a14e5251"
+    },
+    {
+      "file": "frontend/src/components/navigation/__tests__/ConsoleSidebar.test.tsx",
+      "sha256": "f57bea39e346d77705bb3cccf3cd25a94588a3370037b268b2d0607443444cc7"
+    },
+    {
+      "file": "frontend/src/components/navigation/__tests__/RootAgentBar.test.tsx",
+      "sha256": "e3d106f5eab9567d84899546acfe86dfa6fccf353f05c996578513937182e1e8"
+    },
+    {
+      "file": "frontend/src/components/navigation/__tests__/UserMenu.test.tsx",
+      "sha256": "4b8a3586ec0ef16606372f27e8c6141bb6644743e448000d99b797d568800126"
+    },
+    {
+      "file": "frontend/src/components/skills/__tests__/SkillsPage.test.tsx",
+      "sha256": "aa220c2e5f48d4b647a35f434631ac4b1bd3712e8a38aa1794512a8d6014366c"
+    },
+    {
+      "file": "frontend/src/components/studio/__tests__/StudioPage.test.tsx",
+      "sha256": "1bf02a86f982c6991b2cfa4d30ddc8777f44d67387749c558b5a213562f7ecfa"
+    },
+    {
+      "file": "frontend/src/components/workspace/SessionCard.tsx",
+      "sha256": "693cebe92a0039619eba12d75509c2fdeed2cba16233662967764991c85f47c7"
+    },
+    {
+      "file": "frontend/src/components/workspace/SessionFeedback.tsx",
+      "sha256": "6e3390fd24fb10408827a7a475004861000f772757de4c9a7371683b64194cf4"
+    },
+    {
+      "file": "frontend/src/components/workspace/WorkspaceGate.tsx",
+      "sha256": "620f4589c9e8ee7c06fb212f774b6ac22e17bc4ca2334631f1e24fa7c9b4ae7c"
+    },
+    {
+      "file": "frontend/src/components/workspace/__tests__/ResultsPage.test.tsx",
+      "sha256": "2f86391bd51d2b5f88b8fcce4765cd2e70d74e8c387927b63fee2f7d48a88817"
+    },
+    {
+      "file": "frontend/src/components/workspace/__tests__/WorkspacePages.test.tsx",
+      "sha256": "c918be61098b83f68853a2535f869e96a4d25b2c54388e1e9f37d9515de5d1cb"
+    },
+    {
+      "file": "frontend/src/hooks/__tests__/useLandingTarget.test.tsx",
+      "sha256": "d6e2d4d1febc14b299cece2683d3621767e324df8acfa3f13d9d2b051aa74c0f"
+    },
+    {
+      "file": "frontend/src/hooks/__tests__/useSkillSessions.test.ts",
+      "sha256": "19cbbf8b853e80610cbffcc477ea701a6288bc488ac2c1bb71a6c31d04661d24"
+    },
+    {
+      "file": "frontend/src/hooks/useLandingTarget.ts",
+      "sha256": "7398100157a9fdba81780955e84227ccd0ac300a589077cbc0f1a311464505d7"
+    },
+    {
+      "file": "frontend/src/hooks/useSkillSessions.ts",
+      "sha256": "86210f8736ea23bd0c65fd0bd15b61f10f591ba83518ff14da7183506463027b"
+    },
+    {
+      "file": "frontend/src/hooks/useUserSkills.ts",
+      "sha256": "0c75f13a559f435d989c23dfd52bf0dd881bcbb9626b14a2ea34157046c9941b"
+    },
+    {
+      "file": "frontend/src/lib/__tests__/sessionHref.test.ts",
+      "sha256": "732308a13fb74ad69095b9ea9535efd1ccc38713f8bf29c5df2c7b89c07d930a"
+    },
+    {
+      "file": "frontend/src/lib/i18n/chat.ts",
+      "sha256": "388a9e17790a22e9bb9163aedc542e02b84da719b84e52772bdea600323ba845"
+    },
+    {
+      "file": "frontend/src/lib/sessionHref.ts",
+      "sha256": "503ff5061d9e1febead287252e592c90dfff80997ac488f47a8252a8e5f944b7"
+    },
+    {
+      "file": "outputs/verify-experience-implementation.cjs",
+      "sha256": "7f54fb9a96d4de6a3f083bd05ab2943b3f8ca45a18a56539984a017e323ab48e"
+    }
+  ],
+  "exclusions": [
+    "infrastructure/mcp-sandbox/serve.ts",
+    "start-local.ps1",
+    "stop-local.ps1",
+    ".workbuddy-ai/**",
+    "outputs/glass-workspace-design.html"
+  ],
+  "limitations": [
+    "Unit/API results were executed earlier in this same session; raw outputs are exported, not invented or rerun here.",
+    "API tests use memory persistence with database model registry; they are not PostgreSQL acceptance.",
+    "Browser scripts have syntax/static verification only, not a live browser pass.",
+    "Default browser provider is an HTTP protocol fixture, not a real external LLM.",
+    "Production build stopped in cleanup of the existing .next due to safe-delete protection; protection was not disabled.",
+    "A copied build with node_modules junction was considered but not executed; no substitute build pass is claimed.",
+    "Results support selected-session A2UI metadata, not general file downloads, full-history search or per-surface deep links.",
+    "Source hashes identify local working-tree contents; the baseline commit alone does not contain these uncommitted changes."
+  ]
+}

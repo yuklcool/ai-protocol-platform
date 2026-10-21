@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>体验架构实施 · 验证与交付报告</title>
+<style>
+:root{color-scheme:light;--bg:#f7f8fc;--ink:#252839;--muted:#63697b;--line:#e0e3ee;--purple:#65588e;--mint:#e8f6ef;--green:#26664f;--amber:#815918;--amber-bg:#fff5df;--red:#8f4141}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);background:radial-gradient(ellipse at 10% 0%,#eee9fa 0,transparent 40%),radial-gradient(ellipse at 100% 24%,#e8f7f2 0,transparent 42%),var(--bg);font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.7}a{color:var(--purple);text-underline-offset:4px}a:focus-visible,summary:focus-visible,button:focus-visible{outline:3px solid #8a77ad;outline-offset:4px}main{max-width:1120px;margin:auto;padding:48px 28px 70px}header{border-bottom:1px solid var(--line);padding-bottom:30px}.eyebrow{color:var(--purple);font-size:12px;letter-spacing:2px;font-weight:700}h1{font-size:clamp(26px,4.3vw,43px);letter-spacing:-1px;line-height:1.25;margin:14px 0}h2{font-size:22px;line-height:1.4;margin:0 0 18px}h3{font-size:16px;margin:0 0 7px}p{margin:7px 0 13px}.lead{max-width:800px;color:var(--muted)}.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid currentColor}.amber{color:var(--amber);background:var(--amber-bg)}.green{color:var(--green);background:var(--mint)}.gray{color:var(--muted);background:#f1f3f8}.meta{font-size:12px;color:var(--muted);margin-top:20px;overflow-wrap:anywhere}nav{display:flex;flex-wrap:wrap;gap:10px 22px;padding:20px 0}nav a{font-size:13px}section{margin-top:34px;scroll-margin-top:20px}.panel{background:rgba(255,255,255,.86);border:1px solid var(--line);border-radius:18px;padding:25px;box-shadow:0 9px 35px #363e5c05}.notice{padding:17px 20px;border-left:4px solid #b08741;background:var(--amber-bg);border-radius:0 10px 10px 0}.notice strong{color:var(--amber)}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px}.stat{background:#ffffffb8;border:1px solid var(--line);padding:18px;border-radius:14px}.stat b{display:block;font-size:31px;line-height:1.3;color:var(--purple)}.stat span{font-size:12px;color:var(--muted)}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.step{padding:17px;border:1px solid var(--line);border-radius:12px;background:#fff}.step small{font-family:monospace;color:var(--purple)}.step strong{display:block;margin:6px 0}.step p{font-size:12px;color:var(--muted);margin:0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th{font-size:11px;letter-spacing:1px;color:var(--muted);background:#f7f8fc}td,th{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{font-weight:600;min-width:155px}code{font-family:Consolas,monospace;font-size:.9em;overflow-wrap:anywhere;background:#f0eef7;padding:2px 5px;border-radius:4px}pre{background:#f3f4f9;border:1px solid var(--line);padding:15px;overflow:auto;border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}pre code{background:none;padding:0}ul,ol{padding-left:21px;margin:9px 0}li{margin:7px 0}.small{font-size:12px;color:var(--muted)}.file{font-family:Consolas,monospace;font-size:12px;overflow-wrap:anywhere}.done{color:var(--green)}.pending{color:var(--amber)}details{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}summary{cursor:pointer;font-size:13px;font-weight:600}.downloads{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}.downloads a{border:1px solid var(--line);padding:9px 14px;border-radius:9px;background:white;font-size:13px}.foot{margin-top:35px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12px}.checklist li::marker{color:var(--purple)}@media(max-width:740px){main{padding:26px 16px 44px}.stats{grid-template-columns:1fr 1fr}.cols,.flow{grid-template-columns:1fr}.panel{padding:18px}td,th{padding:11px 8px}.meta{font-size:11px}}@media print{body{background:#fff}main{max-width:none;padding:0}nav,.downloads{display:none}.panel,.stat{box-shadow:none;break-inside:avoid}section{margin-top:24px}details{display:block}summary{display:none}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">AI PROTOCOL PLATFORM / IMPLEMENTATION REVIEW</div>
+<h1>让任务流接续，而不是让用户重新找路</h1>
+<p class="lead">体验架构实施与验证报告 · 2026-10-21。源码已落地，相关单元/API 回归通过；生产构建受安全清理保护阻塞，真实浏览器与目标部署尚未验收。本报告不是运行截图，也不代表上线状态。</p>
+<span class="badge amber">实施已交付 · 生产验收未完成</span>
+<div class="meta">分支 <code>feat/experience-continuity</code> · 基线 <code>03af5c3717a31f91e3646ca7cae854253c378453</code><br>工作树修改尚未提交；基线提交本身不包含这些改动。未推送、未创建 PR、未部署。</div>
+</header>
+<nav aria-label="报告目录"><a href="#delivered">已落地链路</a><a href="#verification">实测证据</a><a href="#changes">文件与契约</a><a href="#blockers">阻塞与边界</a><a href="#reproduce">复核方式</a><a href="#acceptance">下一步验收</a></nav>
+<div class="notice"><strong>结论边界：</strong>可以核对“代码已修改、针对性测试通过”；不能据此宣称“生产可用、真实模型已接通、目标账号流程已验收”。旧缓存清理触发的保护没有被禁用，也没有删除旧输出或使用私有开关替代正常构建。</div>
+<div class="stats"><div class="stat"><b>287</b><span>前端相关用例通过 / 20 文件</span></div><div class="stat"><b>144 + 10</b><span>后端 API + 配置服务单测通过</span></div><div class="stat"><b>50</b><span>源码与复核脚本 SHA-256 指纹</span></div><div class="stat"><b>5</b><span>本次静态检查通过 / 非浏览器测试</span></div></div>
+<section id="delivered">
+<h2>01 / 已落地的任务流</h2>
+<div class="flow"><div class="step"><small>/workspace</small><strong>稳定工作台</strong><p>登录后固定落点；开始任务、最近会话、成果与能力快捷入口。</p></div><div class="step"><small>/sessions</small><strong>继续真实上下文</strong><p>分页历史、错误重试；按真实 skill_id 与 session_id 恢复。</p></div><div class="step"><small>/skills</small><strong>发现 → 启用 → 使用</strong><p>区分 ACL 可见、本人绑定与服务端可调用；未知状态不冒称就绪。</p></div><div class="step"><small>/results</small><strong>找回交互成果</strong><p>先选来源会话，再读取授权摘要，返回原对话继续。</p></div></div>
+<div class="cols" style="margin-top:18px"><article class="panel"><h3>用户端：把断点变成明确状态</h3><ul><li>共享登录入口，保留密码、OIDC、Google 的现有认证行为。</li><li>历史恢复不再误用当前 Skill；失败、加载、空态和分页反馈分开。</li><li>附件初始化或解析失败仍可编辑草稿，但所有模型触发入口继续校验附件。</li><li>引用导入失败可真实重试；旧会话、旧账号请求不污染新上下文。</li><li>Skill 首次保存后接续实体 ID，后续保存使用更新，不重复创建。</li></ul></article><article class="panel"><h3>管理端：配置事实，不冒充用户验收</h3><ul><li><code>/admin</code> 显示真实 Root 配置、模型策略、双测试状态和资源接入入口。</li><li>数据库动态模型实际切换统一要求 24 小时内有效的生成与工具调用测试。</li><li>通用配置保存拒绝时为 422；专用使用接口保持 409。</li><li>同模型其他字段保存、配置文件模型和既有别名不新增误拦。</li><li>手机导航先到“就绪与资源接入”，再进入模型管理；旧 URL 保留。</li></ul></article></div>
+</section>
+<section id="verification" class="panel">
+<h2>02 / 实测与证据矩阵</h2>
+<p class="small">下面的单元/API/质量结果来自本会话主线程实际执行输出，已导出到同目录 JSON；不是根据子代理结论或设计页检查数推算。</p>
+<div class="table-wrap"><table><thead><tr><th>验证项</th><th>实际结果</th><th>覆盖与边界</th></tr></thead><tbody>
+<tr><td>前端针对性回归</td><td><span class="badge green">20 文件 / 287 通过</span></td><td>工作区、成果、导航、认证入口、会话 Hook、能力中心、Studio、管理就绪、聊天附件与恢复。Vitest/jsdom，非真实浏览器。</td></tr>
+<tr><td>后端 API 回归</td><td><span class="badge green">144 passed</span></td><td>模型接入、探测、Provider、会话及最近会话；memory 持久化 + database 模型 registry，非 PostgreSQL 验收。</td></tr>
+<tr><td>配置服务单测</td><td><span class="badge green">10 passed</span></td><td>平台配置服务独立运行；不重复累计前端或 API 子集。</td></tr>
+<tr><td>TypeScript</td><td class="done">全量类型检查通过</td><td>最终复查任务 6yw7xh 已完成；tsc --noEmit，无错误输出。</td></tr>
+<tr><td>前端代码规范</td><td class="done">无 ESLint 错误或警告</td><td>本轮变更的 TS/TSX；CLI 另有 next lint 废弃提示，不计作 lint 通过之外的新测试。</td></tr>
+<tr><td>后端代码规范</td><td class="done">Ruff check + format-check 通过</td><td>5 个变更后端文件；输出 All checks passed / 5 files already formatted。</td></tr>
+<tr><td>两份 E2E 与 CI 静态校验</td><td class="done">5 项检查通过</td><td>2 份 JS 语法、限定 diff、工作流 YAML/触发/21 个前端测试路径及 fixture 顺序、后端环境与回归路径。未运行 CI 或浏览器。</td></tr>
+<tr><td>生产构建</td><td><span class="badge amber">受阻 / 未通过</span></td><td>旧 .next 清理触发 SAFE_DELETE_BULK_CONFIRM_REQUIRED；退出 1。未完成有效生产编译。</td></tr>
+<tr><td>真实浏览器 / PostgreSQL / 外部模型</td><td><span class="badge gray">未执行</span></td><td>不能以单测、脚本语法或历史 PR 结果代替。</td></tr>
+</tbody></table></div>
+<details><summary>本次收尾修正的验收与 CI 脚本</summary><ul><li><code>frontend/e2e/ui-responsive-live.spec.js</code>：新增工作台、历史、成果三种视口路由；移动抽屉检查四个工作区入口及管理总览，经总览进入模型服务。</li><li><code>frontend/e2e/model-provider-studio-live.spec.js</code>：未双测 UI 保存先断言 422 且原配置不变；通过后端 completion/tool_call 测试后再保存；默认连接已有 HTTP 协议 fixture，不代表外部大模型。</li><li><code>.github/workflows/model-provider-gate.yml</code>：补齐新增路径触发、20 份实施回归（连同原 Provider 测试共 21 份）、会话与配置后端回归，显式使用 database registry 和隔离网络模式。</li><li>以上改动已做本地静态复核；本次没有提交或推送，因此没有新 CI 执行结果。</li></ul></details>
+<details><summary>过程中的失败与修正（不隐藏）</summary><ul><li>成果中文测试期望与实际复用文案不一致：修正期望后并入最终 287 项通过。</li><li>管理测试 afterEach 返回类型和 ByRoleOptions 参数错误：修正后类型检查通过。</li><li>后端首次 4 个失败来自缺少 database registry 测试模式；补环境后原断言不变，144 项通过。</li><li>Studio 开关关闭时的编辑入口被隐藏后，英文测试须显式开启 Studio；最终 true/false gate 用例和全部前端回归通过。</li><li>后端 import 排序与旧 ESLint CLI 参数问题已纠正；未通过弱化权限或业务断言换取绿灯。</li><li>第三方仍有 Authlib/ADK、Vite CJS 及 Next lint 弃用提示；本次未改依赖。</li></ul></details>
+</section>
+<section id="changes">
+<h2>03 / 关键文件与状态契约</h2>
+<div class="cols"><article class="panel"><h3>核心修改入口</h3><ul class="small"><li><span class="file">frontend/src/app/{workspace,sessions,results}/page.tsx</span><br>工作台、历史、成果与认证 gate。</li><li><span class="file">frontend/src/hooks/useSkillSessions.ts</span><br>分页、去重、过期请求保护；搜索只覆盖已加载记录。</li><li><span class="file">frontend/src/lib/sessionHref.ts</span><br>从会话记录构造真实恢复路径。</li><li><span class="file">frontend/src/app/skills/page.tsx</span><br>能力发现、本人启用、服务端调用确认。</li><li><span class="file">frontend/src/components/chat/ChatShell.tsx</span><br>历史接续、附件草稿分离、全提交路径阻断与引用重试。</li><li><span class="file">frontend/src/components/admin/AgentReadiness.tsx</span><br>真实状态、局部错误/重试、账号切换隔离。</li><li><span class="file">backend/config/platform_config.py</span><br>实际动态模型切换统一验证，不新增运行时过期停服。</li><li><span class="file">backend/protocols/sessions_route.py</span><br>授权单会话交互成果 metadata 接口。</li></ul></article><article class="panel"><h3>成果接口的明确边界</h3><pre><code>GET /api/sessions/{session_id}/results
+
+{
+  session_id,
+  results: [{ surface_id, title, kind,
+              description, created_at }],
+  state_available,
+  incomplete_count,
+  truncated
+}</code></pre><ul class="small"><li>先检查会话及 ACL，再以授权资源 owner 读取 SDK 会话状态。</li><li>只读持久化 A2UI 交互成果摘要，不遍历全部聊天消息、不包含上传附件或 clientDataModel 正文。</li><li>每会话最多 100 条；缺失、不完整、截断分别呈现，不冒称“没有成果”。</li><li>无通用文件下载、成果分页或指定 surface 标签深链；返回原对话不重新执行工具。</li><li>SDK 请求 num_recent_events=1，不保证所有后端只传输一条事件。</li></ul></article></div>
+<p class="small">同步更新：README.md、docs/configuration-guide.md、docs/module-simplification.md。保留用户已有 infrastructure/mcp-sandbox/serve.ts、本地启动/停止脚本与既有设计产物；未覆盖其基础设施改动。</p>
+</section>
+<section id="blockers" class="panel">
+<h2>04 / 还不能宣称完成的部分</h2>
+<div class="notice"><strong>生产构建阻塞：</strong>正常构建命令在清理旧缓存时失败。原始记录任务 <code>lcg0kw</code>，不是 TypeScript 或功能测试失败，也不等于编译一定能通过。</div>
+<pre><code>next build frontend
+
+[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED]
+count: 50 · threshold: 50 · scope: turn
+frontend/.next/server/vendor-chunks/devlop.js
+Exit: 1</code></pre>
+<p>已只读评估复制源码到新目录后构建的替代路径，但 node_modules junction 并不形成只读隔离，standalone 依赖追踪可能越出新目录；未执行这个替代构建，更未用它冒称正常构建通过。旧产物未删除，保护未关闭。</p>
+<ul><li><strong>浏览器：</strong>两份 E2E 只做语法与静态复核，尚无桌面/手机真实截图和交互运行证据。</li><li><strong>数据与模型：</strong>memory API 回归不替代目标 PostgreSQL、外部 Provider 或用户任务验收。</li><li><strong>能力规模：</strong>能力中心仍逐个探测可见 Skill；大量资源时的并发优化不在本次范围。</li><li><strong>上线状态：</strong>未提交、未推送、未创建 PR、未部署。不能把本地工作树或设计页结果当线上版本。</li></ul>
+</section>
+<section id="reproduce" class="panel">
+<h2>05 / 证据包与复核方式</h2>
+<p>JSON 保存 7 份实际执行记录（含失败的生产构建）、完整命令、当前工作树源码指纹和本次静态检查结果。复核脚本默认只校验指纹与静态规则，不重跑模型、不启动服务、不修改业务文件。</p>
+<div class="downloads"><a href="experience-implementation-evidence.json" download>下载原始证据 JSON</a><a href="verify-experience-implementation.cjs" download>下载指纹与静态复核脚本</a></div>
+<pre><code># 在仓库根目录执行（PowerShell）
+&amp; "C:/Users/User/.workbuddy-ai/binaries/node/versions/22.22.2-6/node.exe" `
+  "outputs/verify-experience-implementation.cjs" --check
+
+# 本次实际输出
+passed: true
+checks: 5
+matchedSourceFiles: 50</code></pre>
+<details><summary>后端针对性测试复现命令</summary><pre><code>$env:DATA_BACKEND="memory"
+$env:AIP_TEST_ISOLATED_NETWORK="1"
+$env:MODEL_REGISTRY_BACKEND="database"
+&amp; "D:/Program Files/Python/Python311/Scripts/uv.exe" run --directory backend --no-sync pytest -q `
+  tests/api_tests/test_model_setup_flow.py `
+  tests/api_tests/test_admin_model_probe.py `
+  tests/api_tests/test_admin_model_providers.py `
+  tests/api_tests/test_sessions_route.py `
+  tests/api_tests/test_sessions_recent.py
+
+# 配置服务单测是独立执行；清除上一条命令的 registry 环境覆盖
+[Environment]::SetEnvironmentVariable("MODEL_REGISTRY_BACKEND", $null, "Process")
+&amp; "D:/Program Files/Python/Python311/Scripts/uv.exe" run --directory backend --no-sync pytest -q `
+  tests/unit/test_platform_config.py</code></pre><p class="small">前端 20 文件的完整运行命令、tsc、lint、Ruff 与失败 build 命令均保存在 JSON 的 historicalRuns 字段中。复核历史输出不等于重新执行这些命令。</p></details>
+</section>
+<section id="acceptance" class="panel">
+<h2>06 / 待完成的验收顺序</h2>
+<ol class="checklist"><li><strong>安全构建环境：</strong>在无旧产物的独立 checkout/CI 中走正常 next build；不关闭本机删除保护，不清理用户旧目录。本次未创建提交或执行远程 CI。</li><li><strong>真实浏览器：</strong>在一次性 local-jwt + PostgreSQL + 独立 MCP 沙箱测试栈运行更新后的 E2E，保留桌面/手机截图、网络与错误记录。</li><li><strong>端到端任务链：</strong>登录 → 工作台 → 创建/启用能力 → 发送任务 → 切换历史 → 查找成果 → 返回原对话；检查账号隔离和失败重试。</li><li><strong>真实 Provider：</strong>在明确授权的目标环境验证生成和工具调用，再由目标账号执行真实任务。HTTP 协议 fixture 不替代外部模型能力。</li><li><strong>交付阶段：</strong>用户授权后再提交、推送、建 PR 或部署；每个阶段单独报告状态，不合并成“已上线”。</li></ol>
+</section>
+<div class="foot">本报告为本地源码实施与验证记录，不含客户内容、实际凭据或运行截图。详细证据与源码指纹见同目录 JSON。最终验收任务仍未关闭。</div>
+</main>
+</body>
+</html>

@@ -1,60 +1,35 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/apiClient", () => ({ fetchWithAuth: vi.fn() }));
-
 import { fetchWithAuth } from "@/lib/apiClient";
 import { useLandingTarget } from "@/hooks/useLandingTarget";
 
-const mockFetch = fetchWithAuth as unknown as ReturnType<typeof vi.fn>;
-
-function res(status: number, body: unknown) {
-  return { status, ok: status >= 200 && status < 300, json: async () => body };
-}
+const mockFetch = vi.mocked(fetchWithAuth);
 
 describe("useLandingTarget", () => {
-  beforeEach(() => mockFetch.mockReset());
+  beforeEach(() => { mockFetch.mockReset(); });
 
-  it("does nothing until enabled", () => {
+  it("未启用时等待认证且不请求后端", () => {
     const { result } = renderHook(() => useLandingTarget(false));
-    expect(result.current.kind).toBe("loading");
+    expect(result.current).toEqual({ kind: "loading" });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("resumes the most-recent session", async () => {
-    mockFetch.mockResolvedValueOnce(
-      res(200, { session_id: "sess-1", skill_id: "skill-a", slug: "ppa-expert", owner_id: "aitana-platform" }),
-    );
+  it("登录后稳定进入工作台，不强制恢复最近会话", () => {
     const { result } = renderHook(() => useLandingTarget(true));
-    await waitFor(() => expect(result.current.kind).toBe("resume"));
-    expect(result.current).toMatchObject({
-      kind: "resume",
-      href: "/chat/@aitana-platform/ppa-expert?session=sess-1",
-    });
+    expect(result.current).toEqual({ kind: "workspace", href: "/workspace" });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("opens Root Agent even when no Skills are configured", async () => {
-    mockFetch.mockResolvedValueOnce(res(204, null)).mockResolvedValueOnce(res(200, { skillId: "root-agent" }));
-    const { result } = renderHook(() => useLandingTarget(true));
-    await waitFor(() => expect(result.current).toEqual({ kind: "fresh", href: "/chat/root-agent" }));
-    expect(mockFetch).toHaveBeenLastCalledWith("/api/proxy/api/agent");
-  });
-
-  it("returns landing when Root Agent metadata is unavailable", async () => {
-    mockFetch.mockResolvedValueOnce(res(204, null)).mockResolvedValueOnce(res(503, {}));
-    const { result } = renderHook(() => useLandingTarget(true));
-    await waitFor(() => expect(result.current.kind).toBe("landing"));
-  });
-
-  it("degrades to landing on error", async () => {
-    mockFetch.mockResolvedValue({
-      status: 200,
-      ok: true,
-      json: async () => {
-        throw new Error("bad json");
-      },
-    });
-    const { result } = renderHook(() => useLandingTarget(true));
-    await waitFor(() => expect(result.current.kind).toBe("landing"));
+  it("后端不可用也不退回宣传页，并响应退出登录", () => {
+    mockFetch.mockRejectedValue(new Error("offline"));
+    const { result, rerender } = renderHook(({ enabled }) => useLandingTarget(enabled), { initialProps: { enabled: true } });
+    expect(result.current).toEqual({ kind: "workspace", href: "/workspace" });
+    rerender({ enabled: false });
+    expect(result.current).toEqual({ kind: "loading" });
+    rerender({ enabled: true });
+    expect(result.current).toEqual({ kind: "workspace", href: "/workspace" });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
