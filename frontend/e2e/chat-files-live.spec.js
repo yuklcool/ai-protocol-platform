@@ -65,7 +65,15 @@ test("普通新对话上传、格式解析、取消选择、刷新与会话切�
     await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
     await picker.setInputFiles({name:"broken.pdf",mimeType:"application/pdf",buffer:Buffer.from("not a PDF")});
     await expect(page.getByText("处理失败",{exact:true})).toBeVisible();
-    await expect(page.locator("textarea").first()).toBeDisabled();
+    const composer=page.locator("textarea").first();
+    await expect(composer).toBeEnabled();
+    const blockedDraft="附件处理失败时保留可编辑草稿";
+    await composer.fill(blockedDraft);
+    await expect(page.getByRole("button",{name:"发送",exact:true})).toBeDisabled();
+    const blockedRequest=page.waitForRequest(request=>request.method()==="POST" && request.url().endsWith("/api/agent/stream"),{timeout:750}).catch(()=>null);
+    await composer.press("Enter");
+    expect(await blockedRequest).toBeNull();
+    await expect(composer).toHaveValue(blockedDraft);
     await expect.poll(async()=>(await api(token,`/api/sessions/${second}/documents`)).documents[0]?.parseStatus).toBe("failed");
     await page.screenshot({path:info.outputPath("chat-file-failure.png"),fullPage:true});
     await page.goto(`${FRONTEND}/chat/root-agent?session=${first}`);

@@ -162,7 +162,7 @@ test.describe("dynamic model -> Root Agent live acceptance", () => {
       );
       await saveButton.click();
       expect((await rejectedSave).status()).toBe(422);
-      await expect(page.getByRole("alert")).toContainText(/Could not save Root Agent settings\.|无法保存 Root Agent 配置。/);
+      await expect(page.getByRole("alert").filter({ hasText: /Could not save Root Agent settings\.|无法保存 Root Agent 配置。/ })).toBeVisible();
       expect((await authedApi(token, "/api/admin/platform-config")).agent?.model).toBe("smart");
 
       for (const mode of ["completion", "tool_call"]) {
