@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockFetch = vi.fn();
@@ -124,5 +124,118 @@ describe("useSkillSessions", () => {
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.sessions).toHaveLength(2));
+  });
+
+  it("分页编码游标、阻止并发请求并按 session_id 去重", async () => {
+    mockOk([{ session_id: "s1" }], "next /?&");
+    let resolvePage!: (value: unknown) => void;
+    mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolvePage = resolve; }));
+    const { result } = renderHook(() => useSkillSessions("agent /"));
+    await waitFor(() => expect(result.current.nextCursor).toBe("next /?&"));
+    act(() => { result.current.loadMore(); result.current.loadMore(); });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(mockFetch.mock.calls[1][0]).toBe("/api/proxy/api/sessions?skill_id=agent%20%2F&cursor=next%20%2F%3F%26");
+    expect(result.current.isLoadingMore).toBe(true);
+    await act(async () => resolvePage({ ok: true, json: async () => ({ sessions: [{ session_id: "s1" }, { session_id: "s2" }, { session_id: "s2" }], next_cursor: "next /?&" }) }));
+    expect(result.current.sessions.map((row) => row.session_id)).toEqual(["s1", "s2"]);
+    expect(result.current.isLoadingMore).toBe(false);
+    expect(result.current.nextCursor).toBeNull();
+    act(() => result.current.loadMore());
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("翻页失败保留数据和游标，允许同一页重试", async () => {
+    mockOk([{ session_id: "s1" }], "page-2");
+    mockError();
+    mockOk([{ session_id: "s2" }]);
+    const { result } = renderHook(() => useSkillSessions(null));
+    await waitFor(() => expect(result.current.nextCursor).toBe("page-2"));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.nextCursor).toBe("page-2");
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.sessions).toHaveLength(2));
+    expect(result.current.error).toBeNull();
+    expect(result.current.nextCursor).toBeNull();
+  });
+
+  it("忽略被新 refetch 替代的结果、错误与 finally", async () => {
+    let rejectOld!: (error: Error) => void;
+    let resolveNew!: (value: unknown) => void;
+    mockFetch.mockImplementationOnce(() => new Promise((_, reject) => { rejectOld = reject; }));
+    mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveNew = resolve; }));
+    const { result } = renderHook(() => useSkillSessions(null));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    act(() => result.current.refetch());
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    await act(async () => rejectOld(new Error("stale")));
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.error).toBeNull();
+    await act(async () => resolveNew({ ok: true, json: async () => ({ sessions: [{ session_id: "new" }], next_cursor: null }) }));
+    expect(result.current.sessions[0].session_id).toBe("new");
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("筛选切换后忽略已开始解析的旧响应", async () => {
+    let resolveJson!: (value: unknown) => void;
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { resolveJson = resolve; }) });
+    mockOk([{ session_id: "new" }]);
+    const { result, rerender } = renderHook(({ filter }) => useSkillSessions(filter), { initialProps: { filter: "old" } });
+    await waitFor(() => expect(resolveJson).toBeTypeOf("function"));
+    rerender({ filter: "new" });
+    await waitFor(() => expect(result.current.sessions[0]?.session_id).toBe("new"));
+    await act(async () => resolveJson({ sessions: [{ session_id: "old" }], next_cursor: "old-cursor" }));
+    expect(result.current.sessions[0].session_id).toBe("new");
+    expect(result.current.nextCursor).toBeNull();
+  });
+
+  it("focus 刷新回第一页，刷新失败不清空已加载数据", async () => {
+    mockOk([{ session_id: "s1" }], "p2");
+    mockOk([{ session_id: "s2" }]);
+    mockError();
+    mockOk([{ session_id: "latest" }], "fresh-p2");
+    const { result } = renderHook(() => useSkillSessions(null));
+    await waitFor(() => expect(result.current.nextCursor).toBe("p2"));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.sessions).toHaveLength(2));
+    act(() => window.dispatchEvent(new Event("focus")));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.sessions).toHaveLength(2);
+    act(() => result.current.refetch());
+    await waitFor(() => expect(result.current.sessions[0]?.session_id).toBe("latest"));
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.nextCursor).toBe("fresh-p2");
+    expect(mockFetch.mock.calls[2][0]).toBe("/api/proxy/api/sessions");
+  });
+
+  it("refetch 替代在途翻页，旧页晚到不能追加或修改新游标", async () => {
+    mockOk([{ session_id: "s1" }], "old-p2");
+    let resolvePage!: (value: unknown) => void;
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { resolvePage = resolve; }) });
+    mockOk([{ session_id: "fresh" }], "new-p2");
+    const { result } = renderHook(() => useSkillSessions(null));
+    await waitFor(() => expect(result.current.nextCursor).toBe("old-p2"));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(resolvePage).toBeTypeOf("function"));
+    act(() => result.current.refetch());
+    await waitFor(() => expect(result.current.sessions[0]?.session_id).toBe("fresh"));
+    await act(async () => resolvePage({ sessions: [{ session_id: "stale-page" }], next_cursor: "old-p3" }));
+    expect(result.current.sessions.map((row) => row.session_id)).toEqual(["fresh"]);
+    expect(result.current.nextCursor).toBe("new-p2");
+    expect(result.current.isLoadingMore).toBe(false);
+  });
+
+  it("卸载取消请求，即使 fetch 忽略 abort 也不继续解析", async () => {
+    let resolveOld!: (value: unknown) => void;
+    const json = vi.fn();
+    mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    const { unmount } = renderHook(() => useSkillSessions(null));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    const signal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+    unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => resolveOld({ ok: true, json }));
+    expect(json).not.toHaveBeenCalled();
   });
 });

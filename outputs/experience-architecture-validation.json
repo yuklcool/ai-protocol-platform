@@ -1,0 +1,64 @@
+{
+  "artifact": "experience-architecture-review.html",
+  "sha256": "e3f867b23d8def3c444992a2708137da023f2a056286a1377de3ebaf7f2b828d",
+  "bytes": 71305,
+  "validation": "Static structure and jsdom interaction checks only",
+  "productRuntimeTested": false,
+  "browserLayoutTested": false,
+  "realModelCalled": false,
+  "checksPassed": 13,
+  "checks": [
+    {
+      "name": "Source identity and evidence boundary",
+      "passed": true
+    },
+    {
+      "name": "Ten issue records and ten evidence groups",
+      "passed": true
+    },
+    {
+      "name": "All cited repository files exist",
+      "passed": true
+    },
+    {
+      "name": "Section links and unique initial IDs",
+      "passed": true
+    },
+    {
+      "name": "Six journeys support selected and hidden state",
+      "passed": true
+    },
+    {
+      "name": "Journey arrow keys and Home/End move focus",
+      "passed": true
+    },
+    {
+      "name": "Start -> result -> preview -> original conversation",
+      "passed": true
+    },
+    {
+      "name": "Attachment failure blocks result but not draft editing",
+      "passed": true
+    },
+    {
+      "name": "Starting a new task clears prior result, attachment and draft state",
+      "passed": true
+    },
+    {
+      "name": "Personal capability activation is distinct from starting a task",
+      "passed": true
+    },
+    {
+      "name": "Admin check -> apply -> user verification remains explicit",
+      "passed": true
+    },
+    {
+      "name": "Every preview navigation renders with a simulation notice",
+      "passed": true
+    },
+    {
+      "name": "No external assets, runtime calls or script errors",
+      "passed": true
+    }
+  ]
+}

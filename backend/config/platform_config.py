@@ -20,6 +20,8 @@ import os
 import time
 from typing import Any
 
+from config.model_provider_registry import MODELS_COLLECTION, database_registry_enabled
+from config.model_readiness import model_readiness
 from db.models import PLATFORM_CONFIG_DOC_ID, PlatformConfig
 from db.persistence import get_document, set_document
 
@@ -134,6 +136,11 @@ def update_platform_config(updates: dict[str, Any], *, updated_by: str = "") -> 
     current = get_platform_config()
     merged = {**_to_storage(current), **updates, "updatedBy": updated_by, "updatedAt": time.time()}
     config = PlatformConfig.model_validate(merged)
+
+    if config.agent.model != current.agent.model and database_registry_enabled():
+        model = get_document(MODELS_COLLECTION, config.agent.model)
+        if model is not None and not model_readiness(config.agent.model, model=model)["ready"]:
+            raise ValueError("当前配置尚未通过 24 小时内的普通生成和工具调用测试,请重新测试后使用。")
 
     set_document(COLLECTION, PLATFORM_CONFIG_DOC_ID, _to_storage(config))
     invalidate_cache()

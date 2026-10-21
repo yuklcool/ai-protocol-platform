@@ -15,10 +15,12 @@ Acceptance criteria verified:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -520,6 +522,310 @@ class TestGetSessionMessages:
         assert resp.status_code == 403, (
             f"Private sessions must stay owner-only after the Bug E fix; got {resp.status_code}: {resp.text[:200]}"
         )
+
+
+class TestGetSessionResults:
+    @staticmethod
+    def _surface(surface_id="result-1", **fields):
+        return {"surfaceId": surface_id, "artifact": {"title": "摘要", "kind": "table"}, "createdAt": 1000, **fields}
+
+    @staticmethod
+    def _read(state, *, session_exists=True):
+        session = SimpleNamespace(state=state) if session_exists else None
+        svc = SimpleNamespace(get_session=AsyncMock(return_value=session))
+        with (
+            patch("protocols.sessions_route.get_session_index", return_value=_make_session()),
+            patch("protocols.sessions_route.get_messages_session_service", return_value=svc),
+        ):
+            response = _make_client("owner-uid").get("/api/sessions/sess-1/results")
+        assert response.status_code == 200
+        return response.json(), svc
+
+    def test_owner_reads_metadata_only_with_minimal_events(self):
+        class StateOnlySession:
+            def __init__(session):
+                session.state = {
+                    "a2ui_surface:result-1": json.dumps(
+                        self._surface(messages=[{"private": "正文"}], clientDataModel={"value": {"secret": "编辑内容"}})
+                    ),
+                    "app:private": "不返回",
+                }
+
+            @property
+            def events(self):
+                raise AssertionError("成果接口不得访问 events")
+
+        async def read_session(**kwargs):
+            from observability.user_context import get_resource_user_id
+
+            assert get_resource_user_id() == "owner-uid"
+            return StateOnlySession()
+
+        svc = SimpleNamespace(get_session=AsyncMock(side_effect=read_session))
+        with (
+            patch("protocols.sessions_route.get_session_index", return_value=_make_session()),
+            patch("protocols.sessions_route.get_messages_session_service", return_value=svc),
+            patch("protocols.sessions_route._apply_client_data_model", side_effect=AssertionError("不得合并编辑正文")),
+            patch("protocols.sessions_route.list_sessions_for_skill", side_effect=AssertionError("不得扫描会话")),
+        ):
+            response = _make_client("owner-uid").get("/api/sessions/sess-1/results")
+        assert response.status_code == 200
+        assert response.json() == {
+            "session_id": "sess-1",
+            "results": [
+                {"surface_id": "result-1", "title": "摘要", "kind": "table", "description": None, "created_at": 1000}
+            ],
+            "state_available": True,
+            "incomplete_count": 0,
+            "truncated": False,
+        }
+        from db.chat_sessions import app_name_for_session
+
+        kwargs = svc.get_session.await_args.kwargs
+        assert kwargs["app_name"] == app_name_for_session(_make_session())
+        assert kwargs["session_id"] == "sess-1"
+        assert kwargs["user_id"] == "owner-uid"
+        assert kwargs["config"].num_recent_events == 1
+        svc.get_session.assert_awaited_once()
+
+    async def test_sdk_minimal_events_preserves_earlier_surface_state(self):
+        from google.adk.events import Event, EventActions
+        from google.adk.sessions import InMemorySessionService
+
+        from db.chat_sessions import app_name_for_session
+        from protocols.sessions_route import get_session_results
+
+        idx = _make_session()
+        delegate = InMemorySessionService()
+        session = await delegate.create_session(
+            app_name=app_name_for_session(idx), user_id=idx.owner_uid, session_id=idx.session_id
+        )
+        for i in range(3):
+            await delegate.append_event(
+                session,
+                Event(
+                    author="user",
+                    invocation_id=f"turn-{i}",
+                    timestamp=i + 1,
+                    actions=EventActions(
+                        state_delta={"a2ui_surface:result-1": json.dumps(self._surface())} if i == 0 else {}
+                    ),
+                ),
+            )
+
+        async def read_session(**kwargs):
+            result = await delegate.get_session(**kwargs)
+            assert len(result.events) == 1
+            return result
+
+        svc = SimpleNamespace(get_session=AsyncMock(side_effect=read_session))
+        request = SimpleNamespace(state=SimpleNamespace(access=AccessContext(uid=idx.owner_uid)))
+        with (
+            patch("protocols.sessions_route.get_session_index", return_value=idx),
+            patch("protocols.sessions_route.get_messages_session_service", return_value=svc),
+        ):
+            response = await get_session_results(idx.session_id, request, User(uid=idx.owner_uid))
+        assert response.state_available is True
+        assert response.results[0].surface_id == "result-1"
+        assert len(session.events) == 3
+
+    @pytest.mark.parametrize(
+        "access",
+        [
+            AccessControl(type="public"),
+            AccessControl(type="domain", domain="example.com"),
+            AccessControl(type="tagged", tags=["team"]),
+            AccessControl(type="specific", emails=["viewer@example.com"]),
+        ],
+    )
+    def test_shared_reader_uses_owner_context(self, access):
+        async def read_session(**kwargs):
+            from observability.user_context import get_resource_user_id
+
+            assert get_resource_user_id() == kwargs["user_id"] == "alice"
+            return SimpleNamespace(state={"a2ui_surface:result-1": self._surface()})
+
+        svc = SimpleNamespace(get_session=AsyncMock(side_effect=read_session))
+        with (
+            patch(
+                "protocols.sessions_route.get_session_index", return_value=_make_session(owner_uid="alice", ac=access)
+            ),
+            patch("protocols.sessions_route.get_messages_session_service", return_value=svc),
+        ):
+            response = _make_client("viewer", tags=frozenset({"team"})).get("/api/sessions/sess-1/results")
+        assert response.status_code == 200
+        assert response.json()["results"][0]["surface_id"] == "result-1"
+        svc.get_session.assert_awaited_once()
+
+    @pytest.mark.parametrize("missing,status", [(False, 403), (True, 404)])
+    def test_acl_denial_and_missing_index_do_not_read_service(self, missing, status):
+        with (
+            patch("protocols.sessions_route.get_session_index", return_value=None if missing else _make_session()),
+            patch("protocols.sessions_route.get_messages_session_service") as factory,
+            patch("observability.user_context.authorized_resource_user") as owner_context,
+        ):
+            response = _make_client("stranger").get("/api/sessions/sess-1/results")
+        assert response.status_code == status
+        factory.assert_not_called()
+        owner_context.assert_not_called()
+
+    def test_requires_auth(self):
+        response = TestClient(app).get("/api/sessions/sess-1/results")
+        assert response.status_code in (401, 403, 422)
+
+    @pytest.mark.parametrize("state", [None, [], "invalid"])
+    def test_absent_or_invalid_state_is_unavailable(self, state):
+        body, _ = self._read(state)
+        assert body["state_available"] is False
+        assert body["results"] == []
+
+    def test_service_error_is_not_misreported_as_no_results(self):
+        with (
+            patch("protocols.sessions_route.get_session_index", return_value=_make_session()),
+            patch("protocols.sessions_route.get_messages_session_service") as factory,
+        ):
+            factory.return_value.get_session = AsyncMock(side_effect=RuntimeError("session backend unavailable"))
+            with pytest.raises(RuntimeError, match="session backend unavailable"):
+                _make_client("owner-uid").get("/api/sessions/sess-1/results")
+
+    def test_missing_adk_session_is_unavailable(self):
+        body, _ = self._read(None, session_exists=False)
+        assert body["state_available"] is False
+        assert body["results"] == []
+
+    def test_missing_state_attribute_is_unavailable(self):
+        with (
+            patch("protocols.sessions_route.get_session_index", return_value=_make_session()),
+            patch("protocols.sessions_route.get_messages_session_service") as factory,
+        ):
+            factory.return_value.get_session = AsyncMock(return_value=SimpleNamespace())
+            response = _make_client("owner-uid").get("/api/sessions/sess-1/results")
+        assert response.json()["state_available"] is False
+
+    @pytest.mark.parametrize("state", [{}, {"document_ids": ["doc-1"]}])
+    def test_available_state_without_results_is_distinct(self, state):
+        body, _ = self._read(state)
+        assert body == {
+            "session_id": "sess-1",
+            "results": [],
+            "state_available": True,
+            "incomplete_count": 0,
+            "truncated": False,
+        }
+
+    def test_metadata_only_surfaces_chat_exclusion_and_legacy_workspace(self):
+        body, _ = self._read(
+            {
+                "a2ui_surface:meta": self._surface("meta"),
+                "a2ui_surface:chat": self._surface("chat", artifact={"placement": "chat", "kind": "elicitation"}),
+                "a2ui_surface:plain": self._surface(
+                    "sidebar", artifact=None, messages=[{"updateComponents": {"surfaceId": "sidebar"}}]
+                ),
+                "a2ui_surface:workspace": self._surface(
+                    "workspace", artifact=None, messages=[{"updateComponents": {"surfaceId": "workspace"}}]
+                ),
+            }
+        )
+        assert [item["surface_id"] for item in body["results"]] == ["meta", "workspace"]
+        assert body["results"][1] == {
+            "surface_id": "workspace",
+            "title": "交互结果",
+            "kind": None,
+            "description": None,
+            "created_at": 1000,
+        }
+        assert body["incomplete_count"] == 0
+
+    @pytest.mark.parametrize(
+        "messages,expected_count,incomplete",
+        [
+            ([{"deleteSurface": {"surfaceId": "workspace"}}], 0, 0),
+            ([{"createSurface": {"surfaceId": "workspace"}}, {"deleteSurface": {"surfaceId": "workspace"}}], 0, 0),
+            ([{"deleteSurface": {"surfaceId": "workspace"}}, {"updateDataModel": {"surfaceId": "workspace"}}], 1, 0),
+            (None, 0, 1),
+            (["bad"], 0, 1),
+            ([{"createSurface": {"surfaceId": "chat"}}], 0, 1),
+        ],
+    )
+    def test_bare_workspace_requires_active_surface(self, messages, expected_count, incomplete):
+        body, _ = self._read({"a2ui_surface:workspace": self._surface("workspace", artifact=None, messages=messages)})
+        assert len(body["results"]) == expected_count
+        assert body["incomplete_count"] == incomplete
+
+    def test_malformed_entries_are_counted_and_do_not_hide_valid_metadata(self):
+        body, _ = self._read(
+            {
+                "a2ui_surface:json": "{broken",
+                "a2ui_surface:list": [],
+                "a2ui_surface:id": {"surfaceId": ["bad"]},
+                "a2ui_surface:artifact": self._surface(artifact=["bad"]),
+                "a2ui_surface:placement": self._surface(artifact={"placement": "other"}),
+                "a2ui_surface:fields": self._surface("fields", artifact={"title": {}, "description": [], "kind": 4}),
+                "a2ui_surface:good": self._surface("good"),
+                "other": "not JSON",
+            }
+        )
+        assert body["state_available"] is True
+        assert body["incomplete_count"] == 6
+        assert [item["surface_id"] for item in body["results"]] == ["fields", "good"]
+        assert body["results"][0]["title"] == "交互结果"
+
+    @pytest.mark.parametrize("created_at", [True, "123", {}, -1, float("nan"), float("inf"), 10**400])
+    def test_invalid_created_at_is_null_and_counted(self, created_at):
+        body, _ = self._read({"a2ui_surface:one": self._surface(createdAt=created_at)})
+        assert body["results"][0]["created_at"] is None
+        assert body["incomplete_count"] == 1
+
+    @pytest.mark.parametrize(
+        "fields,expected", [({}, None), ({"createdAt": None}, None), ({"createdAt": 0}, 0), ({"createdAt": 42.5}, 42.5)]
+    )
+    def test_missing_and_numeric_created_at(self, fields, expected):
+        surface = self._surface()
+        surface.pop("createdAt")
+        body, _ = self._read({"a2ui_surface:one": {**surface, **fields}})
+        assert body["results"][0]["created_at"] == expected
+        assert body["incomplete_count"] == 0
+
+    def test_safe_text_lengths_and_no_synthetic_download_fields(self):
+        body, _ = self._read(
+            {
+                "a2ui_surface:one": self._surface(
+                    artifact={
+                        "title": "\u0000\u202e标题\n" + "长" * 200,
+                        "description": "描述\t" + "长" * 600,
+                        "kind": "k" * 100,
+                        "download_url": "private",
+                    }
+                )
+            }
+        )
+        result = body["results"][0]
+        assert result["title"].startswith("标题 ")
+        assert result["description"].startswith("描述 ")
+        assert len(result["title"]) == 160
+        assert len(result["description"]) == 500
+        assert len(result["kind"]) == 64
+        assert set(result) == {"surface_id", "title", "kind", "description", "created_at"}
+
+    def test_stable_deduplication_order_and_limit_after_dedup(self):
+        state = {
+            "a2ui_surface:z-alias": self._surface("duplicate", artifact={"title": "后选"}),
+            "a2ui_surface:a-alias": self._surface("duplicate", artifact={"title": "先选"}),
+            **{f"a2ui_surface:r{i}": self._surface(f"r{i:03}", createdAt=i + 2000) for i in range(101)},
+        }
+        first, _ = self._read(state)
+        second, _ = self._read(dict(reversed(list(state.items()))))
+        assert first == second
+        assert first["truncated"] is True
+        assert len(first["results"]) == 100
+        assert first["results"][0]["title"] == "先选"
+        assert first["results"][-1]["surface_id"] == "r098"
+        assert first["incomplete_count"] == 0
+        state.pop("a2ui_surface:r100")
+        state.pop("a2ui_surface:r99")
+        exact, _ = self._read(state)
+        assert len(exact["results"]) == 100
+        assert exact["truncated"] is False
 
 
 # ---------------------------------------------------------------------------

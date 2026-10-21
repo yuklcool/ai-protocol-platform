@@ -3,6 +3,7 @@
 Endpoints (all authenticated):
   GET    /api/documents/{docId}/sessions   list sessions for a document
   GET    /api/sessions/{sessionId}         get one session's metadata
+  GET    /api/sessions/{sessionId}/results  仅持久化 A2UI surface 的成果摘要
   PATCH  /api/sessions/{sessionId}         rename / re-scope / archive (owner)
   DELETE /api/sessions/{sessionId}         soft-delete (owner)
 
@@ -18,6 +19,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import unicodedata
+from collections.abc import Mapping
 from datetime import UTC
 from typing import Annotated, Any, Literal
 
@@ -46,7 +50,9 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 log = logging.getLogger(__name__)
 
 
-def _state_to_a2ui_surfaces(state: Any) -> list[dict[str, Any]]:
+def _state_to_a2ui_surfaces(
+    state: Any, *, metadata_only: bool = False, incomplete_keys: set[str] | None = None
+) -> list[dict[str, Any]]:
     """Extract persisted A2UI workbench surfaces from session state (7.5 M3).
 
     Reads session-scoped ``a2ui_surface:*`` keys the result emitter stashes and
@@ -61,6 +67,7 @@ def _state_to_a2ui_surfaces(state: Any) -> list[dict[str, Any]]:
     the canonical tool-emitted messages, so the ordinary replay path restores
     the edited data model with no frontend changes.
     """
+    # metadata_only 不要求可重放正文, 也不合并 clientDataModel; 损坏条目由调用方显式报告。
     if not state:
         return []
     surfaces: list[dict[str, Any]] = []
@@ -69,9 +76,39 @@ def _state_to_a2ui_surfaces(state: Any) -> list[dict[str, Any]]:
             continue
         try:
             payload = json.loads(raw) if isinstance(raw, str) else raw
-            if isinstance(payload, dict) and payload.get("surfaceId") and payload.get("messages"):
+            if metadata_only:
+                if not isinstance(payload, dict):
+                    raise ValueError("invalid surface payload")
+                surface_id = payload.get("surfaceId")
+                if not isinstance(surface_id, str) or not surface_id.strip():
+                    raise ValueError("invalid surfaceId")
+                artifact = payload.get("artifact")
+                if artifact is not None and not isinstance(artifact, dict):
+                    raise ValueError("invalid artifact")
+                created_at = payload.get("createdAt")
+                if created_at is not None and (
+                    isinstance(created_at, bool)
+                    or not isinstance(created_at, (int, float))
+                    or not 0 <= created_at <= 8_640_000_000_000_000
+                    or not math.isfinite(created_at)
+                ):
+                    if incomplete_keys is not None:
+                        incomplete_keys.add(key)
+                    created_at = None
+                surfaces.append(
+                    {
+                        "surfaceId": surface_id,
+                        "artifact": artifact,
+                        "createdAt": created_at,
+                        "messages": payload.get("messages"),
+                        "_state_key": key,
+                    }
+                )
+            elif isinstance(payload, dict) and payload.get("surfaceId") and payload.get("messages"):
                 surfaces.append(_apply_client_data_model(payload))
-        except (ValueError, TypeError) as exc:
+        except (ValueError, TypeError, RecursionError) as exc:
+            if incomplete_keys is not None:
+                incomplete_keys.add(key)
             log.warning("a2ui surface rehydrate: skipping unparseable state key %s: %s", key, exc)
     surfaces.sort(key=lambda s: s.get("createdAt") or 0)
     return surfaces
@@ -139,6 +176,107 @@ class GetSessionMessagesResponse(BaseModel):
     # with no error to explain it (CLAUDE.md #8, NEVER SILENT). The frontend
     # renders a notice instead of an empty thread.
     transcript_unavailable: bool = False
+
+
+class SessionResult(BaseModel):
+    surface_id: str
+    title: str
+    kind: str | None
+    description: str | None
+    # 与持久化 createdAt 一致: Unix 毫秒; 缺失或非法时为 null, 不伪造时间。
+    created_at: float | None
+
+
+class GetSessionResultsResponse(BaseModel):
+    session_id: str
+    results: list[SessionResult]
+    state_available: bool
+    # 按损坏状态键去重计数, 包括跳过的条目及 metadata/时间字段降级的条目。
+    incomplete_count: int = 0
+    # 最多返回 100 个去重结果, 不是完整文件索引或可分页列表。
+    truncated: bool = False
+
+
+_SESSION_RESULTS_LIMIT = 100
+
+
+def _result_text(value: Any, limit: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = "".join(
+        " " if char.isspace() else char
+        for char in value[: limit * 4]
+        if char.isspace() or not unicodedata.category(char).startswith("C")
+    )
+    return " ".join(text.split())[:limit] or None
+
+
+def _workspace_surface_active(messages: Any) -> bool:
+    """对应 SurfaceRegistry 的 create/update 自动创建、delete 清除; 不读取正文。"""
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("missing workspace messages")
+    active = False
+    for message in messages:
+        if not isinstance(message, dict):
+            raise ValueError("invalid workspace message")
+        operations = [
+            name
+            for name in ("createSurface", "updateComponents", "updateDataModel", "deleteSurface")
+            if name in message
+        ]
+        if len(operations) != 1:
+            raise ValueError("invalid workspace operation")
+        name = operations[0]
+        operation = message[name]
+        if not isinstance(operation, dict) or operation.get("surfaceId") != "workspace":
+            raise ValueError("invalid workspace surfaceId")
+        active = name != "deleteSurface"
+    return active
+
+
+def _state_to_session_results(state: Mapping[str, Any]) -> tuple[list[SessionResult], int, bool]:
+    incomplete_keys: set[str] = set()
+    surfaces = _state_to_a2ui_surfaces(state, metadata_only=True, incomplete_keys=incomplete_keys)
+    # 先见时间优先, 同时间按 surfaceId/state key 排序, 重复 surface 稳定保留第一项。
+    surfaces.sort(key=lambda s: (s["createdAt"] or 0, s["surfaceId"], s["_state_key"]))
+    results: dict[str, SessionResult] = {}
+    for surface in surfaces:
+        key = surface["_state_key"]
+        artifact = surface["artifact"]
+        if artifact is not None:
+            placement = artifact.get("placement")
+            if placement == "chat":
+                continue
+            if placement not in (None, "workbench"):
+                incomplete_keys.add(key)
+                continue
+        else:
+            # 无 metadata 的任意 surface 不是成果; 仅裸 workspace 与前端结果页一致。
+            if surface["surfaceId"] != "workspace":
+                continue
+            try:
+                if not _workspace_surface_active(surface["messages"]):
+                    continue
+            except ValueError:
+                incomplete_keys.add(key)
+                continue
+        metadata = artifact or {}
+        if any(
+            metadata.get(field) is not None and not isinstance(metadata[field], str)
+            for field in ("title", "kind", "description")
+        ):
+            incomplete_keys.add(key)
+        results.setdefault(
+            surface["surfaceId"],
+            SessionResult(
+                surface_id=surface["surfaceId"],
+                title=_result_text(metadata.get("title"), 160) or "交互结果",
+                kind=_result_text(metadata.get("kind"), 64),
+                description=_result_text(metadata.get("description"), 500),
+                created_at=surface["createdAt"],
+            ),
+        )
+    return list(results.values())[:_SESSION_RESULTS_LIMIT], len(incomplete_keys), len(results) > _SESSION_RESULTS_LIMIT
 
 
 class ToolActivity(BaseModel):
@@ -647,6 +785,49 @@ async def patch_session(
     if updated is None:
         raise HTTPException(status_code=404, detail="Session not found after update")
     return GetSessionResponse(session=_to_summary(updated, ctx.uid))
+
+
+@router.get("/sessions/{session_id}/results", response_model=GetSessionResultsResponse)
+async def get_session_results(
+    session_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008
+) -> GetSessionResultsResponse:
+    """按需读取单会话持久化 A2UI surface 的摘要, 不代表所有文件或纯文字成果。
+
+    ACL 与 /messages 一致: 先检查索引和 can_access, 再以 owner 身份读取 state。
+    不扫描会话列表或 events, 不返回 messages/clientDataModel, 也不生成下载链接。
+    state 缺失不等于没有成果; 损坏条目数和数量截断均显式返回。
+    """
+    idx = _require_session(session_id)
+    ctx = request.state.access
+    if not ctx.can_access(idx):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from google.adk.sessions.base_session_service import GetSessionConfig
+
+    from observability.user_context import authorized_resource_user
+
+    session_service = get_messages_session_service()
+    with authorized_resource_user(idx.owner_uid):
+        session = await session_service.get_session(
+            app_name=app_name_for_session(idx),
+            user_id=idx.owner_uid,
+            session_id=session_id,
+            # SDK 已核实支持; 不用 0, 避免某些实现将其解释为无限制读取。
+            config=GetSessionConfig(num_recent_events=1),
+        )
+    state = getattr(session, "state", None) if session is not None else None
+    if not isinstance(state, Mapping):
+        return GetSessionResultsResponse(session_id=session_id, results=[], state_available=False)
+    results, incomplete_count, truncated = _state_to_session_results(state)
+    return GetSessionResultsResponse(
+        session_id=session_id,
+        results=results,
+        state_available=True,
+        incomplete_count=incomplete_count,
+        truncated=truncated,
+    )
 
 
 @router.get("/sessions/{session_id}/messages", response_model=GetSessionMessagesResponse)

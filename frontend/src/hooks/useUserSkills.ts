@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
 import type { Skill } from "@/types/skill";
 
@@ -8,47 +8,45 @@ interface UseUserSkillsReturn {
   skills: Skill[];
   isLoading: boolean;
   error: string | null;
+  retry: () => void;
 }
 
-
 export function useUserSkills(uid: string | null): UseUserSkillsReturn {
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const [state, setState] = useState<{
+    uid: string | null;
+    skills: Skill[];
+    isLoading: boolean;
+    error: string | null;
+  }>({ uid, skills: [], isLoading: !!uid, error: null });
+  const [revision, setRevision] = useState(0);
+  const retry = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
-    if (!uid) {
-      setSkills([]);
-      setError(null);
-      return;
-    }
-
-    abortRef.current?.abort();
     const controller = new AbortController();
-    abortRef.current = controller;
+    setState({ uid, skills: [], isLoading: !!uid, error: null });
+    if (!uid) return () => controller.abort();
 
-    setIsLoading(true);
-    setError(null);
-
-    fetchWithAuth(
-      "/api/proxy/api/skills",
-      { signal: controller.signal },
-    ).then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json() as Promise<Skill[]>;
-    })
-      .then((visibleSkills) => setSkills(visibleSkills))
-      .catch((err: Error) => {
-        if (err.name !== "AbortError") {
-          setError("Could not load skills.");
-          setSkills([]);
+    fetchWithAuth("/api/proxy/api/skills", { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<Skill[]>;
+      })
+      .then((skills) => {
+        if (!controller.signal.aborted) {
+          setState({ uid, skills, isLoading: false, error: null });
         }
       })
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setState({ uid, skills: [], isLoading: false, error: "Could not load skills." });
+        }
+      });
 
-    return () => abortRef.current?.abort();
-  }, [uid]);
+    return () => controller.abort();
+  }, [uid, revision]);
 
-  return { skills, isLoading, error };
+  return {
+    ...(state.uid === uid ? state : { skills: [], isLoading: !!uid, error: null }),
+    retry,
+  };
 }

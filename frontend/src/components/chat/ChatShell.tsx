@@ -41,6 +41,7 @@ import { useBackendReady } from "@/hooks/useBackendReady";
 import { computeIncludedDocIds } from "@/lib/docContext";
 import { notifySessionsChanged, subscribeSessionsChangedDetailed } from "@/lib/sessionEvents";
 import { useSkillSessions } from "@/hooks/useSkillSessions";
+import { sessionHref } from "@/lib/sessionHref";
 import { SkillSessionPanel } from "@/components/chat/SkillSessionPanel";
 import DocumentHistoryPanel from "@/components/chat/DocumentHistoryPanel";
 import { SidebarSection } from "@/components/chat/SidebarSection";
@@ -1148,7 +1149,15 @@ function ChatShellContent({
   // whichever agent the user happened to be standing on — a sitting spread
   // across two agents read as "it didn't record my session" (2026-08-05).
   const [sessionSkillFilter, setSessionSkillFilter] = useState<string | null>(null);
-  const { sessions, isLoading: sessionsLoading } = useSkillSessions(sessionSkillFilter);
+  const {
+    sessions,
+    isLoading: sessionsLoading,
+    error: sessionsError,
+    refetch: refetchSessions,
+    nextCursor,
+    loadMore: loadMoreSessions,
+    isLoadingMore: sessionsLoadingMore,
+  } = useSkillSessions(sessionSkillFilter);
 
   // 恢复历史消息和界面时使用；附件选择独立保存。
   const [enteredViaResume, setEnteredViaResume] = useState<boolean>(
@@ -1202,6 +1211,9 @@ function ChatShellContent({
   // unit-testable independently of the chat-page render tree
   // (multi-doc-context-fix.md / 1.22 D2).
   const includedDocIds = computeIncludedDocIds(openTabs);
+  const unreadableAttachments = openTabs.filter((tab) => tab.included && tab.parseStatus !== "parsed");
+  const attachmentBlock = !attachmentsReady || attachmentsSaving || !!attachmentError || uploadBusy || uploadBlocked || unreadableAttachments.length > 0;
+  const submissionBlocked = isLoading || !chatReady || attachmentBlock;
 
   // ── Confirm→SWITCH (8.2, full-switch semantics) ──────────────────────────
   // FRONT-DOOR side. When the user Proceeds on a confirm_delegation card,
@@ -1235,7 +1247,7 @@ function ChatShellContent({
   // like any other turn) and stay active for the rest of the session. One-shot.
   const switchConsumedRef = useRef(false);
   useEffect(() => {
-    if (switchConsumedRef.current) return;
+    if (switchConsumedRef.current || submissionBlocked || error) return;
     const pending = readPendingSkillSwitch();
     if (!pending) return;
     if (pending.threadId !== effectiveSessionId || pending.targetSkillId !== skillId) return;
@@ -1246,11 +1258,11 @@ function ChatShellContent({
       documentIds: pending.documentIds,
 
     });
-  }, [effectiveSessionId, skillId, sendMessage]);
+  }, [effectiveSessionId, skillId, sendMessage, submissionBlocked, error]);
 
   async function handleSend() {
     const text = draft.trim();
-    if (!text || isLoading || error || !attachmentsReady || attachmentsSaving || attachmentError || uploadBusy || uploadBlocked || openTabs.some((tab) => tab.included && tab.parseStatus !== "parsed")) return;
+    if (!text || submissionBlocked || error) return;
     lastUserMessageRef.current = text;
     setDraft("");
     await sendMessage(text, {
@@ -1260,6 +1272,7 @@ function ChatShellContent({
   }
 
   const handleRetry = useCallback(() => {
+    if (submissionBlocked) return;
     const text = lastUserMessageRef.current;
     if (!text) { clearError(); return; }
     clearError();
@@ -1267,21 +1280,21 @@ function ChatShellContent({
       documentIds: includedDocIds,
 
     });
-  }, [clearError, sendMessage, includedDocIds]);
+  }, [clearError, sendMessage, includedDocIds, submissionBlocked]);
 
   // A `chat:send` surface action (e.g. a diff card's "Explain this difference")
   // posts a chat message so the agent's reply lands in the chat thread — same
   // doc context as the composer. See A2UISurfaceMount onChatMessage.
   const handleSurfaceChatMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || isLoading) return;
+      if (!text.trim() || submissionBlocked || error) return;
       lastUserMessageRef.current = text;
       void sendMessage(text, {
         documentIds: includedDocIds,
 
       });
     },
-    [sendMessage, includedDocIds, isLoading],
+    [sendMessage, includedDocIds, submissionBlocked, error],
   );
 
   // MCP App iframe → notification adapter → synthetic chat turn. Stable
@@ -1290,12 +1303,13 @@ function ChatShellContent({
   // changes, never per streamed token.
   const handleMcpChatMessage = useCallback(
     (text: string) => {
+      if (!text.trim() || submissionBlocked || error) return;
       void sendMessage(text, {
         documentIds: includedDocIds,
 
       });
     },
-    [sendMessage, includedDocIds],
+    [sendMessage, includedDocIds, submissionBlocked, error],
   );
 
   // Loop/spam guard for A2UI actions. An action (e.g. a form submit) fires an
@@ -1309,9 +1323,11 @@ function ChatShellContent({
   // suppressed. Refs (not state) keep handleAction's identity stable — a
   // changing onAction prop is itself part of what drove the churn.
   const isLoadingRef = useRef(isLoading);
+  const actionBlockedRef = useRef(submissionBlocked || error !== null);
   useEffect(() => {
     isLoadingRef.current = isLoading;
-  }, [isLoading]);
+    actionBlockedRef.current = submissionBlocked || error !== null;
+  }, [isLoading, submissionBlocked, error]);
   const lastActionSendRef = useRef<{ key: string; at: number } | null>(null);
 
   const handleAction = useCallback(
@@ -1320,7 +1336,7 @@ function ChatShellContent({
       const now = Date.now();
       const prev = lastActionSendRef.current;
       if (
-        isLoadingRef.current ||
+        actionBlockedRef.current ||
         (prev && prev.key === key && now - prev.at < 8000)
       ) {
         if (process.env.NODE_ENV !== "production") {
@@ -1349,6 +1365,16 @@ function ChatShellContent({
       navigateToSession(sid);
     },
     [navigateToSession],
+  );
+
+  const handleSelectSkillSession = useCallback(
+    (sid: string) => {
+      const session = sessions.find((row) => row.session_id === sid);
+      if (!session) return;
+      setEnteredViaResume(true);
+      router.replace(sessionHref(session));
+    },
+    [sessions, router],
   );
 
   const handleNewSession = useCallback(() => {
@@ -1458,14 +1484,54 @@ function ChatShellContent({
   // the returned doc in the workbench via handleDocClick — same path uploads
   // take. Replaces the 4.5 synthetic-chat-message hack that delegated to
   // the agent's bucket tools (which returned raw bytes, not parsed blocks).
+  const [importFailure, setImportFailure] = useState<{
+    bucket: string;
+    objectName: string;
+    message: string;
+  } | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const importsInFlightRef = useRef(new Set<string>());
+  const importScopeRef = useRef({ cancelled: false });
+  const aiOpenedDocsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const scope = { cancelled: false };
+    importScopeRef.current = scope;
+    importsInFlightRef.current.clear();
+    aiOpenedDocsRef.current.clear();
+    setImportFailure(null);
+    setImportBusy(false);
+    return () => {
+      scope.cancelled = true;
+    };
+  }, [effectiveSessionId, skillId, user.uid]);
+
   const handleImportByReference = useCallback(
     async (bucket: string, objectName: string): Promise<void> => {
-      const result = await importByReference(bucket, objectName, skillId);
-      if (isImportError(result)) {
-        console.error(`import-by-reference failed: ${result.message}`);
-        return;
+      const scope = importScopeRef.current;
+      if (scope.cancelled) return;
+      const key = JSON.stringify([bucket, objectName]);
+      if (importsInFlightRef.current.has(key)) return;
+      importsInFlightRef.current.add(key);
+      setImportBusy(true);
+      try {
+        const result = await importByReference(bucket, objectName, skillId);
+        if (scope.cancelled) return;
+        if (isImportError(result)) {
+          setImportFailure({ bucket, objectName, message: result.message });
+          return;
+        }
+        handleDocClick(result.doc);
+        setImportFailure((failure) => failure?.bucket === bucket && failure.objectName === objectName ? null : failure);
+      } catch (cause) {
+        if (!scope.cancelled) {
+          setImportFailure({ bucket, objectName, message: cause instanceof Error ? cause.message : String(cause) });
+        }
+      } finally {
+        if (!scope.cancelled) {
+          importsInFlightRef.current.delete(key);
+          setImportBusy(importsInFlightRef.current.size > 0);
+        }
       }
-      handleDocClick(result.doc);
     },
     [skillId, handleDocClick],
   );
@@ -1475,7 +1541,10 @@ function ChatShellContent({
   // Sources tab can render a visible error (NEVER-SILENT) instead of a dead click.
   const handleOpenSourceDoc = useCallback(
     async (bucket: string, objectName: string): Promise<void> => {
+      const scope = importScopeRef.current;
+      if (scope.cancelled) return;
       const result = await importByReference(bucket, objectName, skillId);
+      if (scope.cancelled) return;
       if (isImportError(result)) {
         throw new Error(result.message);
       }
@@ -1504,7 +1573,6 @@ function ChatShellContent({
   // extract_ppa_clauses, map_ppa_obligations), open it in the document bar —
   // parity with a manual pick, via the same import-by-reference path. Deduped so
   // a doc is opened once even as its args re-render / the tool is re-called.
-  const aiOpenedDocsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const tc of toolCalls) {
       const identity = docIdentityFromToolCall(tc.name, tc.argsJson);
@@ -1514,7 +1582,7 @@ function ChatShellContent({
       aiOpenedDocsRef.current.add(key);
       handleOpenDocFromLauncher(identity);
     }
-  }, [toolCalls, handleOpenDocFromLauncher]);
+  }, [toolCalls, handleOpenDocFromLauncher, effectiveSessionId, skillId, user.uid]);
 
   const handleTabClose = useCallback((id: string) => {
     setOpenTabs((prev) => {
@@ -1530,9 +1598,8 @@ function ChatShellContent({
     );
   }, [setOpenTabs]);
 
-  const unreadableAttachments = openTabs.filter((tab) => tab.included && tab.parseStatus !== "parsed");
-  const attachmentBlock = !attachmentsReady || attachmentsSaving || !!attachmentError || uploadBusy || uploadBlocked || unreadableAttachments.length > 0;
-  const inputDisabled = isLoading || error !== null || !chatReady || attachmentBlock;
+  const inputDisabled = isLoading || error !== null || !chatReady;
+  const sendDisabled = inputDisabled || attachmentBlock;
   useEffect(() => { if (error) setDraft((current) => current || lastUserMessageRef.current); }, [error]);
 
   // The composer (connecting banner + in-context badge + input row). Extracted
@@ -1582,6 +1649,20 @@ function ChatShellContent({
       {attachmentsSaving && <p role="status" className="text-xs text-muted-foreground">正在保存附件选择…</p>}
       {attachmentError && <div role="alert" className="notice flex flex-wrap items-center gap-2 text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave} className="button-secondary px-3 py-1.5 text-xs">重试</button></div>}
       {unreadableAttachments.length > 0 && <p role="alert" className="text-xs text-destructive">{unreadableAttachments.map((tab) => tab.filename).join("、")} 尚不可分析，请等待解析完成、重试或取消选择。</p>}
+      {importFailure && (
+        <div role="alert" className="notice mb-2 flex flex-wrap items-center gap-2 text-xs text-destructive">
+          <p>{translateChat(locale, "shell.importFailed", { file: importFailure.objectName, error: importFailure.message })}</p>
+          <button
+            type="button"
+            disabled={importBusy}
+            onClick={() => void handleImportByReference(importFailure.bucket, importFailure.objectName)}
+            className="button-secondary px-3 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {translateChat(locale, "shell.retryImport")}
+          </button>
+        </div>
+      )}
+      {importBusy && <p role="status" className="mb-2 text-xs text-muted-foreground">{translateChat(locale, "shell.importing")}</p>}
       <form
         // items-end: as the textarea grows the Send/Stop button stays aligned
         // with the LAST line rather than stretching to the full box height.
@@ -1629,7 +1710,7 @@ function ChatShellContent({
             type="submit"
             className="button-primary shrink-0 px-3 py-2 text-sm"
             aria-label={translateChat(locale, "shell.send")}
-            disabled={!draft.trim() || inputDisabled}
+            disabled={!draft.trim() || sendDisabled}
           >
             {translateChat(locale, "shell.send")}
           </button>
@@ -1756,7 +1837,12 @@ function ChatShellContent({
                   sessions={sessions}
                   activeSessionId={sessionId}
                   isLoading={sessionsLoading}
-                  onSelectSession={handleSelectSession}
+                  error={sessionsError}
+                  onRetry={refetchSessions}
+                  nextCursor={nextCursor}
+                  onLoadMore={loadMoreSessions}
+                  isLoadingMore={sessionsLoadingMore}
+                  onSelectSession={handleSelectSkillSession}
                   onDelete={(sid) => void handleDeleteSkillSession(sid)}
                   skillFilter={sessionSkillFilter}
                   onFilterChange={setSessionSkillFilter}

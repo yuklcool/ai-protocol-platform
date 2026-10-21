@@ -9,6 +9,11 @@ interface SkillSessionPanelProps {
   sessions: ChatSessionSummary[];
   activeSessionId: string | null;
   isLoading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  nextCursor?: string | null;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
   onSelectSession: (sessionId: string) => void;
   onDelete?: (sessionId: string) => void;
   skillFilter?: string | null;
@@ -53,6 +58,11 @@ export function SkillSessionPanel({
   sessions,
   activeSessionId,
   isLoading,
+  error = null,
+  onRetry,
+  nextCursor = null,
+  onLoadMore,
+  isLoadingMore = false,
   onSelectSession,
   onDelete,
   skillFilter = null,
@@ -83,7 +93,7 @@ export function SkillSessionPanel({
     </div>
   ) : null;
 
-  if (isLoading) {
+  if (isLoading && sessions.length === 0) {
     return (
       <>
         {filterRow}
@@ -92,21 +102,31 @@ export function SkillSessionPanel({
     );
   }
 
-  if (sessions.length === 0) {
-    return (
-      <>
-        {filterRow}
-        <div className="p-3 text-xs text-muted-foreground">
-          {translateChat(locale, skillFilter ? "sessions.noneForAgent" : "sessions.none")}
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       {filterRow}
-      <nav aria-label={translateChat(locale, "sessions.historyAria")} className="flex flex-col p-1">
+      {error && (
+        <div role="alert" className="space-y-2 p-3 text-xs text-destructive">
+          <p>{translateChat(locale, "sessions.loadFailed")}</p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isLoading || isLoadingMore}
+              className="button-secondary px-3 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {translateChat(locale, "shell.retry")}
+            </button>
+          )}
+        </div>
+      )}
+      {!error && !isLoading && sessions.length === 0 && (
+        <div className="p-3 text-xs text-muted-foreground">
+          {translateChat(locale, skillFilter ? "sessions.noneForAgent" : "sessions.none")}
+        </div>
+      )}
+      {isLoading && <p role="status" className="p-2 text-xs text-muted-foreground">{translateChat(locale, "sessions.loadingAria")}</p>}
+      <nav aria-label={translateChat(locale, "sessions.historyAria")} aria-busy={isLoading || isLoadingMore} className="flex flex-col p-1">
         {sessions.map((s) => {
           const isActive = s.session_id === activeSessionId;
           const title =
@@ -183,6 +203,17 @@ export function SkillSessionPanel({
           );
         })}
       </nav>
+      {nextCursor && onLoadMore && (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={isLoading || isLoadingMore}
+          className="button-secondary m-2 px-3 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {translateChat(locale, isLoadingMore ? "sessions.loadingMore" : "sessions.loadMore")}
+        </button>
+      )}
+      {isLoadingMore && <p role="status" className="px-2 text-xs text-muted-foreground">{translateChat(locale, "sessions.loadingMore")}</p>}
     </>
   );
 }

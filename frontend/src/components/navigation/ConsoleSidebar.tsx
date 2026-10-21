@@ -7,9 +7,9 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   Bot,
-  Boxes,
   LayoutDashboard,
-  Plug,
+  History,
+  Files,
   ScrollText,
   Settings2,
   Sparkles,
@@ -46,44 +46,17 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "工作区",
     en: "Workspace",
     items: [
-      { href: "/", zh: "工作台", en: "Workspace", icon: LayoutDashboard },
+      { href: "/workspace", zh: "工作台", en: "Workspace", icon: LayoutDashboard },
+      { href: "/sessions", zh: "历史对话", en: "Conversations", icon: History },
+      { href: "/results", zh: "我的成果", en: "Results", icon: Files },
+      { href: "/skills", zh: "能力中心", en: "Capabilities", icon: Sparkles },
     ],
   },
   {
-    zh: "智能体",
-    en: "Agent",
-    items: [
-      {
-        href: "/agent",
-        zh: "Root Agent 设置",
-        en: "Root Agent Settings",
-        icon: Bot,
-      },
-    ],
-  },
-  {
-    zh: "资源",
-    en: "Resources",
-    items: [
-      { href: "/skills", zh: "技能管理", en: "Skills", icon: Sparkles },
-      {
-        href: "/admin/model-providers",
-        zh: "模型服务",
-        en: "Models",
-        icon: Boxes,
-      },
-      {
-        href: "/admin/mcp-servers",
-        zh: "MCP 服务",
-        en: "MCP Servers",
-        icon: Plug,
-      },
-    ],
-  },
-  {
-    zh: "管理",
+    zh: "平台管理",
     en: "Administration",
     items: [
+      { href: "/admin", zh: "就绪与资源接入", en: "Readiness and resources", icon: Bot },
       { href: "/admin/users", zh: "用户管理", en: "Users", icon: UsersRound },
       { href: "/admin/analytics", zh: "用量统计", en: "Usage", icon: Activity },
       { href: "/admin/audit", zh: "审计日志", en: "Audit", icon: ScrollText },
@@ -92,8 +65,23 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
 ];
 
 function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname.startsWith("/chat") || pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const matches = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
+
+  if (href === "/workspace") {
+    return pathname === "/" || matches("/workspace") || matches("/chat");
+  }
+  if (href === "/admin") {
+    const specificPaths = [
+      ...CONSOLE_NAVIGATION.flatMap((group) => group.items.map((item) => item.href)),
+      "/admin/settings",
+    ].filter((path) => path.startsWith("/admin/"));
+    return (
+      matches("/agent") ||
+      (matches("/admin") && !specificPaths.some(matches))
+    );
+  }
+  return matches(href);
 }
 
 function label(item: { zh: string; en: string }, isChinese: boolean) {
@@ -110,7 +98,7 @@ export function visibleNavigation(isAdmin: boolean, isPlatform: boolean) {
     ...group,
     items: group.items.filter((item) => {
       if (platformPaths.has(item.href)) return isPlatform;
-      return !item.href.startsWith("/admin/") || isAdmin;
+      return !(item.href === "/admin" || item.href.startsWith("/admin/")) || isAdmin;
     }),
   })).filter((group) => group.items.length > 0);
 }
@@ -118,9 +106,9 @@ export function visibleNavigation(isAdmin: boolean, isPlatform: boolean) {
 function Brand({ isChinese }: { isChinese: boolean }) {
   return (
     <Link
-      href="/"
+      href="/workspace"
       className="flex min-w-0 flex-1 items-center gap-2.5"
-      aria-label={BRANDING.appName}
+      aria-label={`${BRANDING.appName} — ${isChinese ? "返回工作台" : "Back to workspace"}`}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--hairline)] bg-white shadow-[var(--shadow-1)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}

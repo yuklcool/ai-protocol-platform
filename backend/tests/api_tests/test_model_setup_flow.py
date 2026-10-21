@@ -7,9 +7,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import config.platform_config as pc
 from auth import User, get_current_user
 from config.model_readiness import READINESS_COLLECTION
 from config.platform_config import get_platform_config, invalidate_cache, update_platform_config
+from db.models import PLATFORM_CONFIG_DOC_ID
 from db.persistence import reset_repository_for_testing
 from db.repositories.memory import MemoryRepository
 from tests.support.identity import identity_dependency
@@ -22,6 +24,7 @@ MODEL = {"api_name": "service-chat", "provider_id": "service", "context_window":
 def stack(monkeypatch):
     from admin.model_probe_routes import router as probes
     from admin.model_providers_routes import router as providers
+    from admin.platform_config_routes import router as platform_config
 
     monkeypatch.setenv("SELF_HOSTED_MODE", "1")
     monkeypatch.setenv("MODEL_REGISTRY_BACKEND", "database")
@@ -34,6 +37,7 @@ def stack(monkeypatch):
     app = FastAPI()
     app.include_router(providers, prefix="/api/admin")
     app.include_router(probes, prefix="/api/admin")
+    app.include_router(platform_config)
     app.dependency_overrides[get_current_user] = identity_dependency(lambda: actor["user"])
     with TestClient(app) as client:
         assert (
@@ -122,6 +126,14 @@ def test_changed_or_expired_configuration_requires_fresh_tests(stack, monkeypatc
             value["tested_at"] -= 86401
         repo.set_document(READINESS_COLLECTION, "model", raw)
     assert not client.get(f"{API}/models").json()[0]["readiness"]["ready"]
+    before = get_platform_config()
+    with pytest.raises(ValueError, match="24 小时内"):
+        update_platform_config({"agent": {"model": "model"}})
+    assert get_platform_config() == before
+    assert repo.get_document(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID) is None
+    response = client.put("/api/admin/platform-config", json={"agent": {"model": "model"}})
+    assert response.status_code == 422
+    assert "24 小时内" in response.json()["detail"]
     assert client.post(f"{API}/models/model/use").status_code == 409
 
 
@@ -175,3 +187,139 @@ def test_eu_only_deployment_rejects_non_eu_root_even_after_protocol_tests_pass(s
     repo.set_document("model_registry", "model", {"residency": "eu"}, merge=True)
     # Region metadata changes do not alter the wire protocol; the policy guard is evaluated on every application.
     assert client.post(f"{API}/models/model/use").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "state", ["untested", "completion_only", "tool_call_only", "completion_failed", "tool_call_failed"]
+)
+def test_service_rejects_dynamic_model_without_two_successful_probes(stack, state):
+    client, repo, _ = stack
+    before = update_platform_config({"agent": {"model": "lite", "instructions": "保留原配置"}})
+    stored_before = repo.get_document(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID)
+    if state != "untested":
+        probes_pass(client)
+        raw = repo.get_document(READINESS_COLLECTION, "model")
+        if state == "completion_only":
+            raw.pop("tool_call")
+        elif state == "tool_call_only":
+            raw.pop("completion")
+        else:
+            raw[state.removesuffix("_failed")]["ok"] = False
+        repo.set_document(READINESS_COLLECTION, "model", raw)
+
+    with pytest.raises(ValueError, match="24 小时内的普通生成和工具调用测试"):
+        update_platform_config({"agent": {"model": "model"}}, updated_by="admin")
+
+    assert get_platform_config() == before
+    assert repo.get_document(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID) == stored_before
+    response = client.put("/api/admin/platform-config", json={"agent": {"model": "model"}})
+    assert response.status_code == 422
+    assert client.post(f"{API}/models/model/use").status_code == 409
+
+
+@pytest.mark.parametrize("via_route", [False, True], ids=["service", "root_save"])
+def test_verified_dynamic_model_can_be_saved_through_platform_config(stack, via_route):
+    client, repo, _ = stack
+    probes_pass(client)
+    updates = {"agent": {"model": "model", "instructions": "保留新配置", "tools": ["get_current_time"]}}
+    if via_route:
+        response = client.put("/api/admin/platform-config", json=updates)
+        assert response.status_code == 200, response.text
+        config = get_platform_config()
+    else:
+        config = update_platform_config(updates, updated_by="admin")
+    assert config.agent.model == "model"
+    assert config.agent.instructions == "保留新配置"
+    assert config.agent.tools == ["get_current_time"]
+    stored = repo.get_document(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID)
+    assert stored["agent"]["model"] == "model"
+    assert stored["updatedBy"] == "admin"
+    assert stored["updatedAt"] == config.updated_at
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"agent": {"model": "model", "instructions": "更新指令", "tools": ["get_current_time"]}},
+        {"preamble": "更新平台提示"},
+        {"enabled": False},
+        {"compaction": {"tokenThreshold": 3000}},
+    ],
+    ids=["same_model", "preamble", "enabled", "compaction"],
+)
+def test_service_saves_other_fields_without_rechecking_active_model(stack, updates):
+    client, repo, _ = stack
+    probes_pass(client)
+    update_platform_config({"agent": {"model": "model"}})
+    raw = repo.get_document(READINESS_COLLECTION, "model")
+    for result in raw.values():
+        result["tested_at"] -= 86401
+    repo.set_document(READINESS_COLLECTION, "model", raw)
+    assert not client.get(f"{API}/models").json()[0]["readiness"]["ready"]
+    invalidate_cache(clear_last_known_good=True)
+
+    with (
+        patch("config.platform_config.get_document", wraps=pc.get_document) as read,
+        patch("config.platform_config.model_readiness") as readiness,
+    ):
+        assert get_platform_config().agent.model == "model"
+        config = update_platform_config(updates, updated_by="admin")
+        assert config.agent.model == "model"
+        readiness.assert_not_called()
+        assert [call.args for call in read.call_args_list] == [(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID)]
+
+    assert repo.get_document(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID) == config.model_dump(by_alias=True)
+    assert client.put("/api/admin/platform-config", json=updates).status_code == 200
+    assert client.post(f"{API}/models/model/use").status_code == 409
+
+
+@pytest.mark.parametrize("model_ref", ["gemini-3-7-flash", "smart", "pro", "default", "fast", "lite"])
+def test_service_does_not_require_dynamic_probes_for_file_models_or_aliases(stack, model_ref):
+    client, repo, _ = stack
+    update_platform_config({"agent": {"model": "another-model"}})
+    repo.set_document("model_registry_settings", "default", {"tierDefaults": {"smart": "model"}})
+    with patch("config.platform_config.model_readiness") as readiness:
+        config = update_platform_config({"agent": {"model": model_ref}})
+        assert config.agent.model == model_ref
+        readiness.assert_not_called()
+    assert client.put("/api/admin/platform-config", json={"agent": {"model": model_ref}}).status_code == 200
+
+
+@pytest.mark.parametrize("backend", ["file", "yaml", "file_default", "self_hosted_default"])
+def test_service_checks_dynamic_models_only_when_database_registry_is_enabled(stack, monkeypatch, backend):
+    client, _, _ = stack
+    if backend in {"file", "yaml"}:
+        monkeypatch.setenv("MODEL_REGISTRY_BACKEND", backend)
+    else:
+        monkeypatch.delenv("MODEL_REGISTRY_BACKEND")
+        if backend == "file_default":
+            monkeypatch.setenv("SELF_HOSTED_MODE", "0")
+    with (
+        patch("config.platform_config.get_document", wraps=pc.get_document) as read,
+        patch("config.platform_config.model_readiness", wraps=pc.model_readiness) as readiness,
+    ):
+        if backend != "self_hosted_default":
+            assert update_platform_config({"agent": {"model": "model"}}).agent.model == "model"
+            readiness.assert_not_called()
+            assert [call.args for call in read.call_args_list] == [(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID)]
+        else:
+            with pytest.raises(ValueError, match="24 小时内"):
+                update_platform_config({"agent": {"model": "model"}})
+            readiness.assert_called_once()
+    assert client.post(f"{API}/models/model/use").status_code == 409
+
+
+def test_use_maps_service_readiness_rejection_to_conflict(stack):
+    client, repo, _ = stack
+    probes_pass(client)
+
+    def invalidate_after_first_check(model_id):
+        repo.set_document(READINESS_COLLECTION, model_id, {})
+        return {"ready": True}
+
+    with patch("admin.model_probe_routes.model_readiness", side_effect=invalidate_after_first_check):
+        response = client.post(f"{API}/models/model/use")
+    assert response.status_code == 409
+    assert "24 小时内" in response.json()["detail"]
+    assert repo.get_document(pc.COLLECTION, PLATFORM_CONFIG_DOC_ID) is None
+    assert get_platform_config().agent.model != "model"

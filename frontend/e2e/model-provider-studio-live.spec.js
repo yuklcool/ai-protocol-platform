@@ -3,6 +3,9 @@ const { randomUUID } = require("node:crypto");
 
 const FRONTEND_URL = process.env.MODEL_STUDIO_FRONTEND_URL || "http://localhost:3456";
 const BACKEND_URL = process.env.MODEL_STUDIO_BACKEND_URL || "http://127.0.0.1:1956";
+// CI uses the existing HTTP protocol fixture, not a real external model service.
+const PROVIDER_BASE_URL = process.env.REAL_PROVIDER_BASE_URL || "http://model-setup-probe:8080/v1";
+const PROVIDER_MODEL = process.env.REAL_PROVIDER_MODEL || "setup-chat";
 const ADMIN_EMAIL = process.env.SELFHOST_ADMIN_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.SELFHOST_ADMIN_PASSWORD || "";
 const SESSION_KEY = "aitana:local_jwt_session";
@@ -46,7 +49,7 @@ function putJson(token, path, body) {
 }
 
 test.describe("dynamic model -> Root Agent live acceptance", () => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
 
   test("persists the Root model and edits Skill content without overwriting Agent fields", async ({ browser }, testInfo) => {
     expect(ADMIN_PASSWORD, "SELFHOST_ADMIN_PASSWORD must be configured").not.toBe("");
@@ -71,7 +74,7 @@ test.describe("dynamic model -> Root Agent live acceptance", () => {
       const provider = await putJson(token, `/api/admin/model-providers/${PROVIDER_ID}`, {
         name: "Skill Studio CI Provider",
         kind: "openai-compatible",
-        base_url: "http://model-provider.invalid/v1",
+        base_url: PROVIDER_BASE_URL,
         api_key_ref: "${OPENAI_API_KEY}",
         enabled: true,
       });
@@ -80,7 +83,7 @@ test.describe("dynamic model -> Root Agent live acceptance", () => {
       expect(provider.has_api_key).toBe(true);
 
       const model = await putJson(token, `/api/admin/model-providers/models/${MODEL_ID}`, {
-        api_name: "ci-studio-model",
+        api_name: PROVIDER_MODEL,
         provider_id: PROVIDER_ID,
         tier: "default",
         context_window: 16_000,
@@ -152,6 +155,33 @@ test.describe("dynamic model -> Root Agent live acceptance", () => {
 
       const saveButton = page.getByRole("button", { name: /^(Save changes|保存修改)$/ }).first();
       await expect(saveButton).toBeEnabled();
+      // The generic Root save must enforce the same readiness gate as /use.
+      const rejectedSave = page.waitForResponse((response) =>
+        response.url().endsWith("/api/proxy/api/admin/platform-config") &&
+        response.request().method() === "PUT",
+      );
+      await saveButton.click();
+      expect((await rejectedSave).status()).toBe(422);
+      await expect(page.getByRole("alert")).toContainText(/Could not save Root Agent settings\.|无法保存 Root Agent 配置。/);
+      expect((await authedApi(token, "/api/admin/platform-config")).agent?.model).toBe("smart");
+
+      for (const mode of ["completion", "tool_call"]) {
+        const probe = await authedApi(token, `/api/admin/model-providers/models/${MODEL_ID}/test`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mode }),
+        });
+        expect(probe.ok, `${mode}: ${probe.message || probe.category || "probe failed"}`).toBe(true);
+        if (mode === "tool_call") expect(probe.tool_called).toBe(true);
+      }
+      const verified = (await authedApi(token, "/api/admin/model-providers/models"))
+        .find((entry) => entry.model_id === MODEL_ID);
+      expect(verified?.readiness?.ready).toBe(true);
+      await testInfo.attach("model-readiness.json", {
+        body: JSON.stringify({ model_id: MODEL_ID, readiness: verified.readiness }, null, 2),
+        contentType: "application/json",
+      });
+
       await saveButton.click();
       await expect(page.getByText(/^(Saved|已保存)$/)).toBeVisible({ timeout: 30_000 });
 

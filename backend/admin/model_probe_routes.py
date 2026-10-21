@@ -254,6 +254,8 @@ def use_root_model(model_id: str, scope: PlatformScope) -> dict:
         updated = update_platform_config({"agent": agent.model_dump(by_alias=True)}, updated_by=scope.user.uid)
     except PlatformConfigUnavailable as exc:
         raise HTTPException(503, "无法读取或保存平台 Root 配置,请稍后重试。") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     record_admin_action(
         actor_uid=scope.user.uid,
         actor_email=scope.user.email or "",
