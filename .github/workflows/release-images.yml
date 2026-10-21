@@ -274,6 +274,8 @@ jobs:
               && ! grep -RIl "__aip_auth_mode_runtime__" /app/.next >/dev/null'
       - name: Scan native image for HIGH/CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/${{ matrix.platform.arch }}
         with:
           image-ref: ${{ needs.resolve.outputs.publish == 'true' && format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository_owner, matrix.image.image, steps.build.outputs.digest) || format('{0}/{1}/{2}:sha-{3}-{4}', env.REGISTRY, github.repository_owner, matrix.image.image, needs.resolve.outputs.source_sha, matrix.platform.arch) }}
           format: table
