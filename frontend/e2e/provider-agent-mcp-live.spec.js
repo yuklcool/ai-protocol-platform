@@ -82,14 +82,31 @@ function parseSseDataEvents(body) {
 async function expectReadableControl(locator) {
   const contrast = await locator.evaluate((element) => {
     const style = getComputedStyle(element);
+    const rgba = (color) => {
+      const channels = color.match(/[\d.]+/g).map(Number);
+      return [...channels.slice(0, 3), channels[3] ?? 1];
+    };
+    const over = (color, background) => color.slice(0, 3).map((v, i) =>
+      v * color[3] + background[i] * (1 - color[3]),
+    );
+    // Transparent controls display their ancestors' backgrounds; treating
+    // rgba(0, 0, 0, 0) as black reports unreadable text on a white composer.
+    const layers = [];
+    for (let node = element; node; node = node.parentElement) {
+      const color = rgba(getComputedStyle(node).backgroundColor);
+      layers.push(color);
+      if (color[3] === 1) break;
+    }
+    const background = layers.reverse().reduce((base, color) => over(color, base), [255, 255, 255]);
+    const foreground = over(rgba(style.color), background);
     const luminance = (color) => {
-      const channels = color.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
+      const channels = color.map((v) => {
         const s = v / 255;
         return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
       });
       return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
     };
-    const a = luminance(style.color), b = luminance(style.backgroundColor);
+    const a = luminance(foreground), b = luminance(background);
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   });
   expect(contrast, "Input and button labels must remain legible in the console theme").toBeGreaterThanOrEqual(4.5);

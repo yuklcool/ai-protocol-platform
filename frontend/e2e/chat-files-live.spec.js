@@ -98,6 +98,12 @@ test("真实 Provider 从新对话附件中读取未知编号、计算差额并�
   try {
     await api(token,`/api/admin/model-providers/${provider}`,"PUT",{name:"附件真实模型验收",kind:"openai-compatible",base_url:process.env.REAL_PROVIDER_BASE_URL,api_key_ref:"${OPENAI_API_KEY}",enabled:true}); providerCreated=true;
     await api(token,`/api/admin/model-providers/models/${model}`,"PUT",{api_name:process.env.REAL_PROVIDER_MODEL,provider_id:provider,tier:"default",context_window:32_000,max_output_tokens:2048,supports_tools:true,supports_reasoning:false,supports_responses_api:false,supports_vision:false,residency:"global",enabled:true}); modelCreated=true;
+    const completionProbe=await api(token,`/api/admin/model-providers/models/${model}/test`,"POST",{mode:"completion",prompt:"Reply with the word OK only."});
+    expect(completionProbe.ok,JSON.stringify(completionProbe)).toBe(true);
+    expect(String(completionProbe.content || "").trim().length).toBeGreaterThan(0);
+    const toolProbe=await api(token,`/api/admin/model-providers/models/${model}/test`,"POST",{mode:"tool_call",prompt:"Call the provided platform_probe tool now."});
+    expect(toolProbe.ok,JSON.stringify(toolProbe)).toBe(true);
+    expect(toolProbe.tool_called).toBe(true);
     await api(token,"/api/admin/platform-config","PUT",{agent:{...original.agent,model,skills:[],tools:[],mcpServers:[],instructions:"根据本轮附件回答，给出计算依据和文件名、行号。没有读取到内容时明确说明，不得猜测。"}}); rootTouched=true;
     await page.goto(`${FRONTEND}/chat/root-agent`);
     await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
