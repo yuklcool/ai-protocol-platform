@@ -3,6 +3,11 @@
 > 关联 [Issue #141](https://github.com/yuklcool/ai-protocol-platform/issues/141) · 设计基线：v2.1.0 · 日期：2026-10-22  
 > **原型阶段，不是已实施的生产页面。所有任务、模型测试、MCP 状态、用户、费用、审计为演示数据，浏览器不会连接平台后端。**
 
+> **2026-10-22 交互目标修正：优先完成“对话消息流内可操作的 AG-UI/A2UI”体验，而不是以独立工作台/双栏切换为核心。**  
+> - [查看修正后的对话内互动原型](./in-chat-agui-prototype.html)：聊天里直接展示计划 → 实时状态 → 审批表单 → 结果卡。  
+> - [查看具体协议与代码实施规范](./IN_CHAT_AGUI_DESIGN.md)。  
+> - 下方 18 页全站原型用于后续导航和管理页体验参考；**其“双栏/工作台先行”方案不再是 P0 优先交互设计**。
+
 ## 1. 打开可交互原型
 
 **[完整原型：full-platform-prototype.html](./full-platform-prototype.html)**（在 GitHub 点击 **Raw** 保存 HTML，再使用浏览器打开）。
