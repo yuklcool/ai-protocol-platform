@@ -126,6 +126,7 @@ vi.mock("@/lib/documents", async (importOriginal) => {
 
 import { fetchWithAuth } from "@/lib/apiClient";
 import { stashPendingSkillSwitch, readPendingSkillSwitch, clearPendingSkillSwitch } from "@/lib/skillSwitch";
+import { stageWorkspaceDraft, consumeWorkspaceDraft } from "@/lib/workspaceDraft";
 import { useSessionAttachments } from "@/hooks/useSessionAttachments";
 import { useSkillSessions, type ChatSessionSummary } from "@/hooks/useSkillSessions";
 import { importByReference } from "@/lib/importByReference";
@@ -281,6 +282,35 @@ async function openHistory() {
 }
 
 // 所有回归均渲染真实 ChatShell，直接操作输入框、历史按钮和导入错误提示。
+describe("Issue #141: fresh Root draft handoff", () => {
+  it("prefills but never automatically submits a workspace goal", async () => {
+    expect(stageWorkspaceDraft("Please review the document", "test")).toBe(true);
+    await act(async () => {
+      render(<ChatShell skillId="current-skill" pathPrefix="/chat/root-agent" user={{ uid: "test" } as User} />);
+    });
+    await waitFor(() => expect(composer()).toHaveValue("Please review the document"));
+    expect(vi.mocked(useSkillAgent).mock.results[0].value.sendMessage).not.toHaveBeenCalled();
+    expect(consumeWorkspaceDraft("test")).toBeNull();
+  });
+
+  it("ignores the pending draft on a resumed session", async () => {
+    expect(stageWorkspaceDraft("Do not show on resume", "test")).toBe(true);
+    navigation.params = new URLSearchParams("session=existing");
+    await act(async () => {
+      render(<ChatShell skillId="current-skill" pathPrefix="/chat/root-agent" user={{ uid: "test" } as User} />);
+    });
+    expect(composer()).toHaveValue("");
+    expect(vi.mocked(useSkillAgent).mock.results[0].value.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not consume drafts for another skill route", async () => {
+    expect(stageWorkspaceDraft("Root only", "test")).toBe(true);
+    await renderChat();
+    expect(composer()).toHaveValue("");
+    expect(consumeWorkspaceDraft("test")).toBe("Root only");
+  });
+});
+
 describe("ChatShell — 历史和附件恢复", () => {
   it.each([
     { ready: false, saving: false, error: null },
