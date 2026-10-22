@@ -75,6 +75,7 @@ import { forgetFocusedResult, nextFocusedResult } from "@/lib/workbenchFocus";
 import { DocumentPanel } from "@/components/document/DocumentPanel";
 import { LatencyHUD } from "@/components/dev/LatencyHUD";
 import { useI18n } from "@/contexts/I18nContext";
+import { consumeWorkspaceDraft } from "@/lib/workspaceDraft";
 import { translateChat } from "@/lib/i18n/chat";
 
 /**
@@ -982,6 +983,15 @@ function ChatShellContent({
   }, []);
   const sessionId = searchParams.get("session");
   const effectiveSessionId = sessionId ?? agentSessionId;
+
+  // Issue #141: consume a user-scoped, one-time workspace draft only in a
+  // fresh Root chat. Never auto-send, override existing text or apply it to
+  // a resumed session. Session data and authorization remain server-owned.
+  useEffect(() => {
+    if (pathPrefix !== "/chat/root-agent" || sessionId !== null || messages.length > 0) return;
+    const pending = consumeWorkspaceDraft(user.uid);
+    if (pending) setDraft((current) => current || pending);
+  }, [pathPrefix, sessionId, messages.length, user.uid]);
   const { tabs: openTabs, setTabs: setOpenTabs, ready: attachmentsReady, saving: attachmentsSaving, error: attachmentError, retrySave } = useSessionAttachments(effectiveSessionId, skillId, user);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadBlocked, setUploadBlocked] = useState(false);
