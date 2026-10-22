@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ user: null as { uid: string } | null, loading: false, locale: "en" }));
+const route = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => route }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => state }));
 vi.mock("@/contexts/I18nContext", () => ({ useI18n: () => ({ locale: state.locale }) }));
 vi.mock("@/components/chat/SignInRequired", () => ({ SignInRequired: () => <div data-testid="sign-in-required">Sign in required</div> }));
@@ -9,6 +11,7 @@ vi.mock("@/lib/apiClient", () => ({ fetchWithAuth: vi.fn() }));
 
 import { fetchWithAuth } from "@/lib/apiClient";
 import WorkspacePage from "@/app/workspace/page";
+import { consumeWorkspaceDraft } from "@/lib/workspaceDraft";
 import SessionsPage from "@/app/sessions/page";
 const fetchMock = vi.mocked(fetchWithAuth);
 
@@ -25,6 +28,8 @@ beforeEach(() => {
   state.locale = "en";
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(ok([]));
+  route.push.mockReset();
+  window.sessionStorage.clear();
 });
 
 describe.each([["workspace", WorkspacePage], ["sessions", SessionsPage]] as const)("%s 登录边界", (_, Page) => {
@@ -102,6 +107,32 @@ describe("workspace 最近会话", () => {
     expect(await screen.findByText("还没有会话，开始一项任务吧。")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "工作台" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "开始任务" })).toHaveAttribute("href", "/chat/root-agent");
+  });
+});
+
+describe("workspace goal-first task entry", () => {
+  it("prefills a fresh chat draft, does not send a message or create a session", async () => {
+    state.user = { uid: "u1" };
+    render(<WorkspacePage />);
+    await screen.findByText("No sessions yet. Start a task to begin.");
+    fireEvent.change(screen.getByRole("textbox", { name: "Task goal" }), {
+      target: { value: "  Analyze the uploaded report  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Continue in chat/ }));
+    expect(route.push).toHaveBeenCalledWith("/chat/root-agent");
+    expect(consumeWorkspaceDraft("u1")).toBe("Analyze the uploaded report");
+    expect(consumeWorkspaceDraft("u1")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // the existing session list only
+  });
+
+  it("example goals populate the draft without sending or navigating", async () => {
+    state.user = { uid: "u1" };
+    render(<WorkspacePage />);
+    await screen.findByText("No sessions yet. Start a task to begin.");
+    fireEvent.click(screen.getByRole("button", { name: "Prepare a structured report" }));
+    expect(screen.getByRole("textbox", { name: "Task goal" })).toHaveValue("Prepare a structured report");
+    expect(route.push).not.toHaveBeenCalled();
+    expect(consumeWorkspaceDraft("u1")).toBeNull();
   });
 });
 
