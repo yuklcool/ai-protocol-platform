@@ -105,7 +105,8 @@ export interface ChatSurfaceItem {
 
 export function useChatSurfaces(): ChatSurfaceItem[] {
   const chat = useArtifacts().filter((a) => a.placement === "chat");
-  const lastId = chat[chat.length - 1]?.surfaceId;
+  // A progress report must not consume an outstanding user-input request.
+  const lastId = chat.filter((a) => !a.displayOnly).at(-1)?.surfaceId;
   return chat.map((a) => ({
     surfaceId: a.surfaceId,
     createdAt: a.createdAt,

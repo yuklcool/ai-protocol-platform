@@ -314,6 +314,17 @@ describe("ChatMessageList inline forms", () => {
     expect(card.querySelector("fieldset")).toBeDisabled();
   });
 
+  it("a new progress card does not mark an unanswered form as submitted", () => {
+    const { getRegistry, container } = renderForms();
+    act(() => {
+      getRegistry().appendMessages(FORM_SURFACE, formMessages(FORM_SURFACE), "question", CHAT_ARTIFACT);
+      getRegistry().appendMessages("progress", formMessages("progress"), "report", { kind: "task-plan", placement: "chat", displayOnly: true });
+    });
+    const form = container.querySelector(`[data-chat-form="${FORM_SURFACE}"]`)!;
+    expect(form).not.toHaveAttribute("data-submitted");
+    expect(form.querySelector("fieldset")).not.toBeDisabled();
+  });
+
   it("never-silent on missing required: clicking Run with blanks still fires a run (backend re-refuses, form re-appears)", async () => {
     const { getRegistry } = renderForms();
     act(() => {
