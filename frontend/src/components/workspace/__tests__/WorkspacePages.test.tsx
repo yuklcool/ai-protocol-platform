@@ -48,7 +48,7 @@ describe.each([["workspace", WorkspacePage], ["sessions", SessionsPage]] as cons
     expect(await screen.findByText("Private task")).toBeInTheDocument();
     expect(screen.queryByTestId("sign-in-required")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/proxy/api/sessions");
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/proxy/api/sessions${_ === "sessions" ? "/search" : ""}`);
   });
 
   it("uid 切换重建 child，旧请求即使忽略取消也不能泄漏旧会话", async () => {
@@ -106,20 +106,46 @@ describe("workspace 最近会话", () => {
 });
 
 describe("sessions 全局列表", () => {
-  it("搜索仅覆盖已加载会话，可翻页扩展结果并去重", async () => {
+  it("提交服务端搜索覆盖未加载历史，翻页保留查询并去重", async () => {
     state.user = { uid: "u1" };
-    fetchMock.mockResolvedValueOnce(ok([row("s1", "First task")], "p2"));
-    fetchMock.mockResolvedValueOnce(ok([row("s1", "First task"), row("s2", "Later task")]));
+    fetchMock.mockResolvedValueOnce(ok([row("s1", "First task")], "old-page"));
+    fetchMock.mockResolvedValueOnce(ok([row("s2", "Later task")], "search-page"));
+    fetchMock.mockResolvedValueOnce(ok([row("s2", "Later task"), row("s3", "Another later task")]));
     render(<SessionsPage />);
     await screen.findByText("First task");
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search loaded sessions" }), { target: { value: "later" } });
-    expect(screen.getByText("No matches in loaded sessions.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search sessions" }), { target: { value: "later" } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /^Search$/ }));
     expect(await screen.findByText("Later task")).toBeInTheDocument();
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/proxy/api/sessions?cursor=p2");
-    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
+    expect(screen.queryByText("First task")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/proxy/api/sessions/search?q=later");
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("Another later task")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions/search?q=later&cursor=search-page");
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("日期条件按本地整天转换，错误范围不请求，空搜索可重置", async () => {
+    state.user = { uid: "u1" };
+    fetchMock.mockResolvedValueOnce(ok([row("s1")]));
+    fetchMock.mockResolvedValueOnce(ok([]));
+    fetchMock.mockResolvedValueOnce(ok([row("s2", "Reset result")]));
+    render(<SessionsPage />);
+    await screen.findByText("s1");
+    fireEvent.change(screen.getByLabelText("Updated from"), { target: { value: "2026-10-22" } });
+    fireEvent.change(screen.getByLabelText("Updated through"), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Search$/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Start date must not follow end date.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByLabelText("Updated from"), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Search$/ }));
+    expect(await screen.findByText("No matching sessions. Try different filters.")).toBeInTheDocument();
+    const start = encodeURIComponent(new Date("2026-10-20T00:00:00").toISOString());
+    const end = encodeURIComponent(new Date("2026-10-21T00:00:00").toISOString());
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/proxy/api/sessions/search?updated_after=${start}&updated_before=${end}`);
+    fireEvent.click(screen.getByRole("button", { name: /^Reset$/ }));
+    expect(await screen.findByText("Reset result")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions/search");
   });
 
   it("翻页错误保留已有卡片，不误空，可再次加载同一游标", async () => {
@@ -135,7 +161,7 @@ describe("sessions 全局列表", () => {
     expect(screen.queryByText(/No sessions yet/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(await screen.findByText("Next task")).toBeInTheDocument();
-    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions?cursor=p2");
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions/search?cursor=p2");
   });
 
   it("加载更多禁用按钮防止重复请求，uid 切换清空搜索", async () => {
@@ -162,7 +188,7 @@ describe("sessions 全局列表", () => {
     fetchMock.mockResolvedValueOnce(ok([row("s1")], "p2"));
     render(<SessionsPage />);
     expect(await screen.findByRole("button", { name: "加载更多" })).toBeInTheDocument();
-    expect(screen.getByRole("searchbox", { name: "搜索已加载会话" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "搜索历史会话" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute("href", "/workspace");
   });
 });

@@ -8,7 +8,10 @@ memory, Firestore, and PostgreSQL backends.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from db.session_search import Position, SessionSearch
 
 Filter = tuple[str, str, Any]
 
@@ -44,6 +47,10 @@ class Repository(Protocol):
     ) -> list[dict[str, Any]]: ...
 
     def increment_field(self, collection: str, doc_id: str, field: str, amount: int = 1) -> None: ...
+
+    def search_chat_sessions(
+        self, search: SessionSearch, *, after: Position | None, limit: int
+    ) -> list[dict[str, Any]]: ...
 
     def array_union_field(
         self,

@@ -27,7 +27,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from opentelemetry import trace
-from pydantic import BaseModel
+from pydantic import AwareDatetime, BaseModel
 
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from adk.notability import tool_tier
@@ -45,6 +45,7 @@ from db.chat_sessions import (
 )
 from db.models.access import AccessControl
 from db.models.chat_session import ChatSessionIndex
+from db.session_search import SessionSearch, search_sessions
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 log = logging.getLogger(__name__)
@@ -687,6 +688,44 @@ async def list_my_sessions(
         page_size=page_size,
         cursor=cursor,
     )
+    labels = resolve_skill_labels([s.skill_id for s in sessions])
+    return ListSessionsResponse(
+        sessions=[_to_summary(s, ctx.uid, labels.get(s.skill_id)) for s in sessions],
+        next_cursor=next_cursor,
+    )
+
+
+@router.get("/sessions/search", response_model=ListSessionsResponse)
+async def search_my_sessions(
+    request: Request,
+    q: str = Query(default="", max_length=200),
+    skill_id: str | None = Query(default=None, max_length=256),
+    updated_after: Annotated[AwareDatetime | None, Query()] = None,
+    updated_before: Annotated[AwareDatetime | None, Query()] = None,
+    cursor: str | None = Query(default=None, max_length=2048),
+    page_size: int = Query(default=20, ge=1, le=50),
+    user: User = Depends(get_current_user),  # noqa: B008
+) -> ListSessionsResponse:
+    """Search the caller's title/session ID and last-update range, never transcript text.
+
+    Start is inclusive, end exclusive. Cursor is bound to owner and filters;
+    no persisted business Run status exists, so none is inferred here.
+    """
+    ctx = request.state.access
+    try:
+        sessions, next_cursor = search_sessions(
+            SessionSearch(
+                owner_uid=ctx.uid,
+                query=q,
+                skill_id=skill_id,
+                updated_after=updated_after,
+                updated_before=updated_before,
+            ),
+            cursor=cursor,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     labels = resolve_skill_labels([s.skill_id for s in sessions])
     return ListSessionsResponse(
         sessions=[_to_summary(s, ctx.uid, labels.get(s.skill_id)) for s in sessions],

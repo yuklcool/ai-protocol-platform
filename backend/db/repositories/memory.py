@@ -4,9 +4,17 @@ from typing import Any
 
 from db.repositories._document_ops import apply_query
 from db.repository import Filter
+from db.session_search import Position, SessionSearch, match_rows
 
 
 class MemoryRepository:
+    def search_chat_sessions(
+        self, search: SessionSearch, *, after: Position | None, limit: int
+    ) -> list[dict[str, Any]]:
+        return match_rows(
+            self.query_documents("chat_sessions", filters=[("ownerUid", "==", search.owner_uid)]), search, after, limit
+        )
+
     def __init__(self, client: Any | None = None) -> None:
         if client is not None:
             self._client = client

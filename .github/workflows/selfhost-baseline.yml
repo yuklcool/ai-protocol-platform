@@ -60,6 +60,7 @@ on:
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/integration/test_postgres_document_metadata.py
       - backend/tests/integration/test_postgres_admin_config_domains.py
+      - backend/tests/integration/test_postgres_session_search.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/storage_tests/**
@@ -133,6 +134,7 @@ on:
       - backend/tests/integration/test_postgres_a2ui_resume.py
       - backend/tests/integration/test_postgres_document_metadata.py
       - backend/tests/integration/test_postgres_admin_config_domains.py
+      - backend/tests/integration/test_postgres_session_search.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/persistence_tests/**
       - backend/tests/storage_tests/**
@@ -276,7 +278,8 @@ jobs:
             -v "$PWD/backend/tests:/app/tests:ro" \
             backend uv run pytest -q \
               tests/integration/test_postgres_document_metadata.py \
-              tests/integration/test_postgres_admin_config_domains.py
+              tests/integration/test_postgres_admin_config_domains.py \
+              tests/integration/test_postgres_session_search.py
 
       - name: Verify local object and artifact volume survives container reconstruction
         run: |

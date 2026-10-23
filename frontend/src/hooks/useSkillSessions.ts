@@ -29,6 +29,12 @@ interface ListSessionsResponse {
   next_cursor: string | null;
 }
 
+export interface SessionSearchFilters {
+  query?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
+}
+
 interface UseSkillSessionsReturn {
   sessions: ChatSessionSummary[];
   isLoading: boolean;
@@ -52,7 +58,13 @@ interface UseSkillSessionsReturn {
  *
  * @param skillFilter Pass a skillId to narrow to one agent; null for all.
  */
-export function useSkillSessions(skillFilter: string | null): UseSkillSessionsReturn {
+export function useSkillSessions(skillFilter: string | null, search?: SessionSearchFilters): UseSkillSessionsReturn {
+  const searchEnabled = search !== undefined;
+  const queryText = search?.query?.trim() ?? "";
+  const updatedAfter = search?.updatedAfter ?? "";
+  const updatedBefore = search?.updatedBefore ?? "";
+  const scope = JSON.stringify([skillFilter, searchEnabled, queryText, updatedAfter, updatedBefore]);
+  const [stateScope, setStateScope] = useState(scope);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -77,10 +89,14 @@ export function useSkillSessions(skillFilter: string | null): UseSkillSessionsRe
     setIsLoadingMore(cursor !== null);
     setError(null);
 
-    // 保留首屏原有 query，只有翻页才附加 cursor。
-    const filter = skillFilter ? `skill_id=${encodeURIComponent(skillFilter)}` : "";
-    const query = [filter, cursor === null ? "" : `cursor=${encodeURIComponent(cursor)}`].filter(Boolean).join("&");
-    fetchWithAuth(`/api/proxy/api/sessions${query ? `?${query}` : ""}`, {
+    const params = [
+      skillFilter ? `skill_id=${encodeURIComponent(skillFilter)}` : "",
+      queryText ? `q=${encodeURIComponent(queryText)}` : "",
+      updatedAfter ? `updated_after=${encodeURIComponent(updatedAfter)}` : "",
+      updatedBefore ? `updated_before=${encodeURIComponent(updatedBefore)}` : "",
+      cursor === null ? "" : `cursor=${encodeURIComponent(cursor)}`,
+    ].filter(Boolean).join("&");
+    fetchWithAuth(`/api/proxy/api/sessions${searchEnabled ? "/search" : ""}${params ? `?${params}` : ""}`, {
       signal: controller.signal,
     })
       .then((res) => {
@@ -115,7 +131,7 @@ export function useSkillSessions(skillFilter: string | null): UseSkillSessionsRe
         setIsLoading(false);
         setIsLoadingMore(false);
       });
-  }, [skillFilter]);
+  }, [skillFilter, searchEnabled, queryText, updatedAfter, updatedBefore]);
 
   const fetch_ = useCallback(() => request(null), [request]);
   const loadMore = useCallback(() => {
@@ -123,6 +139,7 @@ export function useSkillSessions(skillFilter: string | null): UseSkillSessionsRe
   }, [request]);
 
   useEffect(() => {
+    setStateScope(scope);
     setSessions([]);
     setNextCursor(null);
     cursorRef.current = null;
@@ -132,7 +149,7 @@ export function useSkillSessions(skillFilter: string | null): UseSkillSessionsRe
       abortRef.current?.abort();
       busyRef.current = false;
     };
-  }, [fetch_]);
+  }, [fetch_, scope]);
 
   useEffect(() => {
     const onFocus = () => fetch_();
@@ -144,5 +161,8 @@ export function useSkillSessions(skillFilter: string | null): UseSkillSessionsRe
   // mutates, both hooks refetch. See lib/sessionEvents.ts.
   useEffect(() => subscribeSessionsChanged(fetch_), [fetch_]);
 
-  return { sessions, isLoading, error, refetch: fetch_, nextCursor, loadMore, isLoadingMore };
+  const current = stateScope === scope;
+  return { sessions: current ? sessions : [], isLoading: !current || isLoading,
+    error: current ? error : null, refetch: fetch_, nextCursor: current ? nextCursor : null,
+    loadMore, isLoadingMore: current && isLoadingMore };
 }

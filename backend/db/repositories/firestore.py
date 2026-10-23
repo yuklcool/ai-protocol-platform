@@ -8,9 +8,18 @@ from google.cloud import firestore
 
 from config.gcp import resolve_gcp_project
 from db.repository import Filter
+from db.session_search import Position, SessionSearch, match_rows
 
 
 class FirestoreRepository:
+    def search_chat_sessions(
+        self, search: SessionSearch, *, after: Position | None, limit: int
+    ) -> list[dict[str, Any]]:
+        # Firestore has no substring predicate. Fetch ONLY this authenticated
+        # owner's metadata; filter before pagination in the application server.
+        rows = self.query_documents("chat_sessions", filters=[("ownerUid", "==", search.owner_uid)])
+        return match_rows(rows, search, after, limit)
+
     def __init__(self, client: Any | None = None) -> None:
         if client is not None:
             self._client = client
