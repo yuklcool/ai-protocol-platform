@@ -154,7 +154,8 @@ export function A2UISurfaceMount({
   // otherwise reads as "nothing happened" and gets clicked again (the 2026-07-14
   // obligation-handoff report). Freeze it + show a persistent "Sent" badge.
   const [hasCompleted, setHasCompleted] = useState(false);
-  const completedRef = useRef(false);
+  const completedRef = useRef<object | null>(null);
+  const isCompleted = hasCompleted && completedRef.current === state?.surface;
   // The SDK awaits listeners while iterating a live Set. Replacing a listener
   // during its awaited run adds it back to that same dispatch and repeats the
   // action. Subscribe once per SurfaceModel; read current routing from a ref.
@@ -169,7 +170,7 @@ export function A2UISurfaceMount({
     const sub = state.surface.onAction.subscribe(async (action) => {
       const { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage, readOnly, freezeAfterAction } = actionRouting.current;
       if (!sessionId) return;
-      if (readOnly || actionInFlightRef.current || (completedRef.current && freezeAfterAction)) return;
+      if (readOnly || actionInFlightRef.current || (completedRef.current === state?.surface && freezeAfterAction)) return;
       // chat:send — a surface Button asks to post a chat message (e.g. a diff
       // card's "Explain this difference", whose action carries a ready-built
       // prompt in `context.prompt`). Route to the chat composer so the agent's
@@ -252,7 +253,7 @@ export function A2UISurfaceMount({
           // Reached only if the run did NOT reject — mark a visible terminal
           // state so the click has an unmistakable, persistent consequence.
           setHasCompleted(true);
-          completedRef.current = true;
+          completedRef.current = state.surface;
         } catch (err) {
           // NEVER SILENT (#8): triggerAction rejects on RUN_ERROR (and its
           // gate-reject / network fallbacks resolve — those surface separately).
@@ -322,10 +323,10 @@ export function A2UISurfaceMount({
               (the SDK renders the Button; we can't reach into it to disable
               it, so we gate interaction at the wrapper). */}
           <fieldset
-            disabled={readOnly || isRunning || (hasCompleted && freezeAfterAction)}
+            disabled={readOnly || isRunning || (isCompleted && freezeAfterAction)}
             aria-busy={isRunning}
             className={
-              isRunning || (hasCompleted && triggerOnAction && freezeAfterAction)
+              isRunning || (isCompleted && triggerOnAction && freezeAfterAction)
                 ? "m-0 min-w-0 border-0 p-0 opacity-60 transition-opacity"
                 : "m-0 min-w-0 border-0 p-0 transition-opacity"
             }
@@ -375,7 +376,7 @@ export function A2UISurfaceMount({
               <span>{actionError}</span>
             </div>
           )}
-          {hasCompleted && !isRunning && !actionError && (
+          {isCompleted && !isRunning && !actionError && (
             <div
               role="status"
               data-testid="a2ui-surface-done"
