@@ -452,7 +452,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: MODEL_ID, skills: [], tools: [], mcpServers: [],
         instructions: `For the initial request SHOW_ACCEPTANCE_FORM call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(uiMessages)}. For each submit_form UI action, read lastAction.context.value from the A2UI state. Call send_a2ui_json_to_client with v0.9 updateDataModel messages on surface acceptance-form: set /status to ACCEPTED: followed immediately by the exact submitted value, and set /formInput to that value. Never recreate or delete the surface on submit. Only for the ordinary user message CONFIRM_CHAT_MODE reply CHAT_MODE_RESTORED in text without calling tools. Do not call other tools.`,
-        interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "workspace", defaultUpdateMode: "patch",
+        interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "chat", defaultUpdateMode: "patch",
           a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
       } });
       // A resume URL must identify an existing session. Otherwise the product
@@ -467,7 +467,9 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await expect(uiComposer).toBeEnabled({ timeout: 30_000 });
       await uiComposer.fill("SHOW_ACCEPTANCE_FORM");
       await uiComposer.press("Enter");
-      const input = page.getByRole("textbox", { name: "Acceptance value" });
+      const inlineForm = page.locator('[data-chat-form="acceptance-form"]');
+      await expect(inlineForm).toBeVisible({ timeout: 90_000 });
+      const input = inlineForm.getByRole("textbox", { name: "Acceptance value" });
       await expect(input).toBeVisible({ timeout: 90_000 });
       await expectReadableControl(input);
       await expectReadableControl(page.getByRole("button", { name: "Apply value" }));
@@ -492,6 +494,17 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
         console.info("Root browser diagnostics", JSON.stringify(diagnostics));
         throw error;
       }
+      await expect(page.locator('[data-execution-id]')).not.toHaveCount(0);
+      for (const width of [1440, 768, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(inlineForm).toBeVisible();
+        await expect(page.locator("textarea").first()).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        const screenshot = testInfo.outputPath(`in-chat-action-${width}.png`);
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await testInfo.attach(`in-chat-action-${width}`, { path: screenshot, contentType: "image/png" });
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
       const firstScreenshot = testInfo.outputPath("root-action-first.png");
       await page.screenshot({ path: firstScreenshot, fullPage: true });
       await testInfo.attach("root-action-first", { path: firstScreenshot, contentType: "image/png" });

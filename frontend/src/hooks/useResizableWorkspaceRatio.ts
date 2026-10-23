@@ -33,12 +33,13 @@ const COLLAPSED_KEY_PREFIX = "aitana.workspaceCollapsed:";
  * again." Persisted per-skillId so toggling on one skill doesn't fold
  * the other.
  */
-export function readStoredCollapsed(skillId: string): boolean {
-  if (typeof window === "undefined") return false;
+export function readStoredCollapsed(skillId: string, defaultCollapsed = false): boolean {
+  if (typeof window === "undefined") return defaultCollapsed;
   try {
-    return window.sessionStorage.getItem(COLLAPSED_KEY_PREFIX + skillId) === "1";
+    const value = window.sessionStorage.getItem(COLLAPSED_KEY_PREFIX + skillId);
+    return value === null ? defaultCollapsed : value === "1";
   } catch {
-    return false;
+    return defaultCollapsed;
   }
 }
 

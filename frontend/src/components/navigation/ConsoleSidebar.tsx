@@ -15,6 +15,7 @@ import {
   Sparkles,
   UsersRound,
   Menu,
+  MessageSquare,
   X,
 } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
@@ -46,7 +47,8 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "工作区",
     en: "Workspace",
     items: [
-      { href: "/workspace", zh: "工作台", en: "Workspace", icon: LayoutDashboard },
+      { href: "/chat/root-agent", zh: "AI 任务对话", en: "AI conversation", icon: MessageSquare },
+      { href: "/workspace", zh: "任务概览", en: "Workspace", icon: LayoutDashboard },
       { href: "/sessions", zh: "历史对话", en: "Conversations", icon: History },
       { href: "/results", zh: "我的成果", en: "Results", icon: Files },
       { href: "/skills", zh: "能力中心", en: "Capabilities", icon: Sparkles },
@@ -69,8 +71,9 @@ function isActive(pathname: string, href: string) {
     pathname === path || pathname.startsWith(`${path}/`);
 
   if (href === "/workspace") {
-    return pathname === "/" || matches("/workspace") || matches("/chat");
+    return matches("/workspace");
   }
+  if (href === "/chat/root-agent") return pathname === "/" || matches("/chat");
   if (href === "/admin") {
     const specificPaths = [
       ...CONSOLE_NAVIGATION.flatMap((group) => group.items.map((item) => item.href)),

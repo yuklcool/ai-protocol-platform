@@ -21,6 +21,8 @@
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/apiClient";
 import type { ToolCallState, DelegationMarkerItem } from "@/hooks/useSkillAgent";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface ActivityResponse {
   tool_calls?: {
@@ -46,6 +48,7 @@ interface SessionActivity {
   delegations: DelegationMarkerItem[];
   /** Real session start (epoch ms) from the first event, or null. */
   sessionStartTs: number | null;
+  error?: string | null;
 }
 
 const EMPTY: SessionActivity = { toolCalls: [], delegations: [], sessionStartTs: null };
@@ -55,8 +58,12 @@ export function useSessionActivity(
   /** Bump to force a re-fetch (e.g. after an action-triggered run settles).
    * Any changing value works — a monotonic counter is the intended use. */
   refetchKey: number = 0,
+  identity: string = "",
 ): SessionActivity {
+  const { locale } = useI18n();
+  const scope = `${identity}:${sessionId ?? ""}`;
   const [activity, setActivity] = useState<SessionActivity>(EMPTY);
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -64,10 +71,12 @@ export function useSessionActivity(
       return;
     }
     let cancelled = false;
-    fetchWithAuth(`/api/proxy/api/sessions/${encodeURIComponent(sessionId)}/activity`)
+    const controller = new AbortController();
+    fetchWithAuth(`/api/proxy/api/sessions/${encodeURIComponent(sessionId)}/activity`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((data: ActivityResponse) => {
         if (cancelled) return;
+        setLoadedScope(scope);
         setActivity({
           toolCalls: (data.tool_calls ?? []).map((t) => ({
             id: t.id,
@@ -94,13 +103,16 @@ export function useSessionActivity(
         });
       })
       .catch(() => {
-        // Non-fatal — the panel just shows no history (live events still work).
-        if (!cancelled) setActivity(EMPTY);
+        if (!cancelled) {
+          setLoadedScope(scope);
+          setActivity({ ...EMPTY, error: translateChat(locale, "execution.historyError") });
+        }
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [sessionId, refetchKey]);
+  }, [sessionId, refetchKey, scope, locale]);
 
-  return activity;
+  return loadedScope === scope ? activity : EMPTY;
 }

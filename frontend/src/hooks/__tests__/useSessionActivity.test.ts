@@ -91,4 +91,17 @@ describe("useSessionActivity", () => {
     // Still one fetch — same session, same key.
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+  it("clears prior user activity immediately and ignores a late response", async () => {
+    let resolveOld!: (value: unknown) => void;
+    mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ tool_calls: [{ id: "b", name: "user-b", status: "success", ts: 1 }] }) });
+    const { result, rerender } = renderHook(({ uid }) => useSessionActivity("same-session", 0, uid), { initialProps: { uid: "a" } });
+    rerender({ uid: "b" });
+    expect(result.current.toolCalls).toEqual([]);
+    await waitFor(() => expect(result.current.toolCalls[0]?.id).toBe("b"));
+    resolveOld({ ok: true, json: async () => ({ tool_calls: [{ id: "a", name: "private-a", status: "success", ts: 1 }] }) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.toolCalls[0]?.id).toBe("b");
+  });
+
 });

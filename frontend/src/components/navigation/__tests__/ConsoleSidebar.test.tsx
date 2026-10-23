@@ -22,11 +22,11 @@ vi.mock("@/components/LanguageSwitcher", () => ({ LanguageSwitcher: () => null }
 vi.mock("../UserMenu", () => ({ UserMenu: () => null }));
 
 const routes = [
-  ["/", "/workspace"],
+  ["/", "/chat/root-agent"],
   ["/workspace", "/workspace"],
   ["/workspace/recent", "/workspace"],
-  ["/chat", "/workspace"],
-  ["/chat/root-agent/session-1", "/workspace"],
+  ["/chat", "/chat/root-agent"],
+  ["/chat/root-agent/session-1", "/chat/root-agent"],
   ["/sessions", "/sessions"],
   ["/sessions/session-1", "/sessions"],
   ["/results/report-1", "/results"],
@@ -105,7 +105,7 @@ describe("控制台导航", () => {
     expect(screen.getByRole("link", { name: "Readiness and resources" })).toHaveAttribute("href", "/admin");
     expect(screen.queryByRole("link", { name: "Platform settings" })).not.toBeInTheDocument();
     expect(visibleNavigation(false, false).flatMap((group) => group.items.map((item) => item.href))).toEqual([
-      "/workspace", "/sessions", "/results", "/skills",
+      "/chat/root-agent", "/workspace", "/sessions", "/results", "/skills",
     ]);
   });
 
@@ -121,7 +121,7 @@ describe("控制台导航", () => {
     navigation.locale = "zh-CN";
     render(<ConsoleSidebar />);
     expect(screen.getByRole("link", { name: /返回工作台/ })).toHaveAttribute("href", "/workspace");
-    expect(screen.getByRole("link", { name: "工作台" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "任务概览" })).toHaveAttribute("aria-current", "page");
   });
 
   it("移动端选择入口后关闭抽屉", () => {
