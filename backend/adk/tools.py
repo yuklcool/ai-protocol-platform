@@ -26,6 +26,7 @@ from google.adk.tools import FunctionTool, ToolContext
 
 from db.persistence import query_documents
 from tools.documents.context import build_document_context
+from tools.task_plan import update_task_plan
 from tools.url_processing import url_processing
 from tools.workshop_docs import search_workshop_docs
 
@@ -198,6 +199,7 @@ async def list_bucket_documents(bucket_uri: str, prefix: str = "") -> list[dict]
 
 
 TOOL_REGISTRY: dict[str, Callable[[dict], FunctionTool]] = {
+    "update_task_plan": lambda _config: FunctionTool(update_task_plan),
     "list_documents": lambda _config: FunctionTool(list_documents),
     "get_document_content": lambda _config: FunctionTool(get_document_content),
     "url_processing": lambda _config: FunctionTool(url_processing),
@@ -215,6 +217,12 @@ _MCP_TOOL = "mcp"
 
 
 TOOL_CATALOG: list[dict[str, str]] = [
+    {
+        "name": "update_task_plan",
+        "label": "任务计划与进度",
+        "description": "在对话内记录公开业务步骤及状态,不执行或自动恢复任务。",
+        "category": "Interaction",
+    },
     {
         "name": "ai_search",
         "label": "Knowledge search",

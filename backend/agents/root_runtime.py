@@ -143,6 +143,10 @@ def compose_root_skill(skill: SkillConfig, config: RootAgentConfig) -> SkillConf
     root_instructions = (config.instructions or "").strip()
     capability_instructions = (skill.instructions or "").strip()
     instructions = "\n\n".join(part for part in (root_instructions, capability_instructions) if part)
+    if "update_task_plan" in metadata.tools:
+        from tools.task_plan import PLAN_INSTRUCTIONS
+
+        instructions += "\n\n" + PLAN_INSTRUCTIONS
     persona = skill.persona.model_copy(deep=True) if skill.persona else SkillPersona()
     voice = persona.voice.model_copy(deep=True) if persona.voice else SkillVoiceConfig()
     voice.enabled = interaction.voice_enabled
