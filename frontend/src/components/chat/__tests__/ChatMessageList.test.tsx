@@ -124,6 +124,29 @@ describe("ChatMessageList", () => {
     expect(form.compareDocumentPosition(screen.getByText("second")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("keeps the same form DOM and SDK mount while an action waits and streams its continuation", () => {
+    const start = Date.now();
+    const messages = [
+      { ...msg("u1", "user", "first"), createdAt: start },
+      { ...msg("a1", "assistant", "confirm first"), createdAt: start + 200 },
+    ];
+    const chatSurfaces = [{ surfaceId: "stable-form", createdAt: start + 100, submitted: false, isConfirm: true, replayed: false }];
+    const { container, rerender } = render(<ChatMessageList {...baseProps} messages={messages} chatSurfaces={chatSurfaces} />);
+    const form = container.querySelector('[data-chat-form="stable-form"]')!;
+    const assertPreserved = () => {
+      expect(form.isConnected).toBe(true);
+      expect(container.querySelector('[data-chat-form="stable-form"]')).toBe(form);
+      expect(screen.getByText("confirm first").compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    };
+    rerender(<ChatMessageList {...baseProps} isLoading messages={messages} chatSurfaces={chatSurfaces} />);
+    assertPreserved();
+    const continued = [...messages, { ...msg("a2", "assistant", "continued"), createdAt: start + 300 }];
+    rerender(<ChatMessageList {...baseProps} isLoading messages={continued} chatSurfaces={chatSurfaces} />);
+    assertPreserved();
+    rerender(<ChatMessageList {...baseProps} messages={continued} chatSurfaces={chatSurfaces} />);
+    assertPreserved();
+  });
+
   it("renders a delegation marker inline after its anchor message", () => {
     const messages = [msg("u1", "user", "compare these PPAs"), msg("a1", "assistant", "Here's the analysis")];
     render(

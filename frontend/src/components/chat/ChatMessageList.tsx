@@ -266,7 +266,9 @@ export function ChatMessageList({
 
   // Stable messages: all finalised (when streaming, exclude last assistant msg)
   const stableMessages = isStreaming ? messages.slice(0, -1) : messages;
-  const allStableMessages = [...(initialMessages ?? []), ...stableMessages];
+  // Streaming messages remain timeline anchors; temporarily excluding the last
+  // assistant while an action awaits its first event must not move its forms.
+  const timelineMessages = [...(initialMessages ?? []), ...messages];
 
   // Delegation markers (SKILL-DELEGATION M3) grouped by the message they follow.
   // Markers whose anchor isn't among the current messages (fired before any
@@ -329,7 +331,7 @@ export function ChatMessageList({
   const leadingSurfaces: ChatSurfaceItem[] = [];
   for (const s of surfaceList) {
     let anchorId: string | null = null;
-    for (const m of allStableMessages) {
+    for (const m of timelineMessages) {
       if (messageArrival(m.id) <= s.createdAt) anchorId = m.id;
     }
     // Pull-forward (form-after-text): an elicitation/confirm surface is the TAIL
@@ -341,7 +343,7 @@ export function ChatMessageList({
     // that arrived just after it, so the card sits BELOW the intro text.
     if (!s.replayed) {
       const permitLeadingUser = anchorId === null;
-      for (const [index, m] of allStableMessages.entries()) {
+      for (const [index, m] of timelineMessages.entries()) {
         // A later user turn must not capture an earlier confirmation. The
         // first same-turn narration is a stable anchor even when a subsequent
         // action produces another assistant message within the grace window.
@@ -365,11 +367,7 @@ export function ChatMessageList({
     }
   }
   // `mt-4` gives the card a consistent gap above it. It's load-bearing for the
-  // INTERLEAVED case: those surfaces render as grandchildren inside a per-message
-  // `display:contents` wrapper (see stableMessages.map), so the parent's
-  // `space-y-4` never reaches them and the card would otherwise butt flush
-  // against the bubble above. For `leadingSurfaces` (direct children) `mt-4`
-  // matches the `space-y-4` value, so there's no double margin.
+  // surface card, matching the transcript spacing for leading and anchored cards.
   const renderChatSurface = (s: ChatSurfaceItem) => (
     <div key={`surface-${s.surfaceId}`} className="mt-4 flex justify-start">
       <ChatPlacementForm
@@ -430,10 +428,10 @@ export function ChatMessageList({
   const activeToolName = toolCalls.find((tc) => tc.status === "running")?.name ?? null;
 
   const executionList = [
-    ...recordedExecutions(allStableMessages, recordedToolCalls, executions),
+    ...recordedExecutions(timelineMessages, recordedToolCalls, executions),
     ...executions.filter((run) => run.tools.length > 0),
   ];
-  const knownMessageIds = new Set(allStableMessages.map((m) => m.id));
+  const knownMessageIds = new Set(timelineMessages.map((m) => m.id));
   const executionsByAfter = new Map<string | null, ChatExecution[]>();
   for (const run of executionList) {
     const anchor = run.afterMessageId && knownMessageIds.has(run.afterMessageId) ? run.afterMessageId : null;
@@ -443,7 +441,7 @@ export function ChatMessageList({
     .map((run) => <ChatExecutionCard key={`execution-${run.id}`} execution={run} onStop={onStopExecution} />);
   const resultsByAfter = new Map<string | null, A2uiArtifactEntry[]>();
   for (const result of results) {
-    const anchor = allStableMessages.filter((m) => messageArrival(m.id) <= result.createdAt).at(-1)?.id ?? null;
+    const anchor = timelineMessages.filter((m) => messageArrival(m.id) <= result.createdAt).at(-1)?.id ?? null;
     resultsByAfter.set(anchor, [...(resultsByAfter.get(anchor) ?? []), result]);
   }
   const renderResults = (anchor: string | null) => (resultsByAfter.get(anchor) ?? []).map((result) => (
@@ -454,6 +452,51 @@ export function ChatMessageList({
       {onOpenResult && <button type="button" onClick={() => onOpenResult(result.surfaceId)} className="button-secondary mt-3 min-h-11 text-xs">{translateChat(locale, "execution.preview")}</button>}
     </section>
   ));
+
+  // Keep every keyed card in ONE reconciliation list. A message temporarily
+  // moves out of stableMessages when the next action starts, and an arriving
+  // narration can change a surface's chronological anchor. Nested per-message
+  // parents would remount its SDK subscriber and discard its completion guard.
+  const transcriptItems: React.ReactNode[] = [
+    ...renderExecutions(null), ...renderResults(null), ...leadingSurfaces.map(renderChatSurface),
+  ];
+  for (const m of initialMessages ?? []) {
+    transcriptItems.push(
+      <MessageBubble
+        key={`message-${m.id}`} message={m} skillId={skillId}
+        userInitial={userInitial} userDisplayName={userDisplayName} userPhotoURL={userPhotoURL}
+        botAvatarUrl={m.avatar ?? botAvatarUrl} botLabel={m.agentLabel}
+        toolCalls={EMPTY_TOOL_CALLS} navigateToBlock={navigate} onAction={onAction}
+        mcpServerIds={mcpServerIds} onChatMessage={onChatMessage} sessionId={sessionId} timestamp={m.createdAt}
+      />,
+      ...renderExecutions(m.id), ...(surfacesByAfter.get(m.id) ?? []).map(renderChatSurface), ...renderResults(m.id),
+    );
+  }
+  if (initialMessages?.length) transcriptItems.push(
+    <div key="history-divider" className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex-1 border-t" /><span>{translateChat(locale, "message.earlier")}</span><div className="flex-1 border-t" />
+    </div>,
+  );
+  for (const m of messages) {
+    transcriptItems.push(
+      isStreaming && m.id === lastMessage?.id ? <StreamingBubble
+        key={`message-${m.id}`} message={m} skillId={skillId}
+        botAvatarUrl={attrFor(m.id).avatar} botLabel={attrFor(m.id).label}
+        thinkingContent={thinkingContent} isThinking={isThinking}
+      /> : <MessageBubble
+        key={`message-${m.id}`} message={m} skillId={skillId}
+        userInitial={userInitial} userDisplayName={userDisplayName} userPhotoURL={userPhotoURL}
+        botAvatarUrl={attrFor(m.id).avatar} botLabel={attrFor(m.id).label}
+        toolCalls={toolCallsByParent[m.id] ?? EMPTY_TOOL_CALLS} navigateToBlock={navigate} onAction={onAction}
+        mcpServerIds={mcpServerIds} onChatMessage={onChatMessage} sessionId={sessionId}
+        timestamp={m.createdAt ?? messageArrival(m.id)}
+      />,
+      ...renderExecutions(m.id),
+      ...(delegationsByAfter.get(m.id) ?? []).map((d) => <DelegationMarker key={`delegation-${d.id}`} targetDisplay={d.targetDisplay} mode={d.mode} />),
+      ...(fallbacksByAfter.get(m.id) ?? []).map((f) => <FallbackNotice key={`fallback-${f.id}`} fromModel={f.fromModel} toModel={f.toModel} reason={f.reason} />),
+      ...(surfacesByAfter.get(m.id) ?? []).map(renderChatSurface), ...renderResults(m.id),
+    );
+  }
 
   return (
     <div className="relative flex flex-col flex-1 overflow-hidden">
@@ -506,42 +549,7 @@ export function ChatMessageList({
             />
           )}
 
-          {renderExecutions(null)}
-          {renderResults(null)}
-          {leadingSurfaces.map(renderChatSurface)}
-          {initialMessages && initialMessages.length > 0 && (
-            <>
-              {initialMessages.map((m) => (
-                <div key={m.id} className="contents">
-                  <MessageBubble
-                    key={m.id}
-                    message={m}
-                    skillId={skillId}
-                    userInitial={userInitial}
-                    userDisplayName={userDisplayName}
-                    userPhotoURL={userPhotoURL}
-                    botAvatarUrl={m.avatar ?? botAvatarUrl}
-                    botLabel={m.agentLabel}
-                    toolCalls={EMPTY_TOOL_CALLS}
-                    navigateToBlock={navigate}
-                    onAction={onAction}
-                    mcpServerIds={mcpServerIds}
-                    onChatMessage={onChatMessage}
-                    sessionId={sessionId}
-                    timestamp={m.createdAt}
-                  />
-                  {renderExecutions(m.id)}
-                  {surfacesByAfter.get(m.id)?.map(renderChatSurface)}
-                  {renderResults(m.id)}
-                </div>
-              ))}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <div className="flex-1 border-t" />
-                <span>{translateChat(locale, "message.earlier")}</span>
-                <div className="flex-1 border-t" />
-              </div>
-            </>
-          )}
+          {transcriptItems}
 
           {messages.length === 0 &&
             !initialMessages?.length &&
@@ -553,42 +561,6 @@ export function ChatMessageList({
               </p>
             )}
 
-          {stableMessages.map((m) => {
-            const markers = delegationsByAfter.get(m.id);
-            return (
-              <div key={m.id} className="contents">
-                <MessageBubble
-                  message={m}
-                  skillId={skillId}
-                  userInitial={userInitial}
-                  userDisplayName={userDisplayName}
-                  userPhotoURL={userPhotoURL}
-                  botAvatarUrl={attrFor(m.id).avatar}
-                  botLabel={attrFor(m.id).label}
-                  toolCalls={toolCallsByParent[m.id] ?? EMPTY_TOOL_CALLS}
-                  navigateToBlock={navigate}
-                  onAction={onAction}
-                  mcpServerIds={mcpServerIds}
-                  onChatMessage={onChatMessage}
-                  sessionId={sessionId}
-                  // History carries createdAt; live messages fall back to their
-                  // stable client first-seen (so the time doesn't tick forward).
-                  timestamp={m.createdAt ?? messageArrival(m.id)}
-                />
-                {renderExecutions(m.id)}
-                {markers?.map((d) => (
-                  <DelegationMarker key={d.id} targetDisplay={d.targetDisplay} mode={d.mode} />
-                ))}
-                {fallbacksByAfter.get(m.id)?.map((f) => (
-                  <FallbackNotice key={f.id} fromModel={f.fromModel} toModel={f.toModel} reason={f.reason} />
-                ))}
-                {/* Chat surfaces created after this message but before the next
-                    (7.8) — interleaved so the timeline is chronological. */}
-                {surfacesByAfter.get(m.id)?.map(renderChatSurface)}
-                {renderResults(m.id)}
-              </div>
-            );
-          })}
 
           {trailingDelegations.map((d) => (
             <DelegationMarker key={d.id} targetDisplay={d.targetDisplay} mode={d.mode} />
@@ -597,17 +569,6 @@ export function ChatMessageList({
           {trailingFallbacks.map((f) => (
             <FallbackNotice key={f.id} fromModel={f.fromModel} toModel={f.toModel} reason={f.reason} />
           ))}
-
-          {isStreaming && lastMessage && (
-            <StreamingBubble
-              message={lastMessage}
-              skillId={skillId}
-              botAvatarUrl={attrFor(lastMessage.id).avatar}
-              botLabel={attrFor(lastMessage.id).label}
-              thinkingContent={thinkingContent}
-              isThinking={isThinking}
-            />
-          )}
 
           {isTyping && (
             <TypingIndicator stageLabel={stageLabel} activeToolName={activeToolName} />
