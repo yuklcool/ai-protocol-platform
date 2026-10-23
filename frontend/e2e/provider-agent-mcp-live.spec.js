@@ -452,7 +452,7 @@ test.describe("real Provider -> Agent -> MCP Tool Calling acceptance", () => {
       await putJson(token, "/api/admin/platform-config", { agent: {
         ...originalPlatform.agent, model: MODEL_ID, skills: [], tools: [], mcpServers: [],
         instructions: `For the initial request SHOW_ACCEPTANCE_FORM call send_a2ui_json_to_client with exactly this JSON array: ${JSON.stringify(uiMessages)}. For each submit_form UI action, read lastAction.context.value from the A2UI state. Call send_a2ui_json_to_client with v0.9 updateDataModel messages on surface acceptance-form: set /status to ACCEPTED: followed immediately by the exact submitted value, and set /formInput to that value. Never recreate or delete the surface on submit. Only for the ordinary user message CONFIRM_CHAT_MODE reply CHAT_MODE_RESTORED in text without calling tools. Do not call other tools.`,
-        interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "chat", defaultUpdateMode: "patch",
+        interaction: { ...originalPlatform.agent?.interaction, defaultSurface: "chat", defaultUpdateMode: "replace",
           a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true },
       } });
       // A resume URL must identify an existing session. Otherwise the product
