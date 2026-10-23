@@ -8,6 +8,59 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 EVIDENCE = []
 
 
+def plan_reply(messages):
+    """Deterministic function calls through the REAL ADK tool/callback pipeline."""
+    user_index = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "user"), -1)
+    if user_index < 0:
+        return None
+    marker = re.search(r"TASK-PLAN-(CREATE|UPDATE)-[a-f0-9]{8}", str(messages[user_index].get("content", "")))
+    if not marker:
+        return None
+    if any(message.get("role") == "tool" for message in messages[user_index + 1 :]):
+        return {"role": "assistant", "content": f"{marker.group()} 已记录。"}, "stop"
+
+    steps = [
+        {"id": "read", "title": "读取资料", "status": "pending"},
+        {"id": "check", "title": "核对数据", "status": "pending"},
+    ]
+    args = {"title": "资料检查计划", "steps": steps}
+    if marker.group(1) == "UPDATE":
+        plan = None
+        for message in reversed(messages[:user_index]):
+            if message.get("role") != "tool":
+                continue
+            try:
+                result = json.loads(message.get("content", ""))
+                for _ in range(4):
+                    if isinstance(result, str):
+                        result = json.loads(result)
+                    elif isinstance(result, dict) and "result" in result:
+                        result = result["result"]
+                    else:
+                        break
+                if isinstance(result, dict) and "task_plan" in result:
+                    plan = result["task_plan"]
+                    break
+            except (ValueError, TypeError):
+                continue
+        if not plan:
+            return {"role": "assistant", "content": "PLAN_FIXTURE_MISSING_HISTORY"}, "stop"
+        args.update(plan_id=plan["plan_id"], expected_revision=plan["revision"])
+        steps[0]["status"] = "completed"
+        steps[1].update(status="needs_input", detail="请补充统计日期")
+    return {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": f"call_{marker.group()}",
+                "type": "function",
+                "function": {"name": "update_task_plan", "arguments": json.dumps(args, ensure_ascii=False)},
+            }
+        ],
+    }, "tool_calls"
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
@@ -50,31 +103,6 @@ class Handler(BaseHTTPRequestHandler):
         )
         marker = re.search(r"MODEL-SETUP-ROOT-[a-f0-9]{8}", json.dumps(body.get("messages", [])))
         content = marker.group() if marker else "OK"
-        EVIDENCE.append(
-            {
-                "model": body["model"],
-                "stream": bool(body.get("stream")),
-                "probe_tool": tool == "platform_probe",
-                "root_marker": marker.group() if marker else None,
-            }
-        )
-        del EVIDENCE[:-100]
-        base = {"id": "chatcmpl-setup", "created": 1, "model": "setup-chat"}
-        if body.get("stream"):
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Connection", "close")
-            self.end_headers()
-            for delta, finish in [({"role": "assistant", "content": content}, None), ({}, "stop")]:
-                chunk = {
-                    **base,
-                    "object": "chat.completion.chunk",
-                    "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
-                }
-                self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
-            self.wfile.write(b"data: [DONE]\n\n")
-            self.wfile.flush()
-            return
         message = {"role": "assistant", "content": content}
         finish = "stop"
         if tool == "platform_probe":
@@ -86,6 +114,40 @@ class Handler(BaseHTTPRequestHandler):
                 ],
             }
             finish = "tool_calls"
+        plan = plan_reply(body.get("messages", []))
+        if plan:
+            message, finish = plan
+        EVIDENCE.append(
+            {
+                "model": body["model"],
+                "stream": bool(body.get("stream")),
+                "probe_tool": tool == "platform_probe",
+                "root_marker": marker.group() if marker else None,
+                "plan_call": bool(plan and message.get("tool_calls")),
+            }
+        )
+        del EVIDENCE[:-100]
+        base = {"id": "chatcmpl-setup", "created": 1, "model": "setup-chat"}
+        if body.get("stream"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            first_delta = {**message}
+            if message.get("tool_calls"):
+                first_delta["tool_calls"] = [
+                    {"index": index, **call} for index, call in enumerate(message["tool_calls"])
+                ]
+            for delta, reason in [(first_delta, None), ({}, finish)]:
+                chunk = {
+                    **base,
+                    "object": "chat.completion.chunk",
+                    "choices": [{"index": 0, "delta": delta, "finish_reason": reason}],
+                }
+                self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+            return
         self.reply(
             {
                 **base,

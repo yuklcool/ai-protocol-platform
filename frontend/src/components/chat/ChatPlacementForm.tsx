@@ -20,6 +20,7 @@ export interface ChatPlacementFormProps {
   /** Backend-provided, friendly AI-authored title. */
   title?: string;
   reusable?: boolean;
+  displayOnly?: boolean;
   onStop?: () => void;
   busy?: boolean;
 }
@@ -32,11 +33,13 @@ export function ChatPlacementForm({
   isConfirm,
   title,
   reusable = false,
+  displayOnly = false,
   onStop,
   busy = false,
 }: ChatPlacementFormProps) {
   const { locale } = useI18n();
-  const headerLabel = submitted
+  const processed = submitted && !displayOnly;
+  const headerLabel = processed
     ? translateChat(locale, "placement.submitted")
     : title || translateChat(locale, isConfirm ? "placement.confirm" : "placement.actionNeeded");
 
@@ -44,21 +47,22 @@ export function ChatPlacementForm({
     <div
       className={
         "w-full max-w-2xl overflow-hidden glass-panel shadow-sm " +
-        (submitted ? "border-dashed bg-muted/10" : "border-l-2 border-l-primary/60 bg-card")
+        (processed ? "border-dashed bg-muted/10" : "border-l-2 border-l-primary/60 bg-card")
       }
       data-chat-form={surfaceId}
-      data-submitted={submitted || undefined}
+      data-submitted={processed || undefined}
       aria-busy={busy}
+      aria-live={displayOnly ? "polite" : undefined}
     >
       <div
         className={
           "flex items-center gap-1.5 border-b px-4 py-2 " +
-          (submitted
+          (processed
             ? "bg-muted/40 text-xs font-medium text-muted-foreground"
             : "text-sm font-semibold text-foreground")
         }
       >
-        {submitted && (
+        {processed && (
           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
               d="M20 6 9 17l-5-5"
@@ -71,15 +75,15 @@ export function ChatPlacementForm({
         )}
         {headerLabel}
       </div>
-      <div className={submitted ? "pointer-events-none opacity-75" : undefined}>
+      <div className={processed ? "pointer-events-none opacity-75" : undefined}>
         <A2UISurfaceMount
           key={`${sessionId}:${surfaceId}`}
           surfaceId={surfaceId}
           sessionId={sessionId}
           skillId={skillId}
-          triggerOnAction={!submitted}
+          triggerOnAction={!submitted && !displayOnly}
           freezeAfterAction={!reusable}
-          readOnly={submitted || busy}
+          readOnly={submitted || busy || displayOnly}
           onStop={onStop}
           className={"chat-a2ui-form px-4 py-3" + (isConfirm ? " chat-a2ui-form--confirm" : "")}
         />
@@ -96,6 +100,7 @@ export interface ChatSurfaceItem {
   title?: string;
   replayed: boolean;
   reusable?: boolean;
+  displayOnly?: boolean;
 }
 
 export function useChatSurfaces(): ChatSurfaceItem[] {
@@ -105,10 +110,11 @@ export function useChatSurfaces(): ChatSurfaceItem[] {
     surfaceId: a.surfaceId,
     createdAt: a.createdAt,
     submitted:
-      (Boolean(a.replayed) && a.kind !== "a2ui") || (a.kind === ELICITATION_FORM_KIND && a.surfaceId !== lastId),
+      !a.displayOnly && ((Boolean(a.replayed) && a.kind !== "a2ui") || (a.kind === ELICITATION_FORM_KIND && a.surfaceId !== lastId)),
     isConfirm: a.elicitationKind === "confirm",
     title: a.title,
     replayed: Boolean(a.replayed),
     reusable: a.kind === "a2ui",
+    displayOnly: a.displayOnly,
   }));
 }

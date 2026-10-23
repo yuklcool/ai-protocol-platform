@@ -378,6 +378,7 @@ export function ChatMessageList({
         isConfirm={s.isConfirm}
         title={s.title}
         reusable={s.reusable}
+        displayOnly={s.displayOnly}
         onStop={onStopExecution}
         busy={isLoading}
       />

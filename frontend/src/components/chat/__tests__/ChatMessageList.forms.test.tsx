@@ -293,6 +293,27 @@ describe("ChatMessageList inline forms", () => {
     expect(container.querySelector(`[data-chat-form="${SUMMARY}"]`)?.getAttribute("data-submitted")).toBeNull();
   });
 
+  it("informational A2UI cards update in place and keep their title on history replay", async () => {
+    const id = "task_plan:test";
+    const { getRegistry, container } = renderForms();
+    const meta: A2uiArtifact = { kind: "task-plan", title: "检查资料", placement: "chat", displayOnly: true };
+    act(() => getRegistry().appendMessages(id, formMessages(id), "plan-1", meta));
+    const card = container.querySelector(`[data-chat-form="${id}"]`)!;
+    expect(card).toHaveTextContent("检查资料");
+    // Even a mistakenly embedded action cannot dispatch from a display card.
+    const surface = getRegistry().getState(id)!.surface!;
+    await act(async () => {
+      await surface.dispatchAction({ event: { name: "start_obligation_analysis", context: { doc: "demo" } } }, "btn");
+    });
+    expect(triggerActionSpy).not.toHaveBeenCalled();
+    expect(fetchWithAuthSpy).not.toHaveBeenCalled();
+    act(() => getRegistry().appendMessages(id, formMessages(id), "plan-2", { ...meta, replayed: true }));
+    expect(container.querySelector(`[data-chat-form="${id}"]`)).toBe(card);
+    expect(card).not.toHaveAttribute("data-submitted");
+    expect(card).toHaveTextContent("检查资料");
+    expect(card.querySelector("fieldset")).toBeDisabled();
+  });
+
   it("never-silent on missing required: clicking Run with blanks still fires a run (backend re-refuses, form re-appears)", async () => {
     const { getRegistry } = renderForms();
     act(() => {

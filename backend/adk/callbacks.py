@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -780,18 +781,31 @@ def _stash_surface_for_resume(
         state = getattr(tool_context, "state", None)
         if state is None:
             return
+        state_key = f"{A2UI_SURFACE_STATE_PREFIX}{rendered.surface_id}"
+        created_at = datetime.now(UTC).timestamp() * 1000
+        try:
+            previous = state.get(state_key)
+            previous = json.loads(previous) if isinstance(previous, str) else previous
+            stamp = previous.get("createdAt") if isinstance(previous, dict) else None
+            if (
+                isinstance(stamp, (int, float))
+                and not isinstance(stamp, bool)
+                and 0 <= stamp <= 8_640_000_000_000_000
+                and math.isfinite(stamp)
+            ):
+                created_at = stamp
+        except (ValueError, TypeError):
+            pass  # A corrupt previous render must not prevent a fresh one.
         payload = {
             "surfaceId": rendered.surface_id,
             "messages": rendered.messages,
             "artifact": rendered.artifact,
             "sourceId": source_id,
             "toolName": tool_name,
-            # Epoch ms so the frontend index/timeline keeps its ordering across a
-            # refresh (first-seen order). Overwrites on re-emit to a surface —
-            # the surface's latest render is what rehydrates.
-            "createdAt": datetime.now(UTC).timestamp() * 1000,
+            # Latest content, ORIGINAL position, just like SurfaceRegistry.
+            "createdAt": created_at,
         }
-        state[f"{A2UI_SURFACE_STATE_PREFIX}{rendered.surface_id}"] = json.dumps(payload)
+        state[state_key] = json.dumps(payload)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("a2ui surface stash failed (suppressed): %s", exc)
 

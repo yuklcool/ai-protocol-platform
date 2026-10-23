@@ -67,6 +67,7 @@ from adk import a2ui_ppa_render as _a2ui_ppa_render  # noqa: F401 — registers 
 from adk import (
     a2ui_sources_render as _a2ui_sources_render,  # noqa: F401 — registers web-search Sources tab mapping (6.11)
 )
+from adk import a2ui_task_plan_render as _a2ui_task_plan_render  # noqa: F401 — registers public task plans
 from adk.a2ui import A2uiToolConfig, make_a2ui_toolset
 from adk.a2ui_surface_context import wrap_with_a2ui_surface_context
 from adk.artifact_tools import retrieve_artifact

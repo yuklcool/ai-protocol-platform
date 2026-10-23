@@ -72,6 +72,8 @@ export interface A2uiArtifact {
    * replayed — the action already happened / the session has moved on, so a live
    * "Proceed" would be a lie (v6.10.0). */
   replayed?: boolean;
+  /** Informational cards update in place and never submit an Action. */
+  displayOnly?: boolean;
   title?: string;
   description?: string;
   /**
