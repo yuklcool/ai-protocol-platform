@@ -64,7 +64,7 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
     const trigger=page.getByRole("button",{name:"打开主导航",exact:true});await trigger.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     const drawer=page.getByRole("dialog");
-    for(const name of ["工作台","历史对话","我的成果","能力中心","就绪与资源接入"]){
+    for(const name of ["AI 任务对话","任务概览","历史对话","我的成果","能力中心","就绪与资源接入"]){
       await expect(drawer.getByRole("link",{name,exact:true})).toBeVisible();
     }
     await expect(drawer.getByRole("link",{name:"模型服务",exact:true})).toHaveCount(0);

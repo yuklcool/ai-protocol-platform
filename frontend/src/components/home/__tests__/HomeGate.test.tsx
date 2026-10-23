@@ -33,10 +33,10 @@ describe("HomeGate", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("登录后固定进入工作台且不闪现宣传页", () => {
+  it("登录后固定进入任务对话且不闪现宣传页", () => {
     authState = { user: { uid: "u1" }, loading: false };
     render(gate());
-    expect(replace).toHaveBeenCalledWith("/workspace");
+    expect(replace).toHaveBeenCalledWith("/chat/root-agent");
     expect(screen.queryByTestId("landing")).not.toBeInTheDocument();
     expect(screen.getByTestId("home-gate-redirecting")).toBeInTheDocument();
   });
@@ -46,7 +46,7 @@ describe("HomeGate", () => {
     const { rerender } = render(gate());
     authState = { user: { uid: "u1" }, loading: false };
     rerender(gate());
-    expect(replace).toHaveBeenCalledWith("/workspace");
+    expect(replace).toHaveBeenCalledWith("/chat/root-agent");
     expect(fetchWithAuth).not.toHaveBeenCalled();
     replace.mockClear();
     authState = { user: null, loading: false };

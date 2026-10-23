@@ -34,6 +34,8 @@ import { A2uiSurface } from "@a2ui/react/v0_9";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { useActionDrivenAgent } from "@/hooks/useActionDrivenAgent";
 import { emitSkillSwitchIntent } from "@/lib/skillSwitch";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 import {
   type SurfacePolicy,
   useSurfaceRegistry,
@@ -75,6 +77,9 @@ export interface A2UISurfaceMountProps {
   triggerOnAction?: boolean;
   /** Confirmation cards are one-shot; ordinary Agent UIs remain interactive. */
   freezeAfterAction?: boolean;
+  /** Historical/processed cards cannot dispatch, including keyboard actions. */
+  readOnly?: boolean;
+  onStop?: () => void;
   /**
    * Handler for `chat:send` surface actions — a surface Button can ask the app
    * to post a chat message (e.g. a diff card's "Explain this difference", whose
@@ -94,9 +99,12 @@ export function A2UISurfaceMount({
   skillId,
   triggerOnAction = false,
   freezeAfterAction = true,
+  readOnly = false,
+  onStop,
   onChatMessage,
 }: A2UISurfaceMountProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const { locale } = useI18n();
   const registry = useSurfaceRegistry();
   const state = useSurfaceState(surfaceId);
 
@@ -146,11 +154,12 @@ export function A2UISurfaceMount({
   // otherwise reads as "nothing happened" and gets clicked again (the 2026-07-14
   // obligation-handoff report). Freeze it + show a persistent "Sent" badge.
   const [hasCompleted, setHasCompleted] = useState(false);
+  const completedRef = useRef(false);
   // The SDK awaits listeners while iterating a live Set. Replacing a listener
   // during its awaited run adds it back to that same dispatch and repeats the
   // action. Subscribe once per SurfaceModel; read current routing from a ref.
-  const actionRouting = useRef({ surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage });
-  actionRouting.current = { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage };
+  const actionRouting = useRef({ surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage, readOnly, freezeAfterAction });
+  actionRouting.current = { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage, readOnly, freezeAfterAction };
 
   // Subscribe to surface actions and route each one through the
   // configured dispatch path. Re-subscribes whenever the SurfaceModel
@@ -158,8 +167,9 @@ export function A2UISurfaceMount({
   useEffect(() => {
     if (!state?.surface) return;
     const sub = state.surface.onAction.subscribe(async (action) => {
-      const { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage } = actionRouting.current;
+      const { surfaceId, sessionId, skillId, triggerOnAction, triggerAction, onChatMessage, readOnly, freezeAfterAction } = actionRouting.current;
       if (!sessionId) return;
+      if (readOnly || actionInFlightRef.current || (completedRef.current && freezeAfterAction)) return;
       // chat:send — a surface Button asks to post a chat message (e.g. a diff
       // card's "Explain this difference", whose action carries a ready-built
       // prompt in `context.prompt`). Route to the chat composer so the agent's
@@ -242,6 +252,7 @@ export function A2UISurfaceMount({
           // Reached only if the run did NOT reject — mark a visible terminal
           // state so the click has an unmistakable, persistent consequence.
           setHasCompleted(true);
+          completedRef.current = true;
         } catch (err) {
           // NEVER SILENT (#8): triggerAction rejects on RUN_ERROR (and its
           // gate-reject / network fallbacks resolve — those surface separately).
@@ -310,16 +321,17 @@ export function A2UISurfaceMount({
               ref guard: it stops a stray click reaching the button DOM at all
               (the SDK renders the Button; we can't reach into it to disable
               it, so we gate interaction at the wrapper). */}
-          <div
+          <fieldset
+            disabled={readOnly || isRunning || (hasCompleted && freezeAfterAction)}
             aria-busy={isRunning}
             className={
               isRunning || (hasCompleted && triggerOnAction && freezeAfterAction)
-                ? "pointer-events-none opacity-60 transition-opacity"
-                : "transition-opacity"
+                ? "m-0 min-w-0 border-0 p-0 opacity-60 transition-opacity"
+                : "m-0 min-w-0 border-0 p-0 transition-opacity"
             }
           >
             <A2uiSurface surface={state.surface} />
-          </div>
+          </fieldset>
           {isRunning && (
             <div
               className="pointer-events-none absolute inset-0 flex items-center justify-center"
@@ -348,11 +360,11 @@ export function A2UISurfaceMount({
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                 </svg>
-                Working…
+                {translateChat(locale, "surface.working")}
               </span>
             </div>
           )}
-          {isRunning && <button type="button" onClick={cancelAction} className="mt-2 rounded-md border px-3 py-1 text-xs">Stop</button>}
+          {isRunning && <button type="button" onClick={() => { onStop?.(); cancelAction(); }} className="button-secondary mt-2 min-h-11 text-xs">{translateChat(locale, "shell.stop")}</button>}
           {actionError && (
             <div
               role="alert"
@@ -370,7 +382,7 @@ export function A2UISurfaceMount({
               className="mt-2 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-1.5 text-xs font-medium text-emerald-700"
             >
               <span aria-hidden="true">✓</span>
-              <span>{freezeAfterAction ? "Sent — the response appears below, and in the Workspace and Activity." : "Action completed"}</span>
+              <span>{translateChat(locale, freezeAfterAction ? "surface.sent" : "surface.done")}</span>
             </div>
           )}
         </div>

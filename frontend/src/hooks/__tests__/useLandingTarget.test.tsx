@@ -16,20 +16,20 @@ describe("useLandingTarget", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("登录后稳定进入工作台，不强制恢复最近会话", () => {
+  it("登录后稳定进入任务对话，不强制恢复最近会话", () => {
     const { result } = renderHook(() => useLandingTarget(true));
-    expect(result.current).toEqual({ kind: "workspace", href: "/workspace" });
+    expect(result.current).toEqual({ kind: "chat", href: "/chat/root-agent" });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("后端不可用也不退回宣传页，并响应退出登录", () => {
     mockFetch.mockRejectedValue(new Error("offline"));
     const { result, rerender } = renderHook(({ enabled }) => useLandingTarget(enabled), { initialProps: { enabled: true } });
-    expect(result.current).toEqual({ kind: "workspace", href: "/workspace" });
+    expect(result.current).toEqual({ kind: "chat", href: "/chat/root-agent" });
     rerender({ enabled: false });
     expect(result.current).toEqual({ kind: "loading" });
     rerender({ enabled: true });
-    expect(result.current).toEqual({ kind: "workspace", href: "/workspace" });
+    expect(result.current).toEqual({ kind: "chat", href: "/chat/root-agent" });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });

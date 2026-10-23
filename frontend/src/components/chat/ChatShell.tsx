@@ -27,6 +27,7 @@ import { useSessionMessages, type A2uiSurfaceReplay } from "@/hooks/useSessionMe
 import { useSessionAttachments } from "@/hooks/useSessionAttachments";
 import type { UploadResult } from "@/lib/documents";
 import { useSessionActivity } from "@/hooks/useSessionActivity";
+import { useChatExecution } from "@/hooks/useChatExecution";
 import { useStableThreadId } from "@/hooks/useStableThreadId";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { importByReference, isImportError } from "@/lib/importByReference";
@@ -1020,9 +1021,9 @@ function ChatShellContent({
   // preference survives navigation within a tab. Collapsed → render a
   // thin vertical strip with an expand chevron so the user always sees
   // a way back.
-  const [workbenchCollapsed, setWorkbenchCollapsed] = useState(false);
+  const [workbenchCollapsed, setWorkbenchCollapsed] = useState(skillId === "root-agent");
   useEffect(() => {
-    setWorkbenchCollapsed(readStoredCollapsed(skillId));
+    setWorkbenchCollapsed(readStoredCollapsed(skillId, skillId === "root-agent"));
   }, [skillId]);
   const toggleWorkbenchCollapsed = useCallback(() => {
     setWorkbenchCollapsed((v) => {
@@ -1060,6 +1061,8 @@ function ChatShellContent({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionStageLabel, setActionStageLabel] = useState<string | null>(null);
   const [activityNonce, setActivityNonce] = useState(0);
+  const { executions, markStopped } = useChatExecution(user.uid);
+  const stopExecution = useCallback(() => { markStopped(); stop(); }, [markStopped, stop]);
 
   // State setters are stable, so the sink is stable for the run's lifetime —
   // important, because it's a dep of useActionDrivenAgent's triggerAction.
@@ -1116,7 +1119,8 @@ function ChatShellContent({
     toolCalls: historyToolCalls,
     delegations: historyDelegations,
     sessionStartTs: historyStartTs,
-  } = useSessionActivity(sessionId ?? agentSessionId, activityNonce);
+    error: activityHistoryError,
+  } = useSessionActivity(sessionId ?? agentSessionId, activityNonce, user.uid);
   // Precedence: chat-live > action-run-live > persisted history, deduped by id.
   const liveToolCallIds = new Set(toolCalls.map((t) => t.id));
   const actionToolCallsOnly = actionToolCalls.filter((a) => !liveToolCallIds.has(a.id));
@@ -1702,7 +1706,7 @@ function ChatShellContent({
           disabled={inputDisabled}
         />
         {isLoading ? (
-          <button type="button" onClick={() => { stop(); setDraft(lastUserMessageRef.current); }} className="button-secondary shrink-0 px-3 py-2 text-sm" aria-label={translateChat(locale, "shell.stop")}>
+          <button type="button" onClick={() => { stopExecution(); setDraft(lastUserMessageRef.current); }} className="button-secondary min-h-11 shrink-0 px-3 py-2 text-sm" aria-label={translateChat(locale, "shell.stop")}>
             {translateChat(locale, "shell.stop")}
           </button>
         ) : (
@@ -1728,12 +1732,12 @@ function ChatShellContent({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        stop();
+        stopExecution();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isLoading, stop]);
+  }, [isLoading, stopExecution]);
 
   return (
     <>
@@ -1914,6 +1918,11 @@ function ChatShellContent({
             historyError={historyError}
             transcriptUnavailable={enteredViaResume && transcriptUnavailable}
             toolCalls={toolCalls}
+            executions={executions}
+            recordedToolCalls={historyToolCalls}
+            activityError={enteredViaResume ? activityHistoryError : undefined}
+            onStopExecution={stopExecution}
+            onOpenResult={(surfaceId) => { setWorkbenchTabId(surfaceId); setWorkbenchCollapsed(false); }}
             thinkingContent={thinkingContent}
             isThinking={isThinking}
             isLoading={isLoading}

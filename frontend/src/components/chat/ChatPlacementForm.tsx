@@ -20,6 +20,7 @@ export interface ChatPlacementFormProps {
   /** Backend-provided, friendly AI-authored title. */
   title?: string;
   reusable?: boolean;
+  onStop?: () => void;
 }
 
 export function ChatPlacementForm({
@@ -30,6 +31,7 @@ export function ChatPlacementForm({
   isConfirm,
   title,
   reusable = false,
+  onStop,
 }: ChatPlacementFormProps) {
   const { locale } = useI18n();
   const headerLabel = submitted
@@ -68,11 +70,14 @@ export function ChatPlacementForm({
       </div>
       <div className={submitted ? "pointer-events-none opacity-75" : undefined}>
         <A2UISurfaceMount
+          key={`${sessionId}:${surfaceId}`}
           surfaceId={surfaceId}
           sessionId={sessionId}
           skillId={skillId}
           triggerOnAction={!submitted}
           freezeAfterAction={!reusable}
+          readOnly={submitted}
+          onStop={onStop}
           className={"chat-a2ui-form px-4 py-3" + (isConfirm ? " chat-a2ui-form--confirm" : "")}
         />
       </div>

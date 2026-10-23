@@ -24,6 +24,9 @@ import { ChatPlacementForm, useChatSurfaces, type ChatSurfaceItem } from "./Chat
 import type React from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { translateChat } from "@/lib/i18n/chat";
+import { useArtifacts, type A2uiArtifactEntry } from "@/providers/SurfaceRegistry";
+import { recordedExecutions, type ChatExecution } from "@/lib/chatExecution";
+import { ChatExecutionCard } from "./ChatExecutionCard";
 
 interface ChatMessageListProps {
   messages: SkillMessage[];
@@ -102,6 +105,12 @@ interface ChatMessageListProps {
    * scoped to. Distinct from `skillId` above, which is the display label passed
    * to MessageBubble. Falls back to `skillId` when omitted. */
   formSkillId?: string;
+  executions?: ChatExecution[];
+  recordedToolCalls?: ToolCallState[];
+  activityError?: string | null;
+  onStopExecution?: () => void;
+  results?: A2uiArtifactEntry[];
+  onOpenResult?: (surfaceId: string) => void;
 }
 
 const SCROLL_THRESHOLD = 100;
@@ -166,6 +175,12 @@ export function ChatMessageList({
   trailingSlot,
   chatSurfaces,
   formSkillId,
+  executions = [],
+  recordedToolCalls = [],
+  activityError,
+  onStopExecution,
+  results = [],
+  onOpenResult,
 }: ChatMessageListProps) {
   const { locale } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -251,6 +266,7 @@ export function ChatMessageList({
 
   // Stable messages: all finalised (when streaming, exclude last assistant msg)
   const stableMessages = isStreaming ? messages.slice(0, -1) : messages;
+  const allStableMessages = [...(initialMessages ?? []), ...stableMessages];
 
   // Delegation markers (SKILL-DELEGATION M3) grouped by the message they follow.
   // Markers whose anchor isn't among the current messages (fired before any
@@ -304,8 +320,8 @@ export function ChatMessageList({
   // chronological, not pinned to the bottom. SkillMessage carries no timestamp,
   // so we record each message's client arrival time (first-seen) in a ref; both
   // that and surface.createdAt are client Date.now() values → comparable.
-  for (const m of messages) {
-    if (!messageSeenAtRef.current.has(m.id)) messageSeenAtRef.current.set(m.id, Date.now());
+  for (const m of [...(initialMessages ?? []), ...messages]) {
+    if (!messageSeenAtRef.current.has(m.id)) messageSeenAtRef.current.set(m.id, m.createdAt ?? Date.now());
   }
   const messageArrival = (id: string) => messageSeenAtRef.current.get(id) ?? 0;
   const surfaceList = chatSurfaces ?? [];
@@ -313,7 +329,7 @@ export function ChatMessageList({
   const leadingSurfaces: ChatSurfaceItem[] = [];
   for (const s of surfaceList) {
     let anchorId: string | null = null;
-    for (const m of stableMessages) {
+    for (const m of allStableMessages) {
       if (messageArrival(m.id) <= s.createdAt) anchorId = m.id;
     }
     // Pull-forward (form-after-text): an elicitation/confirm surface is the TAIL
@@ -324,7 +340,7 @@ export function ChatMessageList({
     // already chronological), re-anchor after the same-turn assistant message
     // that arrived just after it, so the card sits BELOW the intro text.
     if (!s.replayed) {
-      for (const m of stableMessages) {
+      for (const m of allStableMessages) {
         if (
           m.role === "assistant" &&
           messageArrival(m.id) > s.createdAt &&
@@ -358,6 +374,7 @@ export function ChatMessageList({
         isConfirm={s.isConfirm}
         title={s.title}
         reusable={s.reusable}
+        onStop={onStopExecution}
       />
     </div>
   );
@@ -405,6 +422,32 @@ export function ChatMessageList({
   // Show the most recent running tool name in the TypingIndicator
   const activeToolName = toolCalls.find((tc) => tc.status === "running")?.name ?? null;
 
+  const executionList = [
+    ...recordedExecutions(allStableMessages, recordedToolCalls, executions),
+    ...executions.filter((run) => run.tools.length > 0),
+  ];
+  const knownMessageIds = new Set(allStableMessages.map((m) => m.id));
+  const executionsByAfter = new Map<string | null, ChatExecution[]>();
+  for (const run of executionList) {
+    const anchor = run.afterMessageId && knownMessageIds.has(run.afterMessageId) ? run.afterMessageId : null;
+    executionsByAfter.set(anchor, [...(executionsByAfter.get(anchor) ?? []), run]);
+  }
+  const renderExecutions = (anchor: string | null) => (executionsByAfter.get(anchor) ?? [])
+    .map((run) => <ChatExecutionCard key={`execution-${run.id}`} execution={run} onStop={onStopExecution} />);
+  const resultsByAfter = new Map<string | null, A2uiArtifactEntry[]>();
+  for (const result of results) {
+    const anchor = allStableMessages.filter((m) => messageArrival(m.id) <= result.createdAt).at(-1)?.id ?? null;
+    resultsByAfter.set(anchor, [...(resultsByAfter.get(anchor) ?? []), result]);
+  }
+  const renderResults = (anchor: string | null) => (resultsByAfter.get(anchor) ?? []).map((result) => (
+    <section key={`result-${result.surfaceId}`} data-chat-result={result.surfaceId} className="glass-panel my-3 w-full min-w-0 max-w-2xl p-4">
+      <p className="text-xs text-muted-foreground">{translateChat(locale, "execution.result")}</p>
+      <h3 className="mt-1 break-words text-sm font-medium">{result.title || translateChat(locale, "shell.result")}</h3>
+      {result.description && <p className="mt-2 break-words text-sm text-muted-foreground">{result.description}</p>}
+      {onOpenResult && <button type="button" onClick={() => onOpenResult(result.surfaceId)} className="button-secondary mt-3 min-h-11 text-xs">{translateChat(locale, "execution.preview")}</button>}
+    </section>
+  ));
+
   return (
     <div className="relative flex flex-col flex-1 overflow-hidden">
       {activeDocumentContext !== undefined && (
@@ -420,6 +463,7 @@ export function ChatMessageList({
           {historyError && (
             <p className="text-xs text-muted-foreground italic">{historyError}</p>
           )}
+          {activityError && <p role="alert" className="text-sm text-destructive">{activityError}</p>}
 
           {transcriptUnavailable && (
             <div
@@ -455,26 +499,34 @@ export function ChatMessageList({
             />
           )}
 
+          {renderExecutions(null)}
+          {renderResults(null)}
+          {leadingSurfaces.map(renderChatSurface)}
           {initialMessages && initialMessages.length > 0 && (
             <>
               {initialMessages.map((m) => (
-                <MessageBubble
-                  key={m.id}
-                  message={m}
-                  skillId={skillId}
-                  userInitial={userInitial}
-                  userDisplayName={userDisplayName}
-                  userPhotoURL={userPhotoURL}
-                  botAvatarUrl={m.avatar ?? botAvatarUrl}
-                  botLabel={m.agentLabel}
-                  toolCalls={EMPTY_TOOL_CALLS}
-                  navigateToBlock={navigate}
-                  onAction={onAction}
-                  mcpServerIds={mcpServerIds}
-                  onChatMessage={onChatMessage}
-                  sessionId={sessionId}
-                  timestamp={m.createdAt}
-                />
+                <div key={m.id} className="contents">
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    skillId={skillId}
+                    userInitial={userInitial}
+                    userDisplayName={userDisplayName}
+                    userPhotoURL={userPhotoURL}
+                    botAvatarUrl={m.avatar ?? botAvatarUrl}
+                    botLabel={m.agentLabel}
+                    toolCalls={EMPTY_TOOL_CALLS}
+                    navigateToBlock={navigate}
+                    onAction={onAction}
+                    mcpServerIds={mcpServerIds}
+                    onChatMessage={onChatMessage}
+                    sessionId={sessionId}
+                    timestamp={m.createdAt}
+                  />
+                  {renderExecutions(m.id)}
+                  {surfacesByAfter.get(m.id)?.map(renderChatSurface)}
+                  {renderResults(m.id)}
+                </div>
               ))}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <div className="flex-1 border-t" />
@@ -493,10 +545,6 @@ export function ChatMessageList({
                 {translateChat(locale, "message.startConversation")}
               </p>
             )}
-
-          {/* Chat surfaces created before the first message (7.8) — e.g. an
-              analysis started from the launcher before any chat text. */}
-          {leadingSurfaces.map(renderChatSurface)}
 
           {stableMessages.map((m) => {
             const markers = delegationsByAfter.get(m.id);
@@ -520,6 +568,7 @@ export function ChatMessageList({
                   // stable client first-seen (so the time doesn't tick forward).
                   timestamp={m.createdAt ?? messageArrival(m.id)}
                 />
+                {renderExecutions(m.id)}
                 {markers?.map((d) => (
                   <DelegationMarker key={d.id} targetDisplay={d.targetDisplay} mode={d.mode} />
                 ))}
@@ -529,6 +578,7 @@ export function ChatMessageList({
                 {/* Chat surfaces created after this message but before the next
                     (7.8) — interleaved so the timeline is chronological. */}
                 {surfacesByAfter.get(m.id)?.map(renderChatSurface)}
+                {renderResults(m.id)}
               </div>
             );
           })}
@@ -585,5 +635,6 @@ export function ChatMessageList({
  */
 export function ChatMessageListWithSurfaces(props: ChatMessageListProps) {
   const chatSurfaces = useChatSurfaces();
-  return <ChatMessageList {...props} chatSurfaces={chatSurfaces} />;
+  const results = useArtifacts().filter((artifact) => artifact.placement !== "chat");
+  return <ChatMessageList {...props} chatSurfaces={chatSurfaces} results={results} />;
 }

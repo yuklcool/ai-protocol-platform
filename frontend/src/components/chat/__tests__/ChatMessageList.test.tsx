@@ -283,3 +283,40 @@ describe("ChatMessageList — transcript unavailable (regression 2026-08-05)", (
     expect(screen.queryByTestId("transcript-unavailable")).not.toBeInTheDocument();
   });
 });
+
+
+describe("Issue 141 in-chat execution", () => {
+  it("updates one card under the original request without moving it to a later reply", () => {
+    const messages = [msg("u1", "user", "first task"), msg("a1", "assistant", "answer one")];
+    const run = { id: "r1", afterMessageId: "u1", startedAt: 10, status: "running" as const, tools: [{ id: "tc1", name: "read_file", status: "running" as const }] };
+    const { container, rerender } = render(<ChatMessageList {...baseProps} messages={messages} executions={[run]} />);
+    const card = container.querySelector('[data-execution-id="r1"]')!;
+    expect(card.compareDocumentPosition(screen.getByText("answer one")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    rerender(<ChatMessageList {...baseProps} messages={[...messages, msg("u2", "user", "second task")]} executions={[{ ...run, status: "completed", tools: [{ ...run.tools[0], status: "success" }] }]} />);
+    expect(container.querySelectorAll("[data-execution-id]")).toHaveLength(1);
+    expect(container.querySelector('[data-execution-id="r1"]')).toBe(card);
+    expect(card).toHaveTextContent("Run finished");
+    expect(card.compareDocumentPosition(screen.getByText("second task")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("interleaves restored activity and A2UI with persisted history timestamps", () => {
+    const history = [{ ...msg("hu", "user", "historical request"), createdAt: 100 }, { ...msg("ha", "assistant", "historical answer"), createdAt: 300 }];
+    const { container } = render(<ChatMessageList {...baseProps} messages={[]} initialMessages={history} recordedToolCalls={[{ id: "old", name: "recorded_tool", status: "success", ts: 200 }]} chatSurfaces={[{ surfaceId: "restored", createdAt: 400, submitted: true, isConfirm: true, replayed: true }]} />);
+    const record = container.querySelector("[data-execution-id]")!;
+    expect(record).toHaveTextContent("Recorded activity");
+    expect(record.compareDocumentPosition(screen.getByText("historical answer")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const form = container.querySelector('[data-chat-form="restored"]')!;
+    expect(screen.getByText("historical answer").compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps plain chat free of synthetic tasks and exposes only real result previews", () => {
+    const open = vi.fn();
+    const { container, rerender } = render(<ChatMessageList {...baseProps} messages={[msg("u1", "user", "hello")]} />);
+    expect(container.querySelector("[data-execution-id]")).toBeNull();
+    rerender(<ChatMessageList {...baseProps} messages={[]} results={[{ surfaceId: "r", title: "Actual result", createdAt: 10 }]} onOpenResult={open} />);
+    expect(container.querySelector("[data-chat-result]")).toHaveTextContent("Actual result");
+    screen.getByRole("button", { name: "Open preview" }).click();
+    expect(open).toHaveBeenCalledWith("r");
+    expect(screen.queryByRole("button", { name: /download|export/i })).not.toBeInTheDocument();
+  });
+});

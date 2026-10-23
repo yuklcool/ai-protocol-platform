@@ -409,7 +409,11 @@ describe("A2UISurfaceMount — triggerOnAction prop (ACTION-TRIGGER M2)", () => 
     // The click has an unmistakable, persistent consequence — not a silent
     // revert to a live button that reads as "nothing happened".
     const done = await screen.findByTestId("a2ui-surface-done");
-    expect(done).toHaveTextContent(/sent/i);
+    expect(done).toHaveTextContent(/submitted/i);
+    expect(done.closest("[data-surface]")!.querySelector("fieldset")).toBeDisabled();
+    // Also reject direct SDK dispatch after completion, independently of CSS.
+    await act(async () => { await surface.dispatchAction({ event: { name: "start_obligation_analysis" } }, "run-btn"); });
+    expect(triggerActionSpy).toHaveBeenCalledTimes(1);
   });
 
   it("confirm_delegation (8.2 full switch): emits a skill-switch intent and does NOT run surface-action", async () => {
