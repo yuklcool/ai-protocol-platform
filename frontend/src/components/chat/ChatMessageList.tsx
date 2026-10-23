@@ -340,13 +340,19 @@ export function ChatMessageList({
     // already chronological), re-anchor after the same-turn assistant message
     // that arrived just after it, so the card sits BELOW the intro text.
     if (!s.replayed) {
-      for (const m of allStableMessages) {
+      const permitLeadingUser = anchorId === null;
+      for (const [index, m] of allStableMessages.entries()) {
+        // A later user turn must not capture an earlier confirmation. The
+        // first same-turn narration is a stable anchor even when a subsequent
+        // action produces another assistant message within the grace window.
+        if (m.role === "user" && messageArrival(m.id) > s.createdAt && !(permitLeadingUser && index === 0)) break;
         if (
           m.role === "assistant" &&
           messageArrival(m.id) > s.createdAt &&
           messageArrival(m.id) <= s.createdAt + SURFACE_TURN_GRACE_MS
         ) {
           anchorId = m.id;
+          break;
         }
       }
     }
@@ -375,6 +381,7 @@ export function ChatMessageList({
         title={s.title}
         reusable={s.reusable}
         onStop={onStopExecution}
+        busy={isLoading}
       />
     </div>
   );

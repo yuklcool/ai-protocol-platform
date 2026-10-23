@@ -21,6 +21,7 @@ export interface ChatPlacementFormProps {
   title?: string;
   reusable?: boolean;
   onStop?: () => void;
+  busy?: boolean;
 }
 
 export function ChatPlacementForm({
@@ -32,6 +33,7 @@ export function ChatPlacementForm({
   title,
   reusable = false,
   onStop,
+  busy = false,
 }: ChatPlacementFormProps) {
   const { locale } = useI18n();
   const headerLabel = submitted
@@ -46,6 +48,7 @@ export function ChatPlacementForm({
       }
       data-chat-form={surfaceId}
       data-submitted={submitted || undefined}
+      aria-busy={busy}
     >
       <div
         className={
@@ -76,7 +79,7 @@ export function ChatPlacementForm({
           skillId={skillId}
           triggerOnAction={!submitted}
           freezeAfterAction={!reusable}
-          readOnly={submitted}
+          readOnly={submitted || busy}
           onStop={onStop}
           className={"chat-a2ui-form px-4 py-3" + (isConfirm ? " chat-a2ui-form--confirm" : "")}
         />

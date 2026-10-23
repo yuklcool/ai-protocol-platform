@@ -110,6 +110,20 @@ describe("ChatMessageList", () => {
     expect(intro.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("does not move an earlier confirmation under a later answer within the grace window", () => {
+    const start = Date.now();
+    const messages = [
+      { ...msg("u1", "user", "first"), createdAt: start },
+      { ...msg("a1", "assistant", "confirm first"), createdAt: start + 200 },
+      { ...msg("u2", "user", "second"), createdAt: start + 300 },
+      { ...msg("a2", "assistant", "second answer"), createdAt: start + 400 },
+    ];
+    const { container } = render(<ChatMessageList {...baseProps} messages={messages} chatSurfaces={[{ surfaceId: "first-form", createdAt: start + 100, submitted: false, isConfirm: true, replayed: false }]} />);
+    const form = container.querySelector('[data-chat-form="first-form"]')!;
+    expect(screen.getByText("confirm first").compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(form.compareDocumentPosition(screen.getByText("second")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("renders a delegation marker inline after its anchor message", () => {
     const messages = [msg("u1", "user", "compare these PPAs"), msg("a1", "assistant", "Here's the analysis")];
     render(

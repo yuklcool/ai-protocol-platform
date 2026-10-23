@@ -43,6 +43,7 @@ test("消息流中的真实组件、活动更新、确认防重与三档布局�
   await page.route("**/api/proxy/api/agent/stream", async (route) => {
     const body = route.request().postDataJSON();
     requests.push(body);
+    console.info("IN_CHAT_FIXTURE_REQUEST", JSON.stringify({ turn: requests.length, action: body.forwardedProps?.a2ui_action?.action?.name ?? null }));
     const turn = requests.length, runId = `fixture-run-${turn}`, toolCallId = `fixture-tool-${turn}`, messageId = `fixture-answer-${turn}`;
     const events = [
       { type: "RUN_STARTED", runId, threadId: body.threadId },
@@ -69,10 +70,12 @@ test("消息流中的真实组件、活动更新、确认防重与三档布局�
     const input = card.getByRole("textbox", { name: "分析范围", exact: true });
     await expect(input).toBeVisible();
     await expect(page.locator("[data-execution-id]")).toHaveCount(1);
+    const originalCard = await card.elementHandle();
     await input.fill("十月资料");
     await card.getByRole("button", { name: "确认继续", exact: true }).click();
     await expect(page.getByText("已按确认范围继续处理。", { exact: true })).toBeVisible();
     expect(requests).toHaveLength(2);
+    expect(await originalCard.evaluate((element) => element.isConnected)).toBe(true);
     expect(requests[1].forwardedProps.a2ui_action.action.name).toBe("confirm_scope");
     await expect(page.locator("[data-execution-id]")).toHaveCount(2);
     await expect(card.locator("fieldset")).toBeDisabled();
