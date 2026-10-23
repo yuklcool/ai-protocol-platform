@@ -1,7 +1,6 @@
 import { BackendHealthBadge } from "@/components/BackendHealthBadge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { MySkillsButton } from "@/components/MySkillsButton";
-import { SignInButton } from "@/components/SignInButton";
 import { HomeGate } from "@/components/home/HomeGate";
 import {
   MarketplaceSkillsSection,
@@ -45,7 +44,6 @@ export default async function HomePage() {
             <LanguageSwitcher compact />
             <BackendHealthBadge />
             {SHOW_DEV_PROBES && <MySkillsButton />}
-            <SignInButton />
           </div>
         </header>
 

@@ -31,7 +31,13 @@ def main():
         repo.set_document(
             "chat_sessions",
             key,
-            document(key, owner=owner, title=f"照明能耗 {tag} {n:02}", lastMessageAt="2026-10-20T12:00:00Z"),
+            document(
+                key,
+                owner=owner,
+                title=f"照明能耗 {tag} {n:02}",
+                taskStatus="needs_input" if n == 24 else "unplanned",
+                lastMessageAt="2026-10-20T12:00:00Z",
+            ),
         )
     key = f"{tag}-private"
     repo.set_document("chat_sessions", key, document(key, owner=f"foreign-{tag}", title=f"照明能耗 {tag} 不可见"))

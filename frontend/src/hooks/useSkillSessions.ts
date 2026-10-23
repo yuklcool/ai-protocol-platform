@@ -5,6 +5,9 @@ import { fetchWithAuth } from "@/lib/apiClient";
 import { subscribeSessionsChanged } from "@/lib/sessionEvents";
 
 export interface ChatSessionSummary {
+  task_status?: string;
+  task_title?: string | null;
+  task_progress?: { completed: number; total: number } | null;
   session_id: string;
   document_ids: string[];
   skill_id: string;
@@ -30,6 +33,7 @@ interface ListSessionsResponse {
 }
 
 export interface SessionSearchFilters {
+  taskStatus?: string;
   query?: string;
   updatedAfter?: string;
   updatedBefore?: string;
@@ -60,10 +64,11 @@ interface UseSkillSessionsReturn {
  */
 export function useSkillSessions(skillFilter: string | null, search?: SessionSearchFilters): UseSkillSessionsReturn {
   const searchEnabled = search !== undefined;
+  const taskStatus = search?.taskStatus ?? "";
   const queryText = search?.query?.trim() ?? "";
   const updatedAfter = search?.updatedAfter ?? "";
   const updatedBefore = search?.updatedBefore ?? "";
-  const scope = JSON.stringify([skillFilter, searchEnabled, queryText, updatedAfter, updatedBefore]);
+  const scope = JSON.stringify([skillFilter, searchEnabled, queryText, updatedAfter, updatedBefore, taskStatus]);
   const [stateScope, setStateScope] = useState(scope);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,6 +96,7 @@ export function useSkillSessions(skillFilter: string | null, search?: SessionSea
 
     const params = [
       skillFilter ? `skill_id=${encodeURIComponent(skillFilter)}` : "",
+      taskStatus ? `task_status=${encodeURIComponent(taskStatus)}` : "",
       queryText ? `q=${encodeURIComponent(queryText)}` : "",
       updatedAfter ? `updated_after=${encodeURIComponent(updatedAfter)}` : "",
       updatedBefore ? `updated_before=${encodeURIComponent(updatedBefore)}` : "",
@@ -131,7 +137,7 @@ export function useSkillSessions(skillFilter: string | null, search?: SessionSea
         setIsLoading(false);
         setIsLoadingMore(false);
       });
-  }, [skillFilter, searchEnabled, queryText, updatedAfter, updatedBefore]);
+  }, [skillFilter, searchEnabled, queryText, updatedAfter, updatedBefore, taskStatus]);
 
   const fetch_ = useCallback(() => request(null), [request]);
   const loadMore = useCallback(() => {

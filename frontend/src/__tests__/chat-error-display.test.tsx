@@ -112,7 +112,7 @@ describe("ChatShell — error display", () => {
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ error: null }));
     render(<ChatPage params={paramsPromise} />);
     // Error message text should not appear
-    expect(screen.queryByRole("button", { name: /try again/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /review and continue/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /dismiss/i })).toBeNull();
   });
 
@@ -120,7 +120,7 @@ describe("ChatShell — error display", () => {
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ error: retryableError }));
     render(<ChatPage params={paramsPromise} />);
     expect(await screen.findByText(retryableError.message)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /try again/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /review and continue/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /dismiss/i })).toBeTruthy();
   });
 
@@ -128,7 +128,7 @@ describe("ChatShell — error display", () => {
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ error: nonRetryableError }));
     render(<ChatPage params={paramsPromise} />);
     expect(await screen.findByText(nonRetryableError.message)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /try again/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /review and continue/i })).toBeNull();
     expect(screen.getByRole("button", { name: /dismiss/i })).toBeTruthy();
   });
 
@@ -140,7 +140,7 @@ describe("ChatShell — error display", () => {
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it("Try again calls clearError then sendMessage with last user message", async () => {
+  it("Review and continue clears the error without replaying an unknown action", async () => {
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ error: retryableError }));
     render(<ChatPage params={paramsPromise} />);
 
@@ -149,9 +149,10 @@ describe("ChatShell — error display", () => {
     // Input is disabled when error is set — change the mock to allow the input to be typed
     // We test the retry logic directly: the lastUserMessage ref is populated when handleSend runs.
     // Since error is already set on mount, we can't type in the input.
-    // Instead, verify clearError is called when Try Again is clicked.
-    fireEvent.click(await screen.findByRole("button", { name: /try again/i }));
+    // Verify recovery clears the error without replaying an uncertain action.
+    fireEvent.click(await screen.findByRole("button", { name: /review and continue/i }));
     expect(mockClearError).toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
     // sendMessage is called only when lastUserMessage is non-empty; it's empty here since
     // the error was set before any message was typed in this render.
     // The important assertion is clearError was called (not dismissed silently).

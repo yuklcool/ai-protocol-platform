@@ -15,7 +15,7 @@ const config = {
     },
     extend: {
       fontFamily: {
-        sans: ['Google Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'system-ui', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
         serif: ['Crimson Pro', 'Georgia', 'serif'],
       },
       colors: {

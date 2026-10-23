@@ -27,7 +27,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from opentelemetry import trace
-from pydantic import AwareDatetime, BaseModel
+from pydantic import AwareDatetime, BaseModel, Field
 
 from adk.callbacks import A2UI_SURFACE_STATE_PREFIX
 from adk.notability import tool_tier
@@ -319,6 +319,9 @@ class GetSessionActivityResponse(BaseModel):
 
 
 class ChatSessionSummary(BaseModel):
+    task_status: str = "unplanned"
+    task_title: str | None = None
+    task_progress: dict[str, int] | None = None
     session_id: str
     document_ids: list[str]
     skill_id: str
@@ -370,6 +373,9 @@ def _to_summary(
     skill_label: str | None = None,
 ) -> ChatSessionSummary:
     return ChatSessionSummary(
+        task_status=idx.task_status,
+        task_title=idx.task_title,
+        task_progress=idx.task_progress,
         skill_label=skill_label,
         session_id=idx.session_id,
         document_ids=list(idx.document_ids),
@@ -699,6 +705,7 @@ async def list_my_sessions(
 async def search_my_sessions(
     request: Request,
     q: str = Query(default="", max_length=200),
+    task_status: str | None = Query(default=None, max_length=32),
     skill_id: str | None = Query(default=None, max_length=256),
     updated_after: Annotated[AwareDatetime | None, Query()] = None,
     updated_before: Annotated[AwareDatetime | None, Query()] = None,
@@ -709,7 +716,7 @@ async def search_my_sessions(
     """Search the caller's title/session ID and last-update range, never transcript text.
 
     Start is inclusive, end exclusive. Cursor is bound to owner and filters;
-    no persisted business Run status exists, so none is inferred here.
+    task status comes only from an explicit plan projection, never Run events.
     """
     ctx = request.state.access
     try:
@@ -717,6 +724,7 @@ async def search_my_sessions(
             SessionSearch(
                 owner_uid=ctx.uid,
                 query=q,
+                task_status=task_status,
                 skill_id=skill_id,
                 updated_after=updated_after,
                 updated_before=updated_before,
@@ -902,6 +910,16 @@ async def get_session_messages(
         )
     events = session.events if session is not None else []
     state = session.state if session is not None else None
+    if isinstance(state, Mapping) and idx.owner_uid == ctx.uid:
+        from db.task_status import task_projection
+
+        projection = task_projection(state)
+        if (projection["taskStatus"], projection["taskTitle"], projection["taskProgress"]) != (
+            idx.task_status,
+            idx.task_title,
+            idx.task_progress,
+        ):
+            update_session_fields(session_id, projection)
 
     # An index row that recorded turns, with no ADK session behind it, means the
     # transcript is unrecoverable — not that the conversation was empty. Log it
@@ -1022,3 +1040,64 @@ async def delete_session(
         raise HTTPException(status_code=403, detail="Only the session owner can delete it")
 
     soft_delete_session(session_id)
+
+
+class SaveReportRequest(BaseModel):
+    message_id: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=200_000)
+    expected_revision: int = Field(ge=0)
+
+
+@router.get("/sessions/{session_id}/reports")
+async def get_session_reports(
+    session_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008
+):
+    from db.session_reports import list_reports
+
+    idx = _require_session(session_id)
+    if not request.state.access.can_access(idx):
+        raise HTTPException(403, "Access denied")
+    return {"reports": list_reports(session_id)}
+
+
+@router.post("/sessions/{session_id}/reports")
+async def post_session_report(
+    session_id: str,
+    body: SaveReportRequest,
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008
+):
+    from db.session_reports import save_report
+
+    idx = _require_session(session_id)
+    if idx.owner_uid != request.state.access.uid or idx.archived_at is not None:
+        raise HTTPException(403, "Only the owner of an active session may edit reports")
+    try:
+        return save_report(session_id, idx.owner_uid, body.message_id, body.title, body.content, body.expected_revision)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/sessions/{session_id}/reports/{report_id}/download")
+async def download_session_report(
+    session_id: str,
+    report_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008
+):
+    from db.session_reports import list_reports
+
+    idx = _require_session(session_id)
+    if not request.state.access.can_access(idx):
+        raise HTTPException(403, "Access denied")
+    report = next((row for row in list_reports(session_id) if row["report_id"] == report_id), None)
+    if report is None:
+        raise HTTPException(404, "Report not found")
+    return Response(
+        content=report["content"],
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="report.txt"', "Cache-Control": "no-store"},
+    )

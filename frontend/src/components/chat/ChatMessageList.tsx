@@ -379,6 +379,7 @@ export function ChatMessageList({
         title={s.title}
         reusable={s.reusable}
         displayOnly={s.displayOnly}
+        completedSummary={s.completedSummary}
         onStop={onStopExecution}
         busy={isLoading}
       />

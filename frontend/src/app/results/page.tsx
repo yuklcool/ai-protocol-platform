@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSkillSessions, type ChatSessionSummary } from "@/hooks/useSkillSessions";
 import { WorkspaceGate } from "@/components/workspace/WorkspaceGate";
 import { SessionFeedback } from "@/components/workspace/SessionFeedback";
 import { fetchWithAuth } from "@/lib/apiClient";
+import { ReportEditor, type SavedReport } from "@/components/chat/ReportEditor";
 import { sessionHref } from "@/lib/sessionHref";
 
 type SessionResult = {
@@ -38,7 +39,9 @@ function isResults(value: unknown, sessionId: string): value is SessionResults {
 
 function ResultsDetails({ session }: { session: ChatSessionSummary }) {
   const { locale } = useI18n();
+  const headingId = useId();
   const zh = locale.startsWith("zh");
+  const [reports, setReports] = useState<SavedReport[]>([]);
   const [data, setData] = useState<SessionResults | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<number | "network" | null>(null);
@@ -47,6 +50,7 @@ function ResultsDetails({ session }: { session: ChatSessionSummary }) {
     const controller = new AbortController();
     setLoading(true);
     setData(null);
+    setReports([]);
     setError(null);
     void (async () => {
       try {
@@ -57,7 +61,10 @@ function ResultsDetails({ session }: { session: ChatSessionSummary }) {
         }
         const body: unknown = await response.json();
         if (!isResults(body, session.session_id)) throw new Error("Invalid results response");
-        if (!controller.signal.aborted) setData(body);
+        const reportsResponse = await fetchWithAuth(`/api/proxy/api/sessions/${encodeURIComponent(session.session_id)}/reports`, { signal: controller.signal });
+        if (!reportsResponse.ok) throw new Error("Reports unavailable");
+        const saved = await reportsResponse.json() as { reports: SavedReport[] };
+        if (!controller.signal.aborted) { setData(body); setReports(saved.reports); }
       } catch {
         if (!controller.signal.aborted) setError("network");
       } finally {
@@ -68,10 +75,10 @@ function ResultsDetails({ session }: { session: ChatSessionSummary }) {
   }, [session.session_id, revision]);
   const title = session.title || (zh ? "未命名会话" : "Untitled session");
   return (
-    <section aria-labelledby="selected-results-title" aria-busy={loading} className="glass-panel min-w-0 space-y-4 p-5 sm:p-6">
+    <section aria-labelledby={headingId} aria-busy={loading} className="glass-panel min-w-0 space-y-4 p-5 sm:p-6">
       <header className="space-y-2">
-        <h2 id="selected-results-title" className="break-words text-xl font-semibold">{title}</h2>
-        <p className="text-sm text-muted-foreground">{zh ? "仅展示此会话持久化的交互成果摘要；返回原对话查看内容，不会重新执行任务。" : "Persisted interactive-result summaries for this session only. Return to the conversation to view content without rerunning the task."}</p>
+        <h2 id={headingId} className="break-words text-xl font-semibold">{title}</h2>
+
         <div className="flex flex-wrap gap-3">
           <Link href={sessionHref(session)} className="button-primary inline-flex items-center px-4 py-2">{zh ? "返回原对话" : "Return to conversation"}</Link>
           <button type="button" disabled={loading} onClick={() => setRevision((value) => value + 1)} className="button-secondary px-4 py-2 disabled:opacity-50">{zh ? "刷新成果" : "Refresh results"}</button>
@@ -91,7 +98,8 @@ function ResultsDetails({ session }: { session: ChatSessionSummary }) {
         {!data.state_available && <p role="status" className="notice notice--warning text-sm">{zh ? "会话成果状态不可用，不能据此判断没有成果。可返回原对话核对。" : "Result state is unavailable; this is not proof of no results. Check the original conversation."}</p>}
         {data.incomplete_count > 0 && <p role="status" className="notice notice--warning text-sm">{zh ? `有 ${data.incomplete_count} 条状态不完整，部分成果可能缺失或摘要已降级。` : `${data.incomplete_count} state entries are incomplete; results may be missing or summaries degraded.`}</p>}
         {data.truncated && <p role="status" className="notice notice--warning text-sm">{zh ? "仅显示前 100 个成果，列表已截断；请返回原对话核对其余内容。" : "Only the first 100 results are shown. Return to the conversation to check the rest."}</p>}
-        {data.state_available && data.results.length === 0 && <p className="text-sm text-muted-foreground">{zh ? "未找到可展示的持久化交互成果摘要。上传附件、知识来源和普通聊天文本不计入此列表。" : "No persisted interactive-result summaries were found. Uploads, knowledge sources and ordinary chat text are not listed as results."}</p>}
+        {data.state_available && data.results.length === 0 && reports.length === 0 && <p className="text-sm text-muted-foreground">{zh ? "未找到可展示的持久化交互成果摘要。上传附件、知识来源和普通聊天文本不计入此列表。" : "No persisted interactive-result summaries were found. Uploads, knowledge sources and ordinary chat text are not listed as results."}</p>}
+        {reports.map(report => <article key={report.report_id} className="surface-sunken space-y-3 p-4"><span className="badge badge--brand">TXT · v{report.revision}</span><h3>{report.title}</h3><p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{report.content}</p><time className="block text-xs text-muted-foreground" dateTime={report.updated_at}>{new Date(report.updated_at).toLocaleString(locale)}</time><ReportEditor sessionId={session.session_id} messageId={report.message_id} content={report.content} initialReport={report} /></article>)}
         <ul className="space-y-3">{data.results.map((result) => {
           const date = result.created_at === null ? null : new Date(result.created_at);
           const validDate = date && Number.isFinite(date.getTime()) ? date : null;
@@ -111,42 +119,17 @@ function ResultsDetails({ session }: { session: ChatSessionSummary }) {
 function ResultsContent() {
   const { locale } = useI18n();
   const zh = locale.startsWith("zh");
-  const { sessions, isLoading, error, refetch, nextCursor, loadMore, isLoadingMore } = useSkillSessions(null);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = sessions.find((session) => session.session_id === selectedId);
-  const search = query.trim().toLocaleLowerCase();
-  const filtered = sessions.filter((session) => [session.title, session.skill_label, session.session_id].some((value) => value?.toLocaleLowerCase().includes(search)));
+  const [search, setSearch] = useState("");
+  const { sessions, isLoading, error, refetch, nextCursor, loadMore, isLoadingMore } = useSkillSessions(null, { query: search });
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-10 sm:px-6">
-      <header className="glass-panel space-y-3 p-6 sm:p-8">
-        <Link href="/workspace" className="text-sm text-primary">{zh ? "返回工作台" : "Back to workspace"}</Link>
-        <h1 className="text-3xl font-semibold tracking-tight">{zh ? "我的成果" : "My results"}</h1>
-        <p className="max-w-[65ch] text-sm text-muted-foreground">{zh ? "先选择可访问的会话，再查看成果摘要。此处不是全部文件索引，不扫描对话全文，也不把上传附件当成成果。" : "Choose an accessible session to see its result summaries. This is not a complete file index: it does not scan transcripts or count uploads as results."}</p>
-      </header>
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <section aria-labelledby="result-sessions-title" className="min-w-0 space-y-4">
-          <h2 id="result-sessions-title" className="text-lg font-semibold">{zh ? "选择来源会话" : "Choose a source session"}</h2>
-          <div className="space-y-2">
-            <label htmlFor="result-session-search" className="block text-sm font-medium">{zh ? "搜索已加载会话" : "Search loaded sessions"}</label>
-            <input id="result-session-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-3" />
-            <p className="text-xs text-muted-foreground">{zh ? "仅搜索已加载的会话，加载更多可扩大范围。" : "Search covers loaded sessions only. Load more to extend it."}</p>
-          </div>
-          <SessionFeedback error={error} isLoading={isLoading} empty={sessions.length === 0} retry={refetch} />
-          {!error && !isLoading && sessions.length > 0 && filtered.length === 0 && <p className="text-sm text-muted-foreground">{zh ? "已加载会话中没有匹配项。" : "No matches in loaded sessions."}</p>}
-          <ul className="space-y-2">{filtered.map((session) => {
-            const title = session.title || (zh ? "未命名会话" : "Untitled session");
-            return <li key={session.session_id}>
-              <button type="button" aria-pressed={selectedId === session.session_id} aria-label={zh ? `查看成果：${title}` : `View results: ${title}`} onClick={() => setSelectedId(session.session_id)} className={`glass-panel w-full space-y-1 p-4 text-left transition-colors hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${selectedId === session.session_id ? "border-primary" : ""}`}>
-                <span className="block break-words font-medium">{title}</span>
-                {session.skill_label && <span className="block text-xs text-muted-foreground">{session.skill_label}</span>}
-              </button>
-            </li>;
-          })}</ul>
-          {nextCursor && <button type="button" onClick={loadMore} disabled={isLoading || isLoadingMore} className="button-secondary px-4 py-2 disabled:opacity-50">{isLoadingMore ? zh ? "正在加载更多…" : "Loading more…" : zh ? "加载更多会话" : "Load more sessions"}</button>}
-        </section>
-        {selected ? <ResultsDetails key={selected.session_id} session={selected} /> : <p className="glass-panel p-6 text-sm text-muted-foreground">{zh ? "选择左侧会话后读取该会话的成果，不会自动遍历所有会话。" : "Select a session to load its results. Other sessions are not automatically scanned."}</p>}
-      </div>
+    <main className="page-container mx-auto max-w-6xl">
+      <header className="page-header"><div><p className="page-header__eyebrow">{zh ? "从对话到交付" : "From conversation to delivery"}</p><h1 className="page-header__title">{zh ? "我的成果" : "My results"}</h1><p className="page-header__desc">{zh ? "报告与交互成果按来源会话归档。编辑、保存、下载，或返回对话继续完善。" : "Reports and interactive results, grouped by source conversation. Edit, save, download or continue in chat."}</p></div><Link href="/chat/root-agent" className="button-primary">{zh ? "创建新成果" : "Create a result"}</Link></header>
+      <form className="results-search glass-panel flex flex-wrap items-end gap-3 p-4" onSubmit={event => { event.preventDefault(); if (search === query.trim()) refetch(); else setSearch(query.trim()); }}><label className="min-w-0 flex-1 space-y-2 text-sm" htmlFor="result-session-search"><span>{zh ? "搜索来源会话" : "Search source conversations"}</span><input id="result-session-search" type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder={zh ? "搜索全部历史会话标题或编号" : "Search all session titles or IDs"} className="glass-control w-full px-3" /></label><button type="submit" className="button-secondary">{zh ? "搜索" : "Search"}</button></form>
+      <p className="my-4 text-xs text-muted-foreground">{zh ? "每页读取 20 个会话的已保存成果；搜索覆盖全部历史会话，正文不参与搜索。上传附件不计为成果。" : "Saved results from 20 sessions per page. Search covers all session titles and IDs, not result content. Uploads are not results."}</p>
+      <SessionFeedback error={error} isLoading={isLoading} empty={sessions.length === 0} retry={refetch} />
+      <div className="grid items-start gap-5 lg:grid-cols-2">{sessions.map(session => <ResultsDetails key={session.session_id} session={session} />)}</div>
+      {nextCursor && <button type="button" onClick={loadMore} disabled={isLoading || isLoadingMore} className="button-secondary mt-6">{isLoadingMore ? (zh ? "正在加载…" : "Loading…") : (zh ? "加载更多成果" : "Load more results")}</button>}
     </main>
   );
 }

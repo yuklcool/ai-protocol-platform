@@ -231,6 +231,7 @@ export function useActionDrivenAgent({
 
       const surfaceSnapshot = registry.readA2uiSurfaceState();
       const body = {
+        requestId: crypto.randomUUID(),
         surfaceId,
         action,
         forwardedProps: { a2ui_surface_state: surfaceSnapshot },
@@ -251,7 +252,7 @@ export function useActionDrivenAgent({
           });
           if (controller.signal.aborted) throw new Error("The action was stopped.");
           if (error) throw new Error(error);
-          if (!finished) throw new Error("The agent connection ended before the action completed. Try again.");
+          if (!finished) throw new Error("The connection ended before completion was confirmed. Check the conversation before continuing.");
           activitySink?.onRunSettled?.({});
         } catch (err) {
           activitySink?.onRunSettled?.({ error: err instanceof Error ? err.message : "The action failed." });
@@ -608,7 +609,7 @@ export function useActionDrivenAgent({
           }
           if (terminated) break;
         }
-        if (!terminated) throw new Error("The agent connection ended before the action completed. Try again.");
+        if (!terminated) throw new Error("The connection ended before completion was confirmed. Check the conversation before continuing.");
       } catch (err) {
         const message = err instanceof Error ? err.message : "The action failed.";
         for (const [id, tc] of activityToolCalls) {

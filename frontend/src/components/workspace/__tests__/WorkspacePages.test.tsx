@@ -48,7 +48,7 @@ describe.each([["workspace", WorkspacePage], ["sessions", SessionsPage]] as cons
     expect(await screen.findByText("Private task")).toBeInTheDocument();
     expect(screen.queryByTestId("sign-in-required")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe(`/api/proxy/api/sessions${_ === "sessions" ? "/search" : ""}`);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/proxy/api/sessions/search");
   });
 
   it("uid 切换重建 child，旧请求即使忽略取消也不能泄漏旧会话", async () => {
@@ -88,11 +88,11 @@ describe("workspace 最近会话", () => {
     fetchMock.mockResolvedValueOnce(ok([row("recent", "Actual task")]));
     render(<WorkspacePage />);
     expect(await screen.findByText("Actual task")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Start a task" })).toHaveAttribute("href", "/chat/root-agent");
-    expect(screen.getByRole("link", { name: "All sessions" })).toHaveAttribute("href", "/sessions");
+    expect(screen.getByRole("link", { name: "New task" })).toHaveAttribute("href", "/chat/root-agent");
+    expect(screen.getByRole("link", { name: "Search all sessions" })).toHaveAttribute("href", "/sessions");
     expect(screen.getByText("Research")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Find results" })).toHaveAttribute("href", "/results");
-    expect(screen.getByRole("link", { name: "Discover capabilities" })).toHaveAttribute("href", "/skills");
+    expect(screen.getByRole("link", { name: "View results" })).toHaveAttribute("href", "/results");
+    expect(screen.getByRole("link", { name: "Explore capabilities" })).toHaveAttribute("href", "/skills");
   });
 
   it("zh 文案、真实空状态仍允许开始任务", async () => {
@@ -100,8 +100,8 @@ describe("workspace 最近会话", () => {
     state.locale = "zh-CN";
     render(<WorkspacePage />);
     expect(await screen.findByText("还没有会话，开始一项任务吧。")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "工作台" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "开始任务" })).toHaveAttribute("href", "/chat/root-agent");
+    expect(screen.getByRole("heading", { name: "任务概览" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "开始新任务" })).toHaveAttribute("href", "/chat/root-agent");
   });
 });
 

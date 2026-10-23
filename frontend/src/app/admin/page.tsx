@@ -183,6 +183,7 @@ export default function AdminHub() {
         </div>
       </header>
       <div className="page-body">
+        <section className="glass-panel mb-5 flex flex-wrap items-center justify-between gap-4 p-5"><div><h2>{locale === "zh-CN" ? "让助手准备就绪" : "Get your assistant ready"}</h2><p className="mt-1 text-sm text-muted-foreground">{locale === "zh-CN" ? "按步骤完成模型接入、能力配置与验证。" : "Connect a model, configure capabilities and verify the setup."}</p></div><NextLink href="/setup" className="button-primary">{locale === "zh-CN" ? "打开配置向导" : "Open setup guide"}</NextLink></section>
         <AgentReadiness key={user.uid} />
         <div className="grid gap-4 sm:grid-cols-2">
           {areas.map((area) => (

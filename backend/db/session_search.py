@@ -29,6 +29,7 @@ def utc(value: datetime) -> datetime:
 @dataclass(frozen=True)
 class SessionSearch:
     owner_uid: str
+    task_status: str | None = None
     query: str = ""
     skill_id: str | None = None
     updated_after: datetime | None = None
@@ -37,6 +38,10 @@ class SessionSearch:
     def __post_init__(self):
         if not self.owner_uid:
             raise ValueError("Session owner is required")
+        from db.task_status import TASK_STATUSES
+
+        if self.task_status is not None and self.task_status not in TASK_STATUSES:
+            raise ValueError("Invalid task status")
         object.__setattr__(self, "query", self.query.strip().lower())
         if len(self.query) > 200:
             raise ValueError("Search query is too long")
@@ -50,6 +55,7 @@ class SessionSearch:
         values = [
             self.owner_uid,
             self.query,
+            self.task_status,
             self.skill_id,
             self.updated_after.isoformat() if self.updated_after else None,
             self.updated_before.isoformat() if self.updated_before else None,
@@ -85,6 +91,8 @@ def match_rows(rows: list[dict], search: SessionSearch, after: Position | None, 
     matches = []
     for row in rows:
         if row.get("ownerUid") != search.owner_uid or row.get("archivedAt") or row.get("provisional"):
+            continue
+        if search.task_status is not None and row.get("taskStatus", "unplanned") != search.task_status:
             continue
         if search.skill_id is not None and row.get("skillId") != search.skill_id:
             continue

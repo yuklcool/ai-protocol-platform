@@ -104,6 +104,7 @@ class SurfaceActionRunRequest(BaseModel):
     accepts — keeps both ends symmetrical with chat turns.
     """
 
+    request_id: str | None = Field(default=None, alias="requestId", min_length=1, max_length=64)
     surface_id: str = Field(alias="surfaceId", min_length=1, max_length=128)
     action: SurfaceActionRunPayload
     forwarded_props: dict[str, Any] | None = Field(default=None, alias="forwardedProps")
@@ -373,7 +374,6 @@ async def post_surface_action_run(
     # Persist the action (same write the fire-and-forget endpoint does). Written
     # under the door's session — the target runs on this same thread.
     session_app_name = app_name_for_session(idx)
-    await _write_action_to_state(session_id, user, skill_id, body, size_bytes, session_app_name)
 
     # Build the (target) agent + AG-UI bridge, then synthesize a run input that
     # carries the trigger via state + forwarded_props.
@@ -381,6 +381,10 @@ async def post_surface_action_run(
     agui_agent = build_agui_adk_agent(agent, user_id=user.uid, app_name=session_app_name)
     run_input = _build_run_input(session_id, body)
     run_input.state["document_ids"] = selected_documents
+    from protocols.action_claims import claim_action
+
+    await claim_action(idx, body.surface_id, body.request_id)
+    await _write_action_to_state(session_id, user, skill_id, body, size_bytes, session_app_name)
 
     # Resolve the model string so the Activity header reflects the model that
     # actually ran this action turn (a confirm→switch delegate is frequently on a

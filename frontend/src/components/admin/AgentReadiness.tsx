@@ -74,7 +74,7 @@ function ReadStatus({ resource, zh }: { resource: Resource; zh: boolean }) {
   );
 }
 
-export function AgentReadiness() {
+export function AgentReadiness({ onVerified }: { onVerified?: (ready: boolean) => void } = {}) {
   const { locale } = useI18n();
   const zh = locale === "zh-CN";
   const unknown = zh ? "未知" : "Unknown";
@@ -100,6 +100,7 @@ export function AgentReadiness() {
     && !platform.error && !current.error && !models.error
     && selected.enabled === true && resolved.allowed === true
     && readiness.ready === true && completion.ok === true && toolCall.ok === true;
+  useEffect(() => { onVerified?.(verified); }, [verified, onVerified]);
   const enabledLabel = (value: unknown) => value === true
     ? zh ? "已启用" : "Enabled"
     : value === false ? zh ? "已停用" : "Disabled" : unknown;
