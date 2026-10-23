@@ -67,6 +67,7 @@ class PostgresRepository:
                       AND ($5::timestamptz IS NULL OR (data->>'lastMessageAt')::timestamptz < $5)
                       AND ($6::timestamptz IS NULL OR
                            ((data->>'lastMessageAt')::timestamptz, doc_id COLLATE "C") < ($6, $7::text COLLATE "C"))
+                      AND ($9::text IS NULL OR COALESCE(data->>'taskStatus', 'unplanned') = $9)
                     ORDER BY (data->>'lastMessageAt')::timestamptz DESC, doc_id COLLATE "C" DESC
                     LIMIT $8
                     """,
@@ -78,8 +79,23 @@ class PostgresRepository:
                     after[0] if after else None,
                     after[1] if after else None,
                     limit,
+                    search.task_status,
                 )
                 return [{**self._decode_json(row["data"]), "__id": row["doc_id"]} for row in rows]
+
+        return self._runner.run(op())
+
+    def create_document(self, collection: str, doc_id: str, data: dict[str, Any]) -> bool:
+        async def op():
+            async with self._pool.acquire() as conn:
+                row = await conn.fetchval(
+                    "INSERT INTO platform_documents (collection, doc_id, data) VALUES ($1, $2, $3::jsonb) "
+                    "ON CONFLICT (collection, doc_id) DO NOTHING RETURNING doc_id",
+                    collection,
+                    doc_id,
+                    json.dumps(data),
+                )
+                return row is not None
 
         return self._runner.run(op())
 

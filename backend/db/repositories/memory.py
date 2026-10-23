@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Any
 
 from db.repositories._document_ops import apply_query
@@ -15,7 +16,15 @@ class MemoryRepository:
             self.query_documents("chat_sessions", filters=[("ownerUid", "==", search.owner_uid)]), search, after, limit
         )
 
+    def create_document(self, collection: str, doc_id: str, data: dict[str, Any]) -> bool:
+        with self._create_lock:
+            if self.get_document(collection, doc_id) is not None:
+                return False
+            self.set_document(collection, doc_id, data)
+            return True
+
     def __init__(self, client: Any | None = None) -> None:
+        self._create_lock = Lock()
         if client is not None:
             self._client = client
         else:

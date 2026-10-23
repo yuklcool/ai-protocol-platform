@@ -6,6 +6,11 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  ListChecks,
+  Cpu,
+  BookOpen,
+  Plug,
+  UserRound,
   Bot,
   LayoutDashboard,
   History,
@@ -51,6 +56,7 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
       { href: "/workspace", zh: "任务概览", en: "Workspace", icon: LayoutDashboard },
       { href: "/sessions", zh: "历史对话", en: "Conversations", icon: History },
       { href: "/results", zh: "我的成果", en: "Results", icon: Files },
+      { href: "/settings/personal", zh: "个人配置", en: "Personal settings", icon: UserRound },
       { href: "/skills", zh: "能力中心", en: "Capabilities", icon: Sparkles },
     ],
   },
@@ -58,6 +64,12 @@ export const CONSOLE_NAVIGATION: NavigationGroup[] = [
     zh: "平台管理",
     en: "Administration",
     items: [
+      { href: "/agent", zh: "Agent 配置", en: "Agent configuration", icon: Bot },
+      { href: "/admin/model-providers", zh: "模型服务", en: "Model services", icon: Cpu },
+      { href: "/admin/knowledge", zh: "知识库", en: "Knowledge", icon: BookOpen },
+      { href: "/admin/diagnostics", zh: "运行诊断", en: "Diagnostics", icon: Activity },
+      { href: "/admin/mcp-servers", zh: "MCP 连接", en: "MCP connections", icon: Plug },
+      { href: "/setup", zh: "配置向导", en: "Setup guide", icon: ListChecks },
       { href: "/admin", zh: "就绪与资源接入", en: "Readiness and resources", icon: Bot },
       { href: "/admin/users", zh: "用户管理", en: "Users", icon: UsersRound },
       { href: "/admin/analytics", zh: "用量统计", en: "Usage", icon: Activity },
@@ -80,7 +92,6 @@ function isActive(pathname: string, href: string) {
       "/admin/settings",
     ].filter((path) => path.startsWith("/admin/"));
     return (
-      matches("/agent") ||
       (matches("/admin") && !specificPaths.some(matches))
     );
   }
@@ -95,12 +106,14 @@ export function visibleNavigation(isAdmin: boolean, isPlatform: boolean) {
   const platformPaths = new Set([
     "/agent",
     "/admin/model-providers",
+    "/admin/knowledge",
     "/admin/groups",
   ]);
   return CONSOLE_NAVIGATION.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
       if (platformPaths.has(item.href)) return isPlatform;
+      if (item.href === "/setup") return isPlatform;
       return !(item.href === "/admin" || item.href.startsWith("/admin/")) || isAdmin;
     }),
   })).filter((group) => group.items.length > 0);

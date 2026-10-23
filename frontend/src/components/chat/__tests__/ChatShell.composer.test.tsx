@@ -382,14 +382,15 @@ describe("ChatShell — 历史和附件恢复", () => {
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ sendMessage, clearError, error: { kind: "network", message: "Connection failed", rawMessage: "Connection failed", retryable: true } }));
     vi.mocked(useSessionAttachments).mockReturnValue({ ...attachmentState(), tabs: [{ id: "doc", filename: "unreadable.pdf", format: "pdf", included: true, parseStatus }] });
     view.rerender(shell());
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await userEvent.click(screen.getByRole("button", { name: "Review and continue" }));
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(clearError).not.toHaveBeenCalled();
     vi.mocked(useSessionAttachments).mockReturnValue({ ...attachmentState(), tabs: [{ id: "doc", filename: "unreadable.pdf", format: "pdf", included: true, parseStatus: "parsed" }] });
     view.rerender(shell());
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenLastCalledWith("analyze again", { documentIds: ["doc"] });
+    await userEvent.click(screen.getByRole("button", { name: "Review and continue" }));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(clearError).toHaveBeenCalledTimes(1);
+    expect(composer()).toHaveValue("analyze again");
   });
 
   it("附件尚不可读时保留技能切换请求，恢复后才发送且仅一次", async () => {

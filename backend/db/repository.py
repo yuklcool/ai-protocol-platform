@@ -20,6 +20,10 @@ Filter = tuple[str, str, Any]
 class Repository(Protocol):
     """Minimal document repository shared by memory, Firestore and Postgres."""
 
+    def create_document(self, collection: str, doc_id: str, data: dict[str, Any]) -> bool:
+        """Atomically insert only if absent; return False when already present."""
+        ...
+
     def get_document(self, collection: str, doc_id: str) -> dict[str, Any] | None: ...
 
     def set_document(

@@ -195,6 +195,15 @@ class _DocumentRef:
             data = self._client._store.get(self._collection, {}).get(self.id)
         return _Snapshot(self._collection, self.id, data)
 
+    def create(self, data: dict[str, Any]) -> None:
+        from google.api_core.exceptions import AlreadyExists
+
+        with self._client._lock:
+            col = self._client._store.setdefault(self._collection, {})
+            if self.id in col:
+                raise AlreadyExists(f"Document {self._collection}/{self.id} already exists")
+            col[self.id] = _resolve_writes_for_set(data)
+
     def set(self, data: dict[str, Any], merge: bool = False) -> None:
         resolved = _resolve_writes_for_set(data)
         with self._client._lock:

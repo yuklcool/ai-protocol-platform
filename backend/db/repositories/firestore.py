@@ -27,6 +27,15 @@ class FirestoreRepository:
             project = resolve_gcp_project()
             self._client = firestore.Client(project=project) if project else firestore.Client()
 
+    def create_document(self, collection: str, doc_id: str, data: dict[str, Any]) -> bool:
+        from google.api_core.exceptions import AlreadyExists
+
+        try:
+            self._client.collection(collection).document(doc_id).create(data)
+            return True
+        except AlreadyExists:
+            return False
+
     def get_document(self, collection: str, doc_id: str) -> dict[str, Any] | None:
         doc = self._client.collection(collection).document(doc_id).get()
         return doc.to_dict() if doc.exists else None

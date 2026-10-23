@@ -74,6 +74,7 @@ export interface A2uiArtifact {
   replayed?: boolean;
   /** Informational cards update in place and never submit an Action. */
   displayOnly?: boolean;
+  completedSummary?: string | null;
   title?: string;
   description?: string;
   /**

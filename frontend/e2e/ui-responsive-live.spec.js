@@ -3,7 +3,7 @@ const { test, expect } = require("@playwright/test");
 const FRONTEND = process.env.MODEL_STUDIO_FRONTEND_URL || "http://localhost:3456";
 const BACKEND = process.env.MODEL_STUDIO_BACKEND_URL || "http://127.0.0.1:1956";
 const ROUTES = [
-  "/workspace", "/sessions", "/results", "/agent", "/skills", "/skills/studio/new", "/chat/root-agent", "/admin",
+  "/setup", "/admin/knowledge", "/admin/diagnostics", "/settings/personal", "/workspace", "/sessions", "/results", "/agent", "/skills", "/skills/studio/new", "/chat/root-agent", "/admin",
    "/admin/users",  "/admin/mcp-servers",
   "/admin/model-providers", "/admin/analytics", "/admin/audit", "/admin/settings",
   "/dev/a2ui", "/dev/mcp-apps", "/dev/mcp-apps/active", "/dev/mcp-apps/passive", "/group",
@@ -67,7 +67,7 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
     for(const name of ["AI 任务对话","任务概览","历史对话","我的成果","能力中心","就绪与资源接入"]){
       await expect(drawer.getByRole("link",{name,exact:true})).toBeVisible();
     }
-    await expect(drawer.getByRole("link",{name:"模型服务",exact:true})).toHaveCount(0);
+    await expect(drawer.getByRole("link",{name:"模型服务",exact:true})).toBeVisible();
     await page.keyboard.press("Escape");await expect(page.getByRole("dialog")).toHaveCount(0);await expect(trigger).toBeFocused();
     await trigger.click();await drawer.getByRole("link",{name:"就绪与资源接入",exact:true}).click();
     await expect(page).toHaveURL(/\/admin$/);await expect(page.getByRole("dialog")).toHaveCount(0);

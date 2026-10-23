@@ -841,7 +841,7 @@ function StreamErrorBanner({
             onClick={onRetry}
             className="button-secondary px-3 py-1.5 text-xs"
           >
-            {translateChat(locale, "shell.retry")}
+            {translateChat(locale, "shell.reviewContinue")}
           </button>
         )}
         <button
@@ -1280,11 +1280,10 @@ function ChatShellContent({
     const text = lastUserMessageRef.current;
     if (!text) { clearError(); return; }
     clearError();
-    void sendMessage(text, {
-      documentIds: includedDocIds,
-
-    });
-  }, [clearError, sendMessage, includedDocIds, submissionBlocked]);
+    setDraft(text);
+    // A lost response may follow a committed tool action. Let the user review
+    // the transcript and explicitly send a continuation instead of replaying it.
+  }, [clearError, submissionBlocked]);
 
   // A `chat:send` surface action (e.g. a diff card's "Explain this difference")
   // posts a chat message so the agent's reply lands in the chat thread — same

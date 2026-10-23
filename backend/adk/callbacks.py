@@ -806,6 +806,14 @@ def _stash_surface_for_resume(
             "createdAt": created_at,
         }
         state[state_key] = json.dumps(payload)
+        if tool_name == "update_task_plan":
+            from db.chat_sessions import update_session_fields
+            from db.task_status import task_projection
+
+            session = getattr(tool_context, "session", None)
+            if session is not None:
+                view = state.to_dict() if hasattr(state, "to_dict") else dict(state)
+                update_session_fields(session.id, task_projection(view))
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("a2ui surface stash failed (suppressed): %s", exc)
 

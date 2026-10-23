@@ -17,6 +17,7 @@ import { A2UIRenderer } from "@/components/protocols/A2UIRenderer";
 import { MCPAppToolCallRouter } from "@/components/protocols/MCPAppToolCallRouter";
 import { BrandAvatar } from "@/components/chat/BrandAvatar";
 import { parseA2uiSubmission } from "@/lib/a2uiSubmission";
+import { ReportEditor } from "./ReportEditor";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 import { InlineCitation } from "@/components/chat/InlineCitation";
 import { ReadAloudButton } from "@/components/chat/ReadAloudButton";
@@ -256,13 +257,14 @@ export const MessageBubble = React.memo(function MessageBubble({
               />
             )}
           </div>
-          <div className="space-y-2 rounded-[2px_8px_8px_8px] border-l-[3px] border-primary bg-muted/40 px-3 py-2 text-sm">
+          <div className="chat-assistant-bubble space-y-3 px-4 py-3 text-sm">
             {message.content && (
               <ChatMarkdown
                 content={message.content}
                 navigateToBlock={navigateToBlock}
               />
             )}
+            {sessionId && message.content && <ReportEditor sessionId={sessionId} messageId={message.id} content={message.content} />}
             {a2uiCalls.map((tc) => {
               const parsed = parseA2UIResult(tc.resultContent);
               if (!parsed) return null;

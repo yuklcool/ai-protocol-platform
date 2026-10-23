@@ -31,11 +31,11 @@ const routes = [
   ["/sessions/session-1", "/sessions"],
   ["/results/report-1", "/results"],
   ["/skills/studio/skill-1", "/skills"],
-  ["/agent", "/admin"],
-  ["/agent/profile", "/admin"],
+  ["/agent", "/agent"],
+  ["/agent/profile", "/agent"],
   ["/admin", "/admin"],
-  ["/admin/model-providers/provider-1", "/admin"],
-  ["/admin/mcp-servers", "/admin"],
+  ["/admin/model-providers/provider-1", "/admin/model-providers"],
+  ["/admin/mcp-servers", "/admin/mcp-servers"],
   ["/admin/groups", "/admin"],
   ["/admin/clients", "/admin"],
   ["/admin/users", "/admin/users"],
@@ -51,7 +51,7 @@ const routes = [
   ["/workspace-extra", null],
   ["/agent-extra", null],
   ["/administrator", null],
-  ["/settings/personal", null],
+  ["/settings/personal", "/settings/personal"],
 ] as const;
 
 describe("控制台导航", () => {
@@ -105,7 +105,7 @@ describe("控制台导航", () => {
     expect(screen.getByRole("link", { name: "Readiness and resources" })).toHaveAttribute("href", "/admin");
     expect(screen.queryByRole("link", { name: "Platform settings" })).not.toBeInTheDocument();
     expect(visibleNavigation(false, false).flatMap((group) => group.items.map((item) => item.href))).toEqual([
-      "/chat/root-agent", "/workspace", "/sessions", "/results", "/skills",
+      "/chat/root-agent", "/workspace", "/sessions", "/results", "/settings/personal", "/skills",
     ]);
   });
 

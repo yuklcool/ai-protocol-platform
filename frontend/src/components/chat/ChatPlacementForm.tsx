@@ -21,6 +21,7 @@ export interface ChatPlacementFormProps {
   title?: string;
   reusable?: boolean;
   displayOnly?: boolean;
+  completedSummary?: string | null;
   onStop?: () => void;
   busy?: boolean;
 }
@@ -34,6 +35,7 @@ export function ChatPlacementForm({
   title,
   reusable = false,
   displayOnly = false,
+  completedSummary,
   onStop,
   busy = false,
 }: ChatPlacementFormProps) {
@@ -43,8 +45,9 @@ export function ChatPlacementForm({
     ? translateChat(locale, "placement.submitted")
     : title || translateChat(locale, isConfirm ? "placement.confirm" : "placement.actionNeeded");
 
+  const Container = completedSummary ? "details" : "div";
   return (
-    <div
+    <Container
       className={
         "w-full max-w-2xl overflow-hidden glass-panel shadow-sm " +
         (processed ? "border-dashed bg-muted/10" : "border-l-2 border-l-primary/60 bg-card")
@@ -54,7 +57,9 @@ export function ChatPlacementForm({
       aria-busy={busy}
       aria-live={displayOnly ? "polite" : undefined}
     >
+      {completedSummary && <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--success)]">{headerLabel} · {completedSummary}</summary>}
       <div
+        hidden={Boolean(completedSummary)}
         className={
           "flex items-center gap-1.5 border-b px-4 py-2 " +
           (processed
@@ -88,7 +93,7 @@ export function ChatPlacementForm({
           className={"chat-a2ui-form px-4 py-3" + (isConfirm ? " chat-a2ui-form--confirm" : "")}
         />
       </div>
-    </div>
+    </Container>
   );
 }
 
@@ -101,6 +106,7 @@ export interface ChatSurfaceItem {
   replayed: boolean;
   reusable?: boolean;
   displayOnly?: boolean;
+  completedSummary?: string | null;
 }
 
 export function useChatSurfaces(): ChatSurfaceItem[] {
@@ -117,5 +123,6 @@ export function useChatSurfaces(): ChatSurfaceItem[] {
     replayed: Boolean(a.replayed),
     reusable: a.kind === "a2ui",
     displayOnly: a.displayOnly,
+    completedSummary: a.completedSummary,
   }));
 }

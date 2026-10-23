@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         className="font-sans text-foreground h-dvh flex flex-col antialiased"
         style={brandThemeStyle}
       >
-        <div className="app-backdrop" aria-hidden="true"><span /><span /><span /></div>
+        <div className="app-backdrop" aria-hidden="true"></div>
         <AppProviders>
           <LocalModeBanner />
           <div className="flex min-h-0 flex-1 flex-col">

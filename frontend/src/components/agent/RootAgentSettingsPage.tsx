@@ -56,7 +56,7 @@ type Section = (typeof sections)[number];
 
 const endpoint = "/api/proxy/api/admin/platform-config";
 
-export function RootAgentSettingsPage() {
+export function RootAgentSettingsPage({ initialSection = "overview" }: { initialSection?: Section } = {}) {
   const { user, loading } = useAuth();
   if (loading)
     return (
@@ -65,10 +65,10 @@ export function RootAgentSettingsPage() {
       </Centered>
     );
   if (!user) return <SignInRequired />;
-  return <RootAgentSettingsInner />;
+  return <RootAgentSettingsInner initialSection={initialSection} />;
 }
 
-function RootAgentSettingsInner() {
+function RootAgentSettingsInner({ initialSection }: { initialSection: Section }) {
   const { locale } = useI18n();
   const t = (
     key: Parameters<typeof translate>[1],
@@ -81,7 +81,7 @@ function RootAgentSettingsInner() {
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [models, setModels] = useState<ModelInfo[]>([]);
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useState<Section>(initialSection);
   const [loadingData, setLoadingData] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [loadError, setLoadError] = useState(false);

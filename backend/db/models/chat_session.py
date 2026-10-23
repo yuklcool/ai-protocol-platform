@@ -37,6 +37,9 @@ class ChatSessionIndex(BaseModel):
     first_message_at: datetime = Field(alias="firstMessageAt")
     last_message_at: datetime = Field(alias="lastMessageAt")
     archived_at: datetime | None = Field(default=None, alias="archivedAt")
+    task_status: str = Field(default="unplanned", alias="taskStatus")
+    task_title: str | None = Field(default=None, alias="taskTitle")
+    task_progress: dict[str, int] | None = Field(default=None, alias="taskProgress")
     transcript_lost: bool = Field(default=False, alias="transcriptLost")
 
     model_config = ConfigDict(populate_by_name=True)

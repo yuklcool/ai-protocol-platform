@@ -290,6 +290,7 @@ jobs:
           node --check frontend/e2e/session-search-live.spec.js
           node --check frontend/e2e/in-chat-execution.spec.js
           node --check frontend/e2e/task-plan-live.spec.js
+          node --check frontend/e2e/v3-workspace-live.spec.js
 
       - name: Validate Compose model
         run: docker compose config --quiet
@@ -346,7 +347,7 @@ jobs:
           MODEL_STUDIO_E2E_RUN_ID: studio-${{ github.run_id }}
           MODEL_STUDIO_FRONTEND_URL: http://localhost:3456
           MODEL_STUDIO_BACKEND_URL: http://127.0.0.1:1956
-        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/model-setup-live.spec.js e2e/chat-files-live.spec.js e2e/ui-responsive-live.spec.js e2e/session-search-live.spec.js e2e/in-chat-execution.spec.js e2e/task-plan-live.spec.js --reporter=line --workers=1
+        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/model-setup-live.spec.js e2e/chat-files-live.spec.js e2e/ui-responsive-live.spec.js e2e/session-search-live.spec.js e2e/in-chat-execution.spec.js e2e/task-plan-live.spec.js e2e/v3-workspace-live.spec.js --reporter=line --workers=1
 
       - name: Preserve model Root and Skill browser evidence
         if: always()

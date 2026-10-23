@@ -48,5 +48,10 @@ register(
         "title": result["task_plan"]["title"],
         "placement": "chat",
         "displayOnly": True,
+        "completedSummary": (
+            f"已完成 · {len(result['task_plan']['steps'])} 个步骤 · 展开计划"
+            if all(step["status"] == "completed" for step in result["task_plan"]["steps"])
+            else None
+        ),
     },
 )

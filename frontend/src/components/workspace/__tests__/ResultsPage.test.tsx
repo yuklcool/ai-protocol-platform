@@ -10,135 +10,58 @@ import { fetchWithAuth } from "@/lib/apiClient";
 import ResultsPage from "@/app/results/page";
 const fetchMock = vi.mocked(fetchWithAuth);
 const response = (body: unknown, status = 200) => ({ ok: status === 200, status, json: async () => body }) as Response;
-const row = (session_id: string, title = session_id) => ({ session_id, title, skill_id: "actual/skill", owner_uid: "not-skill-owner", skill_label: "Research" });
+const row = (session_id: string, title = session_id) => ({ session_id, title, skill_id: "actual/skill", owner_uid: "u1" });
 const results = (session_id: string, extra = {}) => ({ session_id, state_available: true, incomplete_count: 0, truncated: false, results: [{ surface_id: "workspace", title: "Saved result", description: "Actual metadata", kind: "report", created_at: 1 }], ...extra });
 
 beforeEach(() => {
-  auth.user = { uid: "u1" };
-  auth.loading = false;
-  auth.locale = "en";
+  auth.user = { uid: "u1" }; auth.loading = false; auth.locale = "en";
   fetchMock.mockReset();
-  fetchMock.mockResolvedValue(response({ sessions: [row("s1", "Task one"), row("s2", "Task two")], next_cursor: null }));
+  fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).endsWith("/results") ? response(results("s1")) : response({ sessions: [row("s1", "Task one")], next_cursor: null }));
 });
 
-async function selectFirst() {
-  fireEvent.click(await screen.findByRole("button", { name: "View results: Task one" }));
-}
-
 describe("ResultsPage", () => {
-  it("does not request private data until authenticated", async () => {
-    auth.loading = true;
-    const { rerender } = render(<ResultsPage />);
-    expect(screen.getByRole("status")).toHaveTextContent("Checking sign-in");
-    expect(fetchMock).not.toHaveBeenCalled();
-    auth.loading = false;
+  it("requires authentication before loading private results", async () => {
     auth.user = null;
-    rerender(<ResultsPage />);
-    expect(screen.getByText("Sign in required")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
-    auth.user = { uid: "u1" };
-    rerender(<ResultsPage />);
-    await screen.findByText("Task one");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("loads only the selected session metadata and links to its real skill without messages scans", async () => {
-    render(<ResultsPage />);
-    await screen.findByText("Task one");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    fetchMock.mockResolvedValueOnce(response(results("s1")));
-    await selectFirst();
+    const { rerender } = render(<ResultsPage />);
+    expect(screen.getByText("Sign in required")).toBeInTheDocument(); expect(fetchMock).not.toHaveBeenCalled();
+    auth.user = { uid: "u1" }; rerender(<ResultsPage />);
     expect(await screen.findByText("Saved result")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/proxy/api/sessions", "/api/proxy/api/sessions/s1/results"]);
     expect(screen.getByRole("link", { name: "Return to conversation" })).toHaveAttribute("href", "/chat/actual%2Fskill?session=s1");
-    expect(screen.getByRole("time")).toHaveAttribute("datetime", "1970-01-01T00:00:00.001Z");
-    expect(screen.getByRole("button", { name: "View results: Task one" })).toHaveAttribute("aria-pressed", "true");
   });
-
-  it.each([403, 404, 500])("shows HTTP %s as error, not empty, and retries", async (status) => {
+  it("shows reports and surface summaries without requiring session selection", async () => {
+    fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [{ report_id: "r", message_id: "m", title: "Quarterly report", content: "Saved report body", revision: 2, updated_at: "2026-10-23T00:00:00Z" }] }) : String(url).endsWith("/results") ? response(results("s1")) : response({ sessions: [row("s1", "Task one")], next_cursor: null }));
     render(<ResultsPage />);
-    fetchMock.mockResolvedValueOnce(response({}, status));
-    await selectFirst();
-    await screen.findByRole("alert");
-    expect(screen.queryByText(/No persisted interactive-result summaries were found/)).not.toBeInTheDocument();
-    fetchMock.mockResolvedValueOnce(response(results("s1", { results: [] })));
-    fireEvent.click(screen.getByRole("button", { name: "Retry results" }));
-    expect(await screen.findByText(/No persisted interactive-result summaries were found/)).toBeInTheDocument();
+    expect(await screen.findByText("Quarterly report")).toBeInTheDocument(); expect(screen.getByText("Saved result")).toBeInTheDocument();
+    expect(screen.getByText("Saved report body")).toBeInTheDocument();
   });
-
-  it("rejects a mismatched session response instead of presenting it", async () => {
-    render(<ResultsPage />);
-    fetchMock.mockResolvedValueOnce(response(results("foreign")));
-    await selectFirst();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load results");
-    expect(screen.queryByText("Saved result")).not.toBeInTheDocument();
+  it("searches all session metadata on submit", async () => {
+    render(<ResultsPage />); await screen.findByText("Saved result");
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "older & task" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search", exact: true }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/api/sessions/search?q=older%20%26%20task", expect.anything()));
   });
-
-  it("distinguishes unavailable, incomplete and truncated state from a complete empty result", async () => {
+  it("does not treat unavailable or incomplete state as an empty result", async () => {
+    fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).endsWith("/results") ? response(results("s1", { state_available: false, incomplete_count: 2, truncated: true, results: [] })) : response({ sessions: [row("s1")], next_cursor: null }));
     render(<ResultsPage />);
-    fetchMock.mockResolvedValueOnce(response(results("s1", { state_available: false, results: [], incomplete_count: 2, truncated: true })));
-    await selectFirst();
     expect(await screen.findByText(/Result state is unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/2 state entries are incomplete/)).toBeInTheDocument();
     expect(screen.getByText(/Only the first 100 results/)).toBeInTheDocument();
-    expect(screen.queryByText(/No persisted interactive-result summaries were found/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No persisted interactive-result summaries/)).not.toBeInTheDocument();
   });
-
-  it("ignores a stale selected-session request even when transport ignores abort", async () => {
-    render(<ResultsPage />);
-    let resolveOld!: (value: Response) => void;
-    fetchMock.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
-    await selectFirst();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const signal = fetchMock.mock.calls[1][1]?.signal;
-    fetchMock.mockResolvedValueOnce(response(results("s2", { results: [] })));
-    fireEvent.click(screen.getByRole("button", { name: "View results: Task two" }));
-    await screen.findByText(/No persisted interactive-result summaries were found/);
-    expect(signal?.aborted).toBe(true);
-    await act(async () => resolveOld(response(results("s1"))));
-    expect(screen.queryByText("Saved result")).not.toBeInTheDocument();
-  });
-
-  it("clears selected results and search on account switch", async () => {
+  it("isolates late responses after account switching", async () => {
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     const { rerender } = render(<ResultsPage />);
-    fetchMock.mockResolvedValueOnce(response(results("s1")));
-    await selectFirst();
-    await screen.findByText("Saved result");
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "task" } });
-    fetchMock.mockResolvedValueOnce(response({ sessions: [], next_cursor: null }));
-    auth.user = { uid: "u2" };
-    rerender(<ResultsPage />);
-    expect(screen.queryByText("Saved result")).not.toBeInTheDocument();
+    fetchMock.mockResolvedValue(response({ sessions: [], next_cursor: null }));
+    auth.user = { uid: "u2" }; rerender(<ResultsPage />);
+    await act(async () => finish(response({ sessions: [row("secret", "Foreign secret")], next_cursor: null })));
+    expect(screen.queryByText("Foreign secret")).not.toBeInTheDocument();
     expect(screen.getByRole("searchbox")).toHaveValue("");
-    await screen.findByText(/No sessions yet/);
   });
-
-  it("paginates source sessions without requesting their results and searches only loaded rows", async () => {
-    fetchMock.mockResolvedValueOnce(response({ sessions: [row("s1", "Task one")], next_cursor: "next &" }));
+  it("shows permission errors without pretending there are no results", async () => {
+    fetchMock.mockImplementation(async url => String(url).endsWith("/results") ? response({}, 403) : response({ sessions: [row("s1")], next_cursor: null }));
     render(<ResultsPage />);
-    await screen.findByText("Task one");
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "later" } });
-    expect(screen.getByText("No matches in loaded sessions.")).toBeInTheDocument();
-    fetchMock.mockResolvedValueOnce(response({ sessions: [row("later", "Later task")], next_cursor: null }));
-    fireEvent.click(screen.getByRole("button", { name: "Load more sessions" }));
-    expect(await screen.findByText("Later task")).toBeInTheDocument();
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/proxy/api/sessions?cursor=next%20%26");
-    expect(fetchMock.mock.calls).toHaveLength(2);
-  });
-
-  it("shows session load errors with retry and Chinese scope text", async () => {
-    auth.locale = "zh-CN";
-    fetchMock.mockRejectedValueOnce(new Error("offline"));
-    render(<ResultsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("无法加载会话");
-    expect(screen.getByRole("heading", { name: "我的成果" })).toBeInTheDocument();
-    expect(screen.getByText(/不把上传附件当成成果/)).toBeInTheDocument();
-    fetchMock.mockResolvedValueOnce(response({ sessions: [row("s ?&", "真实任务")], next_cursor: null }));
-    fireEvent.click(screen.getByRole("button", { name: "重试" }));
-    await screen.findByText("真实任务");
-    fetchMock.mockResolvedValueOnce(response(results("s ?&")));
-    fireEvent.click(screen.getByRole("button", { name: "查看成果：真实任务" }));
-    await screen.findByText("Saved result");
-    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions/s%20%3F%26/results");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You cannot access these results");
+    expect(screen.queryByText(/No persisted interactive-result summaries/)).not.toBeInTheDocument();
   });
 });

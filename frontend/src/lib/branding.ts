@@ -82,7 +82,7 @@ export const BRANDING: Branding = {
       "https://github.com/yuklcool/ai-protocol-platform",
   },
   theme: {
-    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "253 32% 43%",
+    primaryHsl: process.env.NEXT_PUBLIC_BRAND_PRIMARY_HSL || "210 100% 40%",
     primaryForegroundHsl:
       process.env.NEXT_PUBLIC_BRAND_PRIMARY_FOREGROUND_HSL || "0 0% 100%",
   },
@@ -96,9 +96,9 @@ export const BRANDING: Branding = {
       "Run Skills, AG-UI, A2UI and MCP Apps on a self-hosted platform.",
     ctaPrimary: BRAND_COPY_OVERRIDES.ctaPrimary || "Open the assistant",
     ctaSecondary: BRAND_COPY_OVERRIDES.ctaSecondary || "Explore skills",
-    chatHref: process.env.NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF || "/",
+    chatHref: process.env.NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF || "/chat/root-agent",
     chatHrefSecondary:
-      process.env.NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF_SECONDARY || "/",
+      process.env.NEXT_PUBLIC_BRAND_DEMO_CHAT_HREF_SECONDARY || "/skills",
     techHref: process.env.NEXT_PUBLIC_BRAND_DEMO_TECH_HREF || "",
     // Keys stay stable so the i18n layer can translate the visible labels.
     pillars: [
