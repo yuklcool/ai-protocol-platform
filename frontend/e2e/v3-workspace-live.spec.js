@@ -29,6 +29,8 @@ test("v3 任务筛选、报告编辑恢复、授权下载和配置向导", async
   const errors = []; page.on("pageerror", error => errors.push(error.message));
   try {
     await page.goto(`${FRONTEND}/workspace`);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--primary").trim())).toBe("210 100% 40%");
+    expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("-apple-system");
     await page.getByRole("button", { name: "待确认 / 补充", exact: true }).click();
     await expect(page.getByRole("heading", { name: source, exact: true })).toBeVisible();
     await page.goto(`${FRONTEND}/results`);

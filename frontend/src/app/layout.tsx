@@ -24,10 +24,9 @@ const brandThemeStyle = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang={DEFAULT_LOCALE}>
+    <html lang={DEFAULT_LOCALE} style={brandThemeStyle}>
       <body
         className="font-sans text-foreground h-dvh flex flex-col antialiased"
-        style={brandThemeStyle}
       >
         <div className="app-backdrop" aria-hidden="true"></div>
         <AppProviders>
