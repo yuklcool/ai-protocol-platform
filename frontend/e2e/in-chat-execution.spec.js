@@ -78,7 +78,11 @@ test("消息流中的真实组件、活动更新、确认防重与三档布局�
     expect(await originalCard.evaluate((element) => element.isConnected)).toBe(true);
     expect(requests[1].forwardedProps.a2ui_action.action.name).toBe("confirm_scope");
     await expect(page.locator("[data-execution-id]")).toHaveCount(2);
-    await expect(card.locator("fieldset")).toBeDisabled();
+    // Playwright's disabled matcher targets controls, not fieldset itself.
+    // Assert the native group lock AND its inherited effect on both controls.
+    await expect(card.locator("fieldset")).toHaveAttribute("disabled", "");
+    await expect(input).toBeDisabled();
+    await expect(card.getByRole("button", { name: "确认继续", exact: true })).toBeDisabled();
     for (const width of [1440, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(composer).toBeVisible();
