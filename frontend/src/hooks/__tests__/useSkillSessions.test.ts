@@ -28,6 +28,25 @@ afterEach(() => {
 });
 
 describe("useSkillSessions", () => {
+  it("搜索翻页编码并保留条件，切换查询取消旧页且不混入新结果", async () => {
+    mockOk([{ session_id: "old" }], "old-cursor");
+    let resolveOld!: (response: unknown) => void;
+    mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    mockOk([{ session_id: "new" }], "new-cursor");
+    const { result, rerender } = renderHook(({ q }) => useSkillSessions(null, { query: q }), { initialProps: { q: "照明 /&" } });
+    await waitFor(() => expect(result.current.nextCursor).toBe("old-cursor"));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(mockFetch.mock.calls[1][0]).toBe(`/api/proxy/api/sessions/search?q=${encodeURIComponent("照明 /&")}&cursor=old-cursor`);
+    const oldSignal = mockFetch.mock.calls[1][1].signal as AbortSignal;
+    rerender({ q: "new" });
+    expect(oldSignal.aborted).toBe(true);
+    await waitFor(() => expect(result.current.sessions[0]?.session_id).toBe("new"));
+    await act(async () => resolveOld({ ok: true, json: async () => ({ sessions: [{ session_id: "stale" }], next_cursor: "stale-cursor" }) }));
+    expect(result.current.sessions.map((row) => row.session_id)).toEqual(["new"]);
+    expect(result.current.nextCursor).toBe("new-cursor");
+  });
+
   // 2026-08-05: this list became CROSS-SKILL. Switching agent via the top bar
   // starts a new session on the new skill, so scoping history to the current
   // skill showed only the fragment for whichever agent the user was standing

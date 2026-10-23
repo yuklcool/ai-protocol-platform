@@ -18,6 +18,7 @@ from typing import Any, TypeVar
 
 from db.repositories._document_ops import apply_query
 from db.repository import Filter
+from db.session_search import Position, SessionSearch
 
 _T = TypeVar("_T")
 
@@ -47,6 +48,41 @@ class _LoopRunner:
 
 
 class PostgresRepository:
+    def search_chat_sessions(
+        self, search: SessionSearch, *, after: Position | None, limit: int
+    ) -> list[dict[str, Any]]:
+        async def op():
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT doc_id, data FROM platform_documents
+                    WHERE collection = 'chat_sessions'
+                      AND data @> jsonb_build_object('ownerUid', $1::text)
+                      AND data->>'archivedAt' IS NULL
+                      AND COALESCE(data->>'provisional', 'false') != 'true'
+                      AND ($2::text IS NULL OR data->>'skillId' = $2)
+                      AND ($3::text = '' OR strpos(lower(COALESCE(data->>'title', '')), $3) > 0
+                           OR strpos(lower(doc_id), $3) > 0)
+                      AND ($4::timestamptz IS NULL OR (data->>'lastMessageAt')::timestamptz >= $4)
+                      AND ($5::timestamptz IS NULL OR (data->>'lastMessageAt')::timestamptz < $5)
+                      AND ($6::timestamptz IS NULL OR
+                           ((data->>'lastMessageAt')::timestamptz, doc_id COLLATE "C") < ($6, $7::text COLLATE "C"))
+                    ORDER BY (data->>'lastMessageAt')::timestamptz DESC, doc_id COLLATE "C" DESC
+                    LIMIT $8
+                    """,
+                    search.owner_uid,
+                    search.skill_id,
+                    search.query,
+                    search.updated_after,
+                    search.updated_before,
+                    after[0] if after else None,
+                    after[1] if after else None,
+                    limit,
+                )
+                return [{**self._decode_json(row["data"]), "__id": row["doc_id"]} for row in rows]
+
+        return self._runner.run(op())
+
     def __init__(self, database_url: str) -> None:
         if not database_url:
             raise ValueError("DATABASE_URL is required when DATA_BACKEND=postgres")
