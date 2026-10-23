@@ -15,7 +15,7 @@ it("loads persisted content, saves the expected revision and shows confirmation"
   fireEvent.click(screen.getByRole("button", { name: "Edit & save report" }));
   expect(await screen.findByDisplayValue("Existing text")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Report content"), { target: { value: "Edited text" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save report", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Save report" }));
   expect(await screen.findByRole("status")).toHaveTextContent("Report saved");
   const request = JSON.parse(api.mock.calls[1][1].body);
   expect(request).toEqual({ message_id: "m", title: "Existing title", content: "Edited text", expected_revision: 3 });
@@ -26,7 +26,7 @@ it("preserves the draft on a concurrent save conflict", async () => {
   api.mockResolvedValueOnce({ ok: false, status: 409 });
   render(<ReportEditor sessionId="s" messageId="m" content="Draft" />);
   fireEvent.click(screen.getByRole("button", { name: "Edit & save report" }));
-  const save = await screen.findByRole("button", { name: "Save report", exact: true });
+  const save = await screen.findByRole("button", { name: "Save report" });
   await waitFor(() => expect(save).toBeEnabled());
   fireEvent.click(save);
   expect(await screen.findByRole("alert")).toHaveTextContent("Report changed in another window");

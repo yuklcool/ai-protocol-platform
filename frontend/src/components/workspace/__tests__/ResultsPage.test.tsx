@@ -37,7 +37,7 @@ describe("ResultsPage", () => {
   it("searches all session metadata on submit", async () => {
     render(<ResultsPage />); await screen.findByText("Saved result");
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "older & task" } });
-    fireEvent.click(screen.getByRole("button", { name: "Search", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/api/sessions/search?q=older%20%26%20task", expect.anything()));
   });
   it("does not treat unavailable or incomplete state as an empty result", async () => {

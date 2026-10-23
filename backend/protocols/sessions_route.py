@@ -913,7 +913,13 @@ async def get_session_messages(
     if isinstance(state, Mapping) and idx.owner_uid == ctx.uid:
         from db.task_status import task_projection
 
-        update_session_fields(session_id, task_projection(state))
+        projection = task_projection(state)
+        if (projection["taskStatus"], projection["taskTitle"], projection["taskProgress"]) != (
+            idx.task_status,
+            idx.task_title,
+            idx.task_progress,
+        ):
+            update_session_fields(session_id, projection)
 
     # An index row that recorded turns, with no ADK session behind it, means the
     # transcript is unrecoverable — not that the conversation was empty. Log it
