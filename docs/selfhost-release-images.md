@@ -6,12 +6,12 @@
 
 每个稳定版本发布三个应用镜像，均包含 `linux/amd64`、`linux/arm64`：
 
-两种架构分别在原生 runner 构建和扫描，通过后才合并清单并更新版本及 `latest` 标签。发布失败时，可在主分支运行 `Recover unpublished release`：只恢复已合并、通过同提交门禁且尚未创建 Release 的候选标签；不会重写源码标签或已发布版本。
+两种架构分别在原生 runner 编译构建，成功后直接推送镜像、合并清单并更新版本及 `latest` 标签。发布不等待单元测试、真实 Provider、MCP、A2UI 或浏览器验收。发布失败时，可在主分支运行 `Recover unpublished release`：只恢复已合并且尚未创建 Release 的候选标签；不会重写源码标签或已发布版本。
 
 ```text
-ghcr.io/yuklcool/ai-protocol-platform-backend:v2.0.0
-ghcr.io/yuklcool/ai-protocol-platform-frontend:v2.0.0
-ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox:v2.0.0
+ghcr.io/yuklcool/ai-protocol-platform-backend:v2.2.1
+ghcr.io/yuklcool/ai-protocol-platform-frontend:v2.2.1
+ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox:v2.2.1
 ```
 
 另有精确源码标签 `sha-<完整提交SHA>`。生产使用明确版本，`latest` 不宜作为回滚基线。Compose 中 `BACKEND_IMAGE`、`FRONTEND_IMAGE`、`MCP_SANDBOX_IMAGE` 是镜像仓库名，统一由 `APP_VERSION` 追加标签，不要在这三个变量后重复填写标签。
@@ -21,14 +21,14 @@ ghcr.io/yuklcool/ai-protocol-platform-mcp-sandbox:v2.0.0
 ```bash
 mkdir -p ai-protocol-platform-deploy
 cd ai-protocol-platform-deploy
-release_version=v2.0.0
+release_version=v2.2.1
 curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/docker-compose.release.yml" -o docker-compose.release.yml
 curl -fL "https://github.com/yuklcool/ai-protocol-platform/releases/download/${release_version}/default.env.selfhost.example" -o .env
 chmod 600 .env
 openssl rand -base64 48
 ```
 
-Release 资产名为 `default.env.selfhost.example`，保存为 `.env`；仓库源文件仍为 `.env.selfhost.example`。发布资产已固定 `APP_VERSION=v2.0.0`。
+Release 资产名为 `default.env.selfhost.example`，保存为 `.env`；仓库源文件仍为 `.env.selfhost.example`。发布资产已固定 `APP_VERSION=v2.2.1`。
 
 编辑 JWT 密钥、首次管理员、数据库密码及匹配连接串、模型密钥和浏览器源，然后启动：
 
@@ -81,8 +81,10 @@ docker compose -f docker-compose.release.yml up -d
 
 应用回退时恢复旧 `APP_VERSION` 再执行同样命令。若 schema 不兼容，还需恢复匹配的数据库和对象备份。本次改造不提供 ownership journal 或旧组织数据迁移工具。详见[完整升级流程](configuration-guide.md#7-旧部署升级)。
 
-## 6. 发布验收范围
+## 6. 编译构建与发布规则
 
-v2.0.0 发布门禁包含同提交的用户归属、模型 Provider、MCP、A2UI、PostgreSQL、镜像构建、漏洞扫描、匿名拉取和全新启动验证。正式 Release 在这些检查通过后创建。
+发布链路为：校验版本与源码归属 → 原生 AMD64/ARM64 编译构建 → 推送镜像与合并标签 → 创建 Release 和部署资产。编译或镜像推送失败会停止发布；发布无需模型 API 密钥、浏览器或已通过的其他工作流。
 
-旧数据直接清理的行为由 `002_user_owned_reset.sql` 和真实 PostgreSQL 集成测试验证。发布不会访问或自动重启用户的运行中服务器；目标主机拉取并启动新版本时才执行数据库升级。
+功能、协议和浏览器验收由各自独立工作流执行，不作为镜像发布依赖。镜像漏洞扫描、匿名拉取及冷启动在镜像发布后独立执行，结果仅供查看，不阻塞版本和 Release 发布。构建成功表示镜像可生成与推送，不等于功能或目标部署已验收。
+
+发布不会访问或自动重启用户的运行中服务器；目标主机拉取并启动新版本时才执行数据库升级。

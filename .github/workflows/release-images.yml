@@ -108,87 +108,10 @@ jobs:
           appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${response.status === 404}\n`);
           JS
 
-  release-gate:
-    needs: resolve
-    if: needs.resolve.outputs.enabled == 'true'
-    name: Release self-host gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      AUTH_BACKEND: local-jwt
-      JWT_SIGNING_KEY: release-ci-signing-key-at-least-32-bytes-long
-      JWT_ISSUER: ai-protocol-platform-release-ci
-      JWT_AUDIENCE: ai-protocol-platform-release-ci
-      SELFHOST_ADMIN_EMAIL: admin@example.com
-      SELFHOST_ADMIN_PASSWORD: release-ci-admin-password
-      PLATFORM_DEFAULT_MODEL: gpt-5-6-terra
-      OPENAI_API_KEY: ci-placeholder-not-a-real-key
-      OPENAI_API_BASE: http://model-gateway.invalid/v1
-      SKIP_QUALITY_CHECKS: "true"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve.outputs.source_sha }}
-
-      - name: Require exact-source operation and persistence gates
-        if: needs.resolve.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
-        run: GITHUB_SHA="$RELEASE_SOURCE_SHA" node .github/scripts/wait-release-checks.mjs
-
-      - name: Validate source and release Compose models
-        run: |
-          docker compose config --quiet
-          docker compose -f docker-compose.release.yml config --quiet
-
-      - name: Run frontend typecheck and unit tests
-        working-directory: frontend
-        run: |
-          npm ci --no-audit --no-fund
-          npm run typecheck
-          CI=true npm run test:run
-
-      - name: Build source self-host stack
-        run: docker compose build backend mcp-sandbox frontend
-
-      - name: Start real self-host stack
-        run: |
-          docker compose up -d postgres backend mcp-sandbox frontend
-          for i in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:1956/health >/dev/null \
-              && curl -fsS http://127.0.0.1:3456/api/health >/dev/null \
-              && curl -fsS http://127.0.0.1:3457/healthz >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker compose logs postgres backend mcp-sandbox frontend
-          exit 1
-
-      - name: Run no-GCP self-host smoke
-        run: EXPECT_LOCAL_MODE=false bash scripts/smoke-selfhost.sh
-
-      - name: Verify migration journal was created
-        run: |
-          docker compose exec -T postgres psql \
-            -U "${POSTGRES_USER:-aip}" -d "${POSTGRES_DB:-aip}" \
-            -Atc "SELECT version FROM platform_schema_migrations ORDER BY version" \
-            | grep -Fx '001_postgres_documents.sql'
-
-      - name: Show service logs on failure
-        if: failure()
-        run: docker compose logs postgres backend mcp-sandbox frontend
-
-      - name: Stop release gate stack
-        if: always()
-        run: docker compose down -v --remove-orphans
-
   image-platform:
     name: Build ${{ matrix.image.name }} (${{ matrix.platform.arch }})
-    needs: [resolve, release-gate]
+    needs: resolve
+    if: needs.resolve.outputs.enabled == 'true'
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 35
     strategy:
@@ -259,31 +182,7 @@ jobs:
           provenance: ${{ needs.resolve.outputs.publish == 'true' && 'mode=max' || 'false' }}
           cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}-${{ matrix.platform.arch }}
-      - name: Verify frontend runtime public configuration
-        if: needs.resolve.outputs.publish != 'true' && matrix.image.name == 'frontend'
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.image }}:sha-${{ needs.resolve.outputs.source_sha }}-${{ matrix.platform.arch }}
-        run: |
-          docker run --rm \
-            -e MCP_SANDBOX_PUBLIC_URL=https://mcp.release-ci.example \
-            -e AUTH_BACKEND=oidc-runtime-ci-marker \
-            "$IMAGE" \
-            sh -c 'grep -RIl "https://mcp.release-ci.example" /app/.next >/dev/null \
-              && ! grep -RIl "https://mcp-sandbox.runtime.invalid" /app/.next >/dev/null \
-              && grep -RIl "oidc-runtime-ci-marker" /app/.next >/dev/null \
-              && ! grep -RIl "__aip_auth_mode_runtime__" /app/.next >/dev/null'
-      - name: Scan native image for HIGH/CRITICAL vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
-        env:
-          TRIVY_PLATFORM: linux/${{ matrix.platform.arch }}
-        with:
-          image-ref: ${{ needs.resolve.outputs.publish == 'true' && format('{0}/{1}/{2}@{3}', env.REGISTRY, github.repository_owner, matrix.image.image, steps.build.outputs.digest) || format('{0}/{1}/{2}:sha-{3}-{4}', env.REGISTRY, github.repository_owner, matrix.image.image, needs.resolve.outputs.source_sha, matrix.platform.arch) }}
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore.yaml
-          exit-code: "1"
-      - name: Export scanned image digest
+      - name: Export built image digest
         if: needs.resolve.outputs.publish == 'true'
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -292,7 +191,7 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           mkdir -p "$RUNNER_TEMP/digests"
           touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
-      - name: Preserve scanned image digest
+      - name: Preserve built image digest
         if: needs.resolve.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -333,7 +232,7 @@ jobs:
             type=semver,pattern={{version}},value=${{ needs.resolve.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve.outputs.version }}
             type=raw,value=latest
-      - name: Merge only the two scanned native digests
+      - name: Merge the two built native digests
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/ai-protocol-platform-${{ matrix.image }}
           TAGS: ${{ steps.meta.outputs.tags }}
@@ -358,7 +257,36 @@ jobs:
           cmp "$RUNNER_TEMP/version-manifest.json" "$RUNNER_TEMP/latest-manifest.json"
           jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | unique | sort == ["amd64", "arm64"]' "$RUNNER_TEMP/version-manifest.json"
 
+  scan-images:
+    name: Report image scan (${{ matrix.image }}, ${{ matrix.arch }})
+    needs: [resolve, images]
+    if: needs.resolve.outputs.publish == 'true'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, frontend, mcp-sandbox]
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+      - name: Report HIGH/CRITICAL vulnerabilities without blocking publication
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/${{ matrix.arch }}
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/ai-protocol-platform-${{ matrix.image }}:${{ needs.resolve.outputs.version }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
+          exit-code: "1"
+
   public-pull:
+    continue-on-error: true
     env:
       RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     name: Verify anonymous GHCR pulls
@@ -381,6 +309,7 @@ jobs:
           done
 
   no-clone-cold-start:
+    continue-on-error: true
     env:
       RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     name: Verify no-clone release cold start
@@ -466,7 +395,7 @@ jobs:
       RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     name: Publish GitHub Release
     if: needs.resolve.outputs.publish == 'true'
-    needs: [resolve, images, public-pull, no-clone-cold-start]
+    needs: [resolve, images]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

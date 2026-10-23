@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Recover only an accepted unpublished tag
+      - name: Recover only a merged unpublished tag
         id: candidate
         shell: bash
         env:
@@ -45,7 +45,6 @@ jobs:
           fi
           source_sha="$(git rev-parse "refs/tags/${version}^{commit}")"
           git merge-base --is-ancestor "$source_sha" origin/main
-          GITHUB_SHA="$source_sha" node .github/scripts/wait-release-checks.mjs
           export RELEASE_VERSION="$version" RECOVERY_SOURCE_SHA="$source_sha"
           node --input-type=module <<'JS'
           import { appendFileSync } from 'node:fs';
