@@ -175,6 +175,7 @@ describe("useActionDrivenAgent", () => {
     ).toBe("application/json");
     const body = JSON.parse(init?.body as string);
     expect(body).toEqual({
+      requestId: expect.any(String),
       surfaceId: "workspace",
       action: {
         name: "increment",
@@ -573,10 +574,10 @@ describe("useActionDrivenAgent", () => {
     const { result } = renderHook(() =>
       useActionDrivenAgent({ skillId: "s", sessionId: "sess-1", activitySink: sink }),
     );
-    await expect(result.current.triggerAction("workspace", { name: "click" })).rejects.toThrow("before the action completed");
+    await expect(result.current.triggerAction("workspace", { name: "click" })).rejects.toThrow("before completion was confirmed");
     expect(sink.onRunStart).toHaveBeenCalledOnce();
     expect(sink.onRunSettled).toHaveBeenCalledOnce();
-    expect(sink.onRunSettled).toHaveBeenCalledWith({ error: expect.stringContaining("before the action completed") });
+    expect(sink.onRunSettled).toHaveBeenCalledWith({ error: expect.stringContaining("before completion was confirmed") });
   });
 
   it("no activitySink: hook still works (backward compatible)", async () => {
