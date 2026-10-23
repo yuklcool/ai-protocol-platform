@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSkillSessions, type ChatSessionSummary } from "@/hooks/useSkillSessions";
 import { WorkspaceGate } from "@/components/workspace/WorkspaceGate";
@@ -39,6 +39,7 @@ function isResults(value: unknown, sessionId: string): value is SessionResults {
 
 function ResultsDetails({ session }: { session: ChatSessionSummary }) {
   const { locale } = useI18n();
+  const headingId = useId();
   const zh = locale.startsWith("zh");
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [data, setData] = useState<SessionResults | null>(null);
@@ -74,9 +75,9 @@ function ResultsDetails({ session }: { session: ChatSessionSummary }) {
   }, [session.session_id, revision]);
   const title = session.title || (zh ? "未命名会话" : "Untitled session");
   return (
-    <section aria-labelledby="selected-results-title" aria-busy={loading} className="glass-panel min-w-0 space-y-4 p-5 sm:p-6">
+    <section aria-labelledby={headingId} aria-busy={loading} className="glass-panel min-w-0 space-y-4 p-5 sm:p-6">
       <header className="space-y-2">
-        <h2 id="selected-results-title" className="break-words text-xl font-semibold">{title}</h2>
+        <h2 id={headingId} className="break-words text-xl font-semibold">{title}</h2>
 
         <div className="flex flex-wrap gap-3">
           <Link href={sessionHref(session)} className="button-primary inline-flex items-center px-4 py-2">{zh ? "返回原对话" : "Return to conversation"}</Link>

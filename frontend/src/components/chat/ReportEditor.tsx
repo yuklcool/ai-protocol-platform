@@ -19,6 +19,7 @@ export function ReportEditor({ sessionId, messageId, content, initialReport }: {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const hasChanges = loaded && (draft !== (report?.content ?? content) || title !== (report?.title ?? (zh ? "任务报告" : "Task report")));
   const endpoint = `/api/proxy/api/sessions/${encodeURIComponent(sessionId)}/reports`;
   useEffect(() => {
     if (!open) return;
@@ -57,7 +58,7 @@ export function ReportEditor({ sessionId, messageId, content, initialReport }: {
   };
   if (!open) return <button type="button" className="button-ghost text-xs" onClick={() => setOpen(true)}><FileText className="h-4 w-4" />{zh ? "编辑并保存报告" : "Edit & save report"}</button>;
   return <section className="report-editor space-y-3" aria-label={zh ? "报告编辑器" : "Report editor"}>
-    <header className="flex flex-wrap items-center justify-between gap-2"><h3>{zh ? "任务报告" : "Task report"}</h3><button type="button" className="button-ghost" disabled={busy} onClick={() => { if (draft === (report?.content ?? content) || window.confirm(zh ? "关闭后放弃未保存修改？" : "Discard unsaved changes?")) setOpen(false); }} aria-label={zh ? "关闭报告编辑器" : "Close report editor"}><X className="h-4 w-4" /></button></header>
+    <header className="flex flex-wrap items-center justify-between gap-2"><h3>{zh ? "任务报告" : "Task report"}</h3><button type="button" className="button-ghost" disabled={busy} onClick={() => { if (!hasChanges || window.confirm(zh ? "关闭后放弃未保存修改？" : "Discard unsaved changes?")) setOpen(false); }} aria-label={zh ? "关闭报告编辑器" : "Close report editor"}><X className="h-4 w-4" /></button></header>
     <label className="block text-xs font-medium" htmlFor={`${id}-title`}>{zh ? "报告名称" : "Report title"}</label>
     <input id={`${id}-title`} className="glass-control w-full px-3" maxLength={200} value={title} disabled={!loaded || busy} onChange={event => { setTitle(event.target.value); setSaved(false); }} />
     <label className="block text-xs font-medium" htmlFor={`${id}-body`}>{zh ? "报告正文" : "Report content"}</label>

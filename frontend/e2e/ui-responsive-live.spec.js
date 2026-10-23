@@ -44,6 +44,7 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
         await expect(page.locator("main").first()).toBeVisible();
         if(route === "/chat/root-agent") await expect(page.locator("textarea").first()).toBeVisible();
         else await expect(page.getByRole("heading", {level:1}).first()).toBeVisible();
+        if(route === "/setup") await expect(page.getByRole("button", {name:"添加模型服务",exact:true})).toBeVisible();
         if(route === "/admin/audit") {
           const table=page.getByRole("table");
           await expect(table.or(page.getByRole("heading",{name:"暂无审计记录",exact:true}))).toBeVisible();
