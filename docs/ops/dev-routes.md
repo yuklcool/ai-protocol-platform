@@ -10,8 +10,6 @@ Run `make dev` from the repo root to bring up the stack
 
 | Route | Purpose | Backend needed | Sandbox needed |
 |---|---|---|---|
-| [`/dev/file-browser`](http://localhost:3456/dev/file-browser) | File browser smoke (1A.4 / file-browser.md) | yes (lists docs from Firestore) | no |
-| [`/dev/rich-media`](http://localhost:3456/dev/rich-media) | Rich-media chat-render smoke (1.3 / rich-media-rendering.md) | no (fixtures) | no |
 | [`/dev/mcp-apps`](http://localhost:3456/dev/mcp-apps) | MCP Apps integration index — links to passive + active sub-routes (1.7 M3) | no (fixtures) | yes (for the iframe to load) |
 | [`/dev/mcp-apps/passive`](http://localhost:3456/dev/mcp-apps/passive) | Mounts MCPAppToolCallRouter with the captured ext-apps map-server fixture; no `onChatMessage` bridge | no | yes |
 | [`/dev/mcp-apps/active`](http://localhost:3456/dev/mcp-apps/active) | Full active iframe → host bridge + button panel that synthesises common notifications + adapter log | no (button panel works without backend) | yes (for the iframe; not the buttons) |

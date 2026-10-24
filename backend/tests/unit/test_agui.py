@@ -1,10 +1,8 @@
-"""Unit tests for protocols.agui.mount_skill_endpoint.
+"""Regression tests for the production adk.agui.build_agui_adk_agent bridge.
 
-Verifies that the AG-UI mount helper wires an ADK agent into a FastAPI
-app at the expected path and with the expected service wiring (the real
-session/memory/artifact backends from adk.session, NOT ag_ui_adk's
-silent InMemory defaults). Does NOT exercise the live agent loop —
-that's covered by tests/api_tests/test_stream_skill.py.
+Keep user identity and durable session settings on the same builder used by
+chat turns and surface-action runs. The live agent loop is covered by
+api_tests/test_stream_skill.py.
 """
 
 from __future__ import annotations
@@ -12,13 +10,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from fastapi import FastAPI
 from google.adk.agents import Agent
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory import InMemoryMemoryService
 from google.adk.sessions import InMemorySessionService
-
-from protocols.agui import mount_skill_endpoint
 
 
 @pytest.fixture
@@ -113,104 +108,6 @@ def test_default_user_id_extractor_diverges_from_firebase_uid(dummy_agent: Agent
     )
 
 
-def test_mount_registers_chat_route(dummy_agent: Agent) -> None:
-    """Endpoint is registered at /api/chat/{skill_id} after mount."""
-    app = FastAPI()
-    mount_skill_endpoint(app, "unit_test", dummy_agent)
-
-    paths = {route.path for route in app.routes}
-    assert "/api/chat/unit_test" in paths, f"expected /api/chat/unit_test in routes, got {paths}"
-
-
-def test_mount_forwards_explicit_services(dummy_agent: Agent) -> None:
-    """When explicit services are provided, they reach ADKAgent — together
-    with use_thread_id_as_session_id=True (AG-UI thread IDs map 1:1 to ADK
-    sessions, see PROTOCOLS-1A5 M1) and use_in_memory_services=True (only
-    matters for the credential service, which has no real backend yet —
-    explicit session/memory/artifact arguments still win because ag_ui_adk
-    does ``provided or InMemoryX()``).
-    """
-    app = FastAPI()
-    session_service = InMemorySessionService()
-    memory_service = InMemoryMemoryService()
-    artifact_service = InMemoryArtifactService()
-
-    with patch("protocols.agui.ADKAgent") as mock_adk_agent:
-        mount_skill_endpoint(
-            app,
-            "with_services",
-            dummy_agent,
-            session_service=session_service,
-            memory_service=memory_service,
-            artifact_service=artifact_service,
-        )
-
-        mock_adk_agent.assert_called_once()
-        kwargs = mock_adk_agent.call_args.kwargs
-        assert kwargs["adk_agent"] is dummy_agent
-        assert kwargs["session_service"] is session_service
-        assert kwargs["memory_service"] is memory_service
-        assert kwargs["artifact_service"] is artifact_service
-        assert kwargs["use_in_memory_services"] is True
-        assert kwargs["use_thread_id_as_session_id"] is True
-        assert kwargs["app_name"] == "aitana_platform"
-
-
-def test_mount_defaults_to_session_singletons(dummy_agent: Agent) -> None:
-    """Without explicit services, mount_skill_endpoint pulls the singletons
-    from adk.session — that's what gets the real Vertex/GCS backends in
-    production. Previously it left these unset and ag_ui_adk silently
-    swapped in InMemory defaults, masking the deployed configuration.
-    """
-    app = FastAPI()
-
-    fake_session = InMemorySessionService()
-    fake_memory = InMemoryMemoryService()
-    fake_artifact = InMemoryArtifactService()
-
-    with (
-        patch("protocols.agui.ADKAgent") as mock_adk_agent,
-        patch("adk.session.get_session_service", return_value=fake_session),
-        patch("adk.session.get_memory_service", return_value=fake_memory),
-        patch("adk.session.get_artifact_service", return_value=fake_artifact),
-    ):
-        mount_skill_endpoint(app, "no_services", dummy_agent)
-
-        kwargs = mock_adk_agent.call_args.kwargs
-        assert kwargs["session_service"] is fake_session
-        assert kwargs["memory_service"] is fake_memory
-        assert kwargs["artifact_service"] is fake_artifact
-        assert kwargs["use_thread_id_as_session_id"] is True
-
-
-def test_mount_respects_custom_app_name(dummy_agent: Agent) -> None:
-    """app_name override flows through to ADKAgent."""
-    app = FastAPI()
-
-    with patch("protocols.agui.ADKAgent") as mock_adk_agent:
-        mount_skill_endpoint(app, "custom", dummy_agent, app_name="custom_app")
-
-        kwargs = mock_adk_agent.call_args.kwargs
-        assert kwargs["app_name"] == "custom_app"
-
-
-def test_mount_extracts_auth_headers(dummy_agent: Agent) -> None:
-    """Verify that x-user-id + x-firebase-uid are forwarded to the agent.
-
-    These headers must remain on the extract list so ag-ui-adk sees the
-    caller identity in request context. Real Firebase token verification
-    happens upstream on /api/skill/{id}/stream via get_current_user.
-    """
-    app = FastAPI()
-
-    with patch("protocols.agui.add_adk_fastapi_endpoint") as mock_add_endpoint:
-        mount_skill_endpoint(app, "auth_headers", dummy_agent)
-
-        kwargs = mock_add_endpoint.call_args.kwargs
-        assert kwargs["path"] == "/api/chat/auth_headers"
-        assert kwargs["extract_headers"] == ["x-user-id", "x-firebase-uid"]
-
-
 # ---------------------------------------------------------------------------
 # Session-durability regression (2026-08-05)
 # ---------------------------------------------------------------------------
@@ -225,21 +122,6 @@ def test_mount_extracts_auth_headers(dummy_agent: Agent) -> None:
 # blank chat. Measured on test: 19 of 75 real conversations destroyed.
 #
 # These tests fail if either knob regresses to its library default.
-
-
-def test_mount_disables_session_cleanup_deletion(dummy_agent: Agent) -> None:
-    """mount_skill_endpoint must never let the cleanup sweep delete sessions."""
-    app = FastAPI()
-
-    with patch("protocols.agui.ADKAgent") as mock_adk_agent:
-        mount_skill_endpoint(app, "durable", dummy_agent)
-
-        kwargs = mock_adk_agent.call_args.kwargs
-        assert kwargs["delete_session_on_cleanup"] is False, (
-            "ag_ui_adk would permanently delete idle sessions from Vertex Agent "
-            "Engine, destroying the user's conversation history"
-        )
-        assert kwargs["session_timeout_seconds"] > 1200
 
 
 def test_build_agui_adk_agent_disables_session_cleanup_deletion(dummy_agent: Agent) -> None:

@@ -30,14 +30,6 @@ from skills.visibility import visible_configs
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
-# Group tags that see the full skill set (incl. WIP / demo skills excluded from
-# deploy admin, `aitana-admin` = platform. Sourced from the unified role model.
-_SKILL_ADMIN_TAGS = admin_roles.SKILL_ADMIN_TAGS
-
-# Platform admins (`aitana-admin`) may edit platform-owned skills in place;
-# deploy admins (`one-admin`) and everyone else must fork. Platform skills are
-_PLATFORM_ADMIN_TAGS = frozenset({admin_roles.PLATFORM_ADMIN_TAG})
-
 
 def _is_platform_admin(access: Any) -> bool:
     """True when the caller holds the platform-admin group tag (`aitana-admin`)."""

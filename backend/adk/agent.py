@@ -959,8 +959,8 @@ def create_agent(
     # Gemini builtin-tool constraint (the definitive guard): when the DIRECT
     # BuiltInCodeExecutor is used it cannot coexist with ANY function tool
     # ("Multiple tools are supported only when they are all search tools" → 400).
-    # Strip every auto-injected function tool (artifacts/memory/RAG
-    # search_documents/request_confirmation) — the sole-tool check above means
+    # Strip every auto-injected function tool (artifacts/memory/
+    # request_confirmation) — the sole-tool check above means
     # there are no skill-declared tools to lose. (Fixes the live code-assistant
     # 400, 2026-07-17. Mixed-tool skills use the code sub-agent delegate instead
     # and keep their tools.)

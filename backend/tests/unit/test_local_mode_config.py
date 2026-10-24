@@ -15,7 +15,6 @@ from config.local_mode import (
     assert_safe_local_mode,
     disabled_services,
     is_local_mode,
-    is_local_mode_persistent,
     warn_on_session_artifact_pairing,
 )
 
@@ -42,16 +41,6 @@ def test_is_local_mode_truthy_values(monkeypatch, raw, expected):
 def test_is_local_mode_unset_is_false(monkeypatch):
     monkeypatch.delenv("LOCAL_MODE", raising=False)
     assert is_local_mode() is False
-
-
-def test_is_local_mode_persistent_default_off(monkeypatch):
-    monkeypatch.delenv("LOCAL_MODE_PERSIST", raising=False)
-    assert is_local_mode_persistent() is False
-
-
-def test_is_local_mode_persistent_when_set(monkeypatch):
-    monkeypatch.setenv("LOCAL_MODE_PERSIST", "1")
-    assert is_local_mode_persistent() is True
 
 
 # ---------------------------------------------------------------------------

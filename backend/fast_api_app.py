@@ -39,7 +39,7 @@ if is_local_mode():
     print(
         "[startup] LOCAL_MODE: ON — Firestore in-memory, auth stubbed.\n"
         "[startup]              Disabled: " + ", ".join(disabled_services()) + "\n"
-        "[startup]              Data resets on next boot unless LOCAL_MODE_PERSIST=1.",
+        "[startup]              In-memory data resets on next boot.",
         file=_sys_for_local_mode.stderr,
         flush=True,
     )
@@ -901,17 +901,6 @@ async def slow_stream_probe(
         yield f'data: {{"done": true, "ticks": {n}, "elapsed": {_time.monotonic() - start:.1f}}}\n\n'
 
     return StreamingResponse(_ticks(), media_type="text/event-stream")
-
-
-# TODO: Direct API endpoints (backward compat with v5 CLI)
-# POST /direct/tools/ai-search
-# POST /direct/tools/extract-files
-# POST /direct/models/gemini
-# GET  /direct/models
-
-# TODO: Channel webhooks
-# POST /api/telegram/webhook
-# POST /api/email/webhook
 
 
 # Main execution

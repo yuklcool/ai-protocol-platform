@@ -75,20 +75,6 @@ class TestCreateEnterpriseSearchAgent:
         assert url_context not in tools
 
 
-class TestCreateSearchAgentConvenienceWrapper:
-    """create_search_agent() dispatches to web or enterprise based on datastore_id."""
-
-    def test_no_datastore_returns_web_agent(self):
-        from tools.search_agent import create_search_agent
-
-        assert create_search_agent().name == "web_search_agent"
-
-    def test_with_datastore_returns_enterprise_agent(self):
-        from tools.search_agent import create_search_agent
-
-        assert create_search_agent(datastore_id="my-ds").name == "enterprise_search_agent"
-
-
 def _web_chunk(uri: str, title: str) -> types.GroundingChunk:
     return types.GroundingChunk(web=types.GroundingChunkWeb(uri=uri, title=title))
 

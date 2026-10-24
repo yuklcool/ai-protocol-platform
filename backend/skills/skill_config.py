@@ -258,9 +258,3 @@ def list_marketplace(limit: int = 50) -> list[SkillConfig]:
         limit=limit,
     )
     return [c for c in _configs_from_docs(docs) if SYSTEM_TAG not in c.tags]
-
-
-def increment_usage(skill_id: str) -> None:
-    """Atomically increment a skill's usage count."""
-    fs.increment_field(COLLECTION, skill_id, "usageCount")
-    _cache_invalidate(skill_id)

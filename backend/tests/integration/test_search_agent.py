@@ -56,9 +56,9 @@ def _has_text(events: list) -> bool:
 @pytest.mark.integration
 def test_search_agent_returns_text_for_factual_query():
     """search_agent can answer a simple factual web query via google_search."""
-    from tools.search_agent import create_search_agent
+    from tools.search_agent import create_web_search_agent
 
-    agent = create_search_agent()
+    agent = create_web_search_agent()
     events = _run(agent, "What is the capital of France?")
     assert _has_text(events), "search_agent produced no text output"
 
@@ -66,9 +66,9 @@ def test_search_agent_returns_text_for_factual_query():
 @pytest.mark.integration
 def test_search_agent_answer_mentions_paris():
     """Sanity-check grounding: the answer to capital-of-France includes 'Paris'."""
-    from tools.search_agent import create_search_agent
+    from tools.search_agent import create_web_search_agent
 
-    agent = create_search_agent()
+    agent = create_web_search_agent()
     events = _run(agent, "What is the capital of France? Answer in one word.")
     text = " ".join(p.text for e in events if e.content and e.content.parts for p in e.content.parts if p.text)
     assert "Paris" in text, f"Expected 'Paris' in answer, got: {text!r}"
@@ -88,9 +88,9 @@ def test_root_agent_with_google_search_tool_returns_text():
     root agent alongside FunctionTools. The sub-agent pattern eliminates that.
     """
     from adk.artifact_tools import retrieve_artifact
-    from tools.search_agent import create_search_agent
+    from tools.search_agent import create_web_search_agent
 
-    search_tool = AgentTool(create_search_agent())
+    search_tool = AgentTool(create_web_search_agent())
 
     root = LlmAgent(
         name="test_root",
@@ -111,13 +111,13 @@ def test_root_agent_search_does_not_raise_400():
     never sees mixed tool types on the root agent.
     """
     from adk.artifact_tools import retrieve_artifact
-    from tools.search_agent import create_search_agent
+    from tools.search_agent import create_web_search_agent
 
     root = LlmAgent(
         name="test_root_no400",
         model="gemini-2.5-flash",
         instruction="Use your search tool to answer questions about current events.",
-        tools=[retrieve_artifact, AgentTool(create_search_agent())],
+        tools=[retrieve_artifact, AgentTool(create_web_search_agent())],
     )
     # Should complete without raising google.api_core.exceptions.InvalidArgument
     _run(root, "Who won the most recent FIFA World Cup?")
@@ -140,9 +140,9 @@ _DATASTORE_ID = os.environ.get("VERTEX_AI_SEARCH_DATASTORE_ID")
 )
 def test_search_agent_with_vertex_ai_search_returns_text():
     """search_agent with VertexAiSearchTool answers from the enterprise datastore."""
-    from tools.search_agent import create_search_agent
+    from tools.search_agent import create_enterprise_search_agent
 
-    agent = create_search_agent(datastore_id=_DATASTORE_ID)
+    agent = create_enterprise_search_agent(_DATASTORE_ID)
     events = _run(agent, "What topics does the knowledge base cover?")
     assert _has_text(events), "search_agent with VertexAiSearchTool produced no text"
 
@@ -159,9 +159,9 @@ def test_root_agent_with_vertex_ai_search_and_function_tools():
     root agent still has a clean FunctionTool-only tool list.
     """
     from adk.artifact_tools import retrieve_artifact
-    from tools.search_agent import create_search_agent
+    from tools.search_agent import create_enterprise_search_agent
 
-    search_tool = AgentTool(create_search_agent(datastore_id=_DATASTORE_ID))
+    search_tool = AgentTool(create_enterprise_search_agent(_DATASTORE_ID))
     root = LlmAgent(
         name="test_root_vertex",
         model="gemini-2.5-flash",

@@ -663,14 +663,6 @@ def compose_after_agent_callbacks(*callbacks: AfterAgentCallback) -> Callable[[A
     return _composed
 
 
-# --- after_agent_callback (legacy no-op — kept for tests that import it) ---
-
-
-def _after_agent(callback_context: Any) -> None:
-    """Retained for import compatibility; agent factory now uses make_after_agent_response."""
-    return None
-
-
 # --- after_tool_callback ---
 
 

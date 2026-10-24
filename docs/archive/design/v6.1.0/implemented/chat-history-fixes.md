@@ -48,7 +48,7 @@ The chat-history feature shipped in v6.0.0 + v6.1.0 (1.8) but has **four real fa
 - New tests: 1 per failure mode, all named `test_<failure_id>_*` for grep-ability. All pass on first run after fix.
 
 **Non-goals:**
-- Reworking session-id mapping. The diagnostic confirmed `use_thread_id_as_session_id=True` in [protocols/agui.py:77](../../../../../backend/protocols/agui.py) works correctly; URL `?session=<id>` IS the ADK session id. No change needed there.
+- Reworking session-id mapping. The diagnostic confirmed `use_thread_id_as_session_id=True` works correctly; the current builder is [adk/agui.py](../../../../../backend/adk/agui.py). URL `?session=<id>` IS the ADK session id. No change needed there.
 - Cross-channel session unification (deferred per v6.0.0 chat-history scope notes).
 - Forking sessions / `POST /api/sessions/{id}/fork` (still deferred).
 - Changing the title model (already changed to `gemini-2.5-flash-lite` in env hardening on 2026-04-27).

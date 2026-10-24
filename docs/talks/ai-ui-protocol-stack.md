@@ -255,9 +255,9 @@ agent = Agent(
 **When NOT to use it:** Backend-to-backend agent calls (use HTTP/JSON or A2A). Batch jobs (use a queue).
 
 **Where it sits in v6:**
-- `backend/protocols/agui.py` — wraps each `Skill` as an AG-UI endpoint
-- `backend/api/chat.py` — mounts the endpoints
-- Frontend: CopilotKit's AG-UI client consumes the stream
+- `backend/adk/agui.py` — builds the ADK/AG-UI bridge and streams events
+- `backend/fast_api_app.py` — exposes the authenticated stream endpoints
+- Frontend: `@ag-ui/client` consumes the stream through `useSkillAgent`
 
 **Critical finding (verified 2026-04-10):**
 

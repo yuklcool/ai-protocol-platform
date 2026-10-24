@@ -19,10 +19,6 @@ def get_user_context() -> dict[str, str] | None:
     return dict(value) if value is not None else None
 
 
-def get_current_user_id() -> str:
-    return ((_context.get() or {}).get("user.id") or "").strip()
-
-
 def get_resource_user_id() -> str:
     attrs = _context.get() or {}
     return (attrs.get("resource.user_id") or attrs.get("user.id") or "").strip()

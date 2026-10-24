@@ -50,7 +50,6 @@ Combining `google_search` + `VertexAiSearchTool` on the same sub-agent also caus
 ```python
 create_web_search_agent()        # → LlmAgent("web_search_agent", tools=[google_search, url_context])
 create_enterprise_search_agent(datastore_id)  # → LlmAgent("enterprise_search_agent", tools=[VertexAiSearchTool])
-create_search_agent(datastore_id=None)  # convenience wrapper → one of the above
 ```
 
 ### `adk/agent.py` — `_resolve_search_tools()`
