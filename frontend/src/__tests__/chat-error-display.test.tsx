@@ -174,18 +174,17 @@ describe("ChatShell — error display", () => {
   });
 });
 
-describe("ChatShell — fresh-session landing (6.11)", () => {
-  it("centers the composer and omits the transcript empty-state on a fresh session", async () => {
+describe("ChatShell — consistent conversation layout", () => {
+  it("renders the empty conversation above the footer composer on a fresh session", async () => {
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ messages: [] }));
     render(<ChatPage params={paramsPromise} />);
-    // The composer input is present…
-    expect(await screen.findByPlaceholderText(/message/i)).toBeTruthy();
-    // …but the transcript (and its "Send a message to start the conversation."
-    // empty state) is NOT rendered on the landing — the input is centered instead.
-    expect(screen.queryByText(/send a message to start the conversation/i)).toBeNull();
+    const input = await screen.findByPlaceholderText(/message/i);
+    expect(input.closest("footer")).toHaveClass("chat-composer");
+    expect(screen.getByRole("heading", { name: "What would you like to work on?" })).toBeInTheDocument();
+    expect(screen.getByText(/send a message to start the conversation/i)).toBeInTheDocument();
   });
 
-  it("flips to the transcript layout once a message exists", async () => {
+  it("renders messages in the same conversation layout", async () => {
     vi.mocked(useSkillAgent).mockReturnValue(
       makeReturn({ messages: [{ id: "m1", role: "user", content: "hello there" }] }),
     );

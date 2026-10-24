@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UploadDropZone } from "../UploadDropZone";
 import { documentRequest } from "@/lib/documents";
+import { getIdToken } from "@/lib/firebase";
 
 vi.mock("@/lib/firebase", () => ({ getIdToken: vi.fn().mockResolvedValue("token") }));
 vi.mock("@/lib/documents", () => ({ documentRequest: vi.fn(), notifyDocumentsChanged: vi.fn() }));
@@ -12,6 +13,7 @@ type FakeXhr = { open: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn>;
 let requests: FakeXhr[];
 beforeEach(() => {
   requests = [];
+  vi.mocked(getIdToken).mockResolvedValue("token");
   request.mockReset().mockResolvedValue(capabilities);
   vi.spyOn(globalThis, "XMLHttpRequest").mockImplementation(() => {
     const xhr: FakeXhr = { open: vi.fn(), send: vi.fn(), abort: vi.fn(() => xhr.onabort?.()), setRequestHeader: vi.fn(), upload: {}, status: 200, responseText: JSON.stringify({ docId: "doc", originalFilename: "notes.txt", status: "parsed", blocksCount: 1 }) };
