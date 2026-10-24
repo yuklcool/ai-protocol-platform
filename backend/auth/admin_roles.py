@@ -12,7 +12,3 @@ def is_platform_admin(group_tags: Iterable[str] | None) -> bool:
 
 def is_skill_admin(group_tags: Iterable[str] | None) -> bool:
     return bool(set(group_tags or ()) & SKILL_ADMIN_TAGS)
-
-
-def is_admin_conferring_tag(tag: str) -> bool:
-    return tag.strip() in SKILL_ADMIN_TAGS

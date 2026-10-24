@@ -1,5 +1,5 @@
 // Dev-only landing page for MCP Apps integration smoke routes.
-// Sister to /dev/rich-media. Gated to non-prod via the layout's NODE_ENV
+// Gated to non-prod via the layout's NODE_ENV
 // check; in prod builds Next.js still ships the route but the layout
 // returns notFound().
 //

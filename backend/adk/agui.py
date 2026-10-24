@@ -53,7 +53,6 @@ logger = logging.getLogger(__name__)
 
 APP_NAME = "aitana_platform"
 ROOT_AGENT_APP_NAME = "root-agent"
-_DEFAULT_APP_NAME = APP_NAME  # backwards-compat alias
 
 # G41 (template-agui-terminal-dedup.md): the two AG-UI event types whose
 # arrival closes a run. The spec mandates at most one per run; the

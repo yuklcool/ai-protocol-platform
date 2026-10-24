@@ -1,7 +1,4 @@
-"""LLM cost tracking via OpenTelemetry metrics.
-
-Records estimated cost per model call as an OTEL counter.
-Called from ADK after_agent callbacks or middleware.
+"""LLM pricing shared by usage accounting and budget enforcement.
 
 Cost estimates are approximate — based on published pricing verified 2026-08-13
 (ai.google.dev/gemini-api/docs/pricing, ai.google.dev/gemini-api/docs/latest-model,
@@ -15,22 +12,6 @@ rather than a guess — extend this table instead of estimating.
 """
 
 from __future__ import annotations
-
-from opentelemetry import metrics
-
-_meter = metrics.get_meter("aitana.llm")
-
-cost_counter = _meter.create_counter(
-    "llm.cost.total",
-    description="Estimated LLM cost in USD",
-    unit="USD",
-)
-
-token_counter = _meter.create_counter(
-    "llm.tokens.total",
-    description="Total tokens consumed",
-    unit="tokens",
-)
 
 # Approximate cost per 1M tokens (input, output) — USD. Verified 2026-08-13.
 # ORDER MATTERS: matching is substring containment (`known in key`), first hit
@@ -95,11 +76,3 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
         return 0.0
     input_rate, output_rate = rates
     return (input_tokens * input_rate + output_tokens * output_rate) / 1_000_000
-
-
-def record_llm_cost(model: str, input_tokens: int, output_tokens: int) -> None:
-    """Record LLM cost and token metrics. Call from after_agent callback."""
-    cost = estimate_cost(model, input_tokens, output_tokens)
-    attrs = {"model": model}
-    cost_counter.add(cost, attrs)
-    token_counter.add(input_tokens + output_tokens, attrs)

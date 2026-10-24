@@ -28,10 +28,6 @@ from auth.admin_roles import PLATFORM_ADMIN_TAG, is_platform_admin
 
 logger = logging.getLogger(__name__)
 
-# Back-compat alias; the canonical name lives in auth.admin_roles.
-ADMIN_GROUP_TAG = PLATFORM_ADMIN_TAG
-
-
 def _allowed_emails() -> set[str]:
     raw = os.environ.get("ADMIN_SEED_ALLOWED_SAS", "")
     return {email.strip() for email in raw.split(",") if email.strip()}
@@ -85,7 +81,7 @@ def _assert_caller_is_service_account(request: Request) -> str:
         group_tags = decoded.get("groupTags") or []
         if is_platform_admin(group_tags):
             user_email = decoded.get("email", decoded.get("uid", "(unknown)"))
-            logger.info("admin_auth: firebase user %s (group %s)", user_email, ADMIN_GROUP_TAG)
+            logger.info("admin_auth: firebase user %s (group %s)", user_email, PLATFORM_ADMIN_TAG)
             return user_email
     except Exception as exc:
         logger.debug("admin_auth: firebase verify failed: %s", exc)

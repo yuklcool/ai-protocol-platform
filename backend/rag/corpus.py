@@ -8,7 +8,7 @@ All public functions are async. Synchronous vertexai.rag SDK calls are
 dispatched via ``asyncio.to_thread`` so the FastAPI event loop is not blocked.
 
 Only active when ``RAG_DOCUMENTS_ENABLED=true`` (default false). The corpus
-module itself has no guard — the caller (callbacks.py, rag_tool.py) is
+module itself has no guard — the caller (tools/documents/rag_routes.py) is
 responsible for checking the flag before calling these functions.
 """
 
@@ -130,13 +130,6 @@ def _retrieval_query_sync(corpus_name: str, query: str, top_k: int) -> list[dict
             }
         )
     return results
-
-
-def _import_files_sync(corpus_name: str, gcs_uri: str) -> None:
-    from vertexai import rag
-
-    _ensure_vertexai()
-    rag.import_files(corpus_name=corpus_name, paths=[gcs_uri])
 
 
 async def delete_document(file_name: str) -> None:

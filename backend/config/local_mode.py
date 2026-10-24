@@ -41,15 +41,6 @@ def is_local_mode() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
-def is_local_mode_persistent() -> bool:
-    """When LOCAL_MODE is on, optionally persist the in-memory Firestore to
-    ``~/.aitana-local/firestore.json`` on shutdown so state survives a
-    ``make dev`` restart. Off by default for purity.
-    """
-    raw = os.environ.get("LOCAL_MODE_PERSIST", "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
-
 def assert_safe_local_mode() -> None:
     """Refuse to start if LOCAL_MODE is paired with any deployment marker.
 

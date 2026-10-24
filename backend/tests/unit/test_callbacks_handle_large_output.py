@@ -7,8 +7,6 @@
 * `make_before_agent(skill_id)` — `before_agent_callback` factory.
   Returns a callback that annotates the current OTEL span with
   `skill_id` and (if present on session state) `routing_choice`.
-* `_after_agent` — documented no-op reserved for v6.1 structured
-  extraction (not tested beyond "it's a callable that returns None").
 """
 
 from __future__ import annotations
@@ -17,7 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import adk.a2ui_ppa_render  # noqa: F401 — registers compare/extract as render-payload tools
-from adk.callbacks import _after_agent, _handle_large_output, make_before_agent
+from adk.callbacks import _handle_large_output, make_before_agent
 
 # --- _handle_large_output ---
 
@@ -177,15 +175,3 @@ def test_before_agent_skips_routing_choice_when_absent():
     keys = {a[0] for a in call_args}
     assert "skill_id" in keys
     assert "routing_choice" not in keys
-
-
-# --- _after_agent ---
-
-
-def test_after_agent_is_noop_returning_none():
-    # Placeholder for v6.1 structured extraction. Must be a callable that
-    # accepts a CallbackContext and returns None without touching state.
-    ctx = SimpleNamespace(state={})
-    result = _after_agent(callback_context=ctx)
-    assert result is None
-    assert ctx.state == {}

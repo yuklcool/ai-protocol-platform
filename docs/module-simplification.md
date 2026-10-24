@@ -18,10 +18,16 @@ Root 决定模型、指令、工具、MCP、知识和交互。Skill 编辑器只
 
 知识绑定在 Root 设置中配置，文件上传/查看使用真实工作台能力；没有独立假数据知识库。可选消息通道只在对应凭证启用时加载，普通 Web 部署不初始化 Discord、Telegram、Mailgun 或 Twilio。
 
-## 3. 已移除和兼容入口
+## 3. 已移除实现
 
 移除旧 Skill 切换栏、未使用分栏/预算横幅/只读输入框、Skill 独立模型与工具编辑、重复测试聊天及创作 Copilot、硬编码文件/富媒体演示和未使用依赖。
 
-旧 `/agents`、`/agents/:id`、`/skills/new` 及演示/workshop URL 通过统一 Next.js redirects 兼容。旧链接重定向不代表恢复被移除模块。
+旧 `/agents`、`/agents/:id`、`/skills/new`、`/dev/file-browser`、`/dev/rich-media` 和 `/workshop` 不再提供兼容跳转。使用当前 `/agent`、`/skills/studio/new` 及本文列出的产品入口；自托管步骤见 [SELFHOST](../SELFHOST.md)。
+
+删除没有产品调用者的旧 AG-UI 路由挂载器、Skill 临时文件转换器、未注册的 RAG FunctionTool 和语音 Agent 空文件。对话继续通过 `fast_api_app.py` → `skills/skill_processor.py` → `adk/agui.py` 运行；RAG 管理 API 仍通过 `tools/documents/rag_routes.py` 调用 `rag/corpus.py`。
+
+删除空的 after-agent 回调、搜索工厂的重复包装、未调用的计数与身份辅助函数和旧常量别名。搜索验收直接调用生产使用的 Web/Enterprise 工厂；AG-UI 的用户身份与会话保留回归继续覆盖实际聊天构建器。测试使用的缓存重置、注册表一致性检查及动态加载的 ADK 服务入口保留。
+
+`LOCAL_MODE_PERSIST` 从未接入持久化实现，现移除其配置示例、读取函数和错误提示。`LOCAL_MODE` 的内存数据在重启后清空；持久化部署使用已支持的 PostgreSQL/对象存储配置。
 
 本轮模块整理不执行生产迁移；旧 ADK Session/Memory namespace 仍按 [Issue #9](https://github.com/yuklcool/ai-protocol-platform/issues/9) 验收。

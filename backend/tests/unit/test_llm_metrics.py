@@ -1,10 +1,8 @@
-"""Unit tests for LLM cost estimation and metrics recording."""
+"""Unit tests for LLM cost estimation."""
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
-from observability.llm_metrics import estimate_cost, record_llm_cost
+from observability.llm_metrics import estimate_cost
 
 
 class TestEstimateCost:
@@ -56,17 +54,3 @@ class TestEstimateCost:
         """Models accessed via Vertex AI may have prefixed names."""
         cost = estimate_cost("publishers/google/models/gemini-2.5-pro", 1000, 500)
         assert cost > 0
-
-
-class TestRecordLlmCost:
-    def test_calls_counters(self):
-        with (
-            patch("observability.llm_metrics.cost_counter") as mock_cost,
-            patch("observability.llm_metrics.token_counter") as mock_tokens,
-        ):
-            record_llm_cost("gemini-2.5-flash", 1000, 500)
-            mock_cost.add.assert_called_once()
-            mock_tokens.add.assert_called_once()
-            # Token counter should get total tokens
-            token_args = mock_tokens.add.call_args[0]
-            assert token_args[0] == 1500

@@ -290,11 +290,3 @@ def test_list_marketplace_excludes_system_agents(mock_fs):
     results = skill_config.list_marketplace()
 
     assert [c.skill_id for c in results] == ["normal-1"]
-
-
-# === increment_usage ===
-
-
-def test_increment_usage(mock_fs):
-    skill_config.increment_usage("abc-123")
-    mock_fs.increment_field.assert_called_once_with("skills", "abc-123", "usageCount")

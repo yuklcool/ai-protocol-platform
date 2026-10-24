@@ -18,7 +18,6 @@ on:
       - backend/adk/artifact_backend.py
       - backend/auth/**
       - backend/protocols/models_route.py
-      - backend/protocols/agui.py
       - backend/protocols/mcp_proxy.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/storage_tests/**
@@ -46,7 +45,6 @@ on:
       - backend/adk/artifact_backend.py
       - backend/auth/**
       - backend/protocols/models_route.py
-      - backend/protocols/agui.py
       - backend/protocols/mcp_proxy.py
       - backend/tests/model_tests/test_openai_compatible_routing.py
       - backend/tests/storage_tests/**

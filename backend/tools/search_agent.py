@@ -220,20 +220,3 @@ def create_enterprise_search_agent(datastore_id: str) -> LlmAgent:
         tools=[VertexAiSearchTool(data_store_id=datastore_id)],
         after_model_callback=_append_source_context,
     )
-
-
-def create_search_agent(datastore_id: str | None = None) -> LlmAgent:
-    """Create a search agent — web or enterprise depending on datastore_id.
-
-    Convenience wrapper used when only one search type is needed. For skills
-    requesting both google_search and ai_search, use _resolve_search_tools in
-    adk/agent.py which returns two separate AgentTool instances.
-
-    Args:
-        datastore_id: When provided, returns an enterprise search agent
-            (VertexAiSearchTool only). When None, returns a web search agent
-            (google_search + url_context).
-    """
-    if datastore_id:
-        return create_enterprise_search_agent(datastore_id)
-    return create_web_search_agent()
