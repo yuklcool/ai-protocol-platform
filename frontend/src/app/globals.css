@@ -821,8 +821,19 @@
   background: var(--surface-solid);
 }
 .chat-composer {
-  background: var(--surface-raised);
-  border-top: 1px solid var(--hairline);
+  flex: 0 0 auto;
+  max-height: 45%;
+  overflow-y: auto;
+  background: var(--surface-solid);
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.chat-content-width {
+  width: 100%;
+  max-width: 832px;
+  margin-inline: auto;
+}
+.chat-empty {
+  padding-block: 16px 24px;
 }
 .composer {
   border: 1px solid var(--hairline-strong);

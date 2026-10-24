@@ -25,6 +25,19 @@ async function choose(names = ["notes.txt"]) {
   await waitFor(() => expect(requests.length).toBeGreaterThan(0));
 }
 describe("对话上传", () => {
+  it("紧凑附件入口收起格式说明，仍可上传并显示处理状态", async () => {
+    render(<UploadDropZone compact />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "添加附件" })).toBeEnabled());
+    const help = screen.getByText("支持的文件与限制").closest("details")!;
+    expect(help).not.toHaveAttribute("open");
+    await userEvent.click(screen.getByText("支持的文件与限制"));
+    expect(help).toHaveAttribute("open");
+    await userEvent.upload(screen.getByLabelText("上传对话附件"), new File(["notes"], "notes.txt", { type: "text/plain" }));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    act(() => requests[0].onload?.());
+    expect(screen.getByText("可用于分析")).toBeInTheDocument();
+  });
+
   it("读取能力矩阵，发送认证和真实表单字段", async () => {
     render(<UploadDropZone folderId="folder" skillId="skill" />); await choose();
     expect(requests[0].open).toHaveBeenCalledWith("POST", "/api/proxy/api/documents/upload");

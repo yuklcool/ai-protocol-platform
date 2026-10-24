@@ -39,6 +39,7 @@ interface ChatMessageListProps {
   /** Skill display name shown in the intro bubble headline. */
   skillDisplayName?: string;
   historyError?: string | null;
+  isLoadingHistory?: boolean;
   /** Conversation is listed and had turns, but its transcript is gone from the
    * session store. Renders an explicit notice — resuming it would otherwise
    * show an unexplained blank thread (CLAUDE.md #8, NEVER SILENT). */
@@ -151,6 +152,7 @@ export function ChatMessageList({
   introMessage,
   skillDisplayName,
   historyError,
+  isLoadingHistory = false,
   transcriptUnavailable = false,
   toolCalls,
   thinkingContent,
@@ -501,7 +503,7 @@ export function ChatMessageList({
   }
 
   return (
-    <div className="relative flex flex-col flex-1 overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-chat-transcript>
       {activeDocumentContext !== undefined && (
         <ContextBanner context={activeDocumentContext ?? null} />
       )}
@@ -509,11 +511,13 @@ export function ChatMessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        data-chat-scroll
       >
-        <div ref={innerRef} className="space-y-4 p-4">
+        <div ref={innerRef} className="chat-content-width space-y-5 px-4 py-6 sm:px-6">
+          {isLoadingHistory && <p role="status" className="text-sm text-muted-foreground">{translateChat(locale, "message.loadingHistory")}</p>}
           {historyError && (
-            <p className="text-xs text-muted-foreground italic">{historyError}</p>
+            <p role="alert" className="notice notice--danger text-sm">{translateChat(locale, "message.historyLoadFailed")}</p>
           )}
           {activityError && <p role="alert" className="text-sm text-destructive">{activityError}</p>}
 
@@ -556,11 +560,17 @@ export function ChatMessageList({
           {messages.length === 0 &&
             !initialMessages?.length &&
             !introMessage &&
+            !isLoadingHistory &&
+            !historyError &&
+            !transcriptUnavailable &&
+            !transcriptItems.length &&
             !error &&
             !isLoading && (
-              <p className="text-sm text-muted-foreground">
-                {translateChat(locale, "message.startConversation")}
-              </p>
+              <section className="chat-empty space-y-3" aria-label={translateChat(locale, "message.emptyTitle")}>
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{translateChat(locale, "message.emptyTitle")}</h1>
+                <p className="max-w-lg text-sm leading-7 text-muted-foreground">{translateChat(locale, "message.startConversation")}</p>
+                <p className="max-w-lg text-sm leading-7 text-muted-foreground">{translateChat(locale, "message.emptyDescription")}</p>
+              </section>
             )}
 
 

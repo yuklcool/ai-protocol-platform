@@ -49,7 +49,6 @@ import { SidebarSection } from "@/components/chat/SidebarSection";
 import { InContextBadge } from "@/components/chat/InContextBadge";
 import { Workbench, type WorkbenchTab } from "@/components/chat/Workbench";
 import { WorkbenchHome } from "@/components/chat/WorkbenchHome";
-import { AssistantIntroBubble } from "@/components/chat/AssistantIntroBubble";
 import { SkillExamplesPicker } from "@/components/chat/SkillExamplesPicker";
 import { GCSFileBrowser } from "@/components/doc-browser/GCSFileBrowser";
 import type { ExampleDocument, ExamplePrompt } from "@/types/skill";
@@ -1041,7 +1040,7 @@ function ChatShellContent({
   // Session routing: read ?session= from URL, allow programmatic navigation
   // Effective thread id — the value threaded to the surface mounts
   // (sessionId ?? agentSessionId). The confirm→switch below keys off it.
-  const { initialMessages, a2uiSurfaces, historyError, sessionGone, transcriptUnavailable } =
+  const { initialMessages, a2uiSurfaces, isLoadingHistory, historyError, sessionGone, transcriptUnavailable } =
     useSessionMessages(sessionId);
   // Session documents → "document added" entries in the Activity feed.
   const activityDocuments: ActivityDoc[] = openTabs.map((t) => ({
@@ -1605,9 +1604,7 @@ function ChatShellContent({
   const sendDisabled = inputDisabled || attachmentBlock;
   useEffect(() => { if (error) setDraft((current) => current || lastUserMessageRef.current); }, [error]);
 
-  // The composer (connecting banner + in-context badge + input row). Extracted
-  // so it can render pinned at the bottom during a conversation OR centered on
-  // the landing screen of a fresh session (below).
+  // Keep one composer mounted across empty, streaming and resumed conversations.
   const composer = (
     <>
       {/* 2026-06-11 cold-start UX: surface a "Connecting…" banner whenever the
@@ -1648,7 +1645,6 @@ function ChatShellContent({
           state so the user always knows which files the agent will see next
           turn. Renders nothing when no docs are included. */}
       <InContextBadge openTabs={openTabs} includedDocIds={includedDocIds} />
-      <UploadDropZone skillId={skillId} scopeKey={effectiveSessionId} attachedCount={openTabs.length} disabled={!attachmentsReady} onUploadComplete={handleUploadedDocOpen} onBusyChange={setUploadBusy} onBlockingChange={setUploadBlocked} />
       {attachmentsSaving && <p role="status" className="text-xs text-muted-foreground">正在保存附件选择…</p>}
       {attachmentError && <div role="alert" className="notice flex flex-wrap items-center gap-2 text-xs text-destructive">{attachmentError} <button type="button" onClick={retrySave} className="button-secondary px-3 py-1.5 text-xs">重试</button></div>}
       {unreadableAttachments.length > 0 && <p role="alert" className="text-xs text-destructive">{unreadableAttachments.map((tab) => tab.filename).join("、")} 尚不可分析，请等待解析完成、重试或取消选择。</p>}
@@ -1667,9 +1663,7 @@ function ChatShellContent({
       )}
       {importBusy && <p role="status" className="mb-2 text-xs text-muted-foreground">{translateChat(locale, "shell.importing")}</p>}
       <form
-        // items-end: as the textarea grows the Send/Stop button stays aligned
-        // with the LAST line rather than stretching to the full box height.
-        className="composer composer-form flex items-end gap-2 focus-within:ring-2 focus-within:ring-primary/30"
+        className="composer composer-form flex flex-col gap-2 focus-within:ring-2 focus-within:ring-primary/30"
         aria-label={translateChat(locale, "shell.messagePlaceholder")}
         onSubmit={(e) => {
           e.preventDefault();
@@ -1700,24 +1694,27 @@ function ChatShellContent({
               ? translateChat(locale, "shell.messagePlaceholder")
               : translateChat(locale, "shell.connectingPlaceholder")
           }
-          className="max-h-48 min-w-0 flex-1 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-3 py-2 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          className="max-h-48 min-w-0 w-full resize-none overflow-y-auto rounded-none border-0 bg-transparent px-3 py-2 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={translateChat(locale, "shell.messagePlaceholder")}
           disabled={inputDisabled}
         />
-        {isLoading ? (
-          <button type="button" onClick={() => { stopExecution(); setDraft(lastUserMessageRef.current); }} className="button-secondary min-h-11 shrink-0 px-3 py-2 text-sm" aria-label={translateChat(locale, "shell.stop")}>
-            {translateChat(locale, "shell.stop")}
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className="button-primary shrink-0 px-3 py-2 text-sm"
-            aria-label={translateChat(locale, "shell.send")}
-            disabled={!draft.trim() || sendDisabled}
-          >
-            {translateChat(locale, "shell.send")}
-          </button>
-        )}
+        <div className="flex items-end justify-between gap-3">
+          <UploadDropZone compact skillId={skillId} scopeKey={effectiveSessionId} attachedCount={openTabs.length} disabled={!attachmentsReady} onUploadComplete={handleUploadedDocOpen} onBusyChange={setUploadBusy} onBlockingChange={setUploadBlocked} />
+          {isLoading ? (
+            <button type="button" onClick={() => { stopExecution(); setDraft(lastUserMessageRef.current); }} className="button-secondary min-h-11 shrink-0 px-3 py-2 text-sm" aria-label={translateChat(locale, "shell.stop")}>
+              {translateChat(locale, "shell.stop")}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="button-primary shrink-0 px-3 py-2 text-sm"
+              aria-label={translateChat(locale, "shell.send")}
+              disabled={!draft.trim() || sendDisabled}
+            >
+              {translateChat(locale, "shell.send")}
+            </button>
+          )}
+        </div>
       </form>
     </>
   );
@@ -1747,7 +1744,7 @@ function ChatShellContent({
     {/* SkillsBar (top nav) lifted to ShellChrome in ShellRouter so every shell
         mode shares it — see components/shells/ShellChrome.tsx. This shell body
         fills the height remaining below that bar. */}
-    <main className="chat-shell flex min-h-0 flex-1 flex-col">
+    <main className="chat-shell flex min-h-0 flex-1 flex-col overflow-hidden">
       <DocTabsBar
         tabs={openTabs}
         // 2026-06-11: explicitly switch the workbench to the Document
@@ -1770,7 +1767,7 @@ function ChatShellContent({
         onToggleBrowser={toggleDocBrowser}
       />
 
-      <div className="workspace-row relative flex min-h-0 flex-1" data-workspace-row>
+      <div className="workspace-row relative flex min-h-0 flex-1 overflow-hidden" data-workspace-row>
         {showDocBrowser && (
           <aside className="chat-files-panel flex w-64 shrink-0 flex-col overflow-y-auto border-r bg-card/80" aria-label={translateChat(locale, "shell.yourFiles")} >
             <button type="button" onClick={toggleDocBrowser} className="button-secondary m-3 px-3 py-2 text-sm md:hidden">{locale.startsWith("zh") ? "关闭文件与历史记录" : "Close files and history"}</button>
@@ -1867,7 +1864,7 @@ function ChatShellContent({
             live, with per-skill sessionStorage persistence. */}
         <div
           className={
-            workbenchVisible ? "chat-pane flex min-w-0 flex-col" : "chat-pane flex min-w-0 flex-1 flex-col"
+            workbenchVisible ? "chat-pane flex min-h-0 min-w-0 flex-col overflow-hidden" : "chat-pane flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
           }
           style={
             workbenchVisible
@@ -1875,28 +1872,6 @@ function ChatShellContent({
               : undefined
           }
         >
-          {isFreshChat ? (
-            // Fresh session — no transcript yet. Center the greeting + composer
-            // vertically (ChatGPT/Claude-style landing) instead of pinning the
-            // input to the bottom of an empty pane. Flips to the transcript
-            // layout the instant the first message is sent (isFreshChat→false).
-            <div className="flex flex-1 flex-col items-center justify-center overflow-auto p-4">
-              <div className="glass-panel w-full max-w-2xl space-y-6 p-5 sm:p-8">
-                {skillIntroMessage && !enteredViaResume && (
-                  <AssistantIntroBubble content={skillIntroMessage} skillName={displayName} />
-                )}
-                {/* NEVER SILENT (#8): an error on the very first turn must still
-                    be visible on the landing screen, not hidden with the
-                    (unrendered) transcript. */}
-                {error && (
-                  <StreamErrorBanner error={error} onRetry={handleRetry} onDismiss={clearError} />
-                )}
-                {composer}
-
-              </div>
-            </div>
-          ) : (
-            <>
           <ChatMessageListWithSurfaces
             messages={messages}
             introMessage={
@@ -1914,6 +1889,7 @@ function ChatShellContent({
             // live `messages` — duplicating every bubble. `enteredViaResume`
             // distinguishes the two cases.
             initialMessages={enteredViaResume ? initialMessages : undefined}
+            isLoadingHistory={enteredViaResume && isLoadingHistory}
             historyError={historyError}
             transcriptUnavailable={enteredViaResume && transcriptUnavailable}
             toolCalls={toolCalls}
@@ -1956,9 +1932,7 @@ function ChatShellContent({
             formSkillId={skillId}
           />
 
-          <footer className="chat-composer border-t p-3 sm:p-4">{composer}</footer>
-            </>
-          )}
+          <footer className="chat-composer p-3 sm:p-4"><div className="chat-content-width space-y-2">{composer}</div></footer>
         </div>
 
         {/* 2026-06-11 polish: drag handle between chat and workbench.
