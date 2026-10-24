@@ -28,6 +28,7 @@ from auth.admin_roles import PLATFORM_ADMIN_TAG, is_platform_admin
 
 logger = logging.getLogger(__name__)
 
+
 def _allowed_emails() -> set[str]:
     raw = os.environ.get("ADMIN_SEED_ALLOWED_SAS", "")
     return {email.strip() for email in raw.split(",") if email.strip()}

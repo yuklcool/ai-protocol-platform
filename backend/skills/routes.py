@@ -30,6 +30,7 @@ from skills.visibility import visible_configs
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
+
 def _is_platform_admin(access: Any) -> bool:
     """True when the caller holds the platform-admin group tag (`aitana-admin`)."""
     return admin_roles.is_platform_admin(access.group_tags)
