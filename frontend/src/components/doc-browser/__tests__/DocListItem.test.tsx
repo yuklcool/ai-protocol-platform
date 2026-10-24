@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { ParsedDocument } from "@/hooks/useDocBrowser";
 import { DocListItem } from "../DocListItem";
 
+// Focusing a file action opens its preview; document fetching has separate tests.
+vi.mock("@/hooks/useDocument", () => ({
+  useDocument: () => ({ doc: null, isLoading: false, error: null }),
+}));
+
 function makeDoc(overrides: Partial<ParsedDocument> = {}): ParsedDocument {
   return {
     id: "doc1",

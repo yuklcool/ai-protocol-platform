@@ -48,7 +48,7 @@ export function ChatSidebar({ open, onOpenChange, files, history, library, libra
   const content = <>
     <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
       {mobile ? <Dialog.Title className="text-sm font-semibold">{title}</Dialog.Title> : <h2 className="text-sm font-semibold">{title}</h2>}
-      <button type="button" onClick={() => onOpenChange(false)} className="button-ghost inline-flex h-9 w-9 items-center justify-center p-0" aria-label={translateChat(locale, "sidebar.close")}>
+      <button type="button" onClick={() => onOpenChange(false)} className="button-ghost inline-flex h-11 w-11 items-center justify-center p-0" aria-label={translateChat(locale, "sidebar.close")}>
         <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </header>
@@ -70,7 +70,7 @@ export function ChatSidebar({ open, onOpenChange, files, history, library, libra
           selectTab(tabs[target].id);
           document.getElementById(`chat-resource-tab-${tabs[target].id}`)?.focus();
         }}
-        className="flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        className="flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
       >
         <tab.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="truncate">{tab.label}</span>

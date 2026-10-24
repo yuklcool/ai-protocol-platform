@@ -245,6 +245,11 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
       await expect(sidebar).toBeVisible();
       for (const [tab, kind] of [[files, "files"], [history, "history"]]) {
         await tab.click();
+        // Crossing the mobile breakpoint mounts the modal's own file view.
+        if (kind === "files") {
+          await expect(folderButton).toBeVisible();
+          if (await folderButton.getAttribute("aria-expanded") !== "true") await folderButton.click();
+        }
         const scroll = sidebar.locator(`[data-resource-scroll="${kind}"]`);
         await expect.poll(() => scroll.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
         const geometry = await scroll.evaluate(element => ({ height: element.clientHeight, total: element.scrollHeight, bottom: element.getBoundingClientRect().bottom }));
@@ -255,8 +260,8 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
         await scroll.evaluate(element => { element.scrollTop = element.scrollHeight; });
         await expect(sidebar.getByRole("tablist")).toBeInViewport();
         if (viewport.width >= 768) await checkLayout(page);
-        await page.screenshot({ path: info.outputPath(`sidebar-${kind}-${viewport.width}.png`), fullPage: true });
         await scroll.evaluate(element => { element.scrollTop = 0; });
+        await page.screenshot({ path: info.outputPath(`sidebar-${kind}-${viewport.width}.png`), fullPage: true });
       }
     }
     const dialog = page.getByRole("dialog", { name: "对话资源" });
