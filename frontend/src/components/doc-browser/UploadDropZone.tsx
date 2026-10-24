@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Paperclip } from "lucide-react";
 import { getIdToken } from "@/lib/firebase";
 import { documentRequest, notifyDocumentsChanged, type DocumentCapabilities, type UploadResult } from "@/lib/documents";
 
@@ -18,12 +19,13 @@ interface UploadDropZoneProps {
   scopeKey?: string | null;
   attachedCount?: number;
   disabled?: boolean;
+  compact?: boolean;
   onUploadComplete?: (docId: string, filename: string, result: UploadResult) => void;
   onBusyChange?: (busy: boolean) => void;
   onBlockingChange?: (blocked: boolean) => void;
 }
 
-export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, attachedCount = 0, disabled = false, onUploadComplete, onBusyChange, onBlockingChange }: UploadDropZoneProps) {
+export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, attachedCount = 0, disabled = false, compact = false, onUploadComplete, onBusyChange, onBlockingChange }: UploadDropZoneProps) {
   const [capabilities, setCapabilities] = useState<DocumentCapabilities | null>(null);
   const [capabilityError, setCapabilityError] = useState("");
   const [jobs, setJobs] = useState<UploadJob[]>([]);
@@ -157,12 +159,17 @@ export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, a
     finally { reparses.current.delete(job.id); }
   }
   return (
-    <div className="space-y-2 glass-panel p-3" onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); enqueue(Array.from(event.dataTransfer.files)); }}>
-      <button type="button" disabled={!capabilities || disabled} onClick={() => input.current?.click()} className="rounded border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50">{dragging ? "松开文件开始上传" : "添加文件或拖入此处"}</button>
+    <div className={compact ? "min-w-0 flex-1 space-y-2" : "space-y-2 glass-panel p-3"} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); enqueue(Array.from(event.dataTransfer.files)); }}>
+      <div className={compact ? "flex flex-wrap items-center gap-x-2" : "space-y-2"}>
+      <button type="button" disabled={!capabilities || disabled} onClick={() => input.current?.click()} className={compact ? "button-ghost inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50" : "rounded border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50"}>
+        {compact && <Paperclip className="h-4 w-4" aria-hidden="true" />}
+        {dragging ? "松开文件开始上传" : compact ? "添加附件" : "添加文件或拖入此处"}
+      </button>
       <input ref={input} disabled={!capabilities || disabled} aria-label="上传对话附件" type="file" multiple className="hidden" accept={capabilities?.formats.map((format) => format.extension).join(",")} onChange={(event) => { if (event.target.files) enqueue(Array.from(event.target.files)); event.target.value = ""; }} />
-      <p className="text-[11px] text-muted-foreground">TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；单文件 25 MB，每轮最多 10 个。图片和扫描件暂不支持识别。</p>
+      {compact ? <details className="text-xs text-muted-foreground"><summary className="cursor-pointer rounded px-3 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">支持的文件与限制</summary><p className="px-3 py-2">TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；单文件 25 MB，每轮最多 10 个。图片和扫描件暂不支持识别。</p></details> : <p className="text-[11px] text-muted-foreground">TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；单文件 25 MB，每轮最多 10 个。图片和扫描件暂不支持识别。</p>}
+      </div>
       {capabilityError && <p role="alert" className="text-xs text-destructive">{capabilityError}</p>}
-      <ul className="space-y-1" aria-label="文件处理状态">
+      {jobs.length > 0 && <ul className="max-h-32 space-y-1 overflow-y-auto" aria-label="文件处理状态">
         {jobs.map((job) => <li key={job.id} className="flex flex-wrap items-center gap-2 text-xs">
           <span className="min-w-0 truncate">{job.file.name} · {(job.file.size / 1024).toFixed(1)} KB</span>
           <span role="status">{job.status === "queued" ? "等待上传" : job.status === "uploading" ? `正在上传 ${job.pct}%` : job.status === "processing" ? "正在解析" : job.status === "done" ? "可用于分析" : job.status === "cancelled" ? "已取消" : "处理失败"}</span>
@@ -171,7 +178,7 @@ export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, a
           {job.status === "error" && <button type="button" onClick={() => void retry(job)}>重试</button>}
           {["error", "cancelled", "done"].includes(job.status) && <button type="button" onClick={() => setJobs((previous) => previous.filter((entry) => entry.id !== job.id))}>移除此记录</button>}
         </li>)}
-      </ul>
+      </ul>}
     </div>
   );
 }

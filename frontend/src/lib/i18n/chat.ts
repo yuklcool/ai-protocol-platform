@@ -210,6 +210,10 @@ const en = {
   "message.transcriptUnavailable": "The conversation is still listed, but its transcript was removed from the session store and can’t be recovered. You can keep chatting here — new messages will be saved.",
   "message.earlier": "Earlier in this conversation",
   "message.startConversation": "Send a message to start the conversation.",
+  "message.emptyTitle": "What would you like to work on?",
+  "message.emptyDescription": "Ask a question or attach a document. Plans, progress and results will appear in this conversation.",
+  "message.loadingHistory": "Loading conversation messages…",
+  "message.historyLoadFailed": "Could not load conversation messages. Refresh the page to try again.",
 } as const;
 
 export type ChatTranslationKey = keyof typeof en;
@@ -424,6 +428,10 @@ const zhCN = {
   "message.transcriptUnavailable": "该对话仍保留在列表中，但历史消息已从会话存储中移除且无法恢复。你可以继续在这里对话，新消息会正常保存。",
   "message.earlier": "本次对话的较早消息",
   "message.startConversation": "发送一条消息开始对话。",
+  "message.emptyTitle": "今天想完成什么任务？",
+  "message.emptyDescription": "可以直接提问，或添加文件开始分析。计划、进度和成果都会显示在当前对话中。",
+  "message.loadingHistory": "正在加载会话消息…",
+  "message.historyLoadFailed": "会话消息加载失败，请刷新页面重试。",
 } satisfies Record<ChatTranslationKey, string>;
 
 const dictionaries: Record<Locale, Record<ChatTranslationKey, string>> = {

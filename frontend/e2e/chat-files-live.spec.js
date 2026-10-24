@@ -34,7 +34,7 @@ test("普通新对话上传、格式解析、取消选择、刷新与会话切�
   try {
     await page.goto(`${FRONTEND}/chat/root-agent`);
     const picker=page.getByLabel("上传对话附件");
-    await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
+    await expect(page.getByRole("button",{name:"添加附件"})).toBeEnabled();
     await picker.setInputFiles([
       {name:"budget.txt",mimeType:"text/plain",buffer:Buffer.from("批次 ALPHA119\n原值 1000；现值 620")},
       ...["sample.pdf","sample.docx","sample.xlsx","sample.pptx"].map(name=>({name,mimeType:"application/octet-stream",buffer:readFileSync(path.join(fixtures,name))})),
@@ -62,7 +62,7 @@ test("普通新对话上传、格式解析、取消选择、刷新与会话切�
     await page.goto(`${FRONTEND}/chat/root-agent?session=${second}`);
     await expect(page.locator("textarea").first()).toBeEnabled();
     await expect(page.getByRole("checkbox",{name:/分析 budget.txt/})).toHaveCount(0);
-    await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
+    await expect(page.getByRole("button",{name:"添加附件"})).toBeEnabled();
     await picker.setInputFiles({name:"broken.pdf",mimeType:"application/pdf",buffer:Buffer.from("not a PDF")});
     await expect(page.getByText("处理失败",{exact:true})).toBeVisible();
     const composer=page.locator("textarea").first();
@@ -106,7 +106,7 @@ test("真实 Provider 从新对话附件中读取未知编号、计算差额并�
     expect(toolProbe.tool_called).toBe(true);
     await api(token,"/api/admin/platform-config","PUT",{agent:{...original.agent,model,skills:[],tools:[],mcpServers:[],instructions:"根据本轮附件回答，给出计算依据和文件名、行号。没有读取到内容时明确说明，不得猜测。"}}); rootTouched=true;
     await page.goto(`${FRONTEND}/chat/root-agent`);
-    await expect(page.getByRole("button",{name:"添加文件或拖入此处"})).toBeEnabled();
+    await expect(page.getByRole("button",{name:"添加附件"})).toBeEnabled();
     const uploads=[];
     page.on("response",async response=>{if(response.url().endsWith("/api/documents/upload")&&response.ok()) {const row=await response.json(); ids.push(row.docId); uploads.push(row);}});
     await page.getByLabel("上传对话附件").setInputFiles([

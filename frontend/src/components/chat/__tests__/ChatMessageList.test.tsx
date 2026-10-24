@@ -43,6 +43,24 @@ describe("ChatMessageList", () => {
     expect(screen.getByText(/send a message/i)).toBeInTheDocument();
   });
 
+  it("shows history loading instead of an empty conversation, then displays the saved messages", () => {
+    const view = render(<ChatMessageList messages={[]} {...baseProps} isLoadingHistory />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading conversation messages");
+    expect(screen.queryByText(/send a message/i)).not.toBeInTheDocument();
+    view.rerender(<ChatMessageList messages={[]} {...baseProps} initialMessages={[msg("saved", "assistant", "Saved conversation answer")]} />);
+    expect(screen.getByText("Saved conversation answer")).toBeInTheDocument();
+    expect(screen.queryByText(/Loading conversation messages/)).not.toBeInTheDocument();
+  });
+
+  it("does not describe a failed history load or missing transcript as a new conversation", () => {
+    const view = render(<ChatMessageList messages={[]} {...baseProps} historyError="HTTP 503" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not load conversation messages");
+    expect(screen.queryByText(/send a message/i)).not.toBeInTheDocument();
+    view.rerender(<ChatMessageList messages={[]} {...baseProps} transcriptUnavailable />);
+    expect(screen.getByTestId("transcript-unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/send a message/i)).not.toBeInTheDocument();
+  });
+
   it("maps N messages to N bubbles", () => {
     const messages = [
       msg("u1", "user", "Hi"),

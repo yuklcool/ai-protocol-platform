@@ -80,7 +80,7 @@ vi.mock("@/hooks/useDocumentSessions", () => ({ useDocumentSessions: () => ({ se
 vi.mock("@/hooks/useSkillSessions", () => ({ useSkillSessions: vi.fn() }));
 vi.mock("@/hooks/useSessionAttachments", () => ({ useSessionAttachments: vi.fn() }));
 vi.mock("@/hooks/useSessionMessages", () => ({
-  useSessionMessages: () => ({ initialMessages: [], a2uiSurfaces: [], historyError: null, sessionGone: false, transcriptUnavailable: false }),
+  useSessionMessages: vi.fn(),
 }));
 vi.mock("@/hooks/useSessionActivity", () => ({
   useSessionActivity: () => ({ toolCalls: [], delegations: [], sessionStartTs: null }),
@@ -127,6 +127,7 @@ vi.mock("@/lib/documents", async (importOriginal) => {
 import { fetchWithAuth } from "@/lib/apiClient";
 import { stashPendingSkillSwitch, readPendingSkillSwitch, clearPendingSkillSwitch } from "@/lib/skillSwitch";
 import { useSessionAttachments } from "@/hooks/useSessionAttachments";
+import { useSessionMessages } from "@/hooks/useSessionMessages";
 import { useSkillSessions, type ChatSessionSummary } from "@/hooks/useSkillSessions";
 import { importByReference } from "@/lib/importByReference";
 import { ChatShell } from "../ChatShell";
@@ -161,12 +162,37 @@ beforeEach(() => {
   clearPendingSkillSwitch();
   window.sessionStorage.clear();
   navigation.params = new URLSearchParams();
+  vi.mocked(useSessionMessages).mockReturnValue({ initialMessages: [], a2uiSurfaces: [], isLoadingHistory: false, historyError: null, sessionGone: false, transcriptUnavailable: false });
   vi.mocked(useSessionAttachments).mockReturnValue({ tabs: [], setTabs: vi.fn(), ready: true, saving: false, error: null, retrySave: vi.fn() });
   vi.mocked(useSkillSessions).mockReturnValue({ sessions: [], isLoading: false, error: null, refetch: vi.fn(), nextCursor: null, loadMore: vi.fn(), isLoadingMore: false });
   vi.mocked(useSkillAgent).mockReturnValue(makeReturn());
 });
 
 describe("ChatShell composer — wrapping (2026-08-06 ONE UAT)", () => {
+  it("keeps the same composer mounted when an empty chat receives its first message", async () => {
+    const view = render(shell());
+    const input = composer();
+    input.focus();
+    vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ messages: [{ id: "first", role: "user", content: "First message" }] }));
+    view.rerender(shell());
+    expect(composer()).toBe(input);
+    expect(input).toHaveFocus();
+    expect(screen.getByText("First message")).toBeInTheDocument();
+    expect(screen.queryByText("What would you like to work on?")).not.toBeInTheDocument();
+  });
+
+  it("shows a resumed conversation's loading state and saved answer", async () => {
+    navigation.params = new URLSearchParams("session=saved");
+    const history = { initialMessages: [], a2uiSurfaces: [], isLoadingHistory: true, historyError: null, sessionGone: false, transcriptUnavailable: false };
+    vi.mocked(useSessionMessages).mockReturnValue(history);
+    const view = render(shell());
+    expect(screen.getByRole("status")).toHaveTextContent("Loading conversation messages");
+    vi.mocked(useSessionMessages).mockReturnValue({ ...history, isLoadingHistory: false, initialMessages: [{ id: "saved-answer", role: "assistant", content: "Saved answer" }] });
+    view.rerender(shell());
+    expect(screen.getByText("Saved answer")).toBeInTheDocument();
+    expect(screen.queryByText("What would you like to work on?")).not.toBeInTheDocument();
+  });
+
   it("is a textarea, not a single-line input", async () => {
     await renderChat();
     const el = composer();
