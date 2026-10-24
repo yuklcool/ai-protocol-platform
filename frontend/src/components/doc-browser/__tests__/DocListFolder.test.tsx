@@ -65,7 +65,7 @@ describe("DocListFolder", () => {
   });
 
   it("toggles open/closed on click", async () => {
-    render(
+    const view = render(
       <DocListFolder
         folder={folder}
         documents={docs}
@@ -78,7 +78,11 @@ describe("DocListFolder", () => {
     expect(screen.queryByText("summary.docx")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /q1 financial/i }));
+    view.rerender(<DocListFolder folder={folder} documents={docs} isActive={true} onSelect={vi.fn()} onDocClick={vi.fn()} />);
     expect(screen.getByText("summary.docx")).toBeInTheDocument();
+    view.rerender(<DocListFolder folder={folder} documents={[]} isActive={false} onSelect={vi.fn()} onDocClick={vi.fn()} />);
+    expect(screen.queryByText("暂无文件")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /q1 financial/i })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("calls onSelect when folder is opened", async () => {
@@ -94,6 +98,14 @@ describe("DocListFolder", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /q1 financial/i }));
     expect(onSelect).toHaveBeenCalledWith("f1");
+  });
+
+  it("折叠当前文件夹时通知父组件，读取期间不显示空状态", async () => {
+    const onSelect = vi.fn();
+    render(<DocListFolder folder={folder} documents={[]} isActive isLoading onSelect={onSelect} onDocClick={vi.fn()} />);
+    expect(screen.queryByText("暂无文件")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /q1 financial/i }));
+    expect(onSelect).toHaveBeenCalledWith(null);
   });
 
   it("calls onDocClick when a document is clicked", async () => {

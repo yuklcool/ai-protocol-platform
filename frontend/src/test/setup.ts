@@ -11,6 +11,14 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Resource drawers use the browser's media query API; JSDOM has no layout.
+window.matchMedia = (media) => ({
+  media, matches: false, onchange: null,
+  addListener() {}, removeListener() {},
+  addEventListener() {}, removeEventListener() {},
+  dispatchEvent: () => false,
+});
+
 // vitest.config singleFork=true under CI runs every test file in the same
 // process; without an explicit cleanup, prior renders leak and
 // getByTestId() finds multiple nodes. Local (non-CI) pool=forks masks

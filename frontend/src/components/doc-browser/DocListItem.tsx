@@ -92,8 +92,8 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
         role="button"
         tabIndex={0}
         onClick={() => onClick(doc)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(doc); } }}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(doc); } }}
+        className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-left text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         title={errorMsg ?? dot.title}
       >
         <span
@@ -115,7 +115,7 @@ export function DocListItem({ doc, onClick }: DocListItemProps) {
           onClick={handleDelete}
           disabled={deleting}
           title={confirmDelete ? "再次点击确认删除" : "删除文件"}
-          className={`shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 transition-opacity disabled:opacity-50 ${
+          className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md p-2 opacity-100 transition-opacity focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 md:min-h-8 md:min-w-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 ${
             confirmDelete
               ? "text-destructive hover:bg-destructive/10"
               : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"

@@ -303,11 +303,21 @@ function sessionsState() {
 }
 
 async function openHistory() {
-  await userEvent.click(screen.getByRole("button", { name: "显示文件列表" }));
+  await userEvent.click(screen.getByRole("button", { name: "Open files and history" }));
+  await userEvent.click(screen.getByRole("tab", { name: "Conversations" }));
 }
 
 // 所有回归均渲染真实 ChatShell，直接操作输入框、历史按钮和导入错误提示。
 describe("ChatShell — 历史和附件恢复", () => {
+  it("桌面主动展开的侧栏不会在首条消息出现后自行关闭", async () => {
+    const view = render(shell());
+    await userEvent.click(screen.getByRole("button", { name: "Open files and history" }));
+    vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ messages: [{ id: "first", role: "user", content: "Keep the sidebar open" }] }));
+    view.rerender(shell());
+    expect(screen.getByRole("complementary", { name: "Conversation resources" })).toBeVisible();
+    expect(window.sessionStorage.getItem("aitana.sidebar.open")).toBe("1");
+  });
+
   it.each([
     { ready: false, saving: false, error: null },
     { ready: false, saving: false, error: "Attachment initialization failed" },

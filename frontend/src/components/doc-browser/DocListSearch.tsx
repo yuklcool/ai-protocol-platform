@@ -21,10 +21,11 @@ export function DocListSearch({ value, onChange }: DocListSearchProps) {
       </svg>
       <input
         type="search"
-        placeholder="搜索文件…"
+        placeholder="搜索文件（当前文件夹）…"
+        aria-label="搜索当前文件夹内的文件"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border bg-background py-1.5 pl-7 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        className="min-h-10 w-full rounded-lg border bg-background py-2 pl-7 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
       />
     </div>
   );
