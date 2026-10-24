@@ -45,7 +45,7 @@ import { useSkillSessions } from "@/hooks/useSkillSessions";
 import { sessionHref } from "@/lib/sessionHref";
 import { SkillSessionPanel } from "@/components/chat/SkillSessionPanel";
 import DocumentHistoryPanel from "@/components/chat/DocumentHistoryPanel";
-import { SidebarSection } from "@/components/chat/SidebarSection";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { InContextBadge } from "@/components/chat/InContextBadge";
 import { Workbench, type WorkbenchTab } from "@/components/chat/Workbench";
 import { WorkbenchHome } from "@/components/chat/WorkbenchHome";
@@ -131,16 +131,6 @@ function WorkspaceSurfaceRegion({ sessionId }: { sessionId: string | null }) {
           sessionId={sessionId}
         />
       </div>
-    </div>
-  );
-}
-
-function SidebarSurfaceRegion({ sessionId }: { sessionId: string | null }) {
-  const state = useSurfaceState("sidebar");
-  if (!state?.surface) return null;
-  return (
-    <div className="border-t px-2 py-2">
-      <A2UISurfaceMount surfaceId="sidebar" sessionId={sessionId} />
     </div>
   );
 }
@@ -959,27 +949,22 @@ function ChatShellContent({
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [draft]);
-  // 2026-06-11 polish: sidebar default-collapsed + per-tab persistence.
-  // Most demo sessions don't need the sessions/docs list visible at all;
-  // start hidden so chat takes the full row. User can re-open via the
-  // DocTabsBar toggle button (top-left of the chat header). Persisted
-  // globally (not per-skill) in sessionStorage — sidebar visibility is
-  // a workspace-wide preference, not a per-skill one.
+  // Sidebar visibility follows the user's choice across conversations.
   const [showDocBrowser, setShowDocBrowser] = useState(false);
+  const sidebarSurface = useSurfaceState("sidebar");
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.sessionStorage.getItem("aitana.sidebar.open");
     if (stored === "1") setShowDocBrowser(true);
   }, []);
-  const toggleDocBrowser = useCallback(() => {
-    setShowDocBrowser((v) => {
-      const next = !v;
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("aitana.sidebar.open", next ? "1" : "0");
-      }
-      return next;
-    });
+  const setDocBrowserOpen = useCallback((open: boolean) => {
+    setShowDocBrowser(open);
+    window.sessionStorage.setItem("aitana.sidebar.open", open ? "1" : "0");
   }, []);
+  const toggleDocBrowser = useCallback(() => setDocBrowserOpen(!showDocBrowser), [setDocBrowserOpen, showDocBrowser]);
+  const closeDocBrowserOnMobile = useCallback(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setDocBrowserOpen(false);
+  }, [setDocBrowserOpen]);
   const sessionId = searchParams.get("session");
   const effectiveSessionId = sessionId ?? agentSessionId;
   const { tabs: openTabs, setTabs: setOpenTabs, ready: attachmentsReady, saving: attachmentsSaving, error: attachmentError, retrySave } = useSessionAttachments(effectiveSessionId, skillId, user);
@@ -1167,18 +1152,7 @@ function ChatShellContent({
     () => sessionId !== null,
   );
 
-  // v6.4.0 INTERNAL-SHELL M1: auto-collapse sidebar on first user message of
-  // a fresh chat so the chat + workbench own the screen during a run.
-  // Fires exactly once per session-start (isFreshChat true → false). Skipped
-  // on resume; manual reopens stick.
   const isFreshChat = messages.length === 0 && sessionId === null;
-  const prevFreshChatRef = useRef(isFreshChat);
-  useEffect(() => {
-    if (prevFreshChatRef.current && !isFreshChat && !enteredViaResume) {
-      setShowDocBrowser(false);
-    }
-    prevFreshChatRef.current = isFreshChat;
-  }, [isFreshChat, enteredViaResume]);
 
   // Auto-switch Workbench to Document tab when the user opens a doc.
   useEffect(() => {
@@ -1375,8 +1349,9 @@ function ChatShellContent({
       if (!session) return;
       setEnteredViaResume(true);
       router.replace(sessionHref(session));
+      closeDocBrowserOnMobile();
     },
-    [sessions, router],
+    [sessions, router, closeDocBrowserOnMobile],
   );
 
   const handleNewSession = useCallback(() => {
@@ -1454,7 +1429,8 @@ function ChatShellContent({
     // covers the case where activeTabId is already this doc (no state
     // change → activeTabId-change useEffect doesn't fire).
     setWorkbenchTabId("document");
-  }, [setOpenTabs]);
+    closeDocBrowserOnMobile();
+  }, [setOpenTabs, closeDocBrowserOnMobile]);
 
   // Quick-start upload (landing screen): when a doc is uploaded from the
   // fresh-chat dropzone, mount it as an INCLUDED tab straight away — same path a
@@ -1768,89 +1744,22 @@ function ChatShellContent({
       />
 
       <div className="workspace-row relative flex min-h-0 flex-1 overflow-hidden" data-workspace-row>
-        {showDocBrowser && (
-          <aside className="chat-files-panel flex w-64 shrink-0 flex-col overflow-y-auto border-r bg-card/80" aria-label={translateChat(locale, "shell.yourFiles")} >
-            <button type="button" onClick={toggleDocBrowser} className="button-secondary m-3 px-3 py-2 text-sm md:hidden">{locale.startsWith("zh") ? "关闭文件与历史记录" : "Close files and history"}</button>
-            {/* v6.6.0: order the sidebar skill-first. The skill's own
-                affordances (its curated Library + anything the agent streams
-                into the A2UI sidebar surface) sit at the top because they're
-                the most relevant while working; the generic workspace utilities
-                (your uploads, chat history) sit below. Each section remembers
-                its open/closed state across sidebar reopens (persistId). */}
-
-            {/* Skill-related #1 — the skill's curated document library
-                (v6.4.0 4.5 SKILL-ONBOARDING M4), e.g. ONE's PPA library. Click
-                a file → import-by-reference, no upload. Only present when the
-                skill declares welcome.bucket_browser. */}
-            {skillWelcome?.bucketBrowser?.bucket && (
-              <SidebarSection
-                title={skillWelcome.bucketBrowser.label || translateChat(locale, "shell.library")}
-                persistId="library"
-                defaultOpen={skillWelcome.bucketBrowser.defaultOpen ?? true}
-              >
-                {/* Cap + scroll the library so a large folder (ONE's PPA library
-                    has 50+ files) can't push "Your files" / "Past conversations"
-                    off-screen — the whole point of a sidebar is that every
-                    section stays reachable (2026-07-16 report). */}
-                <div className="max-h-[45vh] overflow-y-auto">
-                  <GCSFileBrowser
-                    bucket={skillWelcome.bucketBrowser.bucket ?? ""}
-                    rootPath={skillWelcome.bucketBrowser.rootPath ?? ""}
-                    onPick={(bucket, objectName, _label) => {
-                      void handleImportByReference(bucket, objectName);
-                    }}
-                  />
-                </div>
-              </SidebarSection>
-            )}
-
-            {/* Skill-related #2 — A2UI sidebar surface. A skill can route its
-                A2UI to the `sidebar` surface (toolConfigs.a2ui.defaultSurface),
-                so the agent streams live UI here. Autohides when empty. Placed
-                high so AI-streamed content is prominent. */}
-            <SidebarSurfaceRegion sessionId={sessionId ?? agentSessionId} />
-
-            {/* Generic workspace utility — the user's own uploaded files. */}
-            <SidebarSection
-              title={translateChat(locale, "shell.yourFiles")}
-              persistId="files"
-              defaultOpen={true}
-              bodyClassName=""
-            >
-              <div className="max-h-[30vh] overflow-y-auto">
-                <DocListView uid={user.uid} onDocClick={handleDocClick} />
-              </div>
-              <div className="border-t">
-                <p className="px-3 py-2 text-xs text-muted-foreground">在输入区添加文件，上传后自动加入当前对话。</p>
-              </div>
-            </SidebarSection>
-
-            {/* Generic workspace utility — chat history. Lowest priority while
-                working, so it sits at the bottom. */}
-            <SidebarSection
-              title={translateChat(locale, "shell.pastConversations")}
-              persistId="conversations"
-              defaultOpen={true}
-            >
-              <div className="max-h-40 overflow-y-auto">
-                <SkillSessionPanel
-                  sessions={sessions}
-                  activeSessionId={sessionId}
-                  isLoading={sessionsLoading}
-                  error={sessionsError}
-                  onRetry={refetchSessions}
-                  nextCursor={nextCursor}
-                  onLoadMore={loadMoreSessions}
-                  isLoadingMore={sessionsLoadingMore}
-                  onSelectSession={handleSelectSkillSession}
-                  onDelete={(sid) => void handleDeleteSkillSession(sid)}
-                  skillFilter={sessionSkillFilter}
-                  onFilterChange={setSessionSkillFilter}
-                />
-              </div>
-            </SidebarSection>
-          </aside>
-        )}
+        <ChatSidebar open={showDocBrowser} onOpenChange={setDocBrowserOpen}
+          files={<>
+            <DocListView uid={user.uid} onDocClick={handleDocClick} />
+            <p className="shrink-0 border-t px-4 py-3 text-xs leading-5 text-muted-foreground">{translateChat(locale, "sidebar.fileHelp")}</p>
+          </>}
+          history={<SkillSessionPanel sessions={sessions} activeSessionId={sessionId} isLoading={sessionsLoading}
+            error={sessionsError} onRetry={refetchSessions} nextCursor={nextCursor} onLoadMore={loadMoreSessions} isLoadingMore={sessionsLoadingMore}
+            onSelectSession={handleSelectSkillSession} onDelete={(sid) => void handleDeleteSkillSession(sid)}
+            skillFilter={sessionSkillFilter} onFilterChange={setSessionSkillFilter} />}
+          libraryLabel={skillWelcome?.bucketBrowser?.label}
+          library={skillWelcome?.bucketBrowser?.bucket ? <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <GCSFileBrowser bucket={skillWelcome.bucketBrowser.bucket} rootPath={skillWelcome.bucketBrowser.rootPath ?? ""}
+              onPick={(bucket, objectName) => { void handleImportByReference(bucket, objectName); }} />
+          </div> : undefined}
+          assistant={sidebarSurface?.surface ? <div className="min-h-0 flex-1 overflow-y-auto p-3"><A2UISurfaceMount surfaceId="sidebar" sessionId={effectiveSessionId} /></div> : undefined}
+        />
 
         {/* v6.4.0 ITERATION 2026-06-09: Chat is the middle column,
             Workbench is the right pane. Replaces the prior conditional

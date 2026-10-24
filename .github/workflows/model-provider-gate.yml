@@ -47,7 +47,7 @@ on:
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
       - frontend/e2e/chat-files-live.spec.js
-      - frontend/src/components/chat/ChatShell.tsx
+      - frontend/src/components/chat/**
       - frontend/src/components/doc-browser/**
       - frontend/src/components/document/**
       - frontend/src/hooks/useSessionAttachments.ts
@@ -133,7 +133,7 @@ on:
       - frontend/e2e/model-provider-studio-live.spec.js
       - frontend/e2e/root-console-live.spec.js
       - frontend/e2e/chat-files-live.spec.js
-      - frontend/src/components/chat/ChatShell.tsx
+      - frontend/src/components/chat/**
       - frontend/src/components/doc-browser/**
       - frontend/src/components/document/**
       - frontend/src/hooks/useSessionAttachments.ts
@@ -254,7 +254,11 @@ jobs:
             src/components/studio/__tests__/StudioPage.test.tsx \
             src/components/skills/__tests__/SkillsPage.test.tsx \
             src/components/chat/__tests__/ChatShell.composer.test.tsx \
+            src/components/chat/__tests__/ChatSidebar.test.tsx \
             src/components/chat/__tests__/SkillSessionPanel.test.tsx \
+            src/components/doc-browser/__tests__/DocListFolder.test.tsx \
+            src/components/doc-browser/__tests__/DocListItem.test.tsx \
+            src/components/doc-browser/__tests__/DocTabsBar.test.tsx \
             src/components/chat/__tests__/ChatShell.workspaceHome.test.tsx \
             src/components/chat/__tests__/ChatShell.closeArtefactTab.test.tsx \
             src/components/chat/__tests__/ChatShell.pricesArtefact.test.tsx \

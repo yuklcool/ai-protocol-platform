@@ -1,6 +1,14 @@
 import type { Locale, TranslationParams } from "@/lib/i18n";
 
 const en = {
+  "sidebar.title": "Conversation resources",
+  "sidebar.trigger": "Files & history",
+  "sidebar.open": "Open files and history",
+  "sidebar.close": "Close files and history",
+  "sidebar.files": "Files",
+  "sidebar.history": "Conversations",
+  "sidebar.assistant": "Assistant",
+  "sidebar.fileHelp": "Select a file to add it to this conversation. Upload new files from the message box.",
   "signIn.required": "Sign-in required",
   "signIn.openSkill": "You need to sign in to open {skill}.",
   "signIn.openChat": "You need to sign in to open this chat.",
@@ -219,6 +227,14 @@ const en = {
 export type ChatTranslationKey = keyof typeof en;
 
 const zhCN = {
+  "sidebar.title": "对话资源",
+  "sidebar.trigger": "文件与历史",
+  "sidebar.open": "打开文件与历史记录",
+  "sidebar.close": "关闭文件与历史记录",
+  "sidebar.files": "文件",
+  "sidebar.history": "历史对话",
+  "sidebar.assistant": "助手",
+  "sidebar.fileHelp": "点击文件可加入当前对话，新文件可在输入区上传。",
   "signIn.required": "需要登录",
   "signIn.openSkill": "登录后才能打开 {skill}。",
   "signIn.openChat": "登录后才能打开此对话。",

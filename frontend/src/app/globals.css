@@ -835,6 +835,38 @@
 .chat-empty {
   padding-block: 16px 24px;
 }
+.chat-resource-sidebar {
+  display: flex;
+  width: 304px;
+  height: 100%;
+  min-height: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--hairline);
+  background: var(--surface-solid);
+}
+.chat-resource-tabs [aria-selected="true"] {
+  background: var(--surface-solid);
+  color: hsl(var(--foreground));
+  box-shadow: var(--shadow-1);
+}
+.chat-resource-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(0 0 0 / 24%);
+}
+.chat-resource-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 81;
+  width: min(360px, calc(100vw - 32px));
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: var(--shadow-3);
+}
 .composer {
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-panel);
@@ -921,14 +953,6 @@
   }
   .workspace-row > [role="separator"] {
     display: none;
-  }
-  .workspace-row > .chat-files-panel {
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 20;
-    width: min(320px, 90%);
-    background: var(--surface-solid);
-    box-shadow: var(--shadow-3);
   }
   .page-container :is(button, select),
   .page-container :is(.button-primary, .button-secondary, .button-ghost, .button-danger),

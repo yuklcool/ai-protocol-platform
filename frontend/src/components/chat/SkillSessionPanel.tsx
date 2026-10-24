@@ -73,12 +73,12 @@ export function SkillSessionPanel({
   const showFilter = Boolean(onFilterChange) && (options.length > 1 || skillFilter !== null);
 
   const filterRow = showFilter ? (
-    <div className="px-2 pb-1 pt-0.5">
+    <div className="shrink-0 px-3 pb-3">
       <select
         aria-label={translateChat(locale, "sessions.filterAria")}
         value={skillFilter ?? ""}
         onChange={(e) => onFilterChange?.(e.target.value || null)}
-        className="w-full rounded border bg-transparent px-1 py-0.5 text-[11px] text-muted-foreground"
+        className="min-h-10 w-full rounded-lg border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
       >
         <option value="">{translateChat(locale, "sessions.allAgents")}</option>
         {options.map((o) => (
@@ -93,18 +93,11 @@ export function SkillSessionPanel({
     </div>
   ) : null;
 
-  if (isLoading && sessions.length === 0) {
-    return (
-      <>
-        {filterRow}
-        <SessionSkeleton locale={locale} />
-      </>
-    );
-  }
-
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {filterRow}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-resource-scroll="history">
+      {isLoading && sessions.length === 0 && <SessionSkeleton locale={locale} />}
       {error && (
         <div role="alert" className="space-y-2 p-3 text-xs text-destructive">
           <p>{translateChat(locale, "sessions.loadFailed")}</p>
@@ -125,8 +118,8 @@ export function SkillSessionPanel({
           {translateChat(locale, skillFilter ? "sessions.noneForAgent" : "sessions.none")}
         </div>
       )}
-      {isLoading && <p role="status" className="p-2 text-xs text-muted-foreground">{translateChat(locale, "sessions.loadingAria")}</p>}
-      <nav aria-label={translateChat(locale, "sessions.historyAria")} aria-busy={isLoading || isLoadingMore} className="flex flex-col p-1">
+      {isLoading && sessions.length > 0 && <p role="status" className="p-2 text-xs text-muted-foreground">{translateChat(locale, "sessions.loadingAria")}</p>}
+      <nav aria-label={translateChat(locale, "sessions.historyAria")} aria-busy={isLoading || isLoadingMore} className="flex flex-col gap-1">
         {sessions.map((s) => {
           const isActive = s.session_id === activeSessionId;
           const title =
@@ -135,7 +128,7 @@ export function SkillSessionPanel({
             <div
               key={s.session_id}
               className={[
-                "group flex w-full items-center gap-1 rounded px-1 transition-colors",
+                "group flex w-full items-center gap-1 rounded-xl px-1 transition-colors",
                 "hover:bg-accent hover:text-accent-foreground",
                 isActive ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground",
               ].join(" ")}
@@ -143,33 +136,31 @@ export function SkillSessionPanel({
               <button
                 type="button"
                 onClick={() => onSelectSession(s.session_id)}
-                className="flex min-w-0 flex-1 items-baseline justify-between gap-2 px-1.5 py-1 text-left"
+                className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-1 px-2 py-2 text-left focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 aria-current={isActive ? "true" : undefined}
                 title={title}
               >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="line-clamp-1 text-xs">{title}</span>
+                  <span className="w-full truncate text-[13px] font-medium text-foreground">{title}</span>
+                <span className="flex w-full min-w-0 items-center justify-between gap-2 text-[11px] text-muted-foreground">
                   {s.transcript_lost ? (
                     <span
                       data-testid="session-transcript-lost"
-                      className="line-clamp-1 text-[10px] text-amber-600"
+                      className="truncate text-amber-600"
                       title={translateChat(locale, "sessions.transcriptLostTitle")}
                     >
                       {translateChat(locale, "sessions.messagesUnavailable")}
                     </span>
                   ) : (
-                    s.skill_label && (
-                      <span
-                        data-testid="session-agent-label"
-                        className="line-clamp-1 text-[10px] opacity-60"
-                      >
-                        {s.skill_label}
-                      </span>
-                    )
+                    <span
+                      data-testid={s.skill_label ? "session-agent-label" : undefined}
+                      className="truncate"
+                    >
+                      {s.skill_label || ""}
+                    </span>
                   )}
-                </span>
-                <span className="shrink-0 text-[10px] opacity-60">
+                <span className="shrink-0">
                   {relativeTime(s.last_message_at, locale)}
+                </span>
                 </span>
               </button>
               {onDelete && s.is_owner && (
@@ -181,7 +172,7 @@ export function SkillSessionPanel({
                   }}
                   aria-label={translateChat(locale, "sessions.deleteAria", { title })}
                   title={translateChat(locale, "sessions.delete")}
-                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-primary md:min-h-8 md:min-w-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 >
                   <svg
                     className="h-3.5 w-3.5"
@@ -214,6 +205,7 @@ export function SkillSessionPanel({
         </button>
       )}
       {isLoadingMore && <p role="status" className="px-2 text-xs text-muted-foreground">{translateChat(locale, "sessions.loadingMore")}</p>}
-    </>
+      </div>
+    </div>
   );
 }

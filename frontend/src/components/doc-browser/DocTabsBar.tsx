@@ -3,6 +3,8 @@
 import { useRef } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { DocTab, type DocTabData } from "./DocTab";
+import { useI18n } from "@/contexts/I18nContext";
+import { translateChat } from "@/lib/i18n/chat";
 
 interface DocTabsBarProps {
   tabs: DocTabData[];
@@ -24,6 +26,7 @@ export function DocTabsBar({
   onToggleBrowser,
 }: DocTabsBarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { locale } = useI18n();
 
   return (
     <div className="app-toolbar flex min-h-10 items-stretch">
@@ -31,19 +34,22 @@ export function DocTabsBar({
       <button
         type="button"
         onClick={onToggleBrowser}
+        id="chat-resource-toggle"
+        aria-controls="chat-resource-sidebar"
         aria-expanded={showBrowser}
         className={[
-          "flex shrink-0 items-center border-r px-2.5 text-muted-foreground hover:bg-accent hover:text-foreground",
+          "flex shrink-0 items-center gap-2 border-r px-3 text-xs text-muted-foreground hover:bg-accent hover:text-foreground",
           showBrowser ? "bg-accent/50 text-foreground" : "",
         ].join(" ")}
-        title={showBrowser ? "隐藏文件列表" : "显示文件列表"}
-        aria-label={showBrowser ? "隐藏文件列表" : "显示文件列表"}
+        title={translateChat(locale, showBrowser ? "sidebar.close" : "sidebar.open")}
+        aria-label={translateChat(locale, showBrowser ? "sidebar.close" : "sidebar.open")}
       >
         {showBrowser ? (
           <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
         ) : (
           <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
         )}
+        <span>{translateChat(locale, "sidebar.trigger")}</span>
       </button>
 
       {/* Tab strip — horizontally scrollable, no scrollbar */}

@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { ParsedDocument } from "@/hooks/useDocBrowser";
 import { DocListItem } from "../DocListItem";
 
+// Focusing a file action opens its preview; document fetching has separate tests.
+vi.mock("@/hooks/useDocument", () => ({
+  useDocument: () => ({ doc: null, isLoading: false, error: null }),
+}));
+
 function makeDoc(overrides: Partial<ParsedDocument> = {}): ParsedDocument {
   return {
     id: "doc1",
@@ -80,5 +85,14 @@ describe("DocListItem", () => {
     expect(row).not.toBeNull();
     await userEvent.click(row!);
     expect(onClick).toHaveBeenCalledWith(doc);
+  });
+
+  it("键盘触发删除确认时不会同时打开文件", async () => {
+    const onClick = vi.fn();
+    render(<DocListItem doc={makeDoc()} onClick={onClick} />);
+    screen.getByRole("button", { name: "删除文件" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "再次点击确认删除" })).toBeInTheDocument();
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

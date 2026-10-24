@@ -79,10 +79,10 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
     await page.getByLabel("服务名称",{exact:true}).fill("手机配置验收服务");
     await snapshot(page,info,"390-model-service-form");
     await page.goto(`${FRONTEND}/chat/root-agent`);
-    await page.getByRole("button",{name:"显示文件列表",exact:true}).click();
-    await expect(page.getByRole("button",{name:"关闭文件与历史记录",exact:true})).toBeVisible();
+    await page.getByRole("button",{name:"打开文件与历史记录",exact:true}).click();
+    await expect(page.getByRole("dialog").getByRole("button",{name:"关闭文件与历史记录",exact:true})).toBeVisible();
     await snapshot(page,info,"390-chat-files");
-    await page.getByRole("button",{name:"关闭文件与历史记录",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"关闭文件与历史记录",exact:true}).click();
     await expect(page.locator("textarea").first()).toBeVisible();
     expect(errors).toEqual([]);
   } catch(error) { primaryError=error; throw error; }
