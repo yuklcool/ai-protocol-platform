@@ -76,6 +76,7 @@ vi.mock("@/hooks/useDocBrowser", () => ({
   useDocBrowser: () => ({ folders: [], documents: [], filteredDocuments: [], activeFolderId: null, searchQuery: "", setActiveFolderId: vi.fn(), setSearchQuery: vi.fn(), error: null, isLoading: false }),
 }));
 vi.mock("@/components/document/DocumentPanel", () => ({ DocumentPanel: () => null }));
+vi.mock("@/hooks/useDocument", () => ({ useDocument: vi.fn(() => ({ doc: null, error: null, isLoading: false })) }));
 vi.mock("@/hooks/useDocumentSessions", () => ({ useDocumentSessions: () => ({ sessions: [], isLoading: false, error: null }) }));
 vi.mock("@/hooks/useSessionAttachments", () => ({ useSessionAttachments: vi.fn() }));
 vi.mock("@/hooks/useSessionMessages", () => ({
@@ -131,6 +132,7 @@ import { importByReference } from "@/lib/importByReference";
 import { ChatShell } from "../ChatShell";
 import type { User } from "@/lib/firebase";
 import { useSkillAgent } from "@/hooks/useSkillAgent";
+import { useDocument } from "@/hooks/useDocument";
 
 async function renderChat() {
   await act(async () => {
@@ -152,6 +154,7 @@ const LONG_PROMPT =
   "change-in-law provisions and the settlement timeline.";
 
 beforeEach(() => {
+  vi.mocked(useDocument).mockReturnValue({ doc: null, error: null, isLoading: false });
   Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
   subscribers.length = 0;
   vi.clearAllMocks();
@@ -530,5 +533,30 @@ describe("ChatShell — 导入失败反馈", () => {
     expect(composer()).toHaveValue("keep editing");
     view.rerender(shell());
     expect(importByReference).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ChatShell — 资料带入对话", () => {
+  it("等待附件恢复后附加已授权文件，并保持预览收起", async () => {
+    navigation.params = new URLSearchParams("document=from-library");
+    vi.mocked(useDocument).mockReturnValue({ doc: { id: "from-library", originalFilename: "notes.txt", sourceFormat: "txt", parseStatus: "parsed", parseError: null, sourceUrl: null, parsedAt: null, summary: null, blocks: [] }, error: null, isLoading: false });
+    const setTabs = vi.fn();
+    const attachments = { tabs: [], setTabs, ready: false, saving: false, error: null, retrySave: vi.fn() };
+    vi.mocked(useSessionAttachments).mockReturnValue(attachments);
+    const view = render(shell());
+    expect(setTabs).not.toHaveBeenCalled();
+    vi.mocked(useSessionAttachments).mockReturnValue({ ...attachments, ready: true });
+    view.rerender(shell());
+    expect(setTabs).toHaveBeenCalledOnce();
+    expect(setTabs.mock.calls[0][0]([])).toEqual([expect.objectContaining({ id: "from-library", filename: "notes.txt", included: true })]);
+    expect(navigation.replace).toHaveBeenCalledWith("/chat/@current/current-slug");
+    expect(document.querySelector(".workbench-pane-visible")).toBeNull();
+  });
+  it("文件读取被拒绝时明确提示且不附加", () => {
+    navigation.params = new URLSearchParams("document=private");
+    vi.mocked(useDocument).mockReturnValue({ doc: null, error: "Access denied", isLoading: false });
+    render(shell());
+    expect(screen.getByRole("alert")).toHaveTextContent("Access denied");
+    expect(attachmentState().setTabs).not.toHaveBeenCalled();
   });
 });
