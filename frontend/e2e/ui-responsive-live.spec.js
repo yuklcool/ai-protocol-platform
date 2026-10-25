@@ -54,6 +54,8 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
         if(route === "/results") {
           await expect(page.getByText("正在加载会话…", {exact:true})).toHaveCount(0);
           await expect(page.getByText(/正在读取成果…/)).toHaveCount(0);
+          await expect(page.getByRole("button", {name:/需核对的来源/})).toHaveAttribute("aria-expanded", "false");
+          await expect(page.getByText("成果状态需核对", {exact:true})).toHaveCount(0);
         }
         if(route === "/documents") {
           const library = page.getByRole("region", {name:"资料列表",exact:true});
@@ -86,6 +88,15 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
           await expect(table.or(page.getByRole("heading",{name:"暂无审计记录",exact:true}))).toBeVisible();
         }
         await snapshot(page,info,`${viewport.width}-${route.slice(1).replaceAll("/","-")}`);
+        if(route === "/results" && viewport.width === 390) {
+          const review = page.getByRole("button", {name:/需核对的来源/});
+          await review.click();
+          await page.locator("summary").filter({hasText:"成果状态需核对"}).first().click();
+          await expect(page.getByText("会话成果状态不可用，不能据此判断没有成果。可返回原对话核对。", {exact:true}).first()).toBeVisible();
+          await snapshot(page,info,"390-results-review");
+          await review.click();
+          await expect(page.getByText("成果状态需核对", {exact:true})).toHaveCount(0);
+        }
         if(route === "/admin/audit" && viewport.width < 768 && await page.getByRole("table").isVisible()) {
           const table=page.getByRole("table");
           const scroller=table.locator("..");

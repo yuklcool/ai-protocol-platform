@@ -37,9 +37,9 @@ function isResults(value: unknown, sessionId: string): value is SessionResults {
       && (item.created_at === null || (typeof item.created_at === "number" && Number.isFinite(item.created_at))));
 }
 
-type ResultStatus = "loading" | "empty" | "visible";
+type ResultStatus = "loading" | "empty" | "review" | "visible";
 
-function ResultsDetails({ session, onStatus }: { session: ChatSessionSummary; onStatus: (id: string, status: ResultStatus) => void }) {
+function ResultsDetails({ session, onStatus, showReview }: { session: ChatSessionSummary; onStatus: (id: string, status: ResultStatus) => void; showReview: boolean }) {
   const { locale } = useI18n();
   const headingId = useId();
   const zh = locale.startsWith("zh");
@@ -78,13 +78,13 @@ function ResultsDetails({ session, onStatus }: { session: ChatSessionSummary; on
   const empty = !loading && !error && data?.state_available === true
     && data.incomplete_count === 0 && !data.truncated
     && data.results.length === 0 && reports.length === 0 && !session.transcript_lost;
+  const reviewOnly = !loading && !error && !empty && data !== null && data.results.length === 0 && reports.length === 0;
   useEffect(() => {
-    onStatus(session.session_id, loading ? "loading" : empty ? "empty" : "visible");
-  }, [session.session_id, loading, empty, onStatus]);
+    onStatus(session.session_id, loading ? "loading" : empty ? "empty" : reviewOnly ? "review" : "visible");
+  }, [session.session_id, loading, empty, reviewOnly, onStatus]);
   const title = session.title || (zh ? "未命名会话" : "Untitled session");
-  if (empty) return null;
+  if (empty || (reviewOnly && !showReview)) return null;
   if (loading) return <p role="status" className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground"><span className="skeleton h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{title} · {zh ? "正在读取成果…" : "Loading results…"}</span></p>;
-  const reviewOnly = !error && data !== null && data.results.length === 0 && reports.length === 0;
   const Container = reviewOnly ? "details" : "section";
   return (
     <Container aria-labelledby={headingId} className="glass-panel min-w-0">
@@ -134,12 +134,15 @@ function ResultsContent() {
   const zh = locale.startsWith("zh");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
+  const [showReview, setShowReview] = useState(false);
   const [statuses, setStatuses] = useState<Record<string, ResultStatus>>({});
   const onStatus = useCallback((id: string, status: ResultStatus) => {
     setStatuses(previous => previous[id] === status ? previous : { ...previous, [id]: status });
   }, []);
   const { sessions, isLoading, error, refetch, nextCursor, loadMore, isLoadingMore } = useSkillSessions(null, { query: search });
   const pageEmpty = sessions.length > 0 && sessions.every(session => statuses[session.session_id] === "empty");
+  const reviewCount = sessions.filter(session => statuses[session.session_id] === "review").length;
+  const renderResult = (session: ChatSessionSummary) => <ResultsDetails key={`session:${session.session_id}`} session={session} onStatus={onStatus} showReview={showReview} />;
   return (
     <main className="page-container mx-auto max-w-6xl">
       <header className="page-header page-header--compact"><h1 className="page-header__title">{zh ? "我的成果" : "My results"}</h1><Link href="/chat/root-agent" className="button-primary">{zh ? "创建新成果" : "Create a result"}</Link></header>
@@ -147,7 +150,13 @@ function ResultsContent() {
       <details className="mb-4 text-xs text-muted-foreground"><summary className="cursor-pointer py-2">{zh ? "成果与搜索范围" : "About results and search"}</summary><p className="pb-2">{zh ? "按来源对话分页查找已保存的报告和交互成果。搜索匹配对话标题与编号，正文不参与；上传附件不计为成果。当前页没有成果时，可继续加载更早的对话。" : "Saved reports and interactive results are grouped by source conversation. Search matches conversation titles and IDs, not content. Uploads are excluded. Load earlier conversations if this page has no results."}</p></details>
       <SessionFeedback error={error} isLoading={isLoading} empty={sessions.length === 0} retry={refetch} />
       {!isLoading && pageEmpty && <div role="status" className="empty-state"><h2 className="empty-state__title">{zh ? "已检查的对话中暂无保存成果" : "No saved results in the checked conversations"}</h2><p className="empty-state__desc">{nextCursor ? (zh ? "可继续加载更早的对话，或搜索来源标题。" : "Load earlier conversations or search by source title.") : (zh ? "可在对话中保存报告，之后在这里编辑和下载。" : "Save a report in chat to edit and download it here.")}</p></div>}
-      <div className="space-y-4">{sessions.map(session => <ResultsDetails key={session.session_id} session={session} onStatus={onStatus} />)}</div>
+      <div className="flex flex-col gap-4">
+        {[
+          ...sessions.filter(session => statuses[session.session_id] !== "review").map(renderResult),
+          reviewCount > 0 && <button key="review-toggle" type="button" aria-expanded={showReview} onClick={() => setShowReview(value => !value)} className="glass-panel flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm"><span>{zh ? `需核对的来源（${reviewCount}）` : `Sources to review (${reviewCount})`}</span><span className="shrink-0 text-primary">{showReview ? (zh ? "收起" : "Collapse") : (zh ? "展开核对" : "Review")}</span></button>,
+          ...sessions.filter(session => statuses[session.session_id] === "review").map(renderResult),
+        ]}
+      </div>
       {nextCursor && <button type="button" onClick={loadMore} disabled={isLoading || isLoadingMore} className="button-secondary mt-6">{isLoadingMore ? (zh ? "正在加载…" : "Loading…") : (zh ? "加载更多成果" : "Load more results")}</button>}
     </main>
   );

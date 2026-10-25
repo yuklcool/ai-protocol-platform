@@ -43,6 +43,8 @@ describe("ResultsPage", () => {
   it("does not treat unavailable or incomplete state as an empty result", async () => {
     fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).endsWith("/results") ? response(results("s1", { state_available: false, incomplete_count: 2, truncated: true, results: [] })) : response({ sessions: [row("s1")], next_cursor: null }));
     render(<ResultsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Sources to review \(1\)/ }));
+    fireEvent.click(await screen.findByText("Result state needs review"));
     expect(await screen.findByText(/Result state is unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/2 state entries are incomplete/)).toBeInTheDocument();
     expect(screen.getByText(/Only the first 100 results/)).toBeInTheDocument();
@@ -74,9 +76,25 @@ describe("ResultsPage", () => {
   it("keeps transcript-loss warnings even when the saved result list is empty", async () => {
     fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).endsWith("/results") ? response(results("s1", { results: [] })) : response({ sessions: [{ ...row("s1"), transcript_lost: true }], next_cursor: null }));
     render(<ResultsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /Sources to review \(1\)/ }));
     fireEvent.click(await screen.findByText("Result state needs review"));
     expect(await screen.findByText(/transcript may be unavailable/)).toBeVisible();
     await waitFor(() => expect(screen.queryByText(/Loading results/)).not.toBeInTheDocument());
     expect(screen.queryByText("No saved results in the checked conversations")).not.toBeInTheDocument();
+  });
+  it("groups unavailable sources behind one toggle without hiding actual results or reloading", async () => {
+    fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).includes("/s1/results") ? response(results("s1")) : String(url).endsWith("/results") ? response(results("s2", { state_available: false, results: [] })) : response({ sessions: [row("s2", "Unknown source"), row("s1", "Actual source")], next_cursor: null }));
+    render(<ResultsPage />);
+    expect(await screen.findByText("Saved result")).toBeVisible();
+    const toggle = await screen.findByRole("button", { name: /Sources to review \(1\)/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Result state needs review")).not.toBeInTheDocument();
+    const calls = fetchMock.mock.calls.length;
+    fireEvent.click(toggle);
+    expect(await screen.findByText("Result state needs review")).toBeVisible();
+    fireEvent.click(toggle);
+    expect(screen.queryByText("Result state needs review")).not.toBeInTheDocument();
+    expect(screen.getByText("Saved result")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
   });
 });
