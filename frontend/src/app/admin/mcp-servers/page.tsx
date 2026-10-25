@@ -246,9 +246,10 @@ export default function McpServersPage() {
         setHealth(null);
         setDiscovery(null);
       }
-      setNoticeTone("success");
-      setNotice(t("delete.ok", { id: server.server_id }));
-      await load();
+      if (await load()) {
+        setNoticeTone("success");
+        setNotice(t("delete.ok", { id: server.server_id }));
+      }
     } finally {
       setBusy(false);
     }
@@ -286,13 +287,14 @@ export default function McpServersPage() {
         );
         return;
       }
-      setNoticeTone("success");
-      setNotice(
-        t(server.enabled ? "toggle.disabled" : "toggle.enabled", {
-          id: server.server_id,
-        }),
-      );
-      await load();
+      if (await load()) {
+        setNoticeTone("success");
+        setNotice(
+          t(server.enabled ? "toggle.disabled" : "toggle.enabled", {
+            id: server.server_id,
+          }),
+        );
+      }
     } finally {
       setBusy(false);
     }
