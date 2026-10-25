@@ -58,6 +58,8 @@ test("服务端搜索未加载历史、日期范围、授权分页与三档布�
     await page.getByRole("button", { name: "筛选", exact: true }).click();
     await page.getByLabel("更新时间起").fill("2026-10-20");
     await page.getByLabel("更新时间止").fill("2026-10-20");
+    await expect(page.getByRole("button", { name: "应用筛选", exact: true })).toBeInViewport();
+    await page.screenshot({ path: info.outputPath("session-filters-390.png"), fullPage: true });
     const firstResponse = page.waitForResponse((r) => r.url().includes("/api/sessions/search?") && new URL(r.url()).searchParams.get("q") === `照明能耗 ${tag}`);
     await page.getByRole("button", { name: "应用筛选", exact: true }).click();
     const result = await firstResponse;

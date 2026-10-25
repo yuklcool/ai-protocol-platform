@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Plus, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useSkillSessions, type SessionSearchFilters } from "@/hooks/useSkillSessions";
 import { WorkspaceGate } from "@/components/workspace/WorkspaceGate";
@@ -20,6 +20,7 @@ function SessionsContent() {
   const [validation, setValidation] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterButton = useRef<HTMLButtonElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<SessionSearchFilters>({});
   const { sessions, isLoading, error, refetch, nextCursor, loadMore, isLoadingMore } = useSkillSessions(null, filters);
   const searching = Boolean(filters.taskStatus || filters.query || filters.updatedAfter || filters.updatedBefore);
@@ -54,13 +55,14 @@ function SessionsContent() {
           <div className="flex min-w-0 items-center gap-2">
             <div className="relative min-w-0 flex-1">
               <label htmlFor="session-search" className="sr-only">{zh ? "搜索历史会话" : "Search sessions"}</label>
-              <input id="session-search" type="search" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜索对话标题或编号" : "Search by title or session ID"} className="glass-control w-full min-w-0 py-2 pl-3 pr-12 text-sm" />
+              <input ref={searchInput} id="session-search" type="search" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜索对话标题或编号" : "Search by title or session ID"} className="glass-control w-full min-w-0 py-2 pl-3 pr-12 text-sm" />
               <button type="submit" aria-label={zh ? "搜索" : "Search"} title={zh ? "搜索" : "Search"} className="button-ghost absolute inset-y-0 right-0 w-11"><Search className="h-4 w-4" aria-hidden="true" /></button>
             </div>
             <button ref={filterButton} type="button" aria-expanded={filtersOpen} aria-controls="session-filters" aria-label={zh ? "筛选" : "Filters"} onClick={() => setFiltersOpen(!filtersOpen)} className={`button-secondary shrink-0 text-sm ${filtersOpen || advancedFilterCount ? "border-primary text-primary" : ""}`}>
               <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />{zh ? "筛选" : "Filters"}
               {advancedFilterCount > 0 && <span className="rounded bg-primary/10 px-1.5 text-xs">{advancedFilterCount}</span>}
             </button>
+            {canReset && <button type="button" aria-label={zh ? "重置" : "Reset"} title={zh ? "重置" : "Reset"} className="button-ghost w-11 shrink-0" onClick={() => { setStatus(""); setQuery(""); setFrom(""); setTo(""); setValidation(false); setFilters({}); searchInput.current?.focus(); }}><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>}
           </div>
           {filtersOpen && <div id="session-filters" className="mt-3 space-y-3 border-t border-border pt-3">
             <div className="grid min-w-0 gap-3 sm:grid-cols-3">
@@ -74,12 +76,10 @@ function SessionsContent() {
               <button type="submit" className="button-secondary text-sm">{zh ? "应用筛选" : "Apply filters"}</button>
             </div>
           </div>}
-          {canReset && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {filters.query && <span className="max-w-full truncate">{zh ? "搜索：" : "Search: "}{filters.query}</span>}
+          {advancedFilterCount > 0 && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {filters.taskStatus && <span>{zh ? "计划：" : "Plan: "}{TASK_STATUS_LABELS[filters.taskStatus]?.[zh ? 0 : 1]}</span>}
             {filters.updatedAfter && <span>{zh ? "起：" : "From: "}{dateLabel(filters.updatedAfter)}</span>}
             {filters.updatedBefore && <span>{zh ? "止：" : "Through: "}{dateLabel(filters.updatedBefore, true)}</span>}
-            <button type="button" className="button-ghost text-xs" onClick={() => { setStatus(""); setQuery(""); setFrom(""); setTo(""); setValidation(false); setFilters({}); }}>{zh ? "重置" : "Reset"}</button>
           </div>}
         </form>
         {(error || isLoading || sessions.length === 0) && <div className="p-4">

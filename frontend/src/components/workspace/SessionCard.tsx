@@ -39,7 +39,7 @@ export function SessionCard({ session }: { session: ChatSessionSummary }) {
               {session.transcript_lost && <p className="text-xs text-muted-foreground">{zh ? "此会话的历史消息已不可用" : "This session’s messages are no longer available"}</p>}
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {session.skill_label && <span>{session.skill_label}</span>}
+              {session.skill_label && <span className="max-w-24 truncate" title={session.skill_label}>{session.skill_label}</span>}
               {!Number.isNaN(date.getTime()) && <time dateTime={session.last_message_at} title={date.toLocaleString(locale)} className="tabular-nums">{date.toLocaleString(locale, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time>}
             </div>
           </div>
