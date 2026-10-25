@@ -148,9 +148,13 @@ test("资料上传、预览后用于新对话，附件保存且聊天默认不�
   const filename = `workbench-${randomUUID()}.txt`;
   try {
     await page.goto(`${FRONTEND}/documents`);
-    const uploaded = page.waitForResponse(response => response.url().endsWith("/api/documents/upload") && response.request().method() === "POST");
-    await page.getByLabel("上传对话附件").setInputFiles({ name: filename, mimeType: "text/plain", buffer: Buffer.from("个人资料验收内容。预算 100，实际 80。") });
-    const response = await uploaded;
+    // setInputFiles bypasses the file picker's disabled state; wait for the
+    // format/size capabilities just as the visible upload button requires.
+    await expect(page.getByRole("button", { name: "添加文件或拖入此处", exact: true })).toBeEnabled();
+    const [response] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith("/api/documents/upload") && response.request().method() === "POST"),
+      page.getByLabel("上传对话附件").setInputFiles({ name: filename, mimeType: "text/plain", buffer: Buffer.from("个人资料验收内容。预算 100，实际 80。") }),
+    ]);
     expect(response.ok()).toBe(true);
     documentId = (await response.json()).docId;
     const preview = page.getByRole("region", { name: "文件预览", exact: true });
