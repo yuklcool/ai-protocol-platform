@@ -126,10 +126,12 @@ async function renderChat() {
 }
 
 /** Push the backend's A2UI_SURFACE event at every live router subscriber. */
-function emitSurface(value: unknown) {
+function emitSurface(value: unknown, openPreview = true) {
   act(() => {
     for (const handler of subscribers) handler({ event: { name: "A2UI_SURFACE", value } });
   });
+  // Existing rendering checks open the preview as a user would.
+  if (openPreview) act(() => { screen.queryByRole("button", { name: "Expand workbench" })?.click(); });
 }
 
 beforeEach(() => {
@@ -152,7 +154,7 @@ describe("ChatShell — prices artifact (PRICES-WORKSPACE M4)", () => {
     }
   });
 
-  it("renders a workbench tab for a prices artifact and auto-focuses it", async () => {
+  it("renders a result tab without automatically selecting it", async () => {
     await renderChat();
     // Nothing before the event — the tab must come FROM the surface, not exist
     // speculatively.
@@ -164,13 +166,14 @@ describe("ChatShell — prices artifact (PRICES-WORKSPACE M4)", () => {
     //     artifact.title — a friendly name, never the surfaceId (CLAUDE.md #9).
     const tab = await screen.findByRole("tab", { name: /DE_LU prices/i });
     // (b) Repo principle #7 — auto-focus, don't merely badge.
-    expect(tab.getAttribute("aria-selected")).toBe("true");
+    expect(tab.getAttribute("aria-selected")).toBe("false");
   });
 
   it("mounts SeriesArtefactTab (not the generic A2UI fallback) for kind=prices", async () => {
     await renderChat();
     emitSurface(envelope);
 
+    act(() => { screen.getByRole("tab", { name: /DE_LU prices/i }).click(); });
     // The real SeriesArtefactTab is rendered here (not a stub), so this asserts
     // the branch AND that the tab can read the emitted data model.
     expect(await screen.findByTestId("series-stats")).toBeTruthy();
@@ -195,3 +198,16 @@ describe("ChatShell — prices artifact (PRICES-WORKSPACE M4)", () => {
     expect(screen.queryByTestId("series-stats")).toBeNull();
   });
 });
+
+ it("keeps incoming results collapsed until the transcript preview is clicked", async () => {
+   await renderChat();
+   emitSurface(envelope, false);
+   expect(document.querySelector(".workbench-pane-visible")).toBeNull();
+   const result = screen.getByRole("button", { name: "Open preview" });
+   act(() => result.click());
+   expect(document.querySelector(".workbench-pane-visible")).not.toBeNull();
+   expect(screen.getByRole("tab", { name: /DE_LU prices/i })).toHaveAttribute("aria-selected", "true");
+   act(() => screen.getByRole("button", { name: "Collapse workbench" }).click());
+   emitSurface(envelope, false);
+   expect(document.querySelector(".workbench-pane-visible")).toBeNull();
+ });

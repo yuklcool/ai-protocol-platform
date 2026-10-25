@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useLandingTarget } from "@/hooks/useLandingTarget";
 
-/** 未登录保留公共首页，登录后直接进入 AI 任务对话。 */
+/** 未登录保留公共首页，登录后直接进入 AI 对话。 */
 export function HomeGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -33,7 +33,7 @@ export function HomeGate({ children }: { children: ReactNode }) {
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
           <path d="M12 2 a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" fill="none" />
         </svg>
-        {locale.startsWith("zh") ? "正在进入 AI 任务对话…" : "Opening your AI conversation…"}
+        {locale.startsWith("zh") ? "正在进入 AI 对话…" : "Opening your AI conversation…"}
       </span>
     </div>
   );

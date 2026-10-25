@@ -223,7 +223,7 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await page.locator("#chat-resource-toggle").click();
     const sidebar = page.locator("#chat-resource-sidebar");
     const files = sidebar.getByRole("tab", { name: "文件", exact: true });
-    const history = sidebar.getByRole("tab", { name: "历史对话", exact: true });
+    await expect(sidebar.getByRole("tab", { name: "历史对话", exact: true })).toHaveCount(0);
     const search = sidebar.getByRole("searchbox", { name: "搜索当前文件夹内的文件" });
     const folderButton = sidebar.getByRole("button", { name: /项目资料 · 侧栏交互验收/ });
     if (await folderButton.getAttribute("aria-expanded") !== "true") await folderButton.click();
@@ -235,7 +235,6 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await folderButton.click();
     await search.fill("项目资料-01");
     await expect(sidebar.getByText("项目资料-01.txt", { exact: true })).toBeVisible();
-    await history.click();
     await files.click();
     await expect(search).toHaveValue("项目资料-01");
     await search.fill("");
@@ -243,7 +242,7 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     for (const viewport of sizes) {
       await page.setViewportSize(viewport);
       await expect(sidebar).toBeVisible();
-      for (const [tab, kind] of [[files, "files"], [history, "history"]]) {
+      for (const [tab, kind] of [[files, "files"]]) {
         await tab.click();
         // Crossing the mobile breakpoint mounts the modal's own file view.
         if (kind === "files") {
@@ -273,11 +272,10 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await page.locator(".chat-resource-overlay").click({ position: { x: 380, y: 400 } });
     await expect(dialog).toHaveCount(0);
     await page.locator("#chat-resource-toggle").click();
-    await dialog.getByRole("button", { name: "关闭文件与历史记录" }).click();
+    await dialog.getByRole("button", { name: "关闭对话文件" }).click();
     await expect(dialog).toHaveCount(0);
-    await page.locator("#chat-resource-toggle").click();
-    await history.click();
-    await sidebar.getByRole("button", { name: new RegExp(`^${sessions[0].title}`) }).click();
+    await page.getByRole("button", { name: "打开主导航", exact: true }).click();
+    await page.getByRole("dialog", { name: "主导航", exact: true }).getByRole("link", { name: sessions[0].title, exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(historyId));
     await expect(page.getByText("侧栏历史恢复内容", { exact: true })).toBeVisible();
@@ -292,17 +290,6 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await page.setViewportSize(sizes[1]);
     await page.goto(`${FRONTEND}/chat/root-agent`);
     await page.locator("#chat-resource-toggle").click();
-    await history.click();
-    await sidebar.getByRole("combobox", { name: "按智能体筛选对话" }).selectOption("root-agent");
-    await expect(sidebar.getByRole("navigation", { name: "会话历史" }).getByRole("button", { name: /^\d{2} ·/ })).toHaveCount(12);
-    expect(listRequests.some(query => query.includes("skill_id=root-agent"))).toBe(true);
-    await sidebar.getByRole("combobox").selectOption("");
-    await sidebar.getByRole("button", { name: "加载更多对话", exact: true }).click();
-    await expect(sidebar.getByRole("navigation", { name: "会话历史" }).getByRole("button", { name: /^\d{2} ·/ })).toHaveCount(24);
-    expect(listRequests.some(query => query.includes("cursor=sidebar-next"))).toBe(true);
-    const deleteButton = sidebar.getByRole("button", { name: /^删除 / }).first();
-    await deleteButton.focus();
-    await expect(deleteButton).toHaveCSS("opacity", "1");
     const input = page.locator(".chat-composer textarea");
     await input.fill("打开侧栏后发送首条消息");
     await input.press("Enter");

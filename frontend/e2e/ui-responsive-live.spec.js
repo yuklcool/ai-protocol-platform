@@ -3,7 +3,7 @@ const { test, expect } = require("@playwright/test");
 const FRONTEND = process.env.MODEL_STUDIO_FRONTEND_URL || "http://localhost:3456";
 const BACKEND = process.env.MODEL_STUDIO_BACKEND_URL || "http://127.0.0.1:1956";
 const ROUTES = [
-  "/setup", "/admin/knowledge", "/admin/diagnostics", "/settings/personal", "/workspace", "/sessions", "/results", "/agent", "/skills", "/skills/studio/new", "/chat/root-agent", "/admin",
+  "/setup", "/admin/knowledge", "/admin/diagnostics", "/settings", "/documents", "/settings/personal", "/workspace", "/sessions", "/results", "/agent", "/skills", "/skills/studio/new", "/chat/root-agent", "/admin",
    "/admin/users",  "/admin/mcp-servers",
   "/admin/model-providers", "/admin/analytics", "/admin/audit", "/admin/settings",
   "/dev/a2ui", "/dev/mcp-apps", "/dev/mcp-apps/active", "/dev/mcp-apps/passive", "/group",
@@ -65,13 +65,13 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
     const trigger=page.getByRole("button",{name:"打开主导航",exact:true});await trigger.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     const drawer=page.getByRole("dialog");
-    for(const name of ["AI 任务对话","任务概览","历史对话","我的成果","能力中心","就绪与资源接入"]){
+    for(const name of ["对话","成果","资料","能力","设置","查看全部"]){
       await expect(drawer.getByRole("link",{name,exact:true})).toBeVisible();
     }
-    await expect(drawer.getByRole("link",{name:"模型服务",exact:true})).toBeVisible();
+    await expect(drawer.getByRole("link",{name:"模型服务",exact:true})).toHaveCount(0);
     await page.keyboard.press("Escape");await expect(page.getByRole("dialog")).toHaveCount(0);await expect(trigger).toBeFocused();
-    await trigger.click();await drawer.getByRole("link",{name:"就绪与资源接入",exact:true}).click();
-    await expect(page).toHaveURL(/\/admin$/);await expect(page.getByRole("dialog")).toHaveCount(0);
+    await trigger.click();await drawer.getByRole("link",{name:"设置",exact:true}).click();
+    await expect(page).toHaveURL(/\/settings$/);await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("main").locator('a[href="/admin/model-providers"]').last().click();
     await expect(page).toHaveURL(/\/admin\/model-providers$/);
     await page.getByRole("button",{name:"添加模型服务",exact:true}).click();
@@ -79,10 +79,10 @@ test("全站浅色主题、三种视口、手机导航和配置表单", async ({
     await page.getByLabel("服务名称",{exact:true}).fill("手机配置验收服务");
     await snapshot(page,info,"390-model-service-form");
     await page.goto(`${FRONTEND}/chat/root-agent`);
-    await page.getByRole("button",{name:"打开文件与历史记录",exact:true}).click();
-    await expect(page.getByRole("dialog").getByRole("button",{name:"关闭文件与历史记录",exact:true})).toBeVisible();
+    await page.getByRole("button",{name:"打开对话文件",exact:true}).click();
+    await expect(page.getByRole("dialog").getByRole("button",{name:"关闭对话文件",exact:true})).toBeVisible();
     await snapshot(page,info,"390-chat-files");
-    await page.getByRole("dialog").getByRole("button",{name:"关闭文件与历史记录",exact:true}).click();
+    await page.getByRole("dialog").getByRole("button",{name:"关闭对话文件",exact:true}).click();
     await expect(page.locator("textarea").first()).toBeVisible();
     expect(errors).toEqual([]);
   } catch(error) { primaryError=error; throw error; }

@@ -24,7 +24,7 @@ import { ChatPlacementForm, useChatSurfaces, type ChatSurfaceItem } from "./Chat
 import type React from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { translateChat } from "@/lib/i18n/chat";
-import { useArtifacts, type A2uiArtifactEntry } from "@/providers/SurfaceRegistry";
+import { useArtifacts, useSurfaceState, type A2uiArtifactEntry } from "@/providers/SurfaceRegistry";
 import { recordedExecutions, type ChatExecution } from "@/lib/chatExecution";
 import { ChatExecutionCard } from "./ChatExecutionCard";
 
@@ -433,7 +433,7 @@ export function ChatMessageList({
 
   const executionList = [
     ...recordedExecutions(timelineMessages, recordedToolCalls, executions),
-    ...executions.filter((run) => run.tools.length > 0),
+    ...executions.filter((run) => run.tools.length > 0 || ["failed", "cancelled", "interrupted"].includes(run.status)),
   ];
   const knownMessageIds = new Set(timelineMessages.map((m) => m.id));
   const executionsByAfter = new Map<string | null, ChatExecution[]>();
@@ -615,6 +615,11 @@ export function ChatMessageList({
  */
 export function ChatMessageListWithSurfaces(props: ChatMessageListProps) {
   const chatSurfaces = useChatSurfaces();
+  const { locale } = useI18n();
+  const workspace = useSurfaceState("workspace");
   const results = useArtifacts().filter((artifact) => artifact.placement !== "chat");
+  if (workspace?.surface && !results.some(result => result.surfaceId === "workspace") && workspace.artifact?.placement !== "chat") {
+    results.push({ surfaceId: "workspace", createdAt: workspace.createdAt, title: workspace.artifact?.title || translateChat(locale, "shell.result") });
+  }
   return <ChatMessageList {...props} chatSurfaces={chatSurfaces} results={results} />;
 }

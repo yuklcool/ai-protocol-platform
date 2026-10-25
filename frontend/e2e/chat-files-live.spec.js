@@ -139,3 +139,36 @@ test("真实 Provider 从新对话附件中读取未知编号、计算差额并�
     for(const id of ids) await api(token,`/api/documents/${id}`,"DELETE");
   }
 });
+
+
+test("资料上传、预览后用于新对话，附件保存且聊天默认不展开预览", async ({ browser }, info) => {
+  test.setTimeout(90_000);
+  const { context, page, token } = await start(browser);
+  let documentId;
+  const filename = `workbench-${randomUUID()}.txt`;
+  try {
+    await page.goto(`${FRONTEND}/documents`);
+    const uploaded = page.waitForResponse(response => response.url().endsWith("/api/documents/upload") && response.request().method() === "POST");
+    await page.getByLabel("上传对话附件").setInputFiles({ name: filename, mimeType: "text/plain", buffer: Buffer.from("个人资料验收内容。预算 100，实际 80。") });
+    const response = await uploaded;
+    expect(response.ok()).toBe(true);
+    documentId = (await response.json()).docId;
+    const preview = page.getByRole("region", { name: "文件预览", exact: true });
+    await expect(preview).toBeVisible();
+    await preview.getByRole("link", { name: "用于新对话", exact: true }).click();
+    await expect(page).toHaveURL(/session=/);
+    const session = new URL(page.url()).searchParams.get("session");
+    await saveComplete(page, token, session, [{ filename, included: true }]);
+    await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
+    await page.getByRole("tab").filter({ hasText: filename }).click();
+    await expect(page.locator(".workbench-pane-visible")).toBeVisible();
+    await page.getByRole("button", { name: "收起工作台", exact: true }).click();
+    await page.screenshot({ path: info.outputPath("personal-document-to-chat.png"), fullPage: true });
+    await page.reload();
+    await saveComplete(page, token, session, [{ filename, included: true }]);
+    await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
+  } finally {
+    await context.close();
+    if (documentId) await api(token, `/api/documents/${documentId}`, "DELETE");
+  }
+});

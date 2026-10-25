@@ -14,21 +14,21 @@ function FileSearch() {
 
 describe("ChatSidebar", () => {
   it("用键盘切换完整列表，保留文件搜索，并记住当前页签", async () => {
-    render(<ChatSidebar open onOpenChange={vi.fn()} files={<FileSearch />} history={<p>Recent work</p>} />);
+    render(<ChatSidebar open onOpenChange={vi.fn()} files={<FileSearch />} library={<p>Curated sources</p>} />);
     await userEvent.type(screen.getByRole("textbox", { name: "File search" }), "report");
     screen.getByRole("tab", { name: "Files" }).focus();
     await userEvent.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "Conversations" })).toHaveFocus();
-    expect(screen.getByRole("tab", { name: "Conversations" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("Recent work")).toBeVisible();
-    expect(window.sessionStorage.getItem("aitana.sidebar.tab")).toBe("history");
+    expect(screen.getByRole("tab", { name: "Library" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Library" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Curated sources")).toBeVisible();
+    expect(window.sessionStorage.getItem("aitana.sidebar.tab")).toBe("library");
     await userEvent.keyboard("{Home}");
     expect(screen.getByRole("textbox", { name: "File search" })).toHaveValue("report");
   });
 
   it("保留资料库和助手界面，失效的页签回到文件", async () => {
     window.sessionStorage.setItem("aitana.sidebar.tab", "library");
-    const props = { open: true, onOpenChange: vi.fn(), files: <p>My files</p>, history: <p>Recent work</p> };
+    const props = { open: true, onOpenChange: vi.fn(), files: <p>My files</p> };
     const view = render(<ChatSidebar {...props} library={<p>Curated sources</p>} assistant={<p>Interactive surface</p>} />);
     expect(screen.getByText("Curated sources")).toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: "Assistant" }));
@@ -44,7 +44,7 @@ describe("ChatSidebar", () => {
       const [open, setOpen] = useState(true);
       return <>
         <button id="chat-resource-toggle" onClick={() => setOpen(true)}>Open resources</button>
-        <ChatSidebar open={open} onOpenChange={setOpen} files={<FileSearch />} history={<p>Recent work</p>} />
+        <ChatSidebar open={open} onOpenChange={setOpen} files={<FileSearch />} library={<p>Curated sources</p>} />
       </>;
     }
     render(<MobileSidebar />);

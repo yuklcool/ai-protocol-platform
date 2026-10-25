@@ -7,6 +7,7 @@ import { DocListView } from "@/components/doc-browser/DocListView";
 import { DocTabsBar } from "@/components/doc-browser/DocTabsBar";
 import { UploadDropZone } from "@/components/doc-browser/UploadDropZone";
 import type { ParsedDocument } from "@/hooks/useDocBrowser";
+import { useDocument } from "@/hooks/useDocument";
 import type { User } from "@/lib/firebase";
 import {
   useSkillAgent,
@@ -29,21 +30,15 @@ import type { UploadResult } from "@/lib/documents";
 import { useSessionActivity } from "@/hooks/useSessionActivity";
 import { useChatExecution } from "@/hooks/useChatExecution";
 import { useStableThreadId } from "@/hooks/useStableThreadId";
-import { fetchWithAuth } from "@/lib/apiClient";
 import { importByReference, isImportError } from "@/lib/importByReference";
 import { docIdentityFromToolCall, docIdentityKey } from "@/lib/docFromToolCall";
 import {
   useResizableWorkspaceRatio,
-  readStoredCollapsed,
-  writeStoredCollapsed,
 } from "@/hooks/useResizableWorkspaceRatio";
 import { WorkbenchResizeHandle } from "@/components/chat/WorkbenchResizeHandle";
 import { useBackendReady } from "@/hooks/useBackendReady";
 import { computeIncludedDocIds } from "@/lib/docContext";
-import { notifySessionsChanged, subscribeSessionsChangedDetailed } from "@/lib/sessionEvents";
-import { useSkillSessions } from "@/hooks/useSkillSessions";
-import { sessionHref } from "@/lib/sessionHref";
-import { SkillSessionPanel } from "@/components/chat/SkillSessionPanel";
+import { subscribeSessionsChangedDetailed } from "@/lib/sessionEvents";
 import DocumentHistoryPanel from "@/components/chat/DocumentHistoryPanel";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { InContextBadge } from "@/components/chat/InContextBadge";
@@ -71,7 +66,6 @@ import { SourcesArtefactTab } from "@/components/workspace/SourcesArtefactTab";
 import { ClausesArtefactTab } from "@/components/workspace/ClausesArtefactTab";
 import { SeriesArtefactTab } from "@/components/workspace/SeriesArtefactTab";
 import { shouldShowCompareLauncher } from "@/lib/compareLauncher";
-import { forgetFocusedResult, nextFocusedResult } from "@/lib/workbenchFocus";
 import { DocumentPanel } from "@/components/document/DocumentPanel";
 import { LatencyHUD } from "@/components/dev/LatencyHUD";
 import { useI18n } from "@/contexts/I18nContext";
@@ -423,64 +417,8 @@ function WorkbenchPane({
     allowObligations: allowObligationsLauncher,
   });
 
-  // Every result tab id this session has already auto-focused once. Shared by
-  // BOTH auto-focus effects below and released only by an explicit user close,
-  // so "new" means *never seen*, not "absent from the previous render". See the
-  // B4 note on the artifact effect for why that distinction is the bug fix.
-  const seenArtifactIdsRef = useRef<Set<string>>(new Set());
-
-  // Repo principle #7 — auto-focus new workbench elements. When the dominant
-  // workspace surface first arrives, switch focus to ITS Result tab, once.
-  // (Superseded the 2026-06-11 badge-don't-switch behaviour.)
-  //
-  // v6.23.0: the target moved from "workspace" (Home) to WORKSPACE_RESULT_TAB_ID.
-  // Before, the surface WAS the Workspace tab, so focusing it destroyed the
-  // launcher. Now Home is never the auto-focus target — which also means a tab
-  // the user deliberately clicked can no longer be stolen by an arriving
-  // surface (relevant to B4, "Workspace tab sometimes needs a second click").
-  //
-  // Same B4 blink hazard as the artifact effect below: `workspaceHasContent`
-  // reads `state.surface`, which is momentarily null across a re-registration.
-  // Latching "we have already focused this surface once" (rather than comparing
-  // against the previous render) means a blink can't re-steal focus. The latch
-  // is released only by an explicit close, via `seenArtifactIdsRef`.
-  const [workspaceBadged, setWorkspaceBadged] = useState(false);
-  useEffect(() => {
-    if (!workspaceHasContent) return;
-    // Same rule, same latch as the artifact tabs — the promoted workspace
-    // surface is a result like any other.
-    const focusId = nextFocusedResult([WORKSPACE_RESULT_TAB_ID], seenArtifactIdsRef.current);
-    if (!focusId) return;
-    if (workbenchTabId !== focusId) onWorkbenchTabChange(focusId);
-    setWorkspaceBadged(false);
-  }, [workspaceHasContent, workbenchTabId, onWorkbenchTabChange]);
-  useEffect(() => {
-    if (workbenchTabId === "workspace") setWorkspaceBadged(false);
-  }, [workbenchTabId]);
-
-  // 7.5: auto-focus the newest artifact tab when a NEW artifact surface arrives
-  // (repo principle #7 — auto-focus new workbench elements). extract → extract →
-  // compare fills tabs; focus tracks the latest one.
-  //
-  // v6.23.0 B4 — "Workspace tab sometimes needs a second click" (Dana; Mark had
-  // seen it too). This ref used to be REPLACED with the current id set on every
-  // run (`prevArtifactIdsRef.current = currentIds`). `listArtifacts()` only
-  // returns surfaces whose `state.surface` is non-null, so an artifact that
-  // blinks out for a single render — any re-registration of its surface — was
-  // dropped from the ref and then read as brand NEW when it came back, stealing
-  // focus a second time. If the user had clicked Home in between, their click
-  // was silently undone: exactly the "it needed a second click" symptom.
-  //
-  // "New" must therefore mean *never seen in this session*. The rule lives in
-  // lib/workbenchFocus.ts so it can be tested against the blink sequence
-  // directly — see that file's header for the full mechanism.
-  useEffect(() => {
-    const focusId = nextFocusedResult(
-      workbenchArtifacts.map((a) => a.surfaceId),
-      seenArtifactIdsRef.current,
-    );
-    if (focusId) onWorkbenchTabChange(focusId);
-  }, [workbenchArtifacts, onWorkbenchTabChange]);
+  // New results remain available without interrupting the current view.
+  const workspaceBadged = workspaceHasContent && workbenchTabId !== WORKSPACE_RESULT_TAB_ID;
 
   // SKILL-DELEGATION M3b: badge the Activity tab when new activity (a tool
   // call, a delegation, or a pushed activity surface) arrives while the user
@@ -499,21 +437,6 @@ function WorkbenchPane({
     if (workbenchTabId === "activity") setActivityBadged(false);
   }, [workbenchTabId]);
 
-  // ACTIVITY-OBS — auto-focus the Activity tab the moment an action-triggered
-  // run starts (false→true) so the user watches its tool calls stream live
-  // ("make it obligatory that we see events come through"). The run's result
-  // artifact lands moments later and the artifact auto-focus effect above then
-  // switches to that tab — so the flow is: click launcher → Activity (live
-  // tools) → Result. Fires once per run start; if the user navigates away it
-  // won't yank them back until the next run.
-  const prevActionRunningRef = useRef(false);
-  useEffect(() => {
-    if (actionRunning && !prevActionRunningRef.current && workbenchTabId !== "activity") {
-      onWorkbenchTabChange("activity");
-    }
-    prevActionRunningRef.current = Boolean(actionRunning);
-  }, [actionRunning, workbenchTabId, onWorkbenchTabChange]);
-
   // Close a Result tab. Every RESULT tab is closable (generically, by the 7.5
   // artifact model — never keyed on `kind`); the FIXED structural tabs (Home,
   // Document, Activity) are not, because they're the pane's furniture rather
@@ -522,7 +445,7 @@ function WorkbenchPane({
   // Confirm first: a result may have cost a real BigQuery job or a paid
   // analysis and is not cheaply regenerable, so this is a destructive act.
   // `window.confirm` matches the existing idiom in this file
-  // (handleDeleteSkillSession, the make-public gate) — not a new modal system.
+  // (the make-public gate) — not a new modal system.
   // The prompt names the result by its FRIENDLY title (CLAUDE.md #9), never the
   // surfaceId.
   //
@@ -537,11 +460,6 @@ function WorkbenchPane({
         return;
       }
       registry.clearSurface(surfaceId);
-      // Forget the auto-focus latch (B4). A CLOSE is deliberate, so if the agent
-      // later re-emits this result it counts as a genuinely new arrival and
-      // should take the stage — unlike the transient blink the latch exists to
-      // absorb.
-      forgetFocusedResult(tabId, seenArtifactIdsRef.current);
       // NEVER SILENT (#8): if the user closed the tab they were looking at,
       // focus lands on Home — never a blank pane or a tab id that no longer
       // resolves. Home always exists, so this is now always a real destination.
@@ -999,23 +917,14 @@ function ChatShellContent({
   // pinned → refresh lost history + surfaces).
   const [hasAnyArtifact, setHasAnyArtifact] = useState(false);
 
-  // 2026-06-11 user-driven collapse: distinct from auto-fold. Even when
-  // the workbench HAS content (a doc tab open, an A2UI surface mounted),
-  // the user can click a button to hide it. Persisted per-skill so the
-  // preference survives navigation within a tab. Collapsed → render a
-  // thin vertical strip with an expand chevron so the user always sees
-  // a way back.
-  const [workbenchCollapsed, setWorkbenchCollapsed] = useState(skillId === "root-agent");
+  // Each conversation starts with a full-width transcript. Only a user action opens a preview.
+  const [workbenchCollapsed, setWorkbenchCollapsed] = useState(true);
   useEffect(() => {
-    setWorkbenchCollapsed(readStoredCollapsed(skillId, skillId === "root-agent"));
-  }, [skillId]);
-  const toggleWorkbenchCollapsed = useCallback(() => {
-    setWorkbenchCollapsed((v) => {
-      const next = !v;
-      writeStoredCollapsed(skillId, next);
-      return next;
-    });
-  }, [skillId]);
+    setWorkbenchCollapsed(true);
+    setWorkbenchTabId(HOME_TAB_ID);
+    setActiveTabId(null);
+  }, [effectiveSessionId]);
+  const toggleWorkbenchCollapsed = useCallback(() => setWorkbenchCollapsed(value => !value), []);
 
   // Combined "is the workbench currently visible" — visible when there's
   // content AND the user hasn't collapsed it. When collapsed, the thin
@@ -1131,33 +1040,12 @@ function ChatShellContent({
   // Prefer the real session start (first event) from history; fall back to when
   // this view mounted for a brand-new session with no events yet.
   const sessionStartTs = historyStartTs ?? mountTs;
-  // Past conversations are CROSS-SKILL by default (null filter). Switching
-  // agent via the top bar starts a new session on the new skill, so scoping
-  // this list to the current skill showed only the fragment belonging to
-  // whichever agent the user happened to be standing on — a sitting spread
-  // across two agents read as "it didn't record my session" (2026-08-05).
-  const [sessionSkillFilter, setSessionSkillFilter] = useState<string | null>(null);
-  const {
-    sessions,
-    isLoading: sessionsLoading,
-    error: sessionsError,
-    refetch: refetchSessions,
-    nextCursor,
-    loadMore: loadMoreSessions,
-    isLoadingMore: sessionsLoadingMore,
-  } = useSkillSessions(sessionSkillFilter);
-
   // 恢复历史消息和界面时使用；附件选择独立保存。
   const [enteredViaResume, setEnteredViaResume] = useState<boolean>(
     () => sessionId !== null,
   );
 
   const isFreshChat = messages.length === 0 && sessionId === null;
-
-  // Auto-switch Workbench to Document tab when the user opens a doc.
-  useEffect(() => {
-    if (activeTabId) setWorkbenchTabId("document");
-  }, [activeTabId, setOpenTabs]);
 
   const navigateToSession = useCallback(
     (sid: string) => {
@@ -1343,17 +1231,6 @@ function ChatShellContent({
     [navigateToSession],
   );
 
-  const handleSelectSkillSession = useCallback(
-    (sid: string) => {
-      const session = sessions.find((row) => row.session_id === sid);
-      if (!session) return;
-      setEnteredViaResume(true);
-      router.replace(sessionHref(session));
-      closeDocBrowserOnMobile();
-    },
-    [sessions, router, closeDocBrowserOnMobile],
-  );
-
   const handleNewSession = useCallback(() => {
     setEnteredViaResume(false);
     const params = new URLSearchParams(searchParams.toString());
@@ -1386,36 +1263,7 @@ function ChatShellContent({
     }
   }, [sessionGone, sessionId, handleNewSession]);
 
-  const handleDeleteSkillSession = useCallback(
-    async (sid: string) => {
-      // Mirrors DocumentHistoryPanel.handleDelete: confirm + DELETE +
-      // dispatch sessions-changed (which both useSkillSessions and any
-      // mounted useDocumentSessions listen for, so both panels reconcile)
-      // + clear URL if the deleted session is active.
-      if (
-        !window.confirm(translateChat(locale, "shell.deleteConversationConfirm"))
-      ) {
-        return;
-      }
-      try {
-        const res = await fetchWithAuth(
-          `/api/proxy/api/sessions/${encodeURIComponent(sid)}`,
-          { method: "DELETE" },
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        notifySessionsChanged({ deletedSessionId: sid });
-        if (sid === sessionId) {
-          handleNewSession();
-        }
-      } catch {
-        // Backend rejected. Reconcile via the same bus.
-        notifySessionsChanged();
-      }
-    },
-    [locale, sessionId, handleNewSession],
-  );
-
-  const handleDocClick = useCallback((doc: ParsedDocument) => {
+  const handleDocClick = useCallback((doc: ParsedDocument, preview = true) => {
     setOpenTabs((prev) => {
       if (prev.find((t) => t.id === doc.id)) return prev.map((tab) => tab.id === doc.id ? { ...tab, parseStatus: doc.parseStatus, parseError: doc.parseError } : tab);
       return [
@@ -1423,14 +1271,23 @@ function ChatShellContent({
         { id: doc.id, filename: doc.originalFilename, format: doc.sourceFormat, included: true, parseStatus: doc.parseStatus, parseError: doc.parseError, sizeBytes: doc.sizeBytes },
       ];
     });
-    setActiveTabId(doc.id);
-    // 2026-06-11: always pull the workbench to the Document tab on a
-    // doc-click. Same rationale as the DocTabsBar onSelect wrapper —
-    // covers the case where activeTabId is already this doc (no state
-    // change → activeTabId-change useEffect doesn't fire).
-    setWorkbenchTabId("document");
-    closeDocBrowserOnMobile();
+    if (preview) {
+      setActiveTabId(doc.id);
+      setWorkbenchTabId("document");
+      setWorkbenchCollapsed(false);
+      closeDocBrowserOnMobile();
+    }
   }, [setOpenTabs, closeDocBrowserOnMobile]);
+
+  const requestedDocId = searchParams.get("document");
+  const { doc: requestedDoc, error: requestedDocError } = useDocument(requestedDocId);
+  useEffect(() => {
+    if (!attachmentsReady || !requestedDocId || requestedDoc?.id !== requestedDocId) return;
+    handleDocClick({ ...requestedDoc, folderId: "", userId: user.uid, blockCount: null, hasA2ui: false }, false);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("document");
+    router.replace(params.size ? `${pathPrefix}?${params}` : pathPrefix);
+  }, [attachmentsReady, requestedDocId, requestedDoc, handleDocClick, user.uid, searchParams, router, pathPrefix]);
 
   // Quick-start upload (landing screen): when a doc is uploaded from the
   // fresh-chat dropzone, mount it as an INCLUDED tab straight away — same path a
@@ -1452,7 +1309,7 @@ function ChatShellContent({
         userId: "",
         blockCount: null,
         hasA2ui: false,
-      });
+      }, false);
     },
     [handleDocClick],
   );
@@ -1484,7 +1341,7 @@ function ChatShellContent({
   }, [effectiveSessionId, skillId, user.uid]);
 
   const handleImportByReference = useCallback(
-    async (bucket: string, objectName: string): Promise<void> => {
+    async (bucket: string, objectName: string, preview = true): Promise<void> => {
       const scope = importScopeRef.current;
       if (scope.cancelled) return;
       const key = JSON.stringify([bucket, objectName]);
@@ -1498,7 +1355,7 @@ function ChatShellContent({
           setImportFailure({ bucket, objectName, message: result.message });
           return;
         }
-        handleDocClick(result.doc);
+        handleDocClick(result.doc, preview);
         setImportFailure((failure) => failure?.bucket === bucket && failure.objectName === objectName ? null : failure);
       } catch (cause) {
         if (!scope.cancelled) {
@@ -1535,13 +1392,14 @@ function ChatShellContent({
   // Library / examples picker). A bucket `gs_url` → import-by-reference (parses +
   // opens + focuses a tab); an already-open `doc_id` → just focus its tab.
   const handleOpenDocFromLauncher = useCallback(
-    (identity: CompareDocIdentity) => {
+    (identity: CompareDocIdentity, preview = true) => {
       if ("gs_url" in identity) {
         const m = identity.gs_url.match(/^gs:\/\/([^/]+)\/(.+)$/);
-        if (m) void handleImportByReference(m[1], m[2]);
-      } else {
+        if (m) void handleImportByReference(m[1], m[2], preview);
+      } else if (preview) {
         setActiveTabId(identity.doc_id);
         setWorkbenchTabId("document");
+        setWorkbenchCollapsed(false);
       }
     },
     [handleImportByReference],
@@ -1558,7 +1416,7 @@ function ChatShellContent({
       const key = docIdentityKey(identity);
       if (aiOpenedDocsRef.current.has(key)) continue;
       aiOpenedDocsRef.current.add(key);
-      handleOpenDocFromLauncher(identity);
+      handleOpenDocFromLauncher(identity, false);
     }
   }, [toolCalls, handleOpenDocFromLauncher, effectiveSessionId, skillId, user.uid]);
 
@@ -1583,6 +1441,7 @@ function ChatShellContent({
   // Keep one composer mounted across empty, streaming and resumed conversations.
   const composer = (
     <>
+      {requestedDocError && <p role="alert" className="mb-2 text-sm text-destructive">{requestedDocError}</p>}
       {/* 2026-06-11 cold-start UX: surface a "Connecting…" banner whenever the
           agent isn't safe to talk to yet — skill metadata still loading OR
           backend cold-start in flight. Disables the input at the same time. */}
@@ -1723,20 +1582,12 @@ function ChatShellContent({
     <main className="chat-shell flex min-h-0 flex-1 flex-col overflow-hidden">
       <DocTabsBar
         tabs={openTabs}
-        // 2026-06-11: explicitly switch the workbench to the Document
-        // tab on every doc-tab click. The activeTabId-change useEffect
-        // below already covers the case where the activeTabId actually
-        // CHANGES (click doc A → click doc B), but if the user clicks
-        // the already-active doc in the tab strip — e.g. after manually
-        // switching to the Workspace tab — React skips the setState
-        // and the effect never fires. Doing it explicitly here makes
-        // the click reliably bring the user to the doc preview no
-        // matter the prior workbench tab state.
         activeTabId={activeTabId}
         showBrowser={showDocBrowser}
         onSelect={(id) => {
           setActiveTabId(id);
           setWorkbenchTabId("document");
+          setWorkbenchCollapsed(false);
         }}
         onClose={handleTabClose}
         onToggleInclude={handleTabToggleInclude}
@@ -1749,10 +1600,6 @@ function ChatShellContent({
             <DocListView uid={user.uid} onDocClick={handleDocClick} />
             <p className="shrink-0 border-t px-4 py-3 text-xs leading-5 text-muted-foreground">{translateChat(locale, "sidebar.fileHelp")}</p>
           </>}
-          history={<SkillSessionPanel sessions={sessions} activeSessionId={sessionId} isLoading={sessionsLoading}
-            error={sessionsError} onRetry={refetchSessions} nextCursor={nextCursor} onLoadMore={loadMoreSessions} isLoadingMore={sessionsLoadingMore}
-            onSelectSession={handleSelectSkillSession} onDelete={(sid) => void handleDeleteSkillSession(sid)}
-            skillFilter={sessionSkillFilter} onFilterChange={setSessionSkillFilter} />}
           libraryLabel={skillWelcome?.bucketBrowser?.label}
           library={skillWelcome?.bucketBrowser?.bucket ? <div className="min-h-0 flex-1 overflow-y-auto p-3">
             <GCSFileBrowser bucket={skillWelcome.bucketBrowser.bucket} rootPath={skillWelcome.bucketBrowser.rootPath ?? ""}
@@ -1785,7 +1632,7 @@ function ChatShellContent({
             messages={messages}
             introMessage={
               // Only show on truly-fresh chat — skip on resume.
-              !enteredViaResume ? skillIntroMessage : null
+              !enteredViaResume && skillId !== "root-agent" ? skillIntroMessage : null
             }
             skillDisplayName={displayName}
             // initialMessages are the persisted history fetched by
@@ -1806,7 +1653,7 @@ function ChatShellContent({
             recordedToolCalls={historyToolCalls}
             activityError={enteredViaResume ? activityHistoryError : undefined}
             onStopExecution={stopExecution}
-            onOpenResult={(surfaceId) => { setWorkbenchTabId(surfaceId); setWorkbenchCollapsed(false); }}
+            onOpenResult={(surfaceId) => { setWorkbenchTabId(surfaceId === "workspace" ? WORKSPACE_RESULT_TAB_ID : surfaceId); setWorkbenchCollapsed(false); }}
             thinkingContent={thinkingContent}
             isThinking={isThinking}
             isLoading={isLoading}
@@ -1863,7 +1710,7 @@ function ChatShellContent({
           <button
             type="button"
             onClick={toggleWorkbenchCollapsed}
-            className="button-ghost group flex h-full w-6 shrink-0 flex-col items-center justify-center rounded-none border-l"
+            className="button-ghost group flex h-full w-11 shrink-0 flex-col items-center justify-center rounded-none border-l"
             aria-label={translateChat(locale, "shell.expandWorkbench")}
             title={translateChat(locale, "shell.expandWorkbench")}
           >
@@ -1903,10 +1750,12 @@ function ChatShellContent({
             since width is now parent-driven. */}
         <div
           className={`workbench-pane relative flex min-w-0 flex-col ${workbenchVisible ? "workbench-pane-visible" : ""}`}
+          aria-hidden={!workbenchVisible}
+          inert={!workbenchVisible}
           style={
             workbenchVisible
               ? { flexBasis: `${workspaceRatio * 100}%`, flexGrow: 0, flexShrink: 1 }
-              : { flexBasis: 0, flexGrow: 0, flexShrink: 0 }
+              : { display: "none" }
           }
         >
         {/* 2026-06-11 explicit collapse: small chevron in the top-right
@@ -1916,7 +1765,7 @@ function ChatShellContent({
           <button
             type="button"
             onClick={toggleWorkbenchCollapsed}
-            className="button-ghost absolute right-1 top-1 z-10 flex h-6 w-6 items-center justify-center p-0"
+            className="button-ghost absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center p-0"
             aria-label={translateChat(locale, "shell.collapseWorkbench")}
             title={translateChat(locale, "shell.collapseWorkbench")}
           >

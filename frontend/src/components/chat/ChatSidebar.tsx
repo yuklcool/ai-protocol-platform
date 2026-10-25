@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { BookOpen, Files, History, Sparkles, X } from "lucide-react";
+import { BookOpen, Files, Sparkles, X } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { translateChat } from "@/lib/i18n/chat";
 
@@ -10,13 +10,12 @@ interface ChatSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   files: ReactNode;
-  history: ReactNode;
   library?: ReactNode;
   libraryLabel?: string;
   assistant?: ReactNode;
 }
 
-export function ChatSidebar({ open, onOpenChange, files, history, library, libraryLabel, assistant }: ChatSidebarProps) {
+export function ChatSidebar({ open, onOpenChange, files, library, libraryLabel, assistant }: ChatSidebarProps) {
   const { locale } = useI18n();
   const [mobile, setMobile] = useState(false);
   const [activeTab, setActiveTab] = useState("files");
@@ -33,7 +32,6 @@ export function ChatSidebar({ open, onOpenChange, files, history, library, libra
 
   const tabs = [
     { id: "files", label: translateChat(locale, "sidebar.files"), icon: Files, content: files },
-    { id: "history", label: translateChat(locale, "sidebar.history"), icon: History, content: history },
     ...(library ? [{ id: "library", label: libraryLabel || translateChat(locale, "shell.library"), icon: BookOpen, content: library }] : []),
     ...(assistant ? [{ id: "assistant", label: translateChat(locale, "sidebar.assistant"), icon: Sparkles, content: assistant }] : []),
   ];

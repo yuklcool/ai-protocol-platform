@@ -4,8 +4,6 @@ import { renderHook, act } from "@testing-library/react";
 import {
   useResizableWorkspaceRatio,
   readStoredRatio,
-  readStoredCollapsed,
-  writeStoredCollapsed,
   RATIO_MIN,
   RATIO_MAX,
   RATIO_DEFAULT,
@@ -61,27 +59,3 @@ describe("useResizableWorkspaceRatio", () => {
   });
 });
 
-describe("readStoredCollapsed / writeStoredCollapsed", () => {
-  it("defaults to false when no value stored", () => {
-    expect(readStoredCollapsed("never-touched")).toBe(false);
-  });
-
-  it("round-trips through sessionStorage per-skill", () => {
-    writeStoredCollapsed("skill-a", true);
-    expect(readStoredCollapsed("skill-a")).toBe(true);
-    expect(window.sessionStorage.getItem("aitana.workspaceCollapsed:skill-a")).toBe("1");
-    writeStoredCollapsed("skill-a", false);
-    expect(readStoredCollapsed("skill-a")).toBe(false);
-    expect(window.sessionStorage.getItem("aitana.workspaceCollapsed:skill-a")).toBe("0");
-  });
-
-  it("collapsed state on one skill does not leak into another", () => {
-    writeStoredCollapsed("skill-a", true);
-    expect(readStoredCollapsed("skill-b")).toBe(false);
-  });
-
-  it("treats malformed stored values as not-collapsed", () => {
-    window.sessionStorage.setItem("aitana.workspaceCollapsed:weird", "yes-please");
-    expect(readStoredCollapsed("weird")).toBe(false);
-  });
-});

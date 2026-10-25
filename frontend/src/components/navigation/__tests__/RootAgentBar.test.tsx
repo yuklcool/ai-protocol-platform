@@ -33,7 +33,7 @@ describe("RootAgentBar", () => {
 
   it("品牌明确返回工作台，保留能力入口和账号菜单", () => {
     renderBar();
-    expect(screen.getByRole("link", { name: "Back to workspace" })).toHaveAttribute("href", "/workspace");
+    expect(screen.getByRole("link", { name: "Back to chat" })).toHaveAttribute("href", "/chat/root-agent");
     expect(screen.getByRole("link", { name: translate("en", "rootAgent.bar.skills") })).toHaveAttribute("href", "/skills");
     expect(screen.getByRole("button", { name: "测试账号菜单" })).toBeInTheDocument();
   });
@@ -59,6 +59,6 @@ describe("RootAgentBar", () => {
   it("中文品牌明确返回工作台", () => {
     navigation.locale = "zh-CN";
     renderBar();
-    expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute("href", "/workspace");
+    expect(screen.getByRole("link", { name: "返回对话" })).toHaveAttribute("href", "/chat/root-agent");
   });
 });

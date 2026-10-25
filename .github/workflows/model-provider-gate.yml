@@ -9,6 +9,8 @@ on:
       - frontend/src/components/studio/**
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/src/lib/modelSetup.ts
+      - frontend/src/app/documents/**
+      - frontend/src/app/settings/**
       - frontend/src/app/workspace/**
       - frontend/src/app/sessions/**
       - frontend/src/app/results/**
@@ -95,6 +97,8 @@ on:
       - frontend/src/components/studio/**
       - frontend/src/lib/i18n/skillStudio.ts
       - frontend/src/lib/modelSetup.ts
+      - frontend/src/app/documents/**
+      - frontend/src/app/settings/**
       - frontend/src/app/workspace/**
       - frontend/src/app/sessions/**
       - frontend/src/app/results/**

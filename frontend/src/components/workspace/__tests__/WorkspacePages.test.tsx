@@ -8,7 +8,6 @@ vi.mock("@/components/chat/SignInRequired", () => ({ SignInRequired: () => <div 
 vi.mock("@/lib/apiClient", () => ({ fetchWithAuth: vi.fn() }));
 
 import { fetchWithAuth } from "@/lib/apiClient";
-import WorkspacePage from "@/app/workspace/page";
 import SessionsPage from "@/app/sessions/page";
 const fetchMock = vi.mocked(fetchWithAuth);
 
@@ -27,7 +26,7 @@ beforeEach(() => {
   fetchMock.mockResolvedValue(ok([]));
 });
 
-describe.each([["workspace", WorkspacePage], ["sessions", SessionsPage]] as const)("%s 登录边界", (_, Page) => {
+describe.each([["sessions", SessionsPage]] as const)("%s 登录边界", (_, Page) => {
   it("未登录原地显示 SignInRequired，不加载私人会话", () => {
     render(<Page />);
     expect(screen.getByTestId("sign-in-required")).toBeInTheDocument();
@@ -79,29 +78,6 @@ describe.each([["workspace", WorkspacePage], ["sessions", SessionsPage]] as cons
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("link", { name: /Recovered task/ })).toHaveAttribute("href", "/chat/actual%2Fagent?session=s%20%3F%26");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-});
-
-describe("workspace 最近会话", () => {
-  it("只显示真实最近卡片并提供 Root Agent 和全部会话入口", async () => {
-    state.user = { uid: "u1" };
-    fetchMock.mockResolvedValueOnce(ok([row("recent", "Actual task")]));
-    render(<WorkspacePage />);
-    expect(await screen.findByText("Actual task")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "New task" })).toHaveAttribute("href", "/chat/root-agent");
-    expect(screen.getByRole("link", { name: "Search all sessions" })).toHaveAttribute("href", "/sessions");
-    expect(screen.getByText("Research")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View results" })).toHaveAttribute("href", "/results");
-    expect(screen.getByRole("link", { name: "Explore capabilities" })).toHaveAttribute("href", "/skills");
-  });
-
-  it("zh 文案、真实空状态仍允许开始任务", async () => {
-    state.user = { uid: "u1" };
-    state.locale = "zh-CN";
-    render(<WorkspacePage />);
-    expect(await screen.findByText("还没有会话，开始一项任务吧。")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "任务概览" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "开始新任务" })).toHaveAttribute("href", "/chat/root-agent");
   });
 });
 
@@ -182,13 +158,13 @@ describe("sessions 全局列表", () => {
     await screen.findByText(/No sessions yet/);
   });
 
-  it("zh 搜索、分页与返回工作台文案", async () => {
+  it("zh 搜索、分页与新对话入口", async () => {
     state.user = { uid: "u1" };
     state.locale = "zh-CN";
     fetchMock.mockResolvedValueOnce(ok([row("s1")], "p2"));
     render(<SessionsPage />);
     expect(await screen.findByRole("button", { name: "加载更多" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "搜索历史会话" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute("href", "/workspace");
+    expect(screen.getByRole("link", { name: "新对话" })).toHaveAttribute("href", "/chat/root-agent");
   });
 });

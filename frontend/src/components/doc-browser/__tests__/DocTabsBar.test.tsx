@@ -45,7 +45,7 @@ describe("DocTabsBar", () => {
 
   it("calls onToggleBrowser when toggle button clicked", async () => {
     const { props } = renderBar();
-    await userEvent.click(screen.getByRole("button", { name: "Close files and history" }));
+    await userEvent.click(screen.getByRole("button", { name: "Close conversation files" }));
     expect(props.onToggleBrowser).toHaveBeenCalled();
   });
 

@@ -34,10 +34,10 @@ function SessionsContent() {
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-10 sm:px-6">
       <header className="glass-panel space-y-4 p-6 sm:p-8">
-        <Link href="/workspace" className="text-sm text-primary">{zh ? "返回工作台" : "Back to workspace"}</Link>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">{zh ? "会话与任务" : "Sessions & tasks"}</h1>
-        <p className="text-sm text-muted-foreground">{zh ? "查找历史记录，按公开计划状态继续任务。" : "Find conversations and continue tasks by their reported plan status."}</p>
-        <Link href="/chat/root-agent" className="button-primary inline-flex px-4 py-2">{zh ? "开始任务" : "Start a task"}</Link>
+        <p className="text-xs text-muted-foreground">{zh ? "你的工作台" : "Your workspace"}</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">{zh ? "全部对话" : "Conversations"}</h1>
+        <p className="text-sm text-muted-foreground">{zh ? "随时继续讨论，查找历史记录，或开始一段新的对话。" : "Continue a discussion, find your history or start a new conversation."}</p>
+        <Link href="/chat/root-agent" className="button-primary inline-flex px-4 py-2">{zh ? "新对话" : "New chat"}</Link>
       </header>
       <form onSubmit={apply} className="glass-panel space-y-4 p-5">
         <div className="space-y-2">
@@ -45,7 +45,9 @@ function SessionsContent() {
           <input id="session-search" type="search" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "标题或会话编号" : "Title or session ID"} className="w-full min-w-0 rounded-xl border border-border bg-background px-4 py-3 text-foreground" />
           <p className="text-sm text-muted-foreground">{zh ? "搜索当前账号的全部历史会话，结果按最近更新时间排序。" : "Search all your sessions, ordered by last update."}</p>
         </div>
-        <label className="block space-y-2 text-sm"><span>{zh ? "任务状态" : "Task status"}</span><select className="glass-control w-full px-3" value={status} onChange={event => setStatus(event.target.value)}><option value="">{zh ? "全部状态" : "All statuses"}</option>{Object.entries(TASK_STATUS_LABELS).map(([key, labels]) => <option key={key} value={key}>{labels[zh ? 0 : 1]}</option>)}</select></label>
+        <details><summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">{zh ? "按计划报告筛选" : "Filter by reported plan"}</summary>
+        <label className="block space-y-2 text-sm"><span>{zh ? "计划报告状态" : "Reported plan status"}</span><select className="glass-control w-full px-3" value={status} onChange={event => setStatus(event.target.value)}><option value="">{zh ? "全部状态" : "All statuses"}</option>{Object.entries(TASK_STATUS_LABELS).map(([key, labels]) => <option key={key} value={key}>{labels[zh ? 0 : 1]}</option>)}</select></label>
+        <p className="mt-2 text-xs text-muted-foreground">{zh ? "只筛选助手已保存的计划报告，不代表会话正在运行。" : "Filters saved plan reports, not whether a conversation is running."}</p></details>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">{zh ? "更新时间起" : "Updated from"}<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block min-h-11 w-full min-w-0 rounded-xl border border-border bg-background px-3 text-foreground" /></label>
           <label className="min-w-0 text-sm">{zh ? "更新时间止" : "Updated through"}<input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 block min-h-11 w-full min-w-0 rounded-xl border border-border bg-background px-3 text-foreground" /></label>

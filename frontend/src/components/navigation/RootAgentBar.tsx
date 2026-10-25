@@ -25,9 +25,9 @@ export function RootAgentBar({}: {
       aria-label="Root Agent navigation"
     >
       <Link
-        href="/workspace"
+        href="/chat/root-agent"
         className="flex shrink-0 items-center"
-        aria-label={locale.startsWith("zh") ? "返回工作台" : "Back to workspace"}
+        aria-label={locale.startsWith("zh") ? "返回对话" : "Back to chat"}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
