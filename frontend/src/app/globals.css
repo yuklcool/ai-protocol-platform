@@ -1140,8 +1140,6 @@
 
 /* v3 page details: solid working surfaces, restrained hierarchy. */
 .workspace-intro { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 32px; }
-.session-card { transition: border-color 180ms, box-shadow 180ms; }
-.session-card:hover { border-color: #c4d8ef; box-shadow: var(--shadow-2); }
 .task-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--hairline); padding-bottom: 12px; }
 .task-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid transparent; border-radius: var(--radius-control); color: var(--text-2); }
 .task-tabs button[aria-pressed="true"] { color: var(--brand-ink); border-color: #d5e5fa; background: var(--brand-soft); font-weight: 600; }

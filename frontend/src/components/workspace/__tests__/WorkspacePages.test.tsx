@@ -108,6 +108,8 @@ describe("sessions 全局列表", () => {
     fetchMock.mockResolvedValueOnce(ok([row("s2", "Reset result")]));
     render(<SessionsPage />);
     await screen.findByText("s1");
+    expect(screen.queryByLabelText("Updated from")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     fireEvent.change(screen.getByLabelText("Updated from"), { target: { value: "2026-10-22" } });
     fireEvent.change(screen.getByLabelText("Updated through"), { target: { value: "2026-10-20" } });
     fireEvent.click(screen.getByRole("button", { name: /^Search$/ }));
@@ -116,12 +118,42 @@ describe("sessions 全局列表", () => {
     fireEvent.change(screen.getByLabelText("Updated from"), { target: { value: "2026-10-20" } });
     fireEvent.click(screen.getByRole("button", { name: /^Search$/ }));
     expect(await screen.findByText("No matching sessions. Try different filters.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filters" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Filters" })).toHaveFocus();
     const start = encodeURIComponent(new Date("2026-10-20T00:00:00").toISOString());
     const end = encodeURIComponent(new Date("2026-10-21T00:00:00").toISOString());
     expect(fetchMock.mock.calls[1][0]).toBe(`/api/proxy/api/sessions/search?updated_after=${start}&updated_before=${end}`);
     fireEvent.click(screen.getByRole("button", { name: /^Reset$/ }));
     expect(await screen.findByText("Reset result")).toBeInTheDocument();
     expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions/search");
+  });
+
+  it("筛选按需展开，收起保留草稿，应用后显示条件并可重置", async () => {
+    state.user = { uid: "u1" };
+    fetchMock.mockResolvedValueOnce(ok([row("s1", "First discussion")]));
+    fetchMock.mockResolvedValueOnce(ok([row("s2", "Completed plan")]));
+    fetchMock.mockResolvedValueOnce(ok([row("s1", "First discussion")]));
+    render(<SessionsPage />);
+    await screen.findByText("First discussion");
+    const toggle = screen.getByRole("button", { name: "Filters" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText("Reported plan status"), { target: { value: "completed" } });
+    fireEvent.click(toggle);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText("Reported plan status")).toHaveValue("completed");
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+    await screen.findByText("Completed plan");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/proxy/api/sessions/search?task_status=completed");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Plan: Completed")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    await screen.findByText("First discussion");
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/api/sessions/search");
+    expect(screen.queryByText("Plan: Completed")).not.toBeInTheDocument();
   });
 
   it("翻页错误保留已有卡片，不误空，可再次加载同一游标", async () => {
