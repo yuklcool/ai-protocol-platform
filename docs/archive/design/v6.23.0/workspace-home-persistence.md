@@ -249,7 +249,8 @@ again. A user's deliberate click was silently undone; they click again and it
 "works".
 
 Fixed by making "new" mean *never seen this session*. The rule is extracted to
-[`frontend/src/lib/workbenchFocus.ts`](../../../../frontend/src/lib/workbenchFocus.ts)
+`frontend/src/lib/workbenchFocus.ts` (since removed by the
+[conversation-first workbench](../../../design/personal-workbench.md), which opens results only on user request)
 so the blink sequence is testable directly (same precedent as `compareLauncher.ts`) —
 the ChatShell-level test could not reproduce it, because a re-emission through
 the event router never nulls the surface. An explicit user close releases the

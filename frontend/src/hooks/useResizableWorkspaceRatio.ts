@@ -22,36 +22,6 @@ export const DEFAULT_RATIOS: Record<string, number> = {
  * less workspace room override via DEFAULT_RATIOS. */
 export const RATIO_DEFAULT = 0.5;
 
-const COLLAPSED_KEY_PREFIX = "aitana.workspaceCollapsed:";
-
-/** Read the per-skill user-collapsed flag from sessionStorage. SSR-safe.
- *
- * This is DISTINCT from the chat-page-level auto-fold (which hides the
- * workbench when there's truly nothing to show — no surface + no tab +
- * no examples). The collapsed flag is an explicit user gesture:
- * "I want this hidden even when there IS content, until I expand it
- * again." Persisted per-skillId so toggling on one skill doesn't fold
- * the other.
- */
-export function readStoredCollapsed(skillId: string, defaultCollapsed = false): boolean {
-  if (typeof window === "undefined") return defaultCollapsed;
-  try {
-    const value = window.sessionStorage.getItem(COLLAPSED_KEY_PREFIX + skillId);
-    return value === null ? defaultCollapsed : value === "1";
-  } catch {
-    return defaultCollapsed;
-  }
-}
-
-export function writeStoredCollapsed(skillId: string, collapsed: boolean): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(COLLAPSED_KEY_PREFIX + skillId, collapsed ? "1" : "0");
-  } catch {
-    // Quota / disabled storage — silently ignore.
-  }
-}
-
 const STORAGE_PREFIX = "aitana.workspaceRatio:";
 
 function storageKey(skillId: string): string {

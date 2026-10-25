@@ -1,4 +1,5 @@
 import { renderHook } from "@testing-library/react";
+import { useEffect } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { useStableThreadId } from "@/hooks/useStableThreadId";
@@ -71,5 +72,21 @@ describe("useStableThreadId — chat-history-deep-fixes-2 Bug A' fix", () => {
 
     expect(result.current).not.toBe(idBefore);
     expect(result.current).toMatch(/^mock-uuid-\d+$/);
+  });
+
+  it("never commits the previous thread under a new URL", () => {
+    const committed: { urlSessionId: string | null; threadId: string }[] = [];
+    const { rerender } = renderHook(({ urlSessionId }: { urlSessionId: string | null }) => {
+      const threadId = useStableThreadId(urlSessionId);
+      useEffect(() => { committed.push({ urlSessionId, threadId }); }, [urlSessionId, threadId]);
+      return threadId;
+    }, { initialProps: { urlSessionId: "session-A" as string | null } });
+    rerender({ urlSessionId: "session-B" });
+    rerender({ urlSessionId: null });
+    expect(committed).toEqual([
+      { urlSessionId: "session-A", threadId: "session-A" },
+      { urlSessionId: "session-B", threadId: "session-B" },
+      { urlSessionId: null, threadId: expect.stringMatching(/^mock-uuid-/) },
+    ]);
   });
 });

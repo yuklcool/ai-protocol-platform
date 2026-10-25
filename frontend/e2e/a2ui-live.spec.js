@@ -146,6 +146,10 @@ test.describe("A2UI persisted surface live acceptance", () => {
         waitUntil: "domcontentloaded",
       });
 
+      await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
+      await page.getByRole("button", { name: /^(查看预览|Open preview)$/ }).first().click();
+      await expect(page.locator('[data-surface="workspace"]')).toHaveCount(1);
+      await expect(page.locator("#workbench-panel-workspace-result")).toBeVisible();
       await expect(page.getByText("A2UI Live Acceptance").first()).toBeVisible({ timeout: 30_000 });
       await expect(
         page.getByText("Rendered from persisted PostgreSQL session state").first(),
@@ -180,6 +184,8 @@ test.describe("A2UI persisted surface live acceptance", () => {
       // A hard browser reload must reconstruct the surface from PostgreSQL via
       // GET /api/sessions/{id}/messages -> a2ui_surfaces -> RehydrateSurfaces.
       await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
+      await page.getByRole("button", { name: /^(查看预览|Open preview)$/ }).first().click();
       await expect(page.getByText("A2UI Live Acceptance").first()).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole("button", { name: "Persist action" }).first()).toBeVisible({
         timeout: 30_000,

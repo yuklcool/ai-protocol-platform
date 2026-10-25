@@ -76,8 +76,8 @@ vi.mock("@/hooks/useDocBrowser", () => ({
   useDocBrowser: () => ({ folders: [], documents: [], filteredDocuments: [], activeFolderId: null, searchQuery: "", setActiveFolderId: vi.fn(), setSearchQuery: vi.fn(), error: null, isLoading: false }),
 }));
 vi.mock("@/components/document/DocumentPanel", () => ({ DocumentPanel: () => null }));
+vi.mock("@/hooks/useDocument", () => ({ useDocument: vi.fn(() => ({ doc: null, error: null, isLoading: false })) }));
 vi.mock("@/hooks/useDocumentSessions", () => ({ useDocumentSessions: () => ({ sessions: [], isLoading: false, error: null }) }));
-vi.mock("@/hooks/useSkillSessions", () => ({ useSkillSessions: vi.fn() }));
 vi.mock("@/hooks/useSessionAttachments", () => ({ useSessionAttachments: vi.fn() }));
 vi.mock("@/hooks/useSessionMessages", () => ({
   useSessionMessages: vi.fn(),
@@ -128,11 +128,11 @@ import { fetchWithAuth } from "@/lib/apiClient";
 import { stashPendingSkillSwitch, readPendingSkillSwitch, clearPendingSkillSwitch } from "@/lib/skillSwitch";
 import { useSessionAttachments } from "@/hooks/useSessionAttachments";
 import { useSessionMessages } from "@/hooks/useSessionMessages";
-import { useSkillSessions, type ChatSessionSummary } from "@/hooks/useSkillSessions";
 import { importByReference } from "@/lib/importByReference";
 import { ChatShell } from "../ChatShell";
 import type { User } from "@/lib/firebase";
 import { useSkillAgent } from "@/hooks/useSkillAgent";
+import { useDocument } from "@/hooks/useDocument";
 
 async function renderChat() {
   await act(async () => {
@@ -154,6 +154,7 @@ const LONG_PROMPT =
   "change-in-law provisions and the settlement timeline.";
 
 beforeEach(() => {
+  vi.mocked(useDocument).mockReturnValue({ doc: null, error: null, isLoading: false });
   Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
   subscribers.length = 0;
   vi.clearAllMocks();
@@ -164,7 +165,6 @@ beforeEach(() => {
   navigation.params = new URLSearchParams();
   vi.mocked(useSessionMessages).mockReturnValue({ initialMessages: [], a2uiSurfaces: [], isLoadingHistory: false, historyError: null, sessionGone: false, transcriptUnavailable: false });
   vi.mocked(useSessionAttachments).mockReturnValue({ tabs: [], setTabs: vi.fn(), ready: true, saving: false, error: null, retrySave: vi.fn() });
-  vi.mocked(useSkillSessions).mockReturnValue({ sessions: [], isLoading: false, error: null, refetch: vi.fn(), nextCursor: null, loadMore: vi.fn(), isLoadingMore: false });
   vi.mocked(useSkillAgent).mockReturnValue(makeReturn());
 });
 
@@ -178,7 +178,7 @@ describe("ChatShell composer — wrapping (2026-08-06 ONE UAT)", () => {
     expect(composer()).toBe(input);
     expect(input).toHaveFocus();
     expect(screen.getByText("First message")).toBeInTheDocument();
-    expect(screen.queryByText("What would you like to work on?")).not.toBeInTheDocument();
+    expect(screen.queryByText("What would you like to talk about?")).not.toBeInTheDocument();
   });
 
   it("shows a resumed conversation's loading state and saved answer", async () => {
@@ -190,7 +190,32 @@ describe("ChatShell composer — wrapping (2026-08-06 ONE UAT)", () => {
     vi.mocked(useSessionMessages).mockReturnValue({ ...history, isLoadingHistory: false, initialMessages: [{ id: "saved-answer", role: "assistant", content: "Saved answer" }] });
     view.rerender(shell());
     expect(screen.getByText("Saved answer")).toBeInTheDocument();
-    expect(screen.queryByText("What would you like to work on?")).not.toBeInTheDocument();
+    expect(screen.queryByText("What would you like to talk about?")).not.toBeInTheDocument();
+  });
+
+  it("restores a bare workspace surface once and opens it from the conversation", async () => {
+    navigation.params = new URLSearchParams("session=saved");
+    vi.mocked(useSessionMessages).mockReturnValue({
+      initialMessages: [], isLoadingHistory: false, historyError: null, sessionGone: false, transcriptUnavailable: false,
+      a2uiSurfaces: [{ surfaceId: "workspace", sourceId: "saved-output", messages: [
+        { version: "v0.9", createSurface: { surfaceId: "workspace", catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json" } },
+        { version: "v0.9", updateComponents: { surfaceId: "workspace", components: [
+          { id: "root", component: "Text", text: "Restored preview content" },
+        ] } },
+      ] }],
+    });
+    const view = render(shell());
+    await screen.findByRole("button", { name: "Open preview" });
+    // RehydrateSurfaces adds replay metadata. That must not create a second
+    // mount, duplicate tab ids, or two subscriptions to the same action.
+    expect(view.container.querySelectorAll('[data-surface="workspace"]')).toHaveLength(1);
+    expect(view.container.querySelectorAll('#workbench-panel-workspace')).toHaveLength(1);
+    expect(view.container.querySelector(".workbench-pane")).toHaveAttribute("aria-hidden", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
+    expect(screen.getByRole("tab", { name: /Assistant/ })).toHaveAttribute("aria-selected", "true");
+    expect(view.container.querySelector("#workbench-panel-workspace-result")).toHaveAttribute("aria-hidden", "false");
+    fireEvent.click(screen.getByRole("tab", { name: /Workspace/ }));
+    expect(screen.getByTestId("workbench-index")).toHaveTextContent("Assistant");
   });
 
   it("is a textarea, not a single-line input", async () => {
@@ -285,33 +310,15 @@ function shell() {
   return <ChatShell skillId="current-skill" pathPrefix="/chat/@current/current-slug" user={{ uid: "test" } as User} />;
 }
 
-function historySession(overrides: Partial<ChatSessionSummary> = {}): ChatSessionSummary {
-  return {
-    session_id: "past/session?1", skill_id: "other/skill", owner_uid: "not-a-skill",
-    title: "Previous work", document_ids: [], turn_count: 1,
-    first_message_at: "2026-10-20T00:00:00Z", last_message_at: "2026-10-20T00:00:00Z",
-    archived_at: null, is_owner: false, ...overrides,
-  };
-}
-
 function attachmentState() {
   return vi.mocked(useSessionAttachments).mock.results[0].value as ReturnType<typeof useSessionAttachments>;
-}
-
-function sessionsState() {
-  return vi.mocked(useSkillSessions).mock.results[0].value as ReturnType<typeof useSkillSessions>;
-}
-
-async function openHistory() {
-  await userEvent.click(screen.getByRole("button", { name: "Open files and history" }));
-  await userEvent.click(screen.getByRole("tab", { name: "Conversations" }));
 }
 
 // 所有回归均渲染真实 ChatShell，直接操作输入框、历史按钮和导入错误提示。
 describe("ChatShell — 历史和附件恢复", () => {
   it("桌面主动展开的侧栏不会在首条消息出现后自行关闭", async () => {
     const view = render(shell());
-    await userEvent.click(screen.getByRole("button", { name: "Open files and history" }));
+    await userEvent.click(screen.getByRole("button", { name: "Open conversation files" }));
     vi.mocked(useSkillAgent).mockReturnValue(makeReturn({ messages: [{ id: "first", role: "user", content: "Keep the sidebar open" }] }));
     view.rerender(shell());
     expect(screen.getByRole("complementary", { name: "Conversation resources" })).toBeVisible();
@@ -365,48 +372,6 @@ describe("ChatShell — 历史和附件恢复", () => {
     await act(async () => {});
   });
 
-  it("历史首屏失败不误报空，键盘重试恢复后按真实 skill_id 跳转", async () => {
-    const refetch = vi.fn();
-    vi.mocked(useSkillSessions).mockReturnValue({ sessions: [], isLoading: false, error: "Failed", refetch, nextCursor: null, loadMore: vi.fn(), isLoadingMore: false });
-    const view = render(shell());
-    await openHistory();
-    expect(screen.getByRole("alert")).toHaveTextContent("Could not load session history");
-    expect(screen.queryByText("No previous sessions")).not.toBeInTheDocument();
-    const retry = within(screen.getByRole("alert")).getByRole("button", { name: "Try again" });
-    retry.focus();
-    await userEvent.keyboard("{Enter}");
-    expect(refetch).toHaveBeenCalledTimes(1);
-    vi.mocked(useSkillSessions).mockReturnValue({ ...sessionsState(), error: null, sessions: [historySession()] });
-    view.rerender(shell());
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    const row = screen.getByRole("button", { name: /Previous work/ });
-    row.focus();
-    await userEvent.keyboard("{Enter}");
-    expect(navigation.replace).toHaveBeenCalledWith("/chat/other%2Fskill?session=past%2Fsession%3F1");
-    expect(navigation.replace).not.toHaveBeenCalledWith(expect.stringContaining("current-slug?session="));
-  });
-
-  it("分页期间保留历史并禁用重复加载，追加后按追加行恢复", async () => {
-    const loadMore = vi.fn();
-    vi.mocked(useSkillSessions).mockReturnValue({ sessions: [historySession()], isLoading: false, error: null, refetch: vi.fn(), nextCursor: "page2", loadMore, isLoadingMore: false });
-    const view = render(shell());
-    await openHistory();
-    const more = screen.getByRole("button", { name: "Load more conversations" });
-    more.focus();
-    await userEvent.keyboard(" ");
-    expect(loadMore).toHaveBeenCalledTimes(1);
-    vi.mocked(useSkillSessions).mockReturnValue({ ...sessionsState(), isLoadingMore: true });
-    view.rerender(shell());
-    expect(screen.getByRole("button", { name: "Loading more conversations…" })).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Loading more conversations…");
-    expect(screen.getByText("Previous work")).toBeInTheDocument();
-    vi.mocked(useSkillSessions).mockReturnValue({ ...sessionsState(), sessions: [historySession(), historySession({ session_id: "page2", skill_id: "second-skill", title: "Older work" })], isLoadingMore: false, nextCursor: null });
-    view.rerender(shell());
-    await userEvent.click(screen.getByText("Older work"));
-    expect(navigation.replace).toHaveBeenCalledWith("/chat/second-skill?session=page2");
-    expect(screen.queryByRole("button", { name: "Load more conversations" })).not.toBeInTheDocument();
-  });
-
   it.each(["pending", "failed", "pending_ai_extraction"] as const)("已选 %s 附件不能绕过流式错误重试", async (parseStatus) => {
     const sendMessage = vi.fn();
     const clearError = vi.fn();
@@ -453,30 +418,6 @@ describe("ChatShell — 历史和附件恢复", () => {
     render(shell());
     expect(navigation.replace).toHaveBeenCalledWith("/chat/@current/current-slug?view=detail&session=test-thread");
     await act(async () => {});
-  });
-
-  it("真实历史 Hook 切换筛选时取消旧页，旧响应不能追加到新列表", async () => {
-    const actual = await vi.importActual<typeof import("@/hooks/useSkillSessions")>("@/hooks/useSkillSessions");
-    vi.mocked(useSkillSessions).mockImplementation(actual.useSkillSessions);
-    let finishOld!: (value: unknown) => void;
-    vi.mocked(fetchWithAuth)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [historySession({ session_id: "a", skill_id: "agent-a", skill_label: "Agent A" }), historySession({ session_id: "b", skill_id: "agent-b", skill_label: "Agent B", title: "Other work" })], next_cursor: "old-page" }) } as Response)
-      .mockResolvedValueOnce({ ok: true, json: () => new Promise((resolve) => { finishOld = resolve; }) } as Response)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [historySession({ session_id: "new", skill_id: "agent-b", skill_label: "Agent B", title: "Filtered work" })], next_cursor: null }) } as Response);
-    render(shell());
-    await openHistory();
-    await userEvent.click(await screen.findByRole("button", { name: "Load more conversations" }));
-    await waitFor(() => expect(finishOld).toBeTypeOf("function"));
-    const oldSignal = vi.mocked(fetchWithAuth).mock.calls[1][1]?.signal;
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Filter conversations by agent" }), "agent-b");
-    await screen.findByText("Filtered work");
-    expect(oldSignal?.aborted).toBe(true);
-    await act(async () => finishOld({ sessions: [historySession({ title: "Stale work" })], next_cursor: "stale-next" }));
-    expect(screen.queryByText("Stale work")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Load more conversations" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(fetchWithAuth).toHaveBeenCalledTimes(3);
-    expect(fetchWithAuth).toHaveBeenLastCalledWith("/api/proxy/api/sessions?skill_id=agent-b", expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it("运行时保留停止按钮和 Esc 语义，不发送新消息", async () => {
@@ -617,5 +558,30 @@ describe("ChatShell — 导入失败反馈", () => {
     expect(composer()).toHaveValue("keep editing");
     view.rerender(shell());
     expect(importByReference).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ChatShell — 资料带入对话", () => {
+  it("等待附件恢复后附加已授权文件，并保持预览收起", async () => {
+    navigation.params = new URLSearchParams("document=from-library");
+    vi.mocked(useDocument).mockReturnValue({ doc: { id: "from-library", originalFilename: "notes.txt", sourceFormat: "txt", parseStatus: "parsed", parseError: null, sourceUrl: null, parsedAt: null, summary: null, blocks: [] }, error: null, isLoading: false });
+    const setTabs = vi.fn();
+    const attachments = { tabs: [], setTabs, ready: false, saving: false, error: null, retrySave: vi.fn() };
+    vi.mocked(useSessionAttachments).mockReturnValue(attachments);
+    const view = render(shell());
+    expect(setTabs).not.toHaveBeenCalled();
+    vi.mocked(useSessionAttachments).mockReturnValue({ ...attachments, ready: true });
+    view.rerender(shell());
+    expect(setTabs).toHaveBeenCalledOnce();
+    expect(setTabs.mock.calls[0][0]([])).toEqual([expect.objectContaining({ id: "from-library", filename: "notes.txt", included: true })]);
+    expect(navigation.replace).toHaveBeenCalledWith("/chat/@current/current-slug");
+    expect(document.querySelector(".workbench-pane-visible")).toBeNull();
+  });
+  it("文件读取被拒绝时明确提示且不附加", () => {
+    navigation.params = new URLSearchParams("document=private");
+    vi.mocked(useDocument).mockReturnValue({ doc: null, error: "Access denied", isLoading: false });
+    render(shell());
+    expect(screen.getByRole("alert")).toHaveTextContent("Access denied");
+    expect(attachmentState().setTabs).not.toHaveBeenCalled();
   });
 });

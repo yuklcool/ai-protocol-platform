@@ -8,11 +8,13 @@ export function ChatExecutionCard({ execution, onStop }: { execution: ChatExecut
   const { locale } = useI18n();
   const t = (key: Parameters<typeof translateChat>[1]) => translateChat(locale, key);
   return (
-    <section data-execution-id={execution.id} className="glass-panel my-3 w-full min-w-0 max-w-2xl overflow-hidden p-4" aria-label={t("execution.title")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{t("execution.title")}</h3>
-        <span role="status" className="text-xs text-muted-foreground">{t(`execution.${execution.status}`)}</span>
-      </div>
+    <section data-execution-id={execution.id} className="my-3 w-full min-w-0 max-w-2xl rounded-xl border border-border px-4 py-2" aria-label={t("execution.title")}>
+      <details>
+        <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-3 text-sm">
+          <span className="font-medium">{t("execution.title")}{execution.tools.length > 0 ? ` · ${execution.tools.length}` : ""}</span>
+          <span role="status" className="text-xs text-muted-foreground">{t(`execution.${execution.status}`)}</span>
+          <span aria-hidden className="ml-auto text-muted-foreground">⌄</span>
+        </summary>
       {execution.stage && execution.status === "running" && <p className="mt-2 break-words text-sm text-muted-foreground">{execution.stage}</p>}
       <ol className="mt-3 space-y-2">
         {execution.tools.map((tool) => (
@@ -23,6 +25,7 @@ export function ChatExecutionCard({ execution, onStop }: { execution: ChatExecut
           </li>
         ))}
       </ol>
+      </details>
       {(execution.status === "interrupted" || execution.status === "cancelled" || execution.status === "failed") && (
         <p className="mt-3 text-xs text-muted-foreground">{t("execution.checkBeforeRetry")}</p>
       )}

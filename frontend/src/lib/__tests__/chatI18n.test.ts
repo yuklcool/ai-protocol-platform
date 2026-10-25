@@ -51,6 +51,6 @@ describe("Chat i18n", () => {
     expect(translateChat("zh-CN", "readAloud.read")).toBe("朗读");
     expect(translateChat("zh-CN", "code.copy")).toBe("复制");
     expect(translateChat("zh-CN", "message.earlier")).toBe("本次对话的较早消息");
-    expect(translateChat("zh-CN", "message.startConversation")).toBe("发送一条消息开始对话。");
+    expect(translateChat("zh-CN", "message.startConversation")).toBe("提一个问题，讨论一个想法，或分享一份资料。");
   });
 });

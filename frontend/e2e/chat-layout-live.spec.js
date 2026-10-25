@@ -31,7 +31,7 @@ async function checkLayout(page) {
   return layout;
 }
 
-test("任务对话：底部输入、首条消息、历史恢复和长会话独立滚动（协议 fixture）", async ({ browser }, info) => {
+test("普通对话：底部输入、首条消息、历史恢复和长会话独立滚动（协议 fixture）", async ({ browser }, info) => {
   test.setTimeout(150_000);
   const response = await fetch(`${BACKEND}/api/auth/login`, {
     method: "POST", headers: { "content-type": "application/json" },
@@ -91,7 +91,7 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
       await checkLayout(page);
       // A new conversation has readable content near the top, not an empty
       // vertically centered composer card.
-      const heading = page.getByRole("heading", { name: "今天想完成什么任务？" });
+      const heading = page.getByRole("heading", { name: "今天想聊些什么？" });
       await expect(heading).toBeVisible();
       const top = await heading.boundingBox();
       const transcript = await page.locator("[data-chat-transcript]").boundingBox();
@@ -104,12 +104,22 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
     await expect(page.getByText("收到，首条回复显示在当前消息区。", { exact: true })).toBeVisible();
     expect(await originalInput.evaluate(element => element.isConnected)).toBe(true);
     expect(streams).toHaveLength(1);
+    await expect(page.locator("[data-execution-id]")).toHaveCount(0);
+    await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
     await checkLayout(page);
     await page.screenshot({ path: info.outputPath("chat-first-reply-390.png"), fullPage: true });
 
+    // Client-side navigation must discard the previous agent before its URL
+    // writeback effect can reopen that conversation.
+    await page.getByRole("button", { name: "新建对话", exact: true }).click();
+    await expect(page).toHaveURL(`${FRONTEND}/chat/root-agent`);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toBeVisible();
+    await expect(page.getByText("收到，首条回复显示在当前消息区。", { exact: true })).toHaveCount(0);
+    expect(streams).toHaveLength(1);
+
     await page.goto(`${FRONTEND}/chat/root-agent?session=${sessionId}`);
     await expect(page.getByText("正在加载会话消息…", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "今天想完成什么任务？" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);
     releaseHistory();
     await expect(page.getByText("历史消息最后一条", { exact: true })).toBeInViewport();
     for (const viewport of sizes) {
@@ -129,13 +139,13 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
     await page.route(historyUrl, route => route.fulfill({ status: 503, json: { detail: "history temporarily unavailable" } }));
     await page.reload();
     await expect(page.getByRole("alert").filter({ hasText: "会话消息加载失败" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "今天想完成什么任务？" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);
     await checkLayout(page);
     await page.unroute(historyUrl);
     await page.route(historyUrl, route => route.fulfill({ json: { session_id: sessionId, messages: [], transcript_unavailable: true } }));
     await page.reload();
     await expect(page.getByTestId("transcript-unavailable")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "今天想完成什么任务？" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     releaseHistory();
@@ -143,7 +153,7 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
   }
 });
 
-test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉（历史协议 fixture）", async ({ browser }, info) => {
+test("资源侧栏：全高列表、文件切换、统一最近会话和手机抽屉（历史协议 fixture）", async ({ browser }, info) => {
   test.setTimeout(150_000);
   const response = await fetch(`${BACKEND}/api/auth/login`, {
     method: "POST", headers: { "content-type": "application/json" },
@@ -223,7 +233,7 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await page.locator("#chat-resource-toggle").click();
     const sidebar = page.locator("#chat-resource-sidebar");
     const files = sidebar.getByRole("tab", { name: "文件", exact: true });
-    const history = sidebar.getByRole("tab", { name: "历史对话", exact: true });
+    await expect(sidebar.getByRole("tab", { name: "历史对话", exact: true })).toHaveCount(0);
     const search = sidebar.getByRole("searchbox", { name: "搜索当前文件夹内的文件" });
     const folderButton = sidebar.getByRole("button", { name: /项目资料 · 侧栏交互验收/ });
     if (await folderButton.getAttribute("aria-expanded") !== "true") await folderButton.click();
@@ -235,7 +245,6 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await folderButton.click();
     await search.fill("项目资料-01");
     await expect(sidebar.getByText("项目资料-01.txt", { exact: true })).toBeVisible();
-    await history.click();
     await files.click();
     await expect(search).toHaveValue("项目资料-01");
     await search.fill("");
@@ -243,7 +252,7 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     for (const viewport of sizes) {
       await page.setViewportSize(viewport);
       await expect(sidebar).toBeVisible();
-      for (const [tab, kind] of [[files, "files"], [history, "history"]]) {
+      for (const [tab, kind] of [[files, "files"]]) {
         await tab.click();
         // Crossing the mobile breakpoint mounts the modal's own file view.
         if (kind === "files") {
@@ -273,11 +282,10 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await page.locator(".chat-resource-overlay").click({ position: { x: 380, y: 400 } });
     await expect(dialog).toHaveCount(0);
     await page.locator("#chat-resource-toggle").click();
-    await dialog.getByRole("button", { name: "关闭文件与历史记录" }).click();
+    await dialog.getByRole("button", { name: "关闭对话文件" }).click();
     await expect(dialog).toHaveCount(0);
-    await page.locator("#chat-resource-toggle").click();
-    await history.click();
-    await sidebar.getByRole("button", { name: new RegExp(`^${sessions[0].title}`) }).click();
+    await page.getByRole("button", { name: "打开主导航", exact: true }).click();
+    await page.getByRole("dialog", { name: "主导航", exact: true }).getByRole("link", { name: sessions[0].title, exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(historyId));
     await expect(page.getByText("侧栏历史恢复内容", { exact: true })).toBeVisible();
@@ -292,19 +300,9 @@ test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉�
     await page.setViewportSize(sizes[1]);
     await page.goto(`${FRONTEND}/chat/root-agent`);
     await page.locator("#chat-resource-toggle").click();
-    await history.click();
-    await sidebar.getByRole("combobox", { name: "按智能体筛选对话" }).selectOption("root-agent");
-    await expect(sidebar.getByRole("navigation", { name: "会话历史" }).getByRole("button", { name: /^\d{2} ·/ })).toHaveCount(12);
-    expect(listRequests.some(query => query.includes("skill_id=root-agent"))).toBe(true);
-    await sidebar.getByRole("combobox").selectOption("");
-    await sidebar.getByRole("button", { name: "加载更多对话", exact: true }).click();
-    await expect(sidebar.getByRole("navigation", { name: "会话历史" }).getByRole("button", { name: /^\d{2} ·/ })).toHaveCount(24);
-    expect(listRequests.some(query => query.includes("cursor=sidebar-next"))).toBe(true);
-    const deleteButton = sidebar.getByRole("button", { name: /^删除 / }).first();
-    await deleteButton.focus();
-    await expect(deleteButton).toHaveCSS("opacity", "1");
     const input = page.locator(".chat-composer textarea");
     await input.fill("打开侧栏后发送首条消息");
+    await expect(page.getByRole("button", { name: "发送", exact: true })).toBeEnabled();
     await input.press("Enter");
     await expect(page.getByText("侧栏保持打开，可以继续查找资料。", { exact: true })).toBeVisible();
     await expect(sidebar).toBeVisible();

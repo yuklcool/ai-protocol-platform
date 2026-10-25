@@ -176,8 +176,8 @@ export default function AdminHub() {
           <p className="page-header__desc">{t("admin.subtitle")}</p>
         </div>
         <div className="page-header__actions">
-          <NextLink href="/workspace" className="button-secondary px-3 py-2 text-sm">
-            {locale === "zh-CN" ? "返回工作台" : "Back to workspace"}
+          <NextLink href="/chat/root-agent" className="button-secondary px-3 py-2 text-sm">
+            {locale === "zh-CN" ? "返回对话" : "Back to chat"}
           </NextLink>
           <LanguageSwitcher />
         </div>

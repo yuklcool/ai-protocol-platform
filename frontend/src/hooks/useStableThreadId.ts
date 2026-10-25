@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 /**
  * Stable threadId for AGUIProvider that survives the URL-writeback after
@@ -27,26 +27,17 @@ import { useEffect, useRef, useState } from "react";
  *   fresh UUID; AGUIProvider rebuilds intentionally.
  */
 export function useStableThreadId(urlSessionId: string | null): string {
-  const [threadId, setThreadId] = useState<string>(
-    () => urlSessionId ?? crypto.randomUUID(),
-  );
-  const prevUrlSessionIdRef = useRef<string | null>(urlSessionId);
-
-  useEffect(() => {
-    const prev = prevUrlSessionIdRef.current;
-    prevUrlSessionIdRef.current = urlSessionId;
-
-    if (urlSessionId === null && prev !== null) {
-      // URL went from ?session=X to no session — "+ New conversation".
-      setThreadId(crypto.randomUUID());
-    } else if (urlSessionId !== null && urlSessionId !== threadId) {
-      // User clicked a different existing thread, OR initial mount with a
-      // session URL we hadn't read yet.
-      setThreadId(urlSessionId);
-    }
-    // When urlSessionId === threadId (URL writeback caught up to our id),
-    // do nothing — that's the whole point of this hook.
-  }, [urlSessionId, threadId]);
-
-  return threadId;
+  const [state, setState] = useState(() => ({
+    urlSessionId,
+    threadId: urlSessionId ?? crypto.randomUUID(),
+  }));
+  if (state.urlSessionId !== urlSessionId) {
+    // Update before children commit. An effect leaves one render with the
+    // previous agent, whose URL-writeback can reopen the chat just cleared.
+    // Writing our own id to the URL keeps the provider key unchanged.
+    const threadId = urlSessionId ?? crypto.randomUUID();
+    setState({ urlSessionId, threadId });
+    return threadId;
+  }
+  return state.threadId;
 }

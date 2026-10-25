@@ -131,10 +131,12 @@ async function renderChat() {
   await waitFor(() => expect(subscribers.length).toBeGreaterThan(0));
 }
 
-function emitSurface(value: unknown) {
+function emitSurface(value: unknown, openPreview = true) {
   act(() => {
     for (const handler of subscribers) handler({ event: { name: "A2UI_SURFACE", value } });
   });
+  // Existing rendering checks open the preview as a user would.
+  if (openPreview) act(() => { screen.queryByRole("button", { name: "Expand workbench" })?.click(); });
 }
 
 /** A bare `workspace` surface — the dominant-surface case that used to clobber
@@ -210,9 +212,8 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     emitSurface(workspaceEnvelope);
 
     const tab = await screen.findByRole("tab", { name: /Assistant/i });
-    // Repo principle #7 — auto-focus new workbench elements. The user still
-    // lands on the result; the difference is that Home survives.
-    expect(tab.getAttribute("aria-selected")).toBe("true");
+    // Arrival keeps Home selected; opening the result is explicit.
+    expect(tab.getAttribute("aria-selected")).toBe("false");
     // Every Result tab is closable; the structural tabs (Home/Document/Activity)
     // are not. The promoted surface joins the result family, close included.
     expect(screen.getByRole("button", { name: /close .*assistant/i })).toBeTruthy();
@@ -228,6 +229,7 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     emitSurface(workspaceEnvelope);
     await screen.findByRole("tab", { name: /Assistant/i });
 
+    act(() => { screen.getByRole("tab", { name: /Assistant/i }).click(); });
     const home = screen.getByRole("tab", { name: /Workspace/i });
     expect(home.getAttribute("aria-selected")).toBe("false");
 
@@ -275,12 +277,10 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     // weaker, still-worth-having property that an ordinary re-emission does not
     // move the user's focus.
     //
-    // The blink itself is guarded where it is actually decidable, as a pure
-    // rule: src/lib/__tests__/workbenchFocus.test.ts, "does NOT re-focus after a
-    // surface blinks out and returns". That one DOES fail against the old code.
     await renderChat();
     emitSurface(pricesEnvelope);
     const result = await screen.findByRole("tab", { name: /DE_LU prices/i });
+    act(() => result.click());
     expect(result.getAttribute("aria-selected")).toBe("true");
 
     const home = screen.getByRole("tab", { name: /Workspace/i });
@@ -302,9 +302,8 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     expect(screen.getAllByRole("tab", { name: /DE_LU prices/i })).toHaveLength(1);
   });
 
-  it("still auto-focuses a genuinely NEW result while another is open (#7 intact)", async () => {
-    // The B4 fix must not blunt auto-focus: a second, different result still
-    // takes the stage even though the user is sitting on Home.
+  it("keeps Home selected when a new result arrives", async () => {
+    // A second result is discoverable without moving the current tab.
     await renderChat();
     emitSurface(pricesEnvelope);
     await screen.findByRole("tab", { name: /DE_LU prices/i });
@@ -325,7 +324,7 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     });
 
     const sources = await screen.findByRole("tab", { name: /Sources/i });
-    await waitFor(() => expect(sources.getAttribute("aria-selected")).toBe("true"));
+    await waitFor(() => expect(sources.getAttribute("aria-selected")).toBe("false"));
   });
 
   it("does NOT keep tiles up for a skill that cannot delegate", async () => {
@@ -359,6 +358,7 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     // NEVER SILENT (#8): Home always has something to show. With no artifacts
     // and no launcher, that is the picker.
     await renderChat();
+    act(() => screen.getByRole("button", { name: "Expand workbench" }).click());
     const home = screen.getByRole("tab", { name: /Workspace/i });
     expect(home.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("example-prompts")).toBeTruthy();

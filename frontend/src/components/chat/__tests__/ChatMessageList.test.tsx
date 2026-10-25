@@ -40,7 +40,7 @@ function msg(id: string, role: SkillMessage["role"], content: string): SkillMess
 describe("ChatMessageList", () => {
   it("renders a placeholder when there are no messages", () => {
     render(<ChatMessageList messages={[]} {...baseProps} />);
-    expect(screen.getByText(/send a message/i)).toBeInTheDocument();
+    expect(screen.getByText(/ask a question, explore an idea/i)).toBeInTheDocument();
   });
 
   it("shows history loading instead of an empty conversation, then displays the saved messages", () => {
@@ -373,5 +373,15 @@ describe("Issue 141 in-chat execution", () => {
     screen.getByRole("button", { name: "Open preview" }).click();
     expect(open).toHaveBeenCalledWith("r");
     expect(screen.queryByRole("button", { name: /download|export/i })).not.toBeInTheDocument();
+  });
+
+  it("hides successful text-only runs but keeps interrupted replies visible", () => {
+    const run = { id: "text", afterMessageId: "u1", startedAt: 10, tools: [], status: "completed" as const };
+    const props = { ...baseProps, messages: [msg("u1", "user", "hello")] };
+    const view = render(<ChatMessageList {...props} executions={[run]} />);
+    expect(view.container.querySelector("[data-execution-id]")).toBeNull();
+    view.rerender(<ChatMessageList {...props} executions={[{ ...run, status: "interrupted" }]} />);
+    expect(view.container.querySelector("[data-execution-id]")).not.toBeNull();
+    expect(view.container.querySelector("details")).not.toHaveAttribute("open");
   });
 });

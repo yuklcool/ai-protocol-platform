@@ -78,7 +78,7 @@ function ChatPageInner({
   const stableThreadId = useStableThreadId(urlSessionId);
 
   return (
-    <AGUIProvider agentId="root-agent" capabilityHint={skillId} skillId={skillId} sessionId={stableThreadId}>
+    <AGUIProvider key={`${user.uid}:${skillId}:${stableThreadId}`} agentId="root-agent" capabilityHint={skillId} skillId={skillId} sessionId={stableThreadId}>
       <ShellRouter skillId={skillId} pathPrefix={pathPrefix} user={user} shell={shell} />
     </AGUIProvider>
   );

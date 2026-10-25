@@ -99,7 +99,7 @@ describe("AdminHub IA", () => {
       "/admin/audit",
       "/admin/settings",
       "/admin/model-providers",
-      "/workspace",
+      "/chat/root-agent",
       "/agent",
       "/skills",
       "/admin/mcp-servers",

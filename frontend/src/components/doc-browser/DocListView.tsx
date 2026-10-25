@@ -47,7 +47,7 @@ export function DocListView({ uid, onDocClick }: DocListViewProps) {
           <p className="px-3 py-4 text-center text-xs text-muted-foreground">
             暂无文件。
             <br />
-            在输入区添加文件即可开始分析。
+            上传文件后，可在这里查看和选择。
           </p>
         )}
 

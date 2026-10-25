@@ -88,6 +88,6 @@ describe("ShellRouter dispatch", () => {
   ] as const)("renders ShellChrome (workspace nav) around %s", (mode, testId) => {
     renderWith({ mode });
     expect(screen.queryByTestId(testId)).not.toBeNull();
-    expect(screen.getByRole("link", { name: "Back to workspace" })).toHaveAttribute("href", "/workspace");
+    expect(screen.getByRole("link", { name: "Back to chat" })).toHaveAttribute("href", "/chat/root-agent");
   });
 });

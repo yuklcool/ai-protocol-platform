@@ -111,10 +111,12 @@ async function renderChat() {
   await waitFor(() => expect(subscribers.length).toBeGreaterThan(0));
 }
 
-function emitSurface(value: unknown) {
+function emitSurface(value: unknown, openPreview = true) {
   act(() => {
     for (const handler of subscribers) handler({ event: { name: "A2UI_SURFACE", value } });
   });
+  // Existing rendering checks open the preview as a user would.
+  if (openPreview) act(() => { screen.queryByRole("button", { name: "Expand workbench" })?.click(); });
 }
 
 /** A second, independent prices artifact — the DK1-vs-DK2 compare case that
@@ -244,7 +246,7 @@ describe("ChatShell — closable artifact tabs (CLOSABLE-ARTEFACT-TABS)", () => 
     await renderChat();
     emitSurface(pricesEnvelope("entsoe_prices_dk1", "DK1 prices"));
     emitSurface(pricesEnvelope("entsoe_prices_dk2", "DK2 prices"));
-    // The 7.5 auto-focus effect lands the user ON the newest artifact tab...
+    fireEvent.click(screen.getByRole("tab", { name: /DK2 prices/i }));
     await waitFor(() =>
       expect(screen.getByRole("tab", { name: /DK2 prices/i }).getAttribute("aria-selected")).toBe("true"),
     );
@@ -264,6 +266,7 @@ describe("ChatShell — closable artifact tabs (CLOSABLE-ARTEFACT-TABS)", () => 
     await renderChat();
     emitSurface(envelope);
     const tab = await screen.findByRole("tab", { name: /DE_LU prices/i });
+    fireEvent.click(tab);
     expect(tab.getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(screen.getByLabelText("Close DE_LU prices"));
@@ -283,7 +286,7 @@ describe("ChatShell — closable artifact tabs (CLOSABLE-ARTEFACT-TABS)", () => 
     await renderChat();
     emitSurface(pricesEnvelope("entsoe_prices_dk1", "DK1 prices"));
     emitSurface(pricesEnvelope("entsoe_prices_dk2", "DK2 prices"));
-    // Auto-focus put us on DK2 (the newest).
+    fireEvent.click(screen.getByRole("tab", { name: /DK2 prices/i }));
     await waitFor(() =>
       expect(screen.getByRole("tab", { name: /DK2 prices/i }).getAttribute("aria-selected")).toBe("true"),
     );
@@ -314,6 +317,7 @@ describe("ChatShell — closable artifact tabs (CLOSABLE-ARTEFACT-TABS)", () => 
     const reborn = await screen.findByRole("tab", { name: /DK1 prices/i });
     // It renders normally: closable again, focused again (it's "new"), and its
     // content is really mounted — not an empty shell.
+    fireEvent.click(reborn);
     expect(reborn.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByLabelText("Close DK1 prices")).toBeTruthy();
     expect(within(screen.getByRole("tabpanel", { hidden: false })).getByTestId("series-stats")).toBeTruthy();
