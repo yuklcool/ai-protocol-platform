@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import NextLink from "next/link";
 
 import { Notice } from "@/components/admin/ConsolePrimitives";
@@ -105,6 +105,9 @@ export default function McpServersPage() {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const formHeading = useRef<HTMLHeadingElement>(null);
+  const formTrigger = useRef<HTMLButtonElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTone, setNoticeTone] = useState<"info" | "success" | "danger">("info");
   const [serversLoading, setServersLoading] = useState(true);
@@ -117,6 +120,8 @@ export default function McpServersPage() {
   const t: PageTranslator = (key, params = {}) =>
     translateMcpAdmin(locale, key, params);
 
+  useEffect(() => { if (formOpen) formHeading.current?.focus(); }, [formOpen, editingId]);
+
   const load = async () => {
     setServersLoading(true);
     setServersLoaded(false);
@@ -126,12 +131,14 @@ export default function McpServersPage() {
       const serversResponse = await fetchWithAuth(API);
       if (!serversResponse.ok) {
         setNotice(await errorDetail(serversResponse, t("load.servers")));
-        return;
+        return false;
       }
       setServers(await serversResponse.json());
       setServersLoaded(true);
+      return true;
     } catch {
       setNotice(t("load.service"));
+      return false;
     } finally {
       setServersLoading(false);
     }
@@ -150,6 +157,7 @@ export default function McpServersPage() {
   };
 
   const edit = (server: McpServer) => {
+    setFormOpen(true);
     setEditingId(server.server_id);
     setForm({
       serverId: server.server_id,
@@ -193,10 +201,14 @@ export default function McpServersPage() {
         setNotice(await errorDetail(response, t("save.failed", { id })));
         return;
       }
-      setNoticeTone("success");
-      setNotice(t("save.ok", { id }));
       resetForm();
-      await load();
+      const loaded = await load();
+      if (loaded) {
+        setNoticeTone("success");
+        setNotice(t("save.ok", { id }));
+      }
+      setFormOpen(false);
+      requestAnimationFrame(() => formTrigger.current?.focus());
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : t("save.failed", { id }),
@@ -347,6 +359,7 @@ export default function McpServersPage() {
           </p>
         </div>
         <div className="page-header__actions">
+        <button ref={formTrigger} type="button" className="button-primary text-sm" aria-expanded={formOpen} aria-controls="mcp-server-form" onClick={() => { if (formOpen) { setFormOpen(false); resetForm(); } else { resetForm(); setFormOpen(true); } }} disabled={busy}>{t("form.addTitle")}</button>
         <NextLink
           href="/admin"
           className="button-secondary px-3 py-2 text-sm"
@@ -359,7 +372,7 @@ export default function McpServersPage() {
       <div className="page-body space-y-5">
       <Notice tone={noticeTone}>{notice}</Notice>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <div className={`grid items-start gap-4 ${formOpen ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
         <section className="glass-panel min-w-0 overflow-hidden">
           <div className="border-b px-4 py-3">
             <h2 className="font-medium">{t("registry.title")}</h2>
@@ -440,12 +453,12 @@ export default function McpServersPage() {
           )}
         </section>
 
-        <section className="glass-panel min-w-0 p-4 sm:p-5">
-          <h2 className="font-medium">
+        {formOpen && <section id="mcp-server-form" className="glass-panel order-first min-w-0 p-4 lg:order-none">
+          <div className="flex items-center justify-between gap-3"><h2 ref={formHeading} tabIndex={-1} className="font-medium">
             {editingId
               ? t("form.editTitle", { id: editingId })
               : t("form.addTitle")}
-          </h2>
+          </h2><button type="button" className="button-ghost text-xs" disabled={busy} onClick={() => { setFormOpen(false); resetForm(); formTrigger.current?.focus(); }}>{t("diagnostics.close")}</button></div>
           <div className="mt-3 grid gap-3">
             <Field label={t("form.serverId")}>
               <input
@@ -559,7 +572,7 @@ export default function McpServersPage() {
               </button>
             </div>
           </div>
-        </section>
+        </section>}
       </div>
 
       {diagnosticId && (

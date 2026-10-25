@@ -109,11 +109,11 @@ export function KnowledgePanel({
     }
   };
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         {t(
-          "上传资料，选择可检索来源。个人来源按用户归属保存，共享来源仍执行访问权限检查。",
-          "Upload documents and bind searchable sources. User ownership and source permissions apply on every search.",
+          "选择检索来源后保存配置。每次检索都按当前用户权限校验。",
+          "Select sources and save settings. Each search checks the current user's access.",
         )}
       </p>
       <Notice>{notice}</Notice>
@@ -125,57 +125,6 @@ export function KnowledgePanel({
       >
         {t("刷新来源与解析状态", "Refresh sources and parsing status")}
       </button>
-      <UploadDropZone
-        skillId="root-agent"
-        onUploadComplete={() => {
-          void load();
-        }}
-      />
-      <section className="space-y-3 glass-panel p-4">
-        <h3 className="text-sm font-semibold">
-          {t("添加知识来源", "Add a knowledge source")}
-        </h3>
-        <Field label={t("已上传资料", "Uploaded document")}>
-          <select
-            className={control}
-            value={documentId}
-            onChange={(e) => setDocumentId(e.target.value)}
-          >
-            <option value="">
-              {t("选择已解析资料", "Select a parsed document")}
-            </option>
-            {documents.map((doc) => (
-              <option
-                key={doc.id}
-                value={doc.id}
-                disabled={doc.status !== "parsed"}
-              >
-                {doc.label} · {doc.status}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t("使用范围", "Sharing")}>
-          <select
-            className={control}
-            value={sharing}
-            onChange={(e) => setSharing(e.target.value)}
-          >
-            <option value="private">{t("仅我可用", "Only me")}</option>
-            <option value="public">
-              {t("所有用户成员可检索", "Searchable by all users")}
-            </option>
-          </select>
-        </Field>
-        <button
-          type="button"
-          className={action}
-          disabled={busy || !documentId}
-          onClick={() => void create()}
-        >
-          {busy ? t("处理中…", "Working…") : t("添加并选中", "Add and select")}
-        </button>
-      </section>
       <section className="space-y-3 glass-panel p-4">
         <h3 className="text-sm font-semibold">
           {t("生效来源", "Bound sources")}
@@ -190,7 +139,7 @@ export function KnowledgePanel({
           sources.map((source) => (
             <div
               key={source.id}
-              className="flex items-start gap-3 rounded-md border p-3"
+              className="flex flex-wrap items-start gap-3 rounded-md border p-3"
             >
               <label className="flex min-w-0 flex-1 items-start gap-2">
                 <input
@@ -305,6 +254,61 @@ export function KnowledgePanel({
           </p>
         )}
       </section>
+      <details className="glass-panel">
+        <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold">{t("添加知识来源", "Add a knowledge source")}</summary>
+        <div className="space-y-4 border-t p-4">
+      <UploadDropZone
+        compact
+        buttonLabel={t("上传资料", "Upload documents")}
+        skillId="root-agent"
+        onUploadComplete={() => {
+          void load();
+        }}
+      />
+      <section className="space-y-3">
+        <Field label={t("已上传资料", "Uploaded document")}>
+          <select
+            className={control}
+            value={documentId}
+            onChange={(e) => setDocumentId(e.target.value)}
+          >
+            <option value="">
+              {t("选择已解析资料", "Select a parsed document")}
+            </option>
+            {documents.map((doc) => (
+              <option
+                key={doc.id}
+                value={doc.id}
+                disabled={doc.status !== "parsed"}
+              >
+                {doc.label} · {doc.status}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("使用范围", "Sharing")}>
+          <select
+            className={control}
+            value={sharing}
+            onChange={(e) => setSharing(e.target.value)}
+          >
+            <option value="private">{t("仅我可用", "Only me")}</option>
+            <option value="public">
+              {t("所有用户成员可检索", "Searchable by all users")}
+            </option>
+          </select>
+        </Field>
+        <button
+          type="button"
+          className={action}
+          disabled={busy || !documentId}
+          onClick={() => void create()}
+        >
+          {busy ? t("处理中…", "Working…") : t("添加并选中", "Add and select")}
+        </button>
+      </section>
+        </div>
+      </details>
       <section className="space-y-3 glass-panel p-4">
         <h3 className="text-sm font-semibold">
           {t("验证已保存的检索配置", "Test saved retrieval settings")}

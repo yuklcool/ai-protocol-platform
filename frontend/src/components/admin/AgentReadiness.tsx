@@ -116,10 +116,10 @@ export function AgentReadiness({ onVerified }: { onVerified?: (ready: boolean) =
   ] as const;
 
   return (
-    <section aria-labelledby="agent-readiness-title" className="glass-panel mb-4 space-y-5 p-5">
+    <section aria-labelledby="agent-readiness-title" className="glass-panel mb-4 space-y-4 p-4">
       <div>
         <h2 id="agent-readiness-title" className="text-lg font-semibold">{zh ? "Agent 就绪清单" : "Agent readiness checklist"}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{zh ? "仅展示后端实际配置与验证记录，不代表目标用户已完成验收。" : "Live backend configuration and validation records only; target-user acceptance is still required."}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{zh ? "已保存的配置与测试记录；用户权限和实际任务需另行验证。" : "Saved configuration and test records. Verify user access and real tasks separately."}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <section aria-label={zh ? "Root 配置" : "Root configuration"} className="surface-sunken min-w-0 p-4">
@@ -145,16 +145,16 @@ export function AgentReadiness({ onVerified }: { onVerified?: (ready: boolean) =
           <p className="mt-2 text-xs text-muted-foreground">{zh ? "绑定数量不代表可用或授权；实际访问仍由后端按目标用户校验。" : "Binding counts do not imply availability or authorization; the backend checks access for each target user."}</p>
           <Link href="/agent" className={linkClass}>{zh ? "配置 Root Agent" : "Configure Root Agent"}</Link>
         </section>
-        <section aria-label={zh ? "模型验证" : "Model validation"} className="surface-sunken min-w-0 p-4">
+        <section aria-label={zh ? "模型验证" : "Model validation"} className="surface-sunken order-first min-w-0 p-4 md:order-none">
           <h3 className="font-medium">{zh ? "当前模型与双测试" : "Current model & both checks"}</h3>
-          <div className="mt-2">
+          {(current.loading || current.error) && <div className="mt-2">
             <p className="text-xs text-muted-foreground">{zh ? "当前模型解析" : "Current model resolution"}</p>
             <ReadStatus resource={current} zh={zh} />
-          </div>
-          <div className="mt-2">
+          </div>}
+          {(models.loading || models.error) && <div className="mt-2">
             <p className="text-xs text-muted-foreground">{zh ? "数据库模型验证记录" : "Database model validation records"}</p>
             <ReadStatus resource={models} zh={zh} />
-          </div>
+          </div>}
           <dl className="mt-3 space-y-2 text-sm">
             <div><dt className="text-muted-foreground">{zh ? "当前解析模型" : "Resolved Root model"}</dt><dd className="break-all font-mono">{modelId ?? unknown} / {text(resolved.root_api_name) ?? unknown}</dd></div>
             <div><dt className="text-muted-foreground">{zh ? "模型启用状态" : "Model enabled state"}</dt><dd>{enabledLabel(selected.enabled)}</dd></div>
@@ -173,15 +173,15 @@ export function AgentReadiness({ onVerified }: { onVerified?: (ready: boolean) =
           <Link href="/admin/model-providers" className={linkClass}>{zh ? "接入、验证与确认应用模型" : "Connect, validate & confirm model application"}</Link>
         </section>
       </div>
-      <div>
-        <h3 className="font-medium">{zh ? "接入 → 验证 → 确认应用 → 用目标账号验证" : "Connect → Validate → Confirm application → Verify with the target account"}</h3>
+      <details className="border-t pt-2">
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">{zh ? "配置与验证步骤" : "Setup and validation steps"}</summary>
         <ol className="mt-2 list-inside list-decimal space-y-2 text-sm text-muted-foreground">
           <li>{zh ? "在现有页面接入服务与模型，管理公共能力资源。" : "Connect services and models, and manage shared resources on the existing pages."} <Link href="/admin/model-providers" className={linkClass}>{zh ? "模型接入" : "Model setup"}</Link><Link href="/skills" className={linkClass}>{zh ? "Skills 中心" : "Skills center"}</Link><Link href="/admin/mcp-servers" className={linkClass}>{zh ? "MCP 管理" : "Manage MCP"}</Link></li>
           <li>{zh ? "在模型管理页分别运行文本生成和原生工具调用测试。" : "Run text generation and native tool-call checks separately on the model page."} <Link href="/admin/model-providers" className={linkClass}>{zh ? "验证模型" : "Validate model"}</Link></li>
           <li>{zh ? "测试通过后，在原模型页面明确选用；在 Root 配置页确认绑定并保存，不自动应用。" : "After validation, explicitly select the model on its existing page; confirm and save bindings in Root settings. Nothing is applied automatically."} <Link href="/admin/model-providers" className={linkClass}>{zh ? "确认模型应用" : "Confirm model application"}</Link><Link href="/agent" className={linkClass}>{zh ? "确认公共绑定" : "Confirm shared bindings"}</Link></li>
           <li>{zh ? "切换为目标账号，在工作台发起真实任务，验证能力、授权与结果；管理员配置不等于用户验收。" : "Switch to the target account and run a real task in the workspace to verify capabilities, access and results; admin configuration is not user acceptance."} <Link href="/chat/root-agent" className={linkClass}>{zh ? "前往工作台验证" : "Verify in workspace"}</Link><Link href="/admin/users" className={linkClass}>{zh ? "核对用户权限" : "Review user access"}</Link></li>
         </ol>
-      </div>
+      </details>
     </section>
   );
 }

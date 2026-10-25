@@ -399,8 +399,7 @@ export default function ModelProvidersPage() {
         <div className="min-w-0">
           <h1 className="page-header__title">模型接入</h1>
           <p className="page-header__desc">
-            添加服务 → 选择模型 → 测试 → 用于 Root
-            对话。单模型无需配置层级映射。
+            接入模型服务，测试通过后用于对话。
           </p>
         </div>
         <div className="page-header__actions">
@@ -439,7 +438,7 @@ export default function ModelProvidersPage() {
         <>
           <section
             aria-label="当前模型"
-            className="glass-panel min-w-0 break-words p-5 text-sm"
+            className="glass-panel flex min-w-0 flex-wrap items-center justify-between gap-2 break-words px-4 py-3 text-sm"
           >
             <p>
               平台 Root 默认模型：
@@ -450,15 +449,9 @@ export default function ModelProvidersPage() {
                 {current?.allowed ? "可用于对话" : "尚不可用于对话"}
               </span>
             </p>
-            <p className="mt-2 text-muted-foreground">
-              当前 Root 模型：{current?.root_api_name || "未解析到可用模型"}
-              {current?.allowed
-                ? ""
-                : "（尚不可用于对话，请核对模型配置和驻留策略）"}
-              。
-            </p>
+            {!current?.allowed && <p className="w-full text-muted-foreground">尚不可用于对话，请核对模型配置和驻留策略。</p>}
             <Link
-              className="mt-2 inline-block text-primary underline"
+              className="inline-flex min-h-11 items-center text-primary underline"
               href="/agent"
             >
               查看 Root 配置

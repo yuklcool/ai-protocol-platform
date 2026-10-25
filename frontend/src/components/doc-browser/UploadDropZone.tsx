@@ -20,12 +20,13 @@ interface UploadDropZoneProps {
   attachedCount?: number;
   disabled?: boolean;
   compact?: boolean;
+  buttonLabel?: string;
   onUploadComplete?: (docId: string, filename: string, result: UploadResult) => void;
   onBusyChange?: (busy: boolean) => void;
   onBlockingChange?: (blocked: boolean) => void;
 }
 
-export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, attachedCount = 0, disabled = false, compact = false, onUploadComplete, onBusyChange, onBlockingChange }: UploadDropZoneProps) {
+export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, attachedCount = 0, disabled = false, compact = false, buttonLabel, onUploadComplete, onBusyChange, onBlockingChange }: UploadDropZoneProps) {
   const [capabilities, setCapabilities] = useState<DocumentCapabilities | null>(null);
   const [capabilityError, setCapabilityError] = useState("");
   const [jobs, setJobs] = useState<UploadJob[]>([]);
@@ -163,7 +164,7 @@ export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, a
       <div className={compact ? "flex flex-wrap items-center gap-x-2" : "space-y-2"}>
       <button type="button" disabled={!capabilities || disabled} onClick={() => input.current?.click()} className={compact ? "button-ghost inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50" : "rounded border px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50"}>
         {compact && <Paperclip className="h-4 w-4" aria-hidden="true" />}
-        {dragging ? "松开文件开始上传" : compact ? "添加附件" : "添加文件或拖入此处"}
+        {dragging ? "松开文件开始上传" : buttonLabel || (compact ? "添加附件" : "添加文件或拖入此处")}
       </button>
       <input ref={input} disabled={!capabilities || disabled} aria-label="上传对话附件" type="file" multiple className="hidden" accept={capabilities?.formats.map((format) => format.extension).join(",")} onChange={(event) => { if (event.target.files) enqueue(Array.from(event.target.files)); event.target.value = ""; }} />
       {compact ? <details className="text-xs text-muted-foreground"><summary className="cursor-pointer rounded px-3 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">支持的文件与限制</summary><p className="px-3 py-2">TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；单文件 25 MB，每轮最多 10 个。图片和扫描件暂不支持识别。</p></details> : <p className="text-[11px] text-muted-foreground">TXT、Markdown、CSV、文本 PDF、DOCX、XLSX、PPTX；单文件 25 MB，每轮最多 10 个。图片和扫描件暂不支持识别。</p>}

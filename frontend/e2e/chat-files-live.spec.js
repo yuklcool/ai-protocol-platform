@@ -150,7 +150,7 @@ test("资料上传、预览后用于新对话，附件保存且聊天默认不�
     await page.goto(`${FRONTEND}/documents`);
     // setInputFiles bypasses the file picker's disabled state; wait for the
     // format/size capabilities just as the visible upload button requires.
-    await expect(page.getByRole("button", { name: "添加文件或拖入此处", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "上传资料", exact: true })).toBeEnabled();
     const [response] = await Promise.all([
       page.waitForResponse(response => response.url().endsWith("/api/documents/upload") && response.request().method() === "POST"),
       page.getByLabel("上传对话附件").setInputFiles({ name: filename, mimeType: "text/plain", buffer: Buffer.from("个人资料验收内容。预算 100，实际 80。") }),
@@ -159,6 +159,13 @@ test("资料上传、预览后用于新对话，附件保存且聊天默认不�
     documentId = (await response.json()).docId;
     const preview = page.getByRole("region", { name: "文件预览", exact: true });
     await expect(preview).toBeVisible();
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await preview.focus();
+      await expect(preview.getByRole("link", { name: "用于新对话", exact: true })).toBeInViewport();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`document-preview-${width}.png`), fullPage: true });
+    }
     await preview.getByRole("link", { name: "用于新对话", exact: true }).click();
     await expect(page).toHaveURL(/session=/);
     const session = new URL(page.url()).searchParams.get("session");

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { useI18n } from "@/contexts/I18nContext";
 import { completeOidcSignIn } from "@/lib/oidcAuth";
 
 export default function OidcCallbackPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function OidcCallbackPage() {
         ) : (
           <p className="notice notice--info mt-3" role="status">{t("auth.checking")}</p>
         )}
+        {error && <Link href="/" className="button-secondary mt-4">{locale.startsWith("zh") ? "返回首页重新登录" : "Return home to sign in"}</Link>}
       </section>
     </main>
   );

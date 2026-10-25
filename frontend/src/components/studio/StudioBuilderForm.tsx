@@ -18,7 +18,7 @@ export function StudioBuilderForm({ draft, setDraft, isNew }: {
   const control = "glass-control min-h-11 w-full px-3 py-2 text-sm";
   return (
     <form className="space-y-6" onSubmit={(event) => event.preventDefault()}>
-      <p className="notice notice--info">
+      <p className="text-xs leading-5 text-muted-foreground">
         <span>{t("studio.capabilityNotice")} <Link href="/agent" className="inline-flex min-h-11 items-center text-primary underline underline-offset-4">{t("studio.rootSettings")}</Link></span>
       </p>
       <section className="glass-panel space-y-4 p-5">
@@ -27,11 +27,13 @@ export function StudioBuilderForm({ draft, setDraft, isNew }: {
         <Field label={t("builder.description")}><input value={draft.description} onChange={(event) => set({ description: event.target.value })} className={control} /></Field>
         <Field label={t("builder.instructions")}><textarea value={draft.instructions} onChange={(event) => set({ instructions: event.target.value })} rows={14} className={`${control} font-mono`} /></Field>
       </section>
-      <details className="glass-panel space-y-4 p-5">
-        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">{t("builder.files")}</summary>
+      <details className="glass-panel">
+        <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-medium">{t("builder.files")}</summary>
+        <div className="space-y-4 border-t p-4">
         <p className="mt-2 text-xs text-muted-foreground">{t("builder.filesHint")}</p>
         <FilesEditor label={t("builder.references")} files={draft.references} onChange={(references) => set({ references })} />
         <FilesEditor label={t("builder.assets")} files={draft.assets} onChange={(assets) => set({ assets })} />
+        </div>
       </details>
       <section className="glass-panel space-y-4 p-5">
         <AccessControlEditor value={draft.accessControl} onChange={(accessControl) => set({ accessControl })} />

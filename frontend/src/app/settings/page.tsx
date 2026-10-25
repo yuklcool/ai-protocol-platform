@@ -27,10 +27,10 @@ function SettingsContent() {
   const scope = useAdminScope();
   const visible = entries.filter(item => item.scope === "user" || (item.scope === "platform" ? scope.isPlatform : scope.isAdmin));
   return <main className="page-container mx-auto max-w-5xl">
-    <header className="page-header"><div><p className="page-header__eyebrow">{zh ? "你的工作台" : "Your workspace"}</p><h1 className="page-header__title">{zh ? "设置" : "Settings"}</h1><p className="page-header__desc">{zh ? "在这里管理个人偏好、模型和工具连接。" : "Manage preferences, models and tool connections."}</p></div></header>
+    <header className="page-header"><div><h1 className="page-header__title">{zh ? "设置" : "Settings"}</h1><p className="page-header__desc">{zh ? "个人偏好、模型和工具连接。" : "Preferences, models and tool connections."}</p></div></header>
     {scope.state === "error" && <div role="alert" className="notice notice--danger mb-5"><p>{zh ? "权限加载失败，部分设置暂不可用。" : "Permissions unavailable. Some settings are hidden."}</p><button type="button" className="button-secondary mt-2" onClick={() => void scope.recheck()}>{zh ? "重试" : "Retry"}</button></div>}
-    <div className="grid gap-4 sm:grid-cols-2">{visible.map(item => <Link key={item.href} href={item.href} className="glass-panel group flex items-start gap-4 p-5 transition-colors hover:bg-muted/40">
-      <item.icon className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{zh ? item.zh : item.en}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description[zh ? 0 : 1]}</p></div><ArrowUpRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    <div className="glass-panel grid overflow-hidden sm:grid-cols-2">{visible.map(item => <Link key={item.href} href={item.href} className="group flex min-h-16 items-center gap-3 border-b px-4 py-3 transition-colors hover:bg-muted/40">
+      <item.icon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">{zh ? item.zh : item.en}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description[zh ? 0 : 1]}</p></div><ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </Link>)}</div>
   </main>;
 }

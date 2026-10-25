@@ -288,9 +288,6 @@ function RootAgentSettingsInner({ initialSection }: { initialSection: Section })
                   `rootAgent.nav.${section}` as Parameters<typeof translate>[1],
                 )}
               </h2>
-              <p className="page-header__desc">
-                {t("rootAgent.subtitle")}
-              </p>
               </div>
             </div>
             {renderSection(section, {

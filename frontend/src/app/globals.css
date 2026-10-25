@@ -423,6 +423,14 @@
     align-items: center;
     gap: 8px;
   }
+  .page-header--compact {
+    align-items: center;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .page-header--compact .page-header__title {
+    margin-top: 0;
+  }
   .page-body {
     width: 100%;
     max-width: var(--page-max);
@@ -1150,7 +1158,10 @@
 .setup-steps button { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--hairline); border-radius: var(--radius-card); background: var(--surface-solid); text-align: left; }
 .setup-steps button[aria-current="step"] { border-color: hsl(var(--primary)); background: var(--brand-soft); color: hsl(var(--primary)); }
 .setup-step-number { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 50%; border: 1px solid currentColor; font-family: ui-monospace, monospace; }
-.setup-content > main { padding: 24px 0; min-height: 0; }
+.setup-content > main { padding: 0; min-height: 0; }
+.setup-content > main > .page-header > div:first-child { display: none; }
+.setup-content > main > .page-header { padding-bottom: 0; border-bottom: 0; margin-bottom: 12px; }
+.setup-content > main > .page-header .page-header__actions > a { display: none; }
 .setup-footer { border-top: 1px solid var(--hairline); padding-top: 20px; }
 @media (max-width: 767px) {
   .workspace-intro { flex-direction: column; align-items: flex-start; padding: 24px; gap: 24px; }

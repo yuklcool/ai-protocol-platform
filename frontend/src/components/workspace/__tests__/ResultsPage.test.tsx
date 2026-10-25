@@ -64,4 +64,19 @@ describe("ResultsPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("You cannot access these results");
     expect(screen.queryByText(/No persisted interactive-result summaries/)).not.toBeInTheDocument();
   });
+  it("removes confirmed empty sources and keeps earlier-page navigation", async () => {
+    fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).endsWith("/results") ? response(results("s1", { results: [] })) : response({ sessions: [row("s1", "Empty conversation")], next_cursor: "earlier" }));
+    render(<ResultsPage />);
+    expect(await screen.findByText("No saved results in the checked conversations")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Empty conversation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load more results" })).toBeEnabled();
+  });
+  it("keeps transcript-loss warnings even when the saved result list is empty", async () => {
+    fetchMock.mockImplementation(async url => String(url).endsWith("/reports") ? response({ reports: [] }) : String(url).endsWith("/results") ? response(results("s1", { results: [] })) : response({ sessions: [{ ...row("s1"), transcript_lost: true }], next_cursor: null }));
+    render(<ResultsPage />);
+    fireEvent.click(await screen.findByText("Result state needs review"));
+    expect(await screen.findByText(/transcript may be unavailable/)).toBeVisible();
+    await waitFor(() => expect(screen.queryByText(/Loading results/)).not.toBeInTheDocument());
+    expect(screen.queryByText("No saved results in the checked conversations")).not.toBeInTheDocument();
+  });
 });

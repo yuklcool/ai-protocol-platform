@@ -74,7 +74,9 @@ describe("AgentReadiness", () => {
   it("provides the existing setup and target-account workflow, without an acceptance button", async () => {
     render(<AgentReadiness />);
     await settled();
-    expect(screen.getByText("Connect → Validate → Confirm application → Verify with the target account")).toBeInTheDocument();
+    const steps = screen.getByText("Setup and validation steps");
+    expect(steps.closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(steps);
     expect(screen.getByRole("link", { name: "Verify in workspace" })).toHaveAttribute("href", "/chat/root-agent");
     expect(screen.getByRole("link", { name: "Confirm model application" })).toHaveAttribute("href", "/admin/model-providers");
     expect(screen.getByRole("link", { name: "Confirm shared bindings" })).toHaveAttribute("href", "/agent");
@@ -221,6 +223,7 @@ describe("AgentReadiness", () => {
     expect(screen.getByText("模型已选择，待验证")).toBeInTheDocument();
     expect(screen.getByText("已绑定：2")).toBeInTheDocument();
     expect(screen.getByText("绑定数量不代表可用或授权；实际访问仍由后端按目标用户校验。")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("配置与验证步骤"));
     expect(screen.getByRole("link", { name: "前往工作台验证" })).toHaveAttribute("href", "/chat/root-agent");
   });
 });
