@@ -109,6 +109,14 @@ test("普通对话：底部输入、首条消息、历史恢复和长会话独�
     await checkLayout(page);
     await page.screenshot({ path: info.outputPath("chat-first-reply-390.png"), fullPage: true });
 
+    // Client-side navigation must discard the previous agent before its URL
+    // writeback effect can reopen that conversation.
+    await page.getByRole("button", { name: "新建对话", exact: true }).click();
+    await expect(page).toHaveURL(`${FRONTEND}/chat/root-agent`);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toBeVisible();
+    await expect(page.getByText("收到，首条回复显示在当前消息区。", { exact: true })).toHaveCount(0);
+    expect(streams).toHaveLength(1);
+
     await page.goto(`${FRONTEND}/chat/root-agent?session=${sessionId}`);
     await expect(page.getByText("正在加载会话消息…", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);

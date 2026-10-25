@@ -29,7 +29,6 @@ import { useSessionAttachments } from "@/hooks/useSessionAttachments";
 import type { UploadResult } from "@/lib/documents";
 import { useSessionActivity } from "@/hooks/useSessionActivity";
 import { useChatExecution } from "@/hooks/useChatExecution";
-import { useStableThreadId } from "@/hooks/useStableThreadId";
 import { importByReference, isImportError } from "@/lib/importByReference";
 import { docIdentityFromToolCall, docIdentityKey } from "@/lib/docFromToolCall";
 import {
@@ -565,12 +564,8 @@ function WorkbenchPane({
   // v6.23.0 WORKSPACE-HOME-PERSISTENCE — the dominant `workspace` A2UI surface
   // gets its own Result tab, exactly like a clauses/prices/sources artifact.
   //
-  // This is the special case being DELETED, not added: every other result kind
-  // already lived in `artifactTabs` via the 7.5 model. The bare `workspace`
-  // surface was the sole exemption, and it was the one that overwrote Home. It
-  // can't join `artifactTabs` literally (it carries no artifact metadata, so
-  // `listArtifacts()` never returns it), so it gets an equivalent tab built the
-  // same way and appended to the same list.
+  // Keep this tab separate whether or not metadata is present: `workspace`
+  // is also Home's tab id, and replay adds metadata to originally bare surfaces.
   //
   // Naming: eyebrow "Result" puts it in the same family as the artifact tabs;
   // "Assistant" is the label the old code already used for this content
