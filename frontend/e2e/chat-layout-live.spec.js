@@ -31,7 +31,7 @@ async function checkLayout(page) {
   return layout;
 }
 
-test("任务对话：底部输入、首条消息、历史恢复和长会话独立滚动（协议 fixture）", async ({ browser }, info) => {
+test("普通对话：底部输入、首条消息、历史恢复和长会话独立滚动（协议 fixture）", async ({ browser }, info) => {
   test.setTimeout(150_000);
   const response = await fetch(`${BACKEND}/api/auth/login`, {
     method: "POST", headers: { "content-type": "application/json" },
@@ -91,7 +91,7 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
       await checkLayout(page);
       // A new conversation has readable content near the top, not an empty
       // vertically centered composer card.
-      const heading = page.getByRole("heading", { name: "今天想完成什么任务？" });
+      const heading = page.getByRole("heading", { name: "今天想聊些什么？" });
       await expect(heading).toBeVisible();
       const top = await heading.boundingBox();
       const transcript = await page.locator("[data-chat-transcript]").boundingBox();
@@ -104,12 +104,14 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
     await expect(page.getByText("收到，首条回复显示在当前消息区。", { exact: true })).toBeVisible();
     expect(await originalInput.evaluate(element => element.isConnected)).toBe(true);
     expect(streams).toHaveLength(1);
+    await expect(page.locator("[data-execution-id]")).toHaveCount(0);
+    await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
     await checkLayout(page);
     await page.screenshot({ path: info.outputPath("chat-first-reply-390.png"), fullPage: true });
 
     await page.goto(`${FRONTEND}/chat/root-agent?session=${sessionId}`);
     await expect(page.getByText("正在加载会话消息…", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "今天想完成什么任务？" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);
     releaseHistory();
     await expect(page.getByText("历史消息最后一条", { exact: true })).toBeInViewport();
     for (const viewport of sizes) {
@@ -129,13 +131,13 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
     await page.route(historyUrl, route => route.fulfill({ status: 503, json: { detail: "history temporarily unavailable" } }));
     await page.reload();
     await expect(page.getByRole("alert").filter({ hasText: "会话消息加载失败" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "今天想完成什么任务？" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);
     await checkLayout(page);
     await page.unroute(historyUrl);
     await page.route(historyUrl, route => route.fulfill({ json: { session_id: sessionId, messages: [], transcript_unavailable: true } }));
     await page.reload();
     await expect(page.getByTestId("transcript-unavailable")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "今天想完成什么任务？" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "今天想聊些什么？" })).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     releaseHistory();
@@ -143,7 +145,7 @@ test("任务对话：底部输入、首条消息、历史恢复和长会话独�
   }
 });
 
-test("资源侧栏：全高列表、文件切换、历史筛选和手机抽屉（历史协议 fixture）", async ({ browser }, info) => {
+test("资源侧栏：全高列表、文件切换、统一最近会话和手机抽屉（历史协议 fixture）", async ({ browser }, info) => {
   test.setTimeout(150_000);
   const response = await fetch(`${BACKEND}/api/auth/login`, {
     method: "POST", headers: { "content-type": "application/json" },

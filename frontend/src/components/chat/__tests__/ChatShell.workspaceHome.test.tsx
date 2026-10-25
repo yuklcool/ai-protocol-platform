@@ -277,9 +277,6 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     // weaker, still-worth-having property that an ordinary re-emission does not
     // move the user's focus.
     //
-    // The blink itself is guarded where it is actually decidable, as a pure
-    // rule: src/lib/__tests__/workbenchFocus.test.ts, "does NOT re-focus after a
-    // surface blinks out and returns". That one DOES fail against the old code.
     await renderChat();
     emitSurface(pricesEnvelope);
     const result = await screen.findByRole("tab", { name: /DE_LU prices/i });
@@ -306,8 +303,7 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
   });
 
   it("keeps Home selected when a new result arrives", async () => {
-    // The B4 fix must not blunt auto-focus: a second, different result still
-    // takes the stage even though the user is sitting on Home.
+    // A second result is discoverable without moving the current tab.
     await renderChat();
     emitSurface(pricesEnvelope);
     await screen.findByRole("tab", { name: /DE_LU prices/i });
@@ -362,6 +358,7 @@ describe("ChatShell — Workspace Home persistence (B6)", () => {
     // NEVER SILENT (#8): Home always has something to show. With no artifacts
     // and no launcher, that is the picker.
     await renderChat();
+    act(() => screen.getByRole("button", { name: "Expand workbench" }).click());
     const home = screen.getByRole("tab", { name: /Workspace/i });
     expect(home.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByTestId("example-prompts")).toBeTruthy();

@@ -36,6 +36,7 @@ describe.each([["desktop", ConsoleSidebar], ["mobile", ConsoleMobileNav]] as con
   it("keeps daily navigation compact and opens chat from the brand", () => {
     show();
     for (const name of ["Chat", "Results", "Documents", "Capabilities", "Settings", "View all"]) expect(screen.getByRole("link", { name })).toBeInTheDocument();
+    if (Component === ConsoleMobileNav) fireEvent.click(screen.getByRole("button", { name: "Close navigation" }));
     expect(screen.getByRole("link", { name: /Back to chat/ })).toHaveAttribute("href", "/chat/root-agent");
     expect(screen.queryByRole("link", { name: "Model services" })).not.toBeInTheDocument();
   });

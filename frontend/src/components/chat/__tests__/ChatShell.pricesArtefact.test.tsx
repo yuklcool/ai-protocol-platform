@@ -165,7 +165,7 @@ describe("ChatShell — prices artifact (PRICES-WORKSPACE M4)", () => {
     // (a) The artifact registered and became its own Result tab, titled from
     //     artifact.title — a friendly name, never the surfaceId (CLAUDE.md #9).
     const tab = await screen.findByRole("tab", { name: /DE_LU prices/i });
-    // (b) Repo principle #7 — auto-focus, don't merely badge.
+    // (b) Arrival never changes the tab selected by the user.
     expect(tab.getAttribute("aria-selected")).toBe("false");
   });
 
