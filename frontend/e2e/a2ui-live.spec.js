@@ -148,6 +148,8 @@ test.describe("A2UI persisted surface live acceptance", () => {
 
       await expect(page.locator(".workbench-pane-visible")).toHaveCount(0);
       await page.getByRole("button", { name: /^(查看预览|Open preview)$/ }).first().click();
+      await expect(page.locator('[data-surface="workspace"]')).toHaveCount(1);
+      await expect(page.locator("#workbench-panel-workspace-result")).toBeVisible();
       await expect(page.getByText("A2UI Live Acceptance").first()).toBeVisible({ timeout: 30_000 });
       await expect(
         page.getByText("Rendered from persisted PostgreSQL session state").first(),

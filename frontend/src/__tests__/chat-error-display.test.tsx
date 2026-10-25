@@ -180,8 +180,8 @@ describe("ChatShell — consistent conversation layout", () => {
     render(<ChatPage params={paramsPromise} />);
     const input = await screen.findByPlaceholderText(/message/i);
     expect(input.closest("footer")).toHaveClass("chat-composer");
-    expect(screen.getByRole("heading", { name: "What would you like to work on?" })).toBeInTheDocument();
-    expect(screen.getByText(/send a message to start the conversation/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What would you like to talk about?" })).toBeInTheDocument();
+    expect(screen.getByText(/ask a question, explore an idea/i)).toBeInTheDocument();
   });
 
   it("renders messages in the same conversation layout", async () => {

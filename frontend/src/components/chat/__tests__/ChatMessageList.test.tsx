@@ -40,7 +40,7 @@ function msg(id: string, role: SkillMessage["role"], content: string): SkillMess
 describe("ChatMessageList", () => {
   it("renders a placeholder when there are no messages", () => {
     render(<ChatMessageList messages={[]} {...baseProps} />);
-    expect(screen.getByText(/send a message/i)).toBeInTheDocument();
+    expect(screen.getByText(/ask a question, explore an idea/i)).toBeInTheDocument();
   });
 
   it("shows history loading instead of an empty conversation, then displays the saved messages", () => {

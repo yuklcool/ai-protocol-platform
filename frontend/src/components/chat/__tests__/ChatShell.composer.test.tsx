@@ -193,6 +193,31 @@ describe("ChatShell composer — wrapping (2026-08-06 ONE UAT)", () => {
     expect(screen.queryByText("What would you like to talk about?")).not.toBeInTheDocument();
   });
 
+  it("restores a bare workspace surface once and opens it from the conversation", async () => {
+    navigation.params = new URLSearchParams("session=saved");
+    vi.mocked(useSessionMessages).mockReturnValue({
+      initialMessages: [], isLoadingHistory: false, historyError: null, sessionGone: false, transcriptUnavailable: false,
+      a2uiSurfaces: [{ surfaceId: "workspace", sourceId: "saved-output", messages: [
+        { version: "v0.9", createSurface: { surfaceId: "workspace", catalogId: "https://a2ui.org/specification/v0_9/basic_catalog.json" } },
+        { version: "v0.9", updateComponents: { surfaceId: "workspace", components: [
+          { id: "root", component: "Text", text: "Restored preview content" },
+        ] } },
+      ] }],
+    });
+    const view = render(shell());
+    await screen.findByRole("button", { name: "Open preview" });
+    // RehydrateSurfaces adds replay metadata. That must not create a second
+    // mount, duplicate tab ids, or two subscriptions to the same action.
+    expect(view.container.querySelectorAll('[data-surface="workspace"]')).toHaveLength(1);
+    expect(view.container.querySelectorAll('#workbench-panel-workspace')).toHaveLength(1);
+    expect(view.container.querySelector(".workbench-pane")).toHaveAttribute("aria-hidden", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
+    expect(screen.getByRole("tab", { name: /Assistant/ })).toHaveAttribute("aria-selected", "true");
+    expect(view.container.querySelector("#workbench-panel-workspace-result")).toHaveAttribute("aria-hidden", "false");
+    fireEvent.click(screen.getByRole("tab", { name: /Workspace/ }));
+    expect(screen.getByTestId("workbench-index")).toHaveTextContent("Assistant");
+  });
+
   it("is a textarea, not a single-line input", async () => {
     await renderChat();
     const el = composer();

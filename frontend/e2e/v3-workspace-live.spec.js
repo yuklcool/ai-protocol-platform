@@ -26,6 +26,7 @@ test("v3 任务筛选、报告编辑恢复、授权下载和配置向导", async
     localStorage.setItem("ai-protocol-platform.locale", "zh-CN");
   }, { login });
   const page = await context.newPage();
+  page.setDefaultTimeout(30_000);
   const errors = []; page.on("pageerror", error => errors.push(error.message));
   try {
     await page.goto(`${FRONTEND}/workspace`);

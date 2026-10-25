@@ -388,9 +388,14 @@ function WorkbenchPane({
   // Chat-placement artifacts (the obligation elicitation form, 7.8 M1) render
   // inline in the chat thread (ChatPlacementForms), NOT as workbench tabs —
   // exclude them from every workbench-facing derivation below.
-  const workbenchArtifacts = artifacts.filter((a) => a.placement !== "chat");
+  // The workspace surface has a dedicated result tab. Rehydration adds
+  // artifact metadata even to bare surfaces; don't mount it a second time
+  // under the Home tab's reserved id.
+  const workbenchArtifacts = artifacts.filter((a) => a.placement !== "chat" && a.surfaceId !== "workspace");
   const hasArtifacts = workbenchArtifacts.length > 0;
-  const workspaceHasContent = Boolean(workspaceSurface?.surface);
+  const workspaceHasContent = Boolean(workspaceSurface?.surface) && workspaceSurface?.artifact?.placement !== "chat";
+  const workspaceTitle = workspaceSurface?.artifact?.title || translateChat(locale, "shell.assistant");
+  const workspaceDescription = workspaceSurface?.artifact?.description || translateChat(locale, "shell.assistantStructuredOutput");
   // v6.4.0 4.5 SKILL-ONBOARDING M2 → v6.23.0 WORKSPACE-HOME-PERSISTENCE.
   // The picker used to be an onboarding affordance that a first message
   // (isFreshChat) or any agent surface switched off. Dana's UAT point was
@@ -571,17 +576,17 @@ function WorkbenchPane({
   // "Assistant" is the label the old code already used for this content
   // (`eyebrow: workspaceHasContent ? "Assistant" : "Home"`), kept so the tab
   // strip reads as a friendly name rather than a surface id (CLAUDE.md #9).
-  const workspaceResultTab: WorkbenchTab | null = workspaceSurface?.surface
+  const workspaceResultTab: WorkbenchTab | null = workspaceHasContent
     ? {
         id: WORKSPACE_RESULT_TAB_ID,
         eyebrow: translateChat(locale, "shell.result"),
-        label: translateChat(locale, "shell.assistant"),
-        tooltip: translateChat(locale, "shell.assistantStructuredOutput"),
+        label: workspaceTitle,
+        tooltip: workspaceDescription,
         onClose: () =>
           handleCloseResult(
             "workspace",
             WORKSPACE_RESULT_TAB_ID,
-            translateChat(locale, "shell.assistant"),
+            workspaceTitle,
           ),
         content: (
           <div className="h-full p-3">
@@ -607,13 +612,13 @@ function WorkbenchPane({
   // Critically: the dominant workspace surface is NOT in here any more. That
   // single condition (`showHome = !workspaceHasContent && hasArtifacts`) was the
   // whole bug — Dana, 2026-08-06 UAT, raised 4×.
-  const showIndex = hasArtifacts || Boolean(activeTabId);
+  const showIndex = hasArtifacts || workspaceHasContent || Boolean(activeTabId);
   const workspaceResultIndexEntry = {
     surfaceId: WORKSPACE_RESULT_TAB_ID,
     createdAt: 0,
     kind: "workspace",
-    title: translateChat(locale, "shell.assistant"),
-    description: translateChat(locale, "shell.assistantStructuredOutput"),
+    title: workspaceTitle,
+    description: workspaceDescription,
   };
   const homeContent =
     showLauncher || showPicker || showIndex ? (

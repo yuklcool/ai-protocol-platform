@@ -294,6 +294,7 @@ test("资源侧栏：全高列表、文件切换、统一最近会话和手机�
     await page.locator("#chat-resource-toggle").click();
     const input = page.locator(".chat-composer textarea");
     await input.fill("打开侧栏后发送首条消息");
+    await expect(page.getByRole("button", { name: "发送", exact: true })).toBeEnabled();
     await input.press("Enter");
     await expect(page.getByText("侧栏保持打开，可以继续查找资料。", { exact: true })).toBeVisible();
     await expect(sidebar).toBeVisible();
