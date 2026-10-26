@@ -83,6 +83,7 @@ def present(req: LightingRequest, data: dict, now: datetime, alarm_data: dict | 
             row["evidence"] = [
                 {"label": label, "value": values.get(key), "unit": unit, "source": "单灯历史巡测", "at": values.get("last_sample"), "note": "末次实际观测,未冒充截止时点新采样"}
                 for key, label, unit in [("voltage", "电压", "V"), ("power", "有功功率", "W"), ("observed_online", "记录在线值", ""), ("observed_on", "记录开灯值", "")]
+            ]
             actions.append({"id": "lamp-" + str(len(rows)), "label": "查询此灯历史证据", "intent": "inspect_lamp", "row_id": row["id"]})
             row["anchor"] = values.get("last_sample")
         elif req.scene in {"lamp_alarms", "rtu_alarms"}:
