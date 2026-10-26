@@ -1,0 +1,29 @@
+name: SQL safe query Skill MCP
+
+on:
+  push:
+    branches: [main, 'codex/migrate-sql-safe-query']
+    paths:
+      - infrastructure/sql-safe-query-mcp/**
+      - .github/workflows/sql-safe-query-skill.yml
+  pull_request:
+    paths:
+      - infrastructure/sql-safe-query-mcp/**
+      - .github/workflows/sql-safe-query-skill.yml
+  workflow_dispatch:
+
+jobs:
+  retrieval-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the deployed MCP version and retrieval dependencies
+        run: pip install 'mcp==1.30.0' -r infrastructure/sql-safe-query-mcp/requirements.txt
+      - name: Verify the real HTTP MCP contract and request bounds
+        run: python -m unittest discover -s infrastructure/sql-safe-query-mcp -p 'test_*.py' -v
+      - name: Validate the isolated deployment configuration
+        run: docker compose -f infrastructure/sql-safe-query-mcp/compose.yml config --quiet
