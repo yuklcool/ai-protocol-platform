@@ -129,7 +129,9 @@ def test_account_scope_is_saved_and_omission_keeps_restrictions(platform_admin: 
             patch("admin.mcp_servers_routes.clear_registry_cache"),
             patch("admin.mcp_servers_routes.record_admin_action"),
         ):
-            response = platform_admin.put("/api/admin/mcp-servers/lighting", json={"url": "http://lighting/mcp", **body})
+            response = platform_admin.put(
+                "/api/admin/mcp-servers/lighting", json={"url": "http://lighting/mcp", **body}
+            )
         assert response.status_code == 200
         assert response.json()["allowedUserIds"] == expected
         assert write.call_args.args[2]["allowedUserIds"] == expected
