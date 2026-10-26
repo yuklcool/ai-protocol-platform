@@ -8,6 +8,7 @@
 
 import type { Message } from "@ag-ui/client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { v4 as createUuid } from "uuid";
 import { useAGUIAgent } from "@/providers/AGUIProvider";
 import { useOptionalSurfaceRegistry } from "@/providers/SurfaceRegistry";
 import {
@@ -878,7 +879,7 @@ export function useSkillAgent(options?: {
       runFailedRef.current = false;
       emptyRunPendingRef.current = false;
       emptyRunRetryRef.current = 0;
-      const userMessageId = crypto.randomUUID();
+      const userMessageId = createUuid();
       // Latency mark t_send: anchored before agent.addMessage so
       // perceived TTFT (t_send → first DOM paint) measures the full
       // submit→render cycle, not just the network call. The HUD reads

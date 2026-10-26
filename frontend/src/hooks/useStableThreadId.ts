@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { v4 as createUuid } from "uuid";
 
 /**
  * Stable threadId for AGUIProvider that survives the URL-writeback after
@@ -29,13 +30,13 @@ import { useState } from "react";
 export function useStableThreadId(urlSessionId: string | null): string {
   const [state, setState] = useState(() => ({
     urlSessionId,
-    threadId: urlSessionId ?? crypto.randomUUID(),
+    threadId: urlSessionId ?? createUuid(),
   }));
   if (state.urlSessionId !== urlSessionId) {
     // Update before children commit. An effect leaves one render with the
     // previous agent, whose URL-writeback can reopen the chat just cleared.
     // Writing our own id to the URL keeps the provider key unchanged.
-    const threadId = urlSessionId ?? crypto.randomUUID();
+    const threadId = urlSessionId ?? createUuid();
     setState({ urlSessionId, threadId });
     return threadId;
   }
