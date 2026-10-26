@@ -26,6 +26,8 @@
 
 对话附件的配置、格式范围、故障处理和验收要求见[文件上传与分析说明](docs/chat-file-analysis.md)。
 
+照明场景的结构化结果、六场景交互、MCP 适配契约及生产接入边界见[照明查询接入说明](docs/lighting-query-integration.md)。
+
 ## 运行架构
 
 | 层次 | 组件与职责 |

@@ -64,6 +64,7 @@ import { ObligationArtefactTab } from "@/components/workspace/ObligationArtefact
 import { SourcesArtefactTab } from "@/components/workspace/SourcesArtefactTab";
 import { ClausesArtefactTab } from "@/components/workspace/ClausesArtefactTab";
 import { SeriesArtefactTab } from "@/components/workspace/SeriesArtefactTab";
+import { LightingArtefactTab } from "@/components/workspace/LightingArtefactTab";
 import { shouldShowCompareLauncher } from "@/lib/compareLauncher";
 import { DocumentPanel } from "@/components/document/DocumentPanel";
 import { LatencyHUD } from "@/components/dev/LatencyHUD";
@@ -275,6 +276,7 @@ function WorkbenchPane({
   onOpenLauncherDoc,
   onOpenSource,
   onSurfaceChatMessage,
+  onDraftMessage,
   compareOptedIn,
   allowCompareLauncher,
   allowObligationsLauncher,
@@ -365,6 +367,7 @@ function WorkbenchPane({
   docTabs: DocTabData[];
   /** `chat:send` surface action → post a chat message (diff "Explain this"). */
   onSurfaceChatMessage?: (text: string) => void;
+  onDraftMessage?: (text: string) => void;
   /** Override the Workbench's default 4-breakpoint width scale. Pass ""
    * to let the parent control the width (used when WorkbenchPane sits
    * inside the resizable chat-row introduced 2026-06-11). */
@@ -538,6 +541,8 @@ function WorkbenchPane({
         // 6.11: PPA clause extraction renders as a professional table with
         // confidence badges, from the surface data model. See ClausesArtefactTab.
         <ClausesArtefactTab surfaceId={a.surfaceId} className="h-full" />
+      ) : a.kind === "lighting" ? (
+        <LightingArtefactTab surfaceId={a.surfaceId} sessionId={sessionId} skillId={skillId} onDraftMessage={onDraftMessage} busy={Boolean(actionRunning) || isThinking} />
       ) : a.kind === "prices" ? (
         // 6.12 PRICES-WORKSPACE M4: a market price query renders as a chart +
         // sortable table + CSV, read from the DECLARED SERIES envelope in the
@@ -1791,6 +1796,7 @@ function ChatShellContent({
           skillId={skillId}
           userUid={user.uid}
           onSurfaceChatMessage={handleSurfaceChatMessage}
+          onDraftMessage={(text) => { setDraft(text); setWorkbenchCollapsed(true); draftRef.current?.focus(); }}
           workbenchTabId={workbenchTabId}
           onWorkbenchTabChange={setWorkbenchTabId}
           toolCalls={mergedToolCalls}

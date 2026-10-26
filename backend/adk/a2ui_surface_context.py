@@ -181,6 +181,14 @@ def _format_action_trigger_clause(trigger: dict[str, Any]) -> str:
     surface_id = trigger.get("surfaceId") or "<unknown>"
     name = trigger.get("name") or "<unnamed>"
     component_id = trigger.get("componentId")
+    if name == "run:lighting.query":
+        return (
+            "The user explicitly requested a read-only lighting follow-up. Call the authorized "
+            "query_lighting MCP tool with request from this surface's server-validated lastAction.context. "
+            "Do not render or invent query results yourself. Device, alarm, time and membership context "
+            "are enforced server-side. Summarize the returned evidence conversationally; if the query "
+            "fails or the tool is unavailable, report that failure and do not claim normal operation."
+        )
     component_clause = f" on component `{component_id}`" if component_id else ""
     return (
         "**Action-triggered turn.** The user just performed an action "
