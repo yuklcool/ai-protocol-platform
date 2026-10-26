@@ -83,11 +83,14 @@ test("照明六场景真实协议闭环、追查权限、恢复与三档布局�
         await result.getByRole("region", { name: "照明查询表格" }).evaluate(node => { node.scrollLeft = 0; });
         await expect(result).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         const composer = page.locator("textarea").first();
+        await expect(result.getByRole("heading", { name: title, exact: true })).toBeInViewport({ ratio: 1 });
         if (width === 390) {
           await expect(composer).toBeHidden();
           await expect(page.locator(".chat-resource-bar")).toBeHidden();
           const heading = await result.getByRole("heading", { name: title, exact: true }).boundingBox();
+          expect(heading.y).toBeGreaterThanOrEqual(0);
           expect(heading.y).toBeLessThan(280);
+          await expect(result.getByRole("button", { name: "继续提问", exact: true })).toBeInViewport({ ratio: 1 });
           const metrics = await result.getByTestId("lighting-metrics").boundingBox();
           expect(metrics.y + metrics.height).toBeLessThan(950);
         } else {

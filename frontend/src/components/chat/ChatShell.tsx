@@ -1793,7 +1793,7 @@ function ChatShellContent({
           </button>
         )}
         <WorkbenchPane
-          workbenchClassName=""
+          workbenchClassName="min-h-0 flex-1"
           onContentChange={setWorkbenchHasContent}
           activeTabId={activeTabId}
           sessionId={sessionId ?? agentSessionId}
