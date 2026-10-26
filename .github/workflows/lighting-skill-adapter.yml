@@ -6,6 +6,11 @@ on:
     branches: [main, codex/lighting-a2ui-skills]
     paths: ['skills/lighting-*/**', 'infrastructure/lighting-query-mcp/**', '.github/workflows/lighting-skill-adapter.yml']
   workflow_dispatch:
+    inputs:
+      verify_server:
+        description: Run acceptance against the explicitly prepared production host
+        type: boolean
+        default: false
 permissions:
   contents: read
   packages: write
@@ -62,8 +67,8 @@ jobs:
             NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
           cache-from: type=gha,scope=${{ matrix.image }}-amd64
   deployment-acceptance:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/lighting-a2ui-skills'
-    needs: [lighting-skills, deployment-images]
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_server
+    needs: lighting-skills
     runs-on: [self-hosted, lighting-a2ui-129-20261026]
     timeout-minutes: 20
     steps:

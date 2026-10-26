@@ -1,16 +1,23 @@
 """Runs on GitHub against disposable PostgreSQL, never the business DB."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
 import json
 import os
 from pathlib import Path
 import sys
+import socket
+from typing import Any, Dict
 
 import asyncpg
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
 import pytest
 from starlette.testclient import TestClient
+import uvicorn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -142,6 +149,59 @@ def test_mcp_auth_and_tool_discovery_use_the_real_app():
         response = client.post("/mcp", json=payload, headers=headers)
         assert response.status_code == 200
         assert [tool["name"] for tool in response.json()["result"]["tools"]] == ["query_lighting"]
+
+
+@asynccontextmanager
+async def running_app(app, port=0):
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", port))
+        server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=2))
+        task = asyncio.create_task(server.serve(sockets=[listener]))
+        try:
+            async with asyncio.timeout(10):
+                while not server.started:
+                    if task.done():
+                        task.result()
+                        raise RuntimeError("MCP test server did not start")
+                    await asyncio.sleep(0.01)
+            yield f"http://127.0.0.1:{listener.getsockname()[1]}/mcp"
+        finally:
+            server.should_exit = True
+            await asyncio.wait_for(task, timeout=10)
+
+
+def test_all_scenes_through_stateful_sql_mcp_and_real_postgres():
+    async def verify():
+        upstream = FastMCP("sql-runtime-ci", host="127.0.0.1", log_level="WARNING")
+        calls = []
+
+        @upstream.tool()
+        async def sql_query_readonly(sql: str, max_rows: int = 1, request_id: str = None) -> Dict[str, Any]:
+            calls.append({"sql": sql, "max_rows": max_rows, "request_id": request_id})
+            data = await read(sql)
+            return {"ok": True, "rowcount": 1, "rows": [{"payload": data}], "meta": {"truncated": False}}
+
+        async with running_app(upstream.streamable_http_app()) as upstream_url:
+            adapter = RequireToken(create_server(LightingService(upstream_url, {})).streamable_http_app(), "a" * 48)
+            async with running_app(adapter, port=8012) as adapter_url:
+                async with streamablehttp_client(adapter_url, headers={"Authorization": "Bearer " + "a" * 48}) as (reader, writer, _):
+                    async with ClientSession(reader, writer) as client:
+                        await client.initialize()
+                        for scene, view in [("night", None), ("lamp_alarms", None), ("rtu", None), ("rtu_alarms", None), ("reconcile", None), ("energy", "night"), ("energy", "week"), ("energy", "volatility"), ("energy", "saving")]:
+                            params = request(scene, energy_view=view).model_dump(mode="json")
+                            response = await client.call_tool("query_lighting", {"request": params})
+                            assert not response.isError, response.content
+                            result = LightingResult.model_validate(response.structuredContent)
+                            assert result.scene == scene and result.rows
+                            if scene == "night":
+                                assert len(result.report) == 9
+                            if scene == "rtu":
+                                assert len(result.report) == 7
+        assert len(calls) == 11
+        assert all(call["max_rows"] == 1 and call["request_id"].startswith("lighting-") for call in calls)
+
+    asyncio.run(verify())
 
 
 def test_sql_errors_and_truncation_cannot_become_zero_results():
