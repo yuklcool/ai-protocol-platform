@@ -30,6 +30,10 @@ def saved(result):
 
 @pytest.mark.parametrize("scene", ["night", "lamp_alarms", "rtu", "rtu_alarms", "energy", "reconcile"])
 def test_six_scenes_have_provenance_basic_fallback_and_host_model(scene):
+    from a2ui.basic_catalog import BasicCatalog
+    from a2ui.schema.manager import A2uiSchemaManager
+    from a2ui.schema.validator import A2uiValidator
+
     result = root(fixture(scene))
     assert result["kind"] == "lighting"
     assert result["query"]["timezone"] == "Asia/Shanghai"
@@ -39,6 +43,8 @@ def test_six_scenes_have_provenance_basic_fallback_and_host_model(scene):
     messages = lighting_to_a2ui(fixture(scene))
     assert all(message["version"] == "v0.9" for message in messages)
     assert messages[0]["createSurface"]["catalogId"].endswith("v0_9/basic_catalog.json")
+    catalog = A2uiSchemaManager(version="0.9", catalogs=[BasicCatalog.get_config("0.9")])._supported_catalogs[0]
+    A2uiValidator(catalog).validate(messages)
 
 
 @pytest.mark.parametrize(
@@ -229,3 +235,48 @@ def test_error_result_strips_stale_metrics_rows_and_reports():
     assert result.rows == result.metrics == result.report == []
     assert result.chart is None
     assert result.row_count == 0
+
+
+def test_main_callback_emits_and_stashes_only_a_tagged_mcp_result(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from adk.callbacks import make_a2ui_result_emitter
+
+    tracker = MagicMock()
+    monkeypatch.setattr("observability.timing.get_current_tracker", lambda: tracker)
+    payload = fixture(query_id="callback-result")
+    context = SimpleNamespace(state={}, invocation_id="fixture")
+    tool = SimpleNamespace(name="query_lighting", _aitana_mcp_server_id="lighting-mcp")
+    make_a2ui_result_emitter()(tool=tool, args={}, tool_context=context, tool_response={"structuredContent": payload})
+    tracker.emit_a2ui_surface.assert_called_once()
+    assert "a2ui_surface:lighting:callback-result" in context.state
+    assert not any(key.startswith("app:") for key in context.state)
+    other = SimpleNamespace(state={}, invocation_id="untrusted")
+    make_a2ui_result_emitter()(
+        tool=SimpleNamespace(name="query_lighting"), args={}, tool_context=other, tool_response=payload
+    )
+    assert not other.state
+
+
+def test_tool_boundary_overrides_forged_model_arguments_and_rejects_other_tools(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from adk.callbacks import make_permission_enforcer
+    from auth.permissions import ToolPermissionDenied
+
+    monkeypatch.setattr("auth.capability_access.mcp_call_allowed", lambda *_args: True)
+    monkeypatch.setattr("observability.timing.get_current_tracker", lambda: MagicMock())
+    canonical = {"server_id": "lighting-mcp", "request": {"intent": "compare_circuit", "device": {"rtu_id": "RTU-017"}}}
+    context = SimpleNamespace(
+        state={"a2ui_action_trigger": {"name": "run:lighting.query"}, "lighting_query_action": canonical}
+    )
+    enforcer = make_permission_enforcer(
+        "owner@example.com", "example.com", user=SimpleNamespace(uid="owner"), root_agent=True
+    )
+    args = {"request": {"device": {"rtu_id": "FORGED"}}, "extra": "untrusted"}
+    enforcer(SimpleNamespace(name="query_lighting", _aitana_mcp_server_id="lighting-mcp"), args, context)
+    assert args == {"request": canonical["request"]}
+    with pytest.raises(ToolPermissionDenied):
+        enforcer(SimpleNamespace(name="control_device", _aitana_mcp_server_id="lighting-mcp"), {}, context)
+    with pytest.raises(ToolPermissionDenied):
+        enforcer(SimpleNamespace(name="query_lighting", _aitana_mcp_server_id="different-source"), {}, context)

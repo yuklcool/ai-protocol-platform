@@ -40,7 +40,7 @@ def resolve_saved_action(saved: dict, context: dict | None, *, now: datetime | N
     if result.query.generated_at > now + timedelta(minutes=5) or now - result.query.generated_at > timedelta(days=1):
         raise HTTPException(409, "历史交互已过期,请将参数放入草稿后重新查询。")
     action = next((item for item in result.actions if item.id == context["actionId"]), None)
-    if action is None or result.status == "error" and action.intent != "retry":
+    if action is None or (result.status == "error" and action.intent != "retry"):
         raise HTTPException(403, "此照明动作未获授权。")
     row = next((item for item in result.rows if item.id == action.row_id), None) if action.row_id else None
     needs_relation = (

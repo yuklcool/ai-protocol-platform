@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { useSurfaceRegistry, useSurfaceState } from "@/providers/SurfaceRegistry";
@@ -29,6 +29,11 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
   const [done, setDone] = useState(false);
   const query = root?.query;
   const timezone = query?.timezone ?? "Asia/Shanghai";
+  useEffect(() => {
+    setSearch(""); setPoint(null); setPage(0); setDrawer(null);
+    setFilter(root?.scene === "lamp_alarms" ? "截止时点未解除" : "all");
+    setSort(root?.scene === "reconcile" ? { key: "difference_kwh", dir: "desc" } : null);
+  }, [query?.id, root?.scene]);
   const rows = useMemo(() => {
     const selected = (root?.rows ?? []).filter(row => {
       const values = { ...row.values, id: row.id, lamp_id: row.lamp_id, rtu_id: row.rtu_id, circuit_id: row.circuit_id, alarm_id: row.alarm_id };
@@ -43,7 +48,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
     return [...selected].sort((a, b) => compareRows(flat(a), flat(b), sort.key, column?.type, sort.dir));
   }, [root, search, filter, point, sort]);
   const statuses = Array.from(new Set((root?.rows ?? []).map(row => String(row.values.status_at_cutoff ?? row.values.status ?? "证据不足"))));
-  const selectedRow = root?.rows?.find(row => row.id === drawer);
+  const selectedRow = drawer?.startsWith("row:") ? root?.rows?.find(row => row.id === drawer.slice(4)) : undefined;
   const readOnly = Boolean(state?.artifact?.replayed);
   const disabled = running || busy || readOnly || !sessionId;
   async function run(action: LightingAction) {
@@ -93,7 +98,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
       {root.status !== "error" && <section className="min-w-0 overflow-hidden rounded-xl border bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 p-4"><h3 className="font-medium">{root.scene === "reconcile" ? "D 日报对账清单" : "查询清单"}</h3><button type="button" className="button-secondary min-h-11 text-xs" disabled={!rows.length} onClick={download}>下载当前清单 CSV</button></div>
         <div className="flex flex-wrap gap-2 px-4 pb-3"><label className="min-w-0 flex-1"><span className="sr-only">搜索清单</span><input className="glass-control min-h-11 w-full px-3 text-base sm:text-sm" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} placeholder="搜索单灯、道路、RTU、回路" /></label><label><span className="sr-only">筛选状态</span><select className="glass-control min-h-11 max-w-full px-2" value={filter} onChange={event => { setFilter(event.target.value); setPage(0); }}><option value="all">全部状态</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label></div>
-        <div className="max-h-[28rem] max-w-full overflow-auto overscroll-contain" tabIndex={0} role="region" aria-label="照明查询表格"><table className="w-full border-collapse whitespace-nowrap text-xs"><thead className="sticky top-0 bg-[#FAFAFB]"><tr>{root.columns?.map(col => <th key={col.key} scope="col" aria-sort={sort?.key === col.key ? sort.dir === "asc" ? "ascending" : "descending" : "none"} className="border-b px-3 text-left font-normal text-muted-foreground"><button className="min-h-11" type="button" onClick={() => { setSort({ key: col.key, dir: sort?.key === col.key && sort.dir === "asc" ? "desc" : "asc" }); setPage(0); }}>{col.label}{col.unit && col.unit !== "ratio" ? ` (${col.unit})` : ""}{sort?.key === col.key ? sort.dir === "asc" ? " ↑" : " ↓" : ""}</button></th>)}<th scope="col" className="px-3 font-normal">证据</th></tr></thead><tbody>{rows.slice(page * 100, page * 100 + 100).map(row => <tr key={row.id} className="border-b last:border-0 hover:bg-muted/20" data-testid="lighting-row">{root.columns.map(col => <td key={col.key} className={`px-3 py-2 tabular-nums ${col.type === "number" ? "text-right" : ""}`}>{cell(row, col)}</td>)}<td className="px-3"><button type="button" className="min-h-11 text-primary" onClick={() => setDrawer(row.id)} aria-label={`查看 ${row.lamp_id || row.rtu_id || row.id} 证据`}>查看证据</button></td></tr>)}</tbody></table>{!rows.length && <p role="status" className="p-5 text-muted-foreground">当前清单没有匹配记录。</p>}</div>
+        <div className="max-h-[28rem] max-w-full overflow-auto overscroll-contain" tabIndex={0} role="region" aria-label="照明查询表格"><table className="w-full border-collapse whitespace-nowrap text-xs"><thead className="sticky top-0 bg-[#FAFAFB]"><tr>{root.columns?.map(col => <th key={col.key} scope="col" aria-sort={sort?.key === col.key ? sort.dir === "asc" ? "ascending" : "descending" : "none"} className="border-b px-3 text-left font-normal text-muted-foreground"><button className="min-h-11" type="button" onClick={() => { setSort({ key: col.key, dir: sort?.key === col.key && sort.dir === "asc" ? "desc" : "asc" }); setPage(0); }}>{col.label}{col.unit && col.unit !== "ratio" ? ` (${col.unit})` : ""}{sort?.key === col.key ? sort.dir === "asc" ? " ↑" : " ↓" : ""}</button></th>)}<th scope="col" className="px-3 font-normal">证据</th></tr></thead><tbody>{rows.slice(page * 100, page * 100 + 100).map(row => <tr key={row.id} className="border-b last:border-0 hover:bg-muted/20" data-testid="lighting-row">{root.columns.map(col => <td key={col.key} className={`px-3 py-2 tabular-nums ${col.type === "number" ? "text-right" : ""}`}>{cell(row, col)}</td>)}<td className="px-3"><button type="button" className="min-h-11 text-primary" onClick={() => setDrawer(`row:${row.id}`)} aria-label={`查看 ${row.lamp_id || row.rtu_id || row.id} 证据`}>查看证据</button></td></tr>)}</tbody></table>{!rows.length && <p role="status" className="p-5 text-muted-foreground">当前清单没有匹配记录。</p>}</div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground"><p>当前清单 {rows.length} / 已返回 {root.rows?.length ?? 0} 条 · 查询范围共 {root.row_count} 条。筛选不改写范围汇总。{!root.complete ? " 结果未完整返回。" : ""}</p>{rows.length > 100 && <div className="flex items-center gap-2"><button type="button" className="button-ghost min-h-11" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button><span>{page + 1}</span><button type="button" className="button-ghost min-h-11" disabled={(page + 1) * 100 >= rows.length} onClick={() => setPage(page + 1)}>下一页</button></div>}</div>
       </section>}
       {!!query?.filters.length && <details className="text-xs leading-6 text-muted-foreground"><summary className="min-h-11 cursor-pointer">统计与过滤口径</summary>{query.filters.map((item, index) => <p key={index}>{item}</p>)}</details>}

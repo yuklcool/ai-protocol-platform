@@ -24,7 +24,7 @@ def unwrap(result: Any) -> dict:
         if isinstance(result, str):
             result = json.loads(result)
         elif isinstance(result, dict):
-            if result.get("isError") or result.get("error") and "schema_version" not in result:
+            if result.get("isError") or (result.get("error") and "schema_version" not in result):
                 raise ValueError("MCP 查询失败,请核对连接与授权后显式重试。")
             if result.get("schema_version") == "lighting-query/v1":
                 return result

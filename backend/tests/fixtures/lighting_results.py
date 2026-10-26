@@ -10,7 +10,7 @@ from lighting.results import LAMP_REPORT, RTU_REPORT
 def fixture(scene="night", view="night", *, query_id=None, status="success"):
     now = datetime.now(ZoneInfo("Asia/Shanghai"))
     day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    daily = scene == "reconcile" or scene == "energy" and view != "night"
+    daily = scene == "reconcile" or (scene == "energy" and view != "night")
     start, end = (day - timedelta(days=1), day) if daily else (day - timedelta(hours=6), day + timedelta(hours=7))
 
     def stamp(value):
@@ -264,7 +264,7 @@ def fixture(scene="night", view="night", *, query_id=None, status="success"):
         "scene": scene,
         "status": status,
         "query": query,
-        "summary": "合成验收结论：先核对未解除报警,历史证据缺口需要继续补查。",
+        "summary": "合成验收结论: 先核对未解除报警,历史证据缺口需要继续补查。",
         "energy_view": view if scene == "energy" else None,
         "metrics": metrics,
         "columns": columns,

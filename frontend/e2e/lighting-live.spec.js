@@ -54,6 +54,7 @@ test("照明六场景真实协议闭环、追查权限、恢复与三档布局�
       await send(scene);
       await expect(result.getByRole("heading", { name: title, exact: true })).toBeVisible();
       await expect(result.getByTestId("lighting-provenance")).toContainText("CI 合成");
+      if (scene === "lamp_alarms") await result.getByLabel("筛选状态").selectOption("all");
       await expect(result.getByTestId("lighting-row")).toHaveCount(2);
       const beforeLocal = requests;
       await result.getByLabel("搜索清单").fill("L-0348-A");

@@ -51,7 +51,7 @@ LAMP_REPORT = [
     "一、总体结论",
     "二、报警总览",
     "三、报警类型分布",
-    "四、报警时间分布（按小时）",
+    "四、报警时间分布（按小时）",  # noqa: RUF001 — preserve the fixed report template heading
     "五、重点道路分布",
     "六、重点异常单灯",
     "七、07:00 时点单灯运行状态",
@@ -62,7 +62,7 @@ RTU_REPORT = [
     "一、总体结论",
     "二、报警总览",
     "三、报警类型分布",
-    "四、报警时间分布（按小时）",
+    "四、报警时间分布（按小时）",  # noqa: RUF001 — preserve the fixed report template heading
     "五、重点RTU",
     "六、07:00 时点运行状态说明",
     "七、建议处置顺序",
