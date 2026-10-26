@@ -115,9 +115,16 @@ def test_omitted_headers_preserve_existing_credentials(platform_admin: TestClien
 
 
 def test_account_scope_is_saved_and_omission_keeps_restrictions(platform_admin: TestClient) -> None:
-    for body, expected in [({"allowedUserIds": ["owner", "owner"]}, ["owner"]), ({}, ["owner"]), ({"allowedUserIds": []}, [])]:
+    for body, expected in [
+        ({"allowedUserIds": ["owner", "owner"]}, ["owner"]),
+        ({}, ["owner"]),
+        ({"allowedUserIds": []}, []),
+    ]:
         with (
-            patch("admin.mcp_servers_routes.get_document", return_value={"url": "http://lighting/mcp", "allowedUserIds": ["owner"]}),
+            patch(
+                "admin.mcp_servers_routes.get_document",
+                return_value={"url": "http://lighting/mcp", "allowedUserIds": ["owner"]},
+            ),
             patch("admin.mcp_servers_routes.set_document") as write,
             patch("admin.mcp_servers_routes.clear_registry_cache"),
             patch("admin.mcp_servers_routes.record_admin_action"),

@@ -61,3 +61,14 @@ jobs:
             NEXT_PUBLIC_MCP_SANDBOX_URL=https://mcp-sandbox.runtime.invalid
             NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
           cache-from: type=gha,scope=${{ matrix.image }}-amd64
+  deployment-acceptance:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/lighting-a2ui-skills'
+    needs: [lighting-skills, deployment-images]
+    runs-on: [self-hosted, lighting-a2ui-129-20261026]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Real authorized deployment acceptance, no raw data in logs
+        run: python3 infrastructure/lighting-query-mcp/verify_live.py

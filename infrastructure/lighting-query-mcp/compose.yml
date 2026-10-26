@@ -17,7 +17,7 @@ services:
     security_opt: [no-new-privileges:true]
     mem_limit: 512m
     pids_limit: 64
-    networks: [platform]
+    networks: [platform, agent-runtime-internal]
     healthcheck:
       test: [CMD, /app/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8012/healthz')"]
       interval: 30s
@@ -27,3 +27,6 @@ networks:
   platform:
     external: true
     name: ai-protocol-platform
+  agent-runtime-internal:
+    external: true
+    name: agent-runtime-internal

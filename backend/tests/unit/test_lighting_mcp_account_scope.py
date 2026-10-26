@@ -11,7 +11,8 @@ def test_server_account_restriction_applies_to_agent_and_direct_mcp_calls():
     config = RootAgentConfig(mcpServers=["lighting-query", "shared"])
     repository = MagicMock()
     repository.get_document.side_effect = lambda collection, ref: {
-        "enabled": True, **({"allowedUserIds": ["owner"]} if ref == "lighting-query" else {})
+        "enabled": True,
+        **({"allowedUserIds": ["owner"]} if ref == "lighting-query" else {}),
     }
     with (
         patch("auth.capability_access.refresh_authorization", side_effect=lambda user: user),
