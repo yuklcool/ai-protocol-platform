@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -46,7 +46,7 @@ def create_server(skill_root: Path) -> FastMCP:
     def sql_retrieve_examples(
         question: Annotated[str, Field(min_length=1, max_length=2000, pattern=r"\S")],
         top_k: Annotated[int, Field(ge=1, le=5)] = 5,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Retrieve lighting SQL examples, templates and relevant schemas.
 
         Use only when no fully applicable verified OpenViking case exists.
