@@ -365,7 +365,26 @@ def normalize(result: LightingResult) -> LightingResult:
                 "过流": ["previous_two_days", "curve_rule", "rated_current", "actual_current"],
                 "断路": ["lamp_kind", "continuous_current", "pre_alarm_current", "total_current"],
             }.get(kind, [])
-            row.missing.extend(f"缺少专项证据: {key}" for key in required if values.get(key) is None)
+            labels = {
+                "leakage_unit": "原始漏电读数单位",
+                "trip_record": "自动断电记录",
+                "lockout": "闭锁保护记录",
+                "post_trip_samples": "断电后有效采样",
+                "day_night": "昼夜时段",
+                "phase_mapping": "报警相位与回路对应",
+                "phase_current": "同事件相电流",
+                "circuit_current": "回路电流",
+                "related_break_alarm": "关联断路报警",
+                "previous_two_days": "前两日同时段曲线",
+                "curve_rule": "已确认的曲线一致性标准",
+                "rated_current": "回路额定电流",
+                "actual_current": "实际电流",
+                "lamp_kind": "灯具类型",
+                "continuous_current": "连续回路电流",
+                "pre_alarm_current": "报警前电流",
+                "total_current": "对应总电流",
+            }
+            row.missing.extend(f"缺少专项证据: {labels[key]}" for key in required if values.get(key) is None)
             if kind == "过流":
                 rated, actual = number(values.get("rated_current")), number(values.get("actual_current"))
                 values["above_rated_rate"] = (

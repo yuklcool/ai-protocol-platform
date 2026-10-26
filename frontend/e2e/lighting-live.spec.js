@@ -34,10 +34,10 @@ test("照明六场景真实协议闭环、追查权限、恢复与三档布局�
     page.on("pageerror", error => errors.push(error.message));
     let requests = 0;
     page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/api/agent/stream")) requests++; });
-    const result = page.getByTestId("lighting-result");
+    const result = page.locator('[data-testid="lighting-result"]:visible');
     async function openResult() { await page.getByRole("button", { name: "查看预览", exact: true }).last().click(); await expect(result).toBeVisible(); }
     async function send(scene) {
-      const session = `lighting-${scene}-${tag}`; sessions.push(session);
+      const session = `lighting-${scene}-${tag}-${randomUUID().slice(0, 8)}`; sessions.push(session);
       await api(`/api/sessions/${session}/bootstrap`, "POST", { skill_id: "root-agent", agent_id: "root-agent", document_ids: [] });
       await page.goto(`${FRONTEND}/chat/root-agent?session=${session}`);
       const composer = page.locator("textarea").first(); await expect(composer).toBeEnabled();
@@ -73,6 +73,8 @@ test("照明六场景真实协议闭环、追查权限、恢复与三档布局�
       await page.keyboard.press("Escape");
       for (const width of [1440, 768, 390]) {
         await page.setViewportSize({ width, height: 950 });
+        await result.evaluate(node => { node.scrollTop = 0; });
+        await result.getByRole("region", { name: "照明查询表格" }).evaluate(node => { node.scrollLeft = 0; });
         await expect(result).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await page.screenshot({ path: info.outputPath(`lighting-${scene}-${width}.png`), fullPage: true });
       }

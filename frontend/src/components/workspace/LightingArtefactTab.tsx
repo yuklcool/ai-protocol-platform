@@ -75,6 +75,11 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
   }
   function cell(row: LightingRow, column: ColumnDecl) {
     const value = ({ ...row.values, id: row.id, lamp_id: row.lamp_id, rtu_id: row.rtu_id, circuit_id: row.circuit_id, alarm_id: row.alarm_id } as Record<string, unknown>)[column.key];
+    if (column.key === "status_at_cutoff" || column.key === "status") {
+      const label = lightingValue(value);
+      const tone = label.includes("未解除") || label === "倒挂" ? "bg-amber-50 text-amber-800" : label.includes("已解除") ? "bg-emerald-50 text-emerald-800" : "bg-muted text-muted-foreground";
+      return <span className={`rounded-md px-2 py-1 text-xs ${tone}`}>{label}</span>;
+    }
     return column.type === "time" ? lightingTime(value as string | null, timezone) : lightingValue(value, column.unit);
   }
   const actionButton = (action: LightingAction) => <button key={action.id} type="button" className="button-secondary min-h-11 text-xs" disabled={disabled} onClick={() => void run(action)}>{action.label}</button>;
@@ -109,6 +114,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground"><p>当前清单 {rows.length} / 已返回 {root.rows?.length ?? 0} 条 · 查询范围共 {root.row_count} 条。筛选不改写范围汇总。{!root.complete ? " 结果未完整返回。" : ""}</p>{rows.length > 100 && <div className="flex items-center gap-2"><button type="button" className="button-ghost min-h-11" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button><span>{page + 1}</span><button type="button" className="button-ghost min-h-11" disabled={(page + 1) * 100 >= rows.length} onClick={() => setPage(page + 1)}>下一页</button></div>}</div>
       </section>}
       {!!query?.filters.length && <details className="text-xs leading-6 text-muted-foreground"><summary className="min-h-11 cursor-pointer">统计与过滤口径</summary>{query.filters.map((item, index) => <p key={index}>{item}</p>)}</details>}
+      {onDraftMessage && <div className="sticky bottom-0 border-t bg-white py-2 sm:hidden"><button type="button" className="button-secondary min-h-11 w-full" onClick={() => onDraftMessage("")}>继续提问</button></div>}
     </div>}
     <Dialog.Root open={drawer !== null} onOpenChange={open => { if (!open) setDrawer(null); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/25" /><Dialog.Content onCloseAutoFocus={event => { event.preventDefault(); if (!drafted.current) drawerOpener.current?.focus(); }} className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[650px] flex-col border-l bg-white shadow-xl" aria-describedby="lighting-drawer-description">
       <div className="flex items-center justify-between gap-3 border-b px-5 py-3"><Dialog.Title className="break-words text-lg font-semibold">{drawer === "report" ? "完整固定格式报告" : drawer === "parameters" ? "准备下一次查询" : selectedRow?.lamp_id || selectedRow?.rtu_id || "设备证据"}</Dialog.Title><Dialog.Close className="button-ghost h-11 w-11 shrink-0" aria-label="关闭证据抽屉"><X className="h-5 w-5" /></Dialog.Close></div>

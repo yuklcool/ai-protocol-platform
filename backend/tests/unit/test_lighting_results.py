@@ -177,7 +177,7 @@ def test_energy_views_require_complete_natural_day_ranges(view, days):
 
 def test_specialized_alarm_evidence_is_not_inferred_from_one_reading():
     result = root(fixture("rtu_alarms"))
-    assert any("trip_record" in gap for gap in result["rows"][0]["missing"])
+    assert any("自动断电记录" in gap for gap in result["rows"][0]["missing"])
     assert result["rows"][1]["values"]["above_rated_rate"] is None
 
 
