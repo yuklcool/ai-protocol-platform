@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { v4 as createUuid } from "uuid";
 import { Paperclip } from "lucide-react";
 import { getIdToken } from "@/lib/firebase";
 import { documentRequest, notifyDocumentsChanged, type DocumentCapabilities, type UploadResult } from "@/lib/documents";
@@ -134,7 +135,7 @@ export function UploadDropZone({ folderId = "", skillId = "", scopeKey = null, a
     const next = files.map((file): UploadJob => {
       const extension = "." + file.name.split(".").pop()?.toLowerCase();
       const error = !capabilities.formats.some((format) => format.extension === extension) ? "暂不支持此格式；图片和扫描件暂不支持识别。" : file.size === 0 ? "文件为空。" : file.size > capabilities.maxFileBytes ? "文件超过 25 MB，请拆分后上传。" : undefined;
-      return { id: crypto.randomUUID(), file, pct: 0, status: error ? "error" : "queued", error };
+      return { id: createUuid(), file, pct: 0, status: error ? "error" : "queued", error };
     });
     setJobs((previous) => [...previous, ...next]);
     queue.current.push(...next.filter((job) => job.status === "queued"));
