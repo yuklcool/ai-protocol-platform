@@ -83,9 +83,9 @@ def main(commit):
     override = ROOT / 'docker-compose.lighting-skills.yml'
     override.write_text('services:\n  backend:\n    image: ghcr.io/yuklcool/ai-protocol-platform-backend:lighting-skills-'+commit+'\n  frontend:\n    image: ghcr.io/yuklcool/ai-protocol-platform-frontend:lighting-skills-'+commit+'\n')
     stack = ['docker','compose','--project-directory',str(ROOT),'-f',str(ROOT/'docker-compose.release.yml'),'-f',str(override)]
-    run(*stack, 'pull','backend','frontend')
+    run(*stack, 'pull','--policy','missing','backend','frontend')
     # No production source bind mounts and no build on the deployment server.
-    run(*stack, 'up','-d','--no-deps','backend','frontend')
+    run(*stack, 'up','-d','--no-deps','--pull','never','backend','frontend')
     wait_backend()
     token = api('/api/auth/login', 'POST', {'email':env['SELFHOST_ADMIN_EMAIL'], 'password':env['SELFHOST_ADMIN_PASSWORD']})['access_token']
     subprocess.run(['docker','compose','-p','aip-lighting-query','-f',str(ADAPTER/'compose.yml'),'up','-d'], check=True, stdout=subprocess.DEVNULL)
