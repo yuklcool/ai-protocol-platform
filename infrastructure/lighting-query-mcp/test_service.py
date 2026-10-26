@@ -16,6 +16,7 @@ from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent
 import pytest
+from sse_starlette.sse import AppStatus
 from starlette.testclient import TestClient
 import uvicorn
 
@@ -29,6 +30,12 @@ from request import LightingRequest
 from serve import LightingService, RequireToken, SqlResultError, create_server, error_categories, unwrap_sql
 
 NOW = datetime.fromisoformat("2026-10-26T12:00:00+08:00")
+
+
+@pytest.fixture(autouse=True)
+def reset_sse_shutdown_state(monkeypatch):
+    # Uvicorn shutdown sets a process-wide SSE flag; each test starts a new server/loop.
+    monkeypatch.setattr(AppStatus, "should_exit", False)
 
 
 def request(scene, **kwargs):
