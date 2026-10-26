@@ -1,0 +1,31 @@
+name: Lighting Skill adapter
+on:
+  pull_request:
+    paths: ['skills/lighting-*/**', 'infrastructure/lighting-query-mcp/**', '.github/workflows/lighting-skill-adapter.yml']
+  push:
+    branches: [main, codex/lighting-a2ui-skills]
+    paths: ['skills/lighting-*/**', 'infrastructure/lighting-query-mcp/**', '.github/workflows/lighting-skill-adapter.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lighting-skills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lighting
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: lighting_ci
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --project backend --dev
+      - name: PostgreSQL fixed queries, business edges, MCP authorization and Skill packages
+        env:
+          LIGHTING_TEST_DATABASE_URL: postgres://lighting:disposable-ci-password@localhost:5432/lighting_ci
+        run: uv run --project backend pytest infrastructure/lighting-query-mcp/test_service.py -q

@@ -1,0 +1,67 @@
+[
+  {
+    "target": "lighting-night-overview",
+    "source": "/root/.nanobot/workspace/skills/night-report-time-window/SKILL.md",
+    "sha256": "286c9eb958688713f3f51d4862129ffda9df20d0cb4bd389218d40751c28fa00"
+  },
+  {
+    "target": "lighting-night-overview",
+    "source": "/root/.nanobot/workspace/skills/night-operation-analysis-with-fallback-sources/SKILL.md",
+    "sha256": "e2f08d90dd12601f4ee915862de17095fe3cdade1d6c02ec99d8ea6558a18ef7"
+  },
+  {
+    "target": "lighting-lamp-alarms",
+    "source": "/root/.nanobot/workspace/skills/single-lamp-alarm-analysis/SKILL.md",
+    "sha256": "fa9723e564fe1af7b6dd55da095349278899f7577752a19865072a91b296d2eb"
+  },
+  {
+    "target": "lighting-rtu-operation",
+    "source": "/root/.nanobot/workspace/skills/smartlight-rtu-online-analysis/SKILL.md",
+    "sha256": "039fa7f33fc23d08c03fda58dd5b2b134b921f2e66b461dc1e085a6ddb0fa5a8"
+  },
+  {
+    "target": "lighting-rtu-alarms",
+    "source": "/root/.nanobot/workspace/skills/smartlight-rtu-power-phase-loss-analysis/SKILL.md",
+    "sha256": "de54482c1688564e503ea67abb79cefd5c1699186afdd594175695c09523d1e3"
+  },
+  {
+    "target": "lighting-rtu-alarms",
+    "source": "/root/.nanobot/workspace/skills/smartlight-rtu-phase-overcurrent-analysis/SKILL.md",
+    "sha256": "de98cf1c6a3215034fc3e965457002d49549bc47644a5ca431c7e15471f1f875"
+  },
+  {
+    "target": "lighting-rtu-alarms",
+    "source": "/root/.nanobot/workspace/skills/smartlight-rtu-circuit-break-alarm-analysis/SKILL.md",
+    "sha256": "d8beb5a7d921a6e047f8aa132e96fb2474c66cf7b8f1a159fe6ff649133cdc81"
+  },
+  {
+    "target": "lighting-rtu-alarms",
+    "source": "/root/.nanobot/workspace/skills/smartlight-branch-leakage-analysis/SKILL.md",
+    "sha256": "6fc127930710ac4b1f7f7ff7739513b52c49be7d528536ddc4938b1a6e4c0565"
+  },
+  {
+    "target": "lighting-energy-analysis",
+    "source": "/root/.nanobot/workspace/skills/diagnose-energy-spike-by-duration-decomposition/SKILL.md",
+    "sha256": "17d85b8b1b61076c929a652e346e89adb0a2fe4775d2810a23fce905f5dc445b"
+  },
+  {
+    "target": "lighting-energy-analysis",
+    "source": "/root/.nanobot/workspace/skills/smartlight-energy-saving-rate-analysis/SKILL.md",
+    "sha256": "a2ccd1ea0a5758430a32f4e57bd26b5a4de283cd449f5e92f6534b8cd820d3fd"
+  },
+  {
+    "target": "lighting-energy-reconciliation",
+    "source": "/root/.nanobot/workspace/skills/rtu-lamp-energy-inversion-query/SKILL.md",
+    "sha256": "d12093ec3d9184d69b982adb00ebccbc6fe14a77dbeff4cabc63ed29a1262f58"
+  },
+  {
+    "target": "lighting-night-overview",
+    "source": "/root/.nanobot/workspace/skills/single-lamp-operation-report/references/report-template.md",
+    "sha256": "417122fa2d5486e05dcacdbb06f2e2869bc865fd8859338e177321a3e8233c48"
+  },
+  {
+    "target": "lighting-rtu-operation",
+    "source": "/root/.nanobot/workspace/skills/rtu-operation-report/references/report-template.md",
+    "sha256": "62b226e9598224747092e4fa4784be04c7a397a5b8fee13f7d451ae6f44a744a"
+  }
+]

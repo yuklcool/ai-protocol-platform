@@ -34,7 +34,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
   const statusKey = root?.scene === "rtu" || root?.scene === "reconcile" ? "status" : "status_at_cutoff";
   useEffect(() => {
     setSearch(""); setPoint(null); setPage(0); setDrawer(null);
-    setFilter(root?.scene === "lamp_alarms" ? "截止时点未解除" : "all");
+    setFilter(root?.scene === "lamp_alarms" && root.rows.some(row => row.values.status_at_cutoff === "截止时点未解除") ? "截止时点未解除" : "all");
     setSort(root?.scene === "reconcile" ? { key: "difference_kwh", dir: "desc" } : null);
   }, [query?.id, root?.scene]);
   const rows = useMemo(() => {

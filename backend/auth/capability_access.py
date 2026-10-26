@@ -51,7 +51,8 @@ def authorized_root_config(config: RootAgentConfig, user: User) -> RootAgentConf
             "mcp_servers": [
                 ref
                 for ref in config.mcp_servers
-                if mcp_config_enabled(get_repository().get_document("mcp_servers", ref))
+                if mcp_config_enabled(server := get_repository().get_document("mcp_servers", ref))
+                and (not server.get("allowedUserIds") or user.uid in server["allowedUserIds"])
             ],
             "specialist_agents": [ref for ref in config.specialist_agents if ref in skills],
         },
