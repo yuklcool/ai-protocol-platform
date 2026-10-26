@@ -1,6 +1,6 @@
 """Project the SQL service's facts into the shipped lighting-query/v1 model."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import uuid
 
@@ -157,7 +157,13 @@ def present(req: LightingRequest, data: dict, now: datetime, alarm_data: dict | 
             if req.energy_view == "volatility":
                 columns.extend([column("previous_kwh", "前一日", "kWh", "number"), column("change_kwh", "增加量", "kWh", "number"), column("change_rate", "增加率", "ratio", "number"), column("increase_flag", "命中双阈值")])
         metrics = [metric("日报记录组合", count), metric("有效能耗记录", totals["valid_energy"]), metric("有效记录能耗合计", totals.get("actual_kwh"), "kWh", "只统计实际存在的有效日报,缺测不补零")]
-        chart = {"title": "有效日报能耗趋势", "x_key": "date", "x_label": "自然日", "y": [column("actual_kwh", "能耗", "kWh", "number")], "rows": [{"date": d["date"], "actual_kwh": d["actual_kwh"]} for d in totals.get("days") or []], "filter_key": "date"}
+        days = {d["date"]: d["actual_kwh"] for d in totals.get("days") or []}
+        start_day = req.window.start.astimezone(ZoneInfo(req.timezone)).date()
+        end_day = req.window.end.astimezone(ZoneInfo(req.timezone)).date()
+        chart_rows = [{"date": (start_day + timedelta(days=i)).isoformat(), "actual_kwh": days.get((start_day + timedelta(days=i)).isoformat())} for i in range((end_day-start_day).days)]
+        chart = {"title": "有效日报能耗趋势", "x_key": "date", "x_label": "自然日", "y": [column("actual_kwh", "能耗", "kWh", "number")], "rows": chart_rows, "filter_key": "date"}
+        if req.energy_view == "volatility":
+            metrics.append(metric("命中上升双阈值", totals.get("increases"), "个日期点", "同时增加≥50kWh且≥30%,前日非零且为相邻自然日"))
         missing = ["趋势仅汇总已取得的有效日报；设备日报覆盖不足时不能称为完整全网用电量。"]
     if req.scene == "energy" and not req.device.lamp_id and req.scope == "全系统":
         actions.extend({"id": "energy-" + view, "label": label, "intent": "energy_view", "energy_view": view} for view, label in [("night", "昨夜同窗口"), ("week", "7日日报"), ("volatility", "30日上升波动"), ("saving", "7日节能率")] if view != req.energy_view)

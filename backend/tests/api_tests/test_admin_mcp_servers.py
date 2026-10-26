@@ -114,6 +114,20 @@ def test_omitted_headers_preserve_existing_credentials(platform_admin: TestClien
     assert write.call_args.args[2]["headers"] == {"Authorization": "${SHARED_MCP_TOKEN}"}
 
 
+def test_account_scope_is_saved_and_omission_keeps_restrictions(platform_admin: TestClient) -> None:
+    for body, expected in [({"allowedUserIds": ["owner", "owner"]}, ["owner"]), ({}, ["owner"]), ({"allowedUserIds": []}, [])]:
+        with (
+            patch("admin.mcp_servers_routes.get_document", return_value={"url": "http://lighting/mcp", "allowedUserIds": ["owner"]}),
+            patch("admin.mcp_servers_routes.set_document") as write,
+            patch("admin.mcp_servers_routes.clear_registry_cache"),
+            patch("admin.mcp_servers_routes.record_admin_action"),
+        ):
+            response = platform_admin.put("/api/admin/mcp-servers/lighting", json={"url": "http://lighting/mcp", **body})
+        assert response.status_code == 200
+        assert response.json()["allowedUserIds"] == expected
+        assert write.call_args.args[2]["allowedUserIds"] == expected
+
+
 def test_delete_clears_runtime_registry_cache(platform_admin: TestClient) -> None:
     existing = {
         "url": "https://shared.test/mcp",

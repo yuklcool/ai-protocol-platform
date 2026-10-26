@@ -134,7 +134,7 @@ def test_unsupported_parameters_fail_without_sql(params):
 
 def test_mcp_auth_and_tool_discovery_use_the_real_app():
     app = RequireToken(create_server(LightingService("http://unused.invalid/mcp", {})).streamable_http_app(), "a" * 48)
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1:8012") as client:
         payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
         headers = {"Accept": "application/json, text/event-stream"}
         assert client.post("/mcp", json=payload, headers=headers).status_code == 401

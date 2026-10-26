@@ -93,7 +93,7 @@ class LightingRequest(BaseModel):
             raise ValueError("夜间或历史证据查询最多 48 小时")
         if req.cutoff is None:
             req.cutoff = req.window.end
-        if req.cutoff > now or req.cutoff < req.window.end:
+        if req.cutoff > now or (req.cutoff < req.window.end and req.basis != "historical"):
             raise ValueError("截止时点不能早于窗口结束或晚于当前时间")
         if daily:
             req.report_type = "D"

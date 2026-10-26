@@ -253,6 +253,7 @@ def build_query(req: LightingRequest) -> str:
         return envelope(rtu_samples(req), req.limit, "COUNT(*) AS objects,COUNT(last_report) AS observed", "last_report ASC NULLS FIRST,id")
     if req.scene == "reconcile":
         return envelope(reconcile(req), req.limit, "COUNT(*) AS objects,COUNT(rtu_kwh) AS rtu_reports,COUNT(lamp_kwh) AS lamp_reports", "ledger_difference_kwh DESC NULLS LAST,id")
+    extra = ",COUNT(*) FILTER(WHERE previous_kwh>0 AND actual_kwh-previous_kwh>=50 AND (actual_kwh-previous_kwh)/previous_kwh>=0.3) AS increases" if req.energy_view == "volatility" else ""
     return envelope(daily_energy(req), req.limit,
                     """COUNT(*) AS objects,COUNT(actual_kwh) AS valid_energy,SUM(actual_kwh) AS actual_kwh,
-                    (SELECT json_agg(x) FROM (SELECT date,SUM(actual_kwh) AS actual_kwh,COUNT(actual_kwh) AS valid_energy FROM data GROUP BY date ORDER BY date) x) AS days""", "date,id")
+                    (SELECT json_agg(x) FROM (SELECT date,SUM(actual_kwh) AS actual_kwh,COUNT(actual_kwh) AS valid_energy FROM data GROUP BY date ORDER BY date) x) AS days""" + extra, "date,id")
