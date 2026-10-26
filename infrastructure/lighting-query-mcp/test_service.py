@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 from pathlib import Path
@@ -187,7 +187,7 @@ def test_all_scenes_through_stateful_sql_mcp_and_real_postgres(structured_output
             adapter = RequireToken(create_server(LightingService(upstream_url, {})).streamable_http_app(), "a" * 48)
             async with running_app(adapter, port=8012) as adapter_url:
                 async with streamablehttp_client(adapter_url, headers={"Authorization": "Bearer " + "a" * 48}) as (reader, writer, _):
-                    async with ClientSession(reader, writer) as client:
+                    async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=15)) as client:
                         await client.initialize()
                         tools = await client.list_tools()
                         assert tools.tools[0].outputSchema["properties"]["schema_version"]["const"] == "lighting-query/v1"
@@ -232,7 +232,7 @@ def test_upstream_failures_remain_errors_and_diagnostics_do_not_expose_data(fail
             adapter = RequireToken(create_server(LightingService(upstream_url, {})).streamable_http_app(), "a" * 48)
             async with running_app(adapter, port=8012) as adapter_url:
                 async with streamablehttp_client(adapter_url, headers={"Authorization": "Bearer " + "a" * 48}) as (reader, writer, _):
-                    async with ClientSession(reader, writer) as client:
+                    async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=15)) as client:
                         await client.initialize()
                         response = await client.call_tool("query_lighting", {"request": {"scene": "night"}})
                         assert response.isError
