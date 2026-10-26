@@ -156,15 +156,13 @@ function SkillsResourceInner({ userId }: { userId: string }) {
   return (
     <main className="page-container min-h-full text-foreground">
       <div className="page-body">
-        <header className="page-header">
+        <header className="page-header page-header--compact">
           <div>
-            <p className="page-header__eyebrow">{zh ? "发现 · 启用 · 使用" : "Discover · Enable · Use"}</p>
             <h1 className="page-header__title">{zh ? "能力中心" : "Capability center"}</h1>
-            <p className="page-header__desc">{zh ? "发现可见能力，确认启用状态后开始使用；编辑与使用彼此独立。" : "Discover visible capabilities and confirm access before starting. Editing is separate from using."}</p>
           </div>
           {studioEnabled && <Link href="/skills/studio/new" className="button-primary text-sm"><Plus className="h-4 w-4" aria-hidden="true" />{zh ? "新建技能" : "Create skill"}</Link>}
         </header>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-2" role="group" aria-label={zh ? "能力筛选" : "Capability filter"}>
             <button type="button" aria-pressed={section === "all"} className={section === "all" ? "button-primary text-sm" : "button-secondary text-sm"} onClick={() => setSection("all")}>{zh ? "发现能力" : "Discover capabilities"}</button>
             <button type="button" aria-pressed={section === "mine"} className={section === "mine" ? "button-primary text-sm" : "button-secondary text-sm"} onClick={() => setSection("mine")}>{zh ? "我的技能" : "My skills"}</button>
@@ -175,7 +173,7 @@ function SkillsResourceInner({ userId }: { userId: string }) {
             <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} className="glass-control w-full py-2 pl-9 pr-3 text-sm" placeholder={zh ? "搜索名称或描述…" : "Search name or description…"} />
           </label>
         </div>
-        <p className="mb-4 text-xs text-muted-foreground">{zh ? "此处保留所有对你可见的共享资源。可见不代表已绑定或可调用；开始前需服务端确认。" : "All resources shared with you remain discoverable. Visibility does not imply a binding or callable access; the server must confirm it."}</p>
+        <details className="mb-3 text-xs text-muted-foreground"><summary className="cursor-pointer py-2">{zh ? "能力使用说明" : "Using capabilities"}</summary><p className="pb-2">{zh ? "此处保留所有对你可见的共享资源。可见不代表已绑定或可调用；开始前需服务端确认。点击开始使用会进入对话并携带能力提示，不会自动发送消息。" : "All resources shared with you remain discoverable. Visibility does not imply callable access; the server confirms it. Starting opens a chat with a capability hint, without sending a message."}</p></details>
         {!isLoading && !error && <p className="mb-4 text-xs text-muted-foreground" role="status">{zh ? `${visible.length} 项技能` : `${visible.length} skills`}{checking && (zh ? " · 正在确认可用性…" : " · Checking availability…")}</p>}
         {(error || profileFailed || needsRetry) && <div role="alert" className="notice notice--danger mb-4 flex flex-wrap items-center justify-between gap-3">
           <span>{error ? (zh ? "技能加载失败。" : "Could not load skills.") : profileFailed ? (zh ? "个人启用状态未知；暂时无法为我启用。" : "Personal bindings are unknown; enabling is unavailable.") : (zh ? "部分能力状态未知，暂不能开始。" : "Some capabilities have unknown access and cannot be started.")}</span>
@@ -200,7 +198,7 @@ function SkillsResourceInner({ userId }: { userId: string }) {
               const platform = skill.ownerId === "aitana-platform";
               const enabled = own && !!profile?.skills.includes(skill.skillId);
               const status = availability[skill.skillId] ?? "unknown";
-              return <article key={skill.skillId} className="glass-panel feature-card flex flex-col p-5" aria-label={skill.displayName || skill.name}>
+              return <article key={skill.skillId} className="glass-panel feature-card flex flex-col p-4" aria-label={skill.displayName || skill.name}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-[var(--brand-soft)] text-base font-semibold text-primary">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -208,9 +206,9 @@ function SkillsResourceInner({ userId }: { userId: string }) {
                   </div>
                   <span className="text-xs text-muted-foreground">{own ? (zh ? "我的技能" : "My skill") : platform ? (zh ? "平台技能" : "Platform skill") : (zh ? "共享技能" : "Shared skill")}</span>
                 </div>
-                <h2 className="mt-4 truncate text-[15px] font-semibold">{skill.displayName || skill.name}</h2>
-                <p className="mt-1 line-clamp-2 min-h-10 text-xs leading-5 text-muted-foreground">{skill.description}</p>
-                <div className="my-4 space-y-1 text-xs" role="status">
+                <h2 className="mt-3 break-words text-[15px] font-semibold">{skill.displayName || skill.name}</h2>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{skill.description}</p>
+                <div className="my-3 space-y-1 text-xs" role="status">
                   <p className={status === "available" ? "text-primary" : "text-muted-foreground"}>{status === "available" ? (zh ? "可使用 · 服务端已确认绑定" : "Ready · Server-confirmed binding") : status === "unbound" ? (zh ? "未获得可调用绑定" : "No callable binding") : (zh ? "可用状态未知" : "Availability unknown")}</p>
                   {enabled && <p>{zh ? "已为我启用" : "Enabled for me"}</p>}
                   {status !== "available" && <p className="text-muted-foreground">{own && !enabled ? (zh ? "下一步：为我启用；仍不可用时请管理员配置。" : "Next: enable for yourself; ask an administrator if access remains unavailable.") : (zh ? "下一步：请管理员检查 Agent 绑定与访问配置。" : "Next: ask an administrator to check Agent bindings and access.")}</p>}
@@ -225,7 +223,6 @@ function SkillsResourceInner({ userId }: { userId: string }) {
             })}
           </div>
         )}
-        <p className="mt-5 text-xs text-muted-foreground">{zh ? "点击“开始使用”仅进入会话并携带能力提示，不会自动发送消息。" : "Start using opens chat with a capability hint. No message is sent automatically."}</p>
       </div>
     </main>
   );

@@ -76,19 +76,19 @@ function Users() {
     <main className="page-container">
       <div className="page-body space-y-5">
         <header className="page-header">
-          <div><p className="page-header__eyebrow">平台管理</p><h1 className="page-header__title">用户与个人配置</h1><p className="page-header__desc">管理用户账号、访问状态与个人配置。</p></div>
+          <div><h1 className="page-header__title">用户与个人配置</h1><p className="page-header__desc">管理账号、访问状态与个人配置。</p></div>
           {!listLoading && !loadFailed && <span className="badge">{rows.length} 个账号</span>}
         </header>
         <Notice tone={tone}>{notice}</Notice>
         {provider === "local-jwt" && (
-          <section className="glass-panel p-5">
-            <div className="section-heading"><h2 className="flex items-center gap-2"><UserPlus className="h-4 w-4 text-primary" aria-hidden="true" />创建用户</h2></div>
-            <form className="grid items-end gap-4 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); void mutate("/admin/accounts", "POST", { email, password }); }}>
+          <details className="glass-panel">
+            <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-medium"><UserPlus className="mr-2 inline h-4 w-4 text-primary" aria-hidden="true" />创建用户</summary>
+            <form className="grid items-end gap-4 border-t p-4 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); void mutate("/admin/accounts", "POST", { email, password }); }}>
               <Field label="新账号邮箱"><input className={control} type="email" autoComplete="off" required value={email} onChange={(event) => setEmail(event.target.value)} /></Field>
               <Field label="初始密码（至少 12 位）"><input className={control} type="password" autoComplete="new-password" required minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
               <button className="button-primary text-sm" disabled={busy}>{busy ? "处理中…" : "创建用户"}</button>
             </form>
-          </section>
+          </details>
         )}
         <section className="glass-panel overflow-hidden" aria-label="用户列表">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">

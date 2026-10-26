@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RotateCw } from "lucide-react";
 import {
   action,
   consoleApi,
-  control,
   errorText,
   Notice,
   useConsoleCopy,
@@ -77,10 +77,10 @@ export function UsagePanel() {
         <h2 className="text-base font-semibold">
           {t("用量统计", "Usage")}
         </h2>
-        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] items-center gap-2 sm:max-w-lg">
         <select
           aria-label={t("用量时间范围", "Usage time range")}
-          className={`${control} w-auto min-w-0 max-w-full`}
+          className="glass-control w-full min-w-0 px-3 py-2 text-sm"
           value={days}
           onChange={(e) => setDays(e.target.value)}
         >
@@ -92,7 +92,7 @@ export function UsagePanel() {
         </select>
         <select
           aria-label={t("用户用量", "Usage user")}
-          className={`${control} w-auto min-w-0 max-w-full`}
+          className="glass-control w-full min-w-0 px-3 py-2 text-sm"
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
         >
@@ -110,16 +110,10 @@ export function UsagePanel() {
           disabled={loading}
           onClick={() => setNonce((value) => value + 1)}
         >
-          {t("刷新用量", "Refresh usage")}
+          <RotateCw className="h-4 w-4" aria-hidden="true" /><span className="sr-only sm:not-sr-only">{t("刷新用量", "Refresh usage")}</span>
         </button>
         </div>
       </div>
-      <p className="text-xs leading-5 text-muted-foreground">
-        {t(
-          "Token 按模型返回的用量持久化记录；费用为估算值。历史记录从启用此版本后开始累计，未返回用量的调用不计入统计。",
-          "Tokens use persisted provider-reported usage; costs are estimates. Accounting starts with this version. Calls without reported usage are excluded.",
-        )}
-      </p>
       <Notice tone="danger">{notice}</Notice>
       {loading && (
         <p role="status" className="skeleton p-6 text-sm text-muted-foreground">
@@ -128,7 +122,7 @@ export function UsagePanel() {
       )}
       {!loading && totals && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
             {[
               [t("模型调用", "Model calls"), totals.calls.toLocaleString()],
               [
@@ -141,9 +135,9 @@ export function UsagePanel() {
               ],
               [t("估算费用", "Estimated cost"), cost(totals.estimatedCostUsd)],
             ].map(([label, value]) => (
-              <div key={label} className="min-w-0 rounded-xl border bg-background/60 p-4">
+              <div key={label} className="min-w-0 rounded-xl border bg-background/60 p-3">
                 <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="mt-2 break-words text-xl font-semibold tabular-nums">{value}</p>
+                <p className="mt-1 break-words text-lg font-semibold tabular-nums">{value}</p>
               </div>
             ))}
           </div>
@@ -155,6 +149,9 @@ export function UsagePanel() {
               )}
             </Notice>
           )}
+          <details className="min-w-0 rounded-xl border p-3">
+            <summary className="cursor-pointer py-1 text-sm">{t("用量明细与统计口径", "Usage details and accounting")}</summary>
+            <p className="my-3 text-xs leading-5 text-muted-foreground">{t("Token 按模型返回的用量记录，费用以 USD 估算。从启用此版本后开始累计，未返回用量的调用不计入统计。", "Tokens use provider-reported usage; costs are estimates in USD. Accounting starts with this version. Calls without reported usage are excluded.")}</p>
           <div className="min-w-0 overflow-x-auto rounded-xl border bg-background/40">
             <table className="data-table min-w-[640px]" aria-label={t("用户用量明细", "Usage by user")}>
               <thead>
@@ -214,6 +211,7 @@ export function UsagePanel() {
               </div>
             </details>
           )}
+          </details>
         </>
       )}
     </section>

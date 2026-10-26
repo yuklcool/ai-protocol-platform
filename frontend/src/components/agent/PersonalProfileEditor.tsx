@@ -30,7 +30,7 @@ export function PersonalProfileEditor({ uid, email }: { uid: string; email?: str
     finally { setBusy(false); }
   }
   return <section className="glass-panel space-y-4 p-5">
-    <p className="notice notice--info">公共 Skill、工具和 MCP 由 Agent 配置。这里补充此用户专有的 Skill 和个人信息。</p>
+    <p className="text-xs leading-5 text-muted-foreground">公共能力在助手配置中管理，这里设置个人专有 Skill 与偏好。</p>
     {notice && <p className={`notice notice--${noticeTone}`} role={noticeTone === "success" ? "status" : "alert"}>{notice}</p>}
     {loading ? <p className="notice notice--info" role="status">正在加载个人配置…</p> : !ready ? <button type="button" className="button-secondary min-h-11 px-4 py-2 text-sm" onClick={() => setRevision(value => value + 1)}>重试加载</button> : <>
       <ResourceChecklist label="个人专有 Skill" options={options} selected={profile.skills} disabled={busy} onChange={skills => setProfile({...profile, skills})} />

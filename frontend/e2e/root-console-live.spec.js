@@ -41,6 +41,7 @@ test("administrator and member can edit user-owned Skills and information", asyn
     await expect(page.getByText("个人配置已保存，下次调用立即生效。")).toBeVisible();
     expect((await api("/api/auth/profile", admin.access_token)).information).toBe("Administrator personal information");
     await page.getByRole("button", { name: "关闭", exact: true }).click();
+    await page.locator("summary").filter({ hasText: "创建用户" }).click();
     await page.getByLabel("新账号邮箱", { exact: true }).fill(EMAIL);
     await page.getByLabel("初始密码（至少 12 位）", { exact: true }).fill(MEMBER_PASSWORD);
     await page.getByRole("button", { name: "创建用户", exact: true }).click();

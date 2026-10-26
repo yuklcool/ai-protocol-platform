@@ -20,7 +20,7 @@ const en = {
   "state.adminRequired": "Administrator permission required.",
   title: "MCP Servers",
   description:
-    "Manage shared MCP endpoints, run a real MCP handshake, discover tools/resources/prompts, and bind a server to the Agent. Stored credential values are write-only and are never loaded into this page.",
+    "Connect tools and services, test connections and discover capabilities.",
   scoped: "Scoped to {domains}.",
   back: "Back to Admin",
   "registry.title": "Registry",
@@ -88,7 +88,7 @@ const zhCN = {
   "state.adminRequired": "需要管理员权限。",
   title: "MCP Server 管理",
   description:
-    "管理公共 MCP Endpoint，执行真实 MCP 握手，发现 Tools、Resources、Prompts，并将 MCP Server 绑定到 Agent。凭据值采用只写方式保存，不会回显到此页面。",
+    "连接外部工具与服务，测试连接并发现可用能力。",
   scoped: "当前范围：{domains}。",
   back: "返回管理中心",
   "registry.title": "MCP Registry",

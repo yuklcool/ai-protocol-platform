@@ -38,17 +38,26 @@ const FIXTURE_TOOL_CALL: ToolCallState = {
 
 export default function McpAppsPassivePage() {
   const [devClient, setDevClient] = useState<Client | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    setDevClient(null);
     const client = createDevDirectMcpClient("http://localhost:3001/mcp");
     const transport = (client as unknown as Record<string, unknown>)[TRANSPORT_FIELD] as Parameters<
       Client["connect"]
     >[0];
     client.connect(transport).then(
-      () => setDevClient(client),
-      (err: unknown) => console.warn("passive: direct map-server connect failed", err),
+      () => { if (!cancelled) setDevClient(client); },
+      () => { if (!cancelled) setError("Could not connect to localhost:3001/mcp. Start the map-server and retry."); },
     );
-  }, []);
+    return () => {
+      cancelled = true;
+      void client.close().catch(() => console.warn("passive: map-server client cleanup failed"));
+    };
+  }, [revision]);
 
   return (
     <main className="page-container">
@@ -64,19 +73,20 @@ export default function McpAppsPassivePage() {
           does not, check that <code>make dev</code> is running and both the
           sandbox proxy (:3457) and map-server (:3001) are up.
         </p>
-        {!devClient && (
+        {!devClient && !error && (
           <p className="notice notice--warning mt-3" role="status">Connecting to map-server…</p>
         )}
+        {error && <div className="notice notice--danger mt-3 flex-wrap" role="alert"><p>{error}</p><button type="button" className="button-secondary" onClick={() => setRevision(value => value + 1)}>Retry connection</button></div>}
         </div>
       </header>
 
-      <section className="glass-panel p-5">
+      {devClient && <section className="glass-panel p-5">
         <MCPAppToolCallRouter
           toolCalls={[FIXTURE_TOOL_CALL]}
           mcpServerIds={["ext-apps-map"]}
-          devClient={devClient ?? undefined}
+          devClient={devClient}
         />
-      </section>
+      </section>}
       </div>
     </main>
   );
