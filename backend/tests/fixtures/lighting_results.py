@@ -280,4 +280,5 @@ def fixture(scene="night", view="night", *, query_id=None, status="success"):
         result["error"] = "合成数据源暂不可用"
     if status == "empty":
         result.update(rows=[], row_count=0, chart=None, metrics=[], report=[], actions=[])
+        result["query"]["coverage"] = "当前合成范围没有记录。"
     return result

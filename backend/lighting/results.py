@@ -265,11 +265,14 @@ def normalize(result: LightingResult) -> LightingResult:
         result.rows, result.metrics, result.report = [], [], []
         result.chart = None
         result.row_count, result.complete = 0, False
+        result.query.coverage = "查询失败,数据覆盖未知。"
         result.summary = "查询失败,不能据此判断正常或零报警。"
         result.actions = [action for action in result.actions if action.intent == "retry" and action.row_id is None]
         return result
     if not result.rows and result.complete and result.status == "success":
         result.status = "empty"
+    if result.status == "empty":
+        result.summary = "当前查询范围没有记录,不能据此判断无异常。"
     if not result.complete:
         result.query.missing.append("当前返回范围不完整;清单与图表不代表全网汇总。")
     theory_total = actual_total = 0.0
@@ -391,6 +394,7 @@ def normalize(result: LightingResult) -> LightingResult:
                     (actual - rated) / rated if rated is not None and rated > 0 and actual is not None else None
                 )
     if result.scene == "energy" and result.energy_view == "saving" and result.complete:
+        result.metrics = [metric for metric in result.metrics if metric.label != "有效样本加权节能率"]
         result.metrics.append(
             Metric(
                 label="有效样本加权节能率",
@@ -399,6 +403,9 @@ def normalize(result: LightingResult) -> LightingResult:
                 note=f"有效配对 {saving_pairs}/{len(result.rows)},先合计理论与实际能耗",
             )
         )
+    result.query.missing = list(dict.fromkeys(result.query.missing))
+    for row in result.rows:
+        row.missing = list(dict.fromkeys(row.missing))
     if result.query.missing or any(row.missing for row in result.rows):
         if result.status == "success":
             result.status = "partial"

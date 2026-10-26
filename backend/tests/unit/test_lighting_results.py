@@ -115,6 +115,24 @@ def test_incomplete_list_does_not_generate_whole_scope_weighted_metric():
 
 
 @pytest.mark.parametrize(
+    "scene,view",
+    [
+        ("night", "night"),
+        ("rtu_alarms", "night"),
+        ("energy", "saving"),
+        ("energy", "volatility"),
+        ("reconcile", "night"),
+    ],
+)
+def test_service_computed_facts_are_idempotent_for_model_and_view(scene, view):
+    result = normalize(LightingResult.model_validate(fixture(scene, view)))
+    assert normalize(result) == result
+    rendered = root(result.model_dump(mode="json"))
+    assert rendered["metrics"] == result.model_dump(mode="json")["metrics"]
+    assert rendered["rows"] == result.model_dump(mode="json")["rows"]
+
+
+@pytest.mark.parametrize(
     "before,after,flag",
     [
         (100, 149, False),

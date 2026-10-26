@@ -48,6 +48,8 @@
 
 合成返回构造器见 [`backend/tests/fixtures/lighting_results.py`](../backend/tests/fixtures/lighting_results.py)。首次自然对话输入由只读服务定义;按钮追查的 `request` 则从服务器保存结果重建。
 
+适配服务应在返回 MCP 结果前完成计算,让模型和宿主收到相同事实。Python 适配可调用 `normalize(LightingResult.model_validate(result)).model_dump(mode="json")`;CI MCP fixture 也遵循此顺序。宿主映射再次校验为幂等操作,不会重复添加统计或缺口,模型无需从原始行自行计算节能率和差额。
+
 | 固定计算 | 字段与规则 |
 | --- | --- |
 | 截止时点报警 | `triggered_at / restored_at / history_complete`;只有可还原历史才判恢复,不从当前末态反推;证据窗默认前后各 10 分钟 |

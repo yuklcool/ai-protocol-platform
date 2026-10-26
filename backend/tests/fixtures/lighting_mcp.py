@@ -3,6 +3,7 @@
 from mcp.server.fastmcp import FastMCP
 from starlette.responses import JSONResponse
 
+from lighting.results import LightingResult, normalize
 from tests.fixtures.lighting_results import fixture
 
 server = FastMCP("lighting-ci-fixture", host="0.0.0.0", port=8090, stateless_http=True, json_response=True)
@@ -22,7 +23,10 @@ def query_lighting(request: dict) -> dict:
         "downstream": "lamp_alarms",
         "energy_view": "energy",
     }.get(intent, request.get("scene", "night"))
-    return fixture(scene, request.get("energy_view") or "night", status=request.get("fixture_status", "success"))
+    result = fixture(scene, request.get("energy_view") or "night", status=request.get("fixture_status", "success"))
+    # The controlled query service returns its computed facts to BOTH model
+    # and renderer. The model must not calculate from raw rows itself.
+    return normalize(LightingResult.model_validate(result)).model_dump(mode="json")
 
 
 @server.custom_route("/evidence", methods=["GET"])
