@@ -24,6 +24,9 @@ def query_lighting(request: dict) -> dict:
         "energy_view": "energy",
     }.get(intent, request.get("scene", "night"))
     result = fixture(scene, request.get("energy_view") or "night", status=request.get("fixture_status", "success"))
+    if request.get("source_query_id"):
+        for key in ("scope", "window", "timezone", "cutoff", "basis", "report_type", "rtu_energy_window"):
+            result["query"][key] = request[key]
     # The controlled query service returns its computed facts to BOTH model
     # and renderer. The model must not calculate from raw rows itself.
     return normalize(LightingResult.model_validate(result)).model_dump(mode="json")

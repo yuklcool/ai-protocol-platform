@@ -19,6 +19,18 @@ function fixture(): LightingRoot {
 beforeEach(() => { root = fixture(); replayed = false; vi.clearAllMocks(); trigger.mockResolvedValue(undefined); });
 
 describe("照明宿主视图", () => {
+  it("RTU 运行筛选使用表格的运行状态,不混用同一行的报警解除状态", () => {
+    root.scene = "rtu";
+    root.columns = [{ key: "rtu_id", label: "RTU" }, { key: "status", label: "判定时点状态" }];
+    root.rows[0].values.status = "上报过期";
+    root.rows[1].values.status = "窗口无记录";
+    render(<LightingArtefactTab surfaceId="lighting:q1" sessionId="s1" skillId="root-agent" />);
+    expect(screen.queryByRole("option", { name: "截止时点未解除" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("筛选状态"), { target: { value: "窗口无记录" } });
+    expect(screen.getAllByTestId("lighting-row")).toHaveLength(1);
+    expect(screen.getByTestId("lighting-row")).toHaveTextContent("窗口无记录");
+    expect(trigger).not.toHaveBeenCalled();
+  });
   it("筛选当前清单,保留范围指标、来源时点与缺失值", () => {
     render(<LightingArtefactTab surfaceId="lighting:q1" sessionId="s1" skillId="root-agent" />);
     expect(screen.getByTestId("lighting-provenance")).toHaveTextContent("Asia/Shanghai");

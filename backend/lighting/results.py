@@ -219,7 +219,8 @@ class LightingResult(Contract):
         if self.scene == "energy":
             if self.energy_view is None:
                 raise ValueError("energy requires an explicit view")
-            if (self.energy_view == "night") != (self.query.basis == "night"):
+            expected_basis = "night" if self.energy_view == "night" else "daily"
+            if self.query.basis != expected_basis:
                 raise ValueError("night energy and daily views cannot mix time bases")
             days = {"week": 7, "saving": 7, "volatility": 30}.get(self.energy_view)
             if days is not None:

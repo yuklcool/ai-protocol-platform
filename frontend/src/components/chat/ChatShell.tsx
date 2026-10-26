@@ -936,6 +936,7 @@ function ChatShellContent({
   // content AND the user hasn't collapsed it. When collapsed, the thin
   // expand strip renders instead.
   const workbenchVisible = workbenchHasContent && !workbenchCollapsed;
+  const lightingResultVisible = workbenchVisible && workbenchTabId.startsWith("lighting:");
 
   // Session routing: read ?session= from URL, allow programmatic navigation
   // Effective thread id — the value threaded to the surface mounts
@@ -1585,20 +1586,22 @@ function ChatShellContent({
     {/* SkillsBar (top nav) lifted to ShellChrome in ShellRouter so every shell
         mode shares it — see components/shells/ShellChrome.tsx. This shell body
         fills the height remaining below that bar. */}
-    <main className="chat-shell flex min-h-0 flex-1 flex-col overflow-hidden">
-      <DocTabsBar
-        tabs={openTabs}
-        activeTabId={activeTabId}
-        showBrowser={showDocBrowser}
-        onSelect={(id) => {
-          setActiveTabId(id);
-          setWorkbenchTabId("document");
-          setWorkbenchCollapsed(false);
-        }}
-        onClose={handleTabClose}
-        onToggleInclude={handleTabToggleInclude}
-        onToggleBrowser={toggleDocBrowser}
-      />
+    <main className={`chat-shell flex min-h-0 flex-1 flex-col overflow-hidden ${lightingResultVisible ? "lighting-result-visible" : ""}`}>
+      <div className="chat-resource-bar shrink-0">
+        <DocTabsBar
+          tabs={openTabs}
+          activeTabId={activeTabId}
+          showBrowser={showDocBrowser}
+          onSelect={(id) => {
+            setActiveTabId(id);
+            setWorkbenchTabId("document");
+            setWorkbenchCollapsed(false);
+          }}
+          onClose={handleTabClose}
+          onToggleInclude={handleTabToggleInclude}
+          onToggleBrowser={toggleDocBrowser}
+        />
+      </div>
 
       <div className="workspace-row relative flex min-h-0 flex-1 overflow-hidden" data-workspace-row>
         <ChatSidebar open={showDocBrowser} onOpenChange={setDocBrowserOpen}

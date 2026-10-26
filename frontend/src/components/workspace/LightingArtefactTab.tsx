@@ -31,6 +31,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
   const [done, setDone] = useState(false);
   const query = root?.query;
   const timezone = query?.timezone ?? "Asia/Shanghai";
+  const statusKey = root?.scene === "rtu" || root?.scene === "reconcile" ? "status" : "status_at_cutoff";
   useEffect(() => {
     setSearch(""); setPoint(null); setPage(0); setDrawer(null);
     setFilter(root?.scene === "lamp_alarms" ? "截止时点未解除" : "all");
@@ -40,7 +41,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
     const selected = (root?.rows ?? []).filter(row => {
       const values = { ...row.values, id: row.id, lamp_id: row.lamp_id, rtu_id: row.rtu_id, circuit_id: row.circuit_id, alarm_id: row.alarm_id };
       if (search && !Object.values(values).some(value => value != null && String(value).toLocaleLowerCase().includes(search.toLocaleLowerCase()))) return false;
-      if (filter !== "all" && String(row.values.status_at_cutoff ?? row.values.status ?? "证据不足") !== filter) return false;
+      if (filter !== "all" && String(row.values[statusKey] ?? "证据不足") !== filter) return false;
       if (point !== null && root?.chart?.filter_key && row.values[root.chart.filter_key] !== point) return false;
       return true;
     });
@@ -48,8 +49,8 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
     const column = root?.columns?.find(col => col.key === sort.key);
     const flat = (row: LightingRow) => ({ ...row.values, id: row.id, lamp_id: row.lamp_id, rtu_id: row.rtu_id, circuit_id: row.circuit_id, alarm_id: row.alarm_id });
     return [...selected].sort((a, b) => compareRows(flat(a), flat(b), sort.key, column?.type, sort.dir));
-  }, [root, search, filter, point, sort]);
-  const statuses = Array.from(new Set((root?.rows ?? []).map(row => String(row.values.status_at_cutoff ?? row.values.status ?? "证据不足"))));
+  }, [root, search, filter, point, sort, statusKey]);
+  const statuses = Array.from(new Set((root?.rows ?? []).map(row => String(row.values[statusKey] ?? "证据不足"))));
   const selectedRow = drawer?.startsWith("row:") ? root?.rows?.find(row => row.id === drawer.slice(4)) : undefined;
   const readOnly = Boolean(state?.artifact?.replayed);
   const disabled = running || busy || readOnly || !sessionId;
@@ -87,7 +88,7 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
     {!root ? <p role="status">正在读取照明结果…</p> : <div className="mx-auto grid max-w-6xl gap-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0"><p className="text-xs text-muted-foreground">照明查询{readOnly ? " · 历史结果" : ""}</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">{root.title}</h2></div>
-        <div className="flex flex-wrap gap-2"><button type="button" className="button-secondary min-h-11 text-xs" onClick={() => openDrawer("parameters")} disabled={!query}>调整查询参数</button><button type="button" className="button-secondary min-h-11 text-xs" onClick={() => openDrawer("report")} disabled={!root.report?.length || root.status === "error"}>完整报告</button></div>
+        <div className="flex flex-wrap gap-2">{onDraftMessage && <button type="button" className="button-secondary min-h-11 text-xs md:hidden" onClick={() => onDraftMessage("")}>继续提问</button>}<button type="button" className="button-secondary min-h-11 text-xs" onClick={() => openDrawer("parameters")} disabled={!query}>调整查询参数</button><button type="button" className="button-secondary min-h-11 text-xs" onClick={() => openDrawer("report")} disabled={!root.report?.length || root.status === "error"}>完整报告</button></div>
       </header>
       {query && <div className="grid gap-1 break-words text-xs leading-6 text-muted-foreground" data-testid="lighting-provenance">
         <p>{query.scope} · {lightingTime(query.window.start, timezone)} → {lightingTime(query.window.end, timezone)} · {timezone} · {query.basis === "daily" ? "自然日 D 日报" : query.basis === "night" ? "跨日夜间窗口" : "历史证据窗口"}</p>
@@ -114,7 +115,6 @@ export function LightingArtefactTab({ surfaceId, sessionId, skillId, onDraftMess
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-xs text-muted-foreground"><p>当前清单 {rows.length} / 已返回 {root.rows?.length ?? 0} 条 · 查询范围共 {root.row_count} 条。筛选不改写范围汇总。{!root.complete ? " 结果未完整返回。" : ""}</p>{rows.length > 100 && <div className="flex items-center gap-2"><button type="button" className="button-ghost min-h-11" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button><span>{page + 1}</span><button type="button" className="button-ghost min-h-11" disabled={(page + 1) * 100 >= rows.length} onClick={() => setPage(page + 1)}>下一页</button></div>}</div>
       </section>}
       {!!query?.filters.length && <details className="text-xs leading-6 text-muted-foreground"><summary className="min-h-11 cursor-pointer">统计与过滤口径</summary>{query.filters.map((item, index) => <p key={index}>{item}</p>)}</details>}
-      {onDraftMessage && <div className="sticky bottom-0 border-t bg-white py-2 sm:hidden"><button type="button" className="button-secondary min-h-11 w-full" onClick={() => onDraftMessage("")}>继续提问</button></div>}
     </div>}
     <Dialog.Root open={drawer !== null} onOpenChange={open => { if (!open) setDrawer(null); }}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-50 bg-black/25" /><Dialog.Content onCloseAutoFocus={event => { event.preventDefault(); if (!drafted.current) drawerOpener.current?.focus(); }} className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[650px] flex-col border-l bg-white shadow-xl" aria-describedby="lighting-drawer-description">
       <div className="flex items-center justify-between gap-3 border-b px-5 py-3"><Dialog.Title className="break-words text-lg font-semibold">{drawer === "report" ? "完整固定格式报告" : drawer === "parameters" ? "准备下一次查询" : selectedRow?.lamp_id || selectedRow?.rtu_id || "设备证据"}</Dialog.Title><Dialog.Close className="button-ghost h-11 w-11 shrink-0" aria-label="关闭证据抽屉"><X className="h-5 w-5" /></Dialog.Close></div>

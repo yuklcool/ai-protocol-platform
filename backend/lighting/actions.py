@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from google.adk.sessions.base_session_service import GetSessionConfig
@@ -76,6 +77,25 @@ def resolve_saved_action(saved: dict, context: dict | None, *, now: datetime | N
         else None,
         "energy_view": action.energy_view or result.energy_view,
     }
+    if action.intent == "energy_view" and action.energy_view != result.energy_view:
+        if result.scene != "energy" or action.energy_view is None:
+            raise HTTPException(409, "能耗切换缺少有效目标视图。")
+        # Keep the saved cutoff as a stable anchor, including across repeated switches.
+        anchor = min(result.query.cutoff, result.query.generated_at).astimezone(ZoneInfo(result.query.timezone))
+        end = anchor.replace(hour=0, minute=0, second=0, microsecond=0)
+        if action.energy_view == "night":
+            end = end.replace(hour=7)
+            if end > anchor:
+                end -= timedelta(days=1)
+            start = (end - timedelta(days=1)).replace(hour=18)
+        else:
+            start = end - timedelta(days=30 if action.energy_view == "volatility" else 7)
+        request.update(
+            window={"start": start.isoformat(), "end": end.isoformat()},
+            basis="night" if action.energy_view == "night" else "daily",
+            report_type=None if action.energy_view == "night" else "D",
+            rtu_energy_window=None,
+        )
     if row:
         request["device"] = {
             key: getattr(row, key) for key in ("lamp_id", "rtu_id", "circuit_id", "pole_id", "alarm_id", "phase")

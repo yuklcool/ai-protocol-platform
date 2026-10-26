@@ -107,9 +107,10 @@ function toNum(v: unknown): number | null {
   return null;
 }
 
-/** x → a number for positioning. `type: "time"` parses ISO; otherwise numeric.
- *  Unparseable (e.g. a category axis) → null, and the row index is used. */
+/** Category positions use row order; time parses ISO, otherwise numeric.
+ *  Null falls back to the row index. */
 function toX(v: unknown, type?: string): number | null {
+  if (type === "category") return null;
   if (type === "time") {
     const t = Date.parse(String(v ?? ""));
     return Number.isFinite(t) ? t : null;

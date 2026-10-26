@@ -193,6 +193,69 @@ def test_energy_views_require_complete_natural_day_ranges(view, days):
         LightingResult.model_validate(result)
 
 
+@pytest.mark.parametrize("source_view", ["night", "week", "saving", "volatility"])
+@pytest.mark.parametrize("target_view", ["night", "week", "saving", "volatility"])
+def test_energy_switch_sends_a_valid_target_window_to_mcp(source_view, target_view):
+    from tests.fixtures.lighting_mcp import query_lighting
+
+    result = fixture("energy", source_view)
+    request = resolve_saved_action(saved(result), {"actionId": f"energy-{target_view}"})["request"]
+    assert request["scope"] == result["query"]["scope"]
+    assert request["cutoff"] == result["query"]["cutoff"]
+    assert request["source_query_id"] == result["query"]["id"]
+    returned = LightingResult.model_validate(query_lighting(request))
+    assert returned.energy_view == target_view
+    assert returned.query.window.model_dump(mode="json") == request["window"]
+    if source_view == target_view:
+        assert request["window"] == result["query"]["window"]
+    elif target_view == "night":
+        assert request["basis"] == "night"
+        assert request["report_type"] is None
+        assert returned.query.window.start.hour == 18
+        assert returned.query.window.end.hour == 7
+        assert returned.query.window.end <= min(returned.query.cutoff, returned.query.generated_at)
+    else:
+        assert request["basis"] == "daily"
+        assert request["report_type"] == "D"
+        assert returned.query.window.end <= returned.query.cutoff
+
+
+def test_energy_switch_uses_saved_timezone_and_cutoff_without_drifting():
+    result = fixture("energy", "week")
+    result["query"].update(
+        timezone="Asia/Tokyo",
+        window={"start": "2026-10-18T00:00:00+09:00", "end": "2026-10-25T00:00:00+09:00"},
+        cutoff="2026-10-25T21:30:00+00:00",  # 06:30 local: the current night is unfinished.
+        generated_at="2026-10-26T08:00:00+09:00",
+    )
+    now = datetime.fromisoformat(result["query"]["generated_at"])
+    request = resolve_saved_action(saved(result), {"actionId": "energy-night"}, now=now)["request"]
+    assert request["window"] == {"start": "2026-10-24T18:00:00+09:00", "end": "2026-10-25T07:00:00+09:00"}
+    result["energy_view"] = "night"
+    result["query"].update({key: request[key] for key in ("window", "basis", "report_type")})
+    request = resolve_saved_action(saved(result), {"actionId": "energy-volatility"}, now=now)["request"]
+    assert request["window"] == {"start": "2026-09-26T00:00:00+09:00", "end": "2026-10-26T00:00:00+09:00"}
+
+
+@pytest.mark.parametrize("action_id", ["retry", "energy-night"])
+def test_energy_reread_keeps_explicit_six_and_seven_oclock_windows(action_id):
+    result = fixture("energy", "night")
+    result["query"]["rtu_energy_window"] = dict(result["query"]["window"])
+    end = datetime.fromisoformat(result["query"]["window"]["end"])
+    result["query"]["window"]["end"] = (end - timedelta(hours=1)).isoformat()
+    request = resolve_saved_action(saved(result), {"actionId": action_id})["request"]
+    for key in ("window", "rtu_energy_window", "basis", "report_type", "cutoff"):
+        assert request[key] == result["query"].get(key)
+
+
+@pytest.mark.parametrize("view", ["week", "saving", "volatility"])
+def test_daily_energy_views_cannot_bypass_daily_validation_with_historical_basis(view):
+    result = fixture("energy", view)
+    result["query"]["basis"] = "historical"
+    with pytest.raises(ValidationError):
+        LightingResult.model_validate(result)
+
+
 def test_specialized_alarm_evidence_is_not_inferred_from_one_reading():
     result = root(fixture("rtu_alarms"))
     assert any("自动断电记录" in gap for gap in result["rows"][0]["missing"])
