@@ -8,6 +8,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { v4 as createUuid } from "uuid";
 import { fetchWithAuth } from "@/lib/apiClient";
 import { useOptionalAGUIAgent } from "@/providers/AGUIProvider";
 import { useSurfaceRegistry } from "@/providers/SurfaceRegistry";
@@ -231,7 +232,7 @@ export function useActionDrivenAgent({
 
       const surfaceSnapshot = registry.readA2uiSurfaceState();
       const body = {
-        requestId: crypto.randomUUID(),
+        requestId: createUuid(),
         surfaceId,
         action,
         forwardedProps: { a2ui_surface_state: surfaceSnapshot },
@@ -529,7 +530,7 @@ export function useActionDrivenAgent({
                   ? v.target_display
                   : String(v.target ?? "specialist");
               activitySink?.upsertDelegation?.({
-                id: `action-deleg-${crypto.randomUUID()}`,
+                id: `action-deleg-${createUuid()}`,
                 afterMessageId: null,
                 parent: String(v.parent ?? ""),
                 target: String(v.target ?? ""),
@@ -563,7 +564,7 @@ export function useActionDrivenAgent({
             const dispatchSourceId =
               typeof v.sourceId === "string" && v.sourceId
                 ? v.sourceId
-                : `custom-a2ui-${dispatchSurfaceId}-${crypto.randomUUID()}`;
+                : `custom-a2ui-${dispatchSurfaceId}-${createUuid()}`;
             const artifact =
               v.artifact && typeof v.artifact === "object" ? v.artifact : null;
             registry.appendMessages(

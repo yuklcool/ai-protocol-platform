@@ -1,20 +1,10 @@
 import { renderHook } from "@testing-library/react";
 import { useEffect } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { useStableThreadId } from "@/hooks/useStableThreadId";
 
-// Polyfill / pin crypto.randomUUID for deterministic assertions where we
-// only care that the value changed, not what it is.
-beforeAll(() => {
-  let n = 0;
-  // jsdom has crypto.randomUUID, but pinning makes the change-detection
-  // assertions in tests below far easier to read.
-  vi.stubGlobal("crypto", {
-    ...globalThis.crypto,
-    randomUUID: () => `mock-uuid-${++n}`,
-  });
-});
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe("useStableThreadId — chat-history-deep-fixes-2 Bug A' fix", () => {
   it("adopts the URL session id on initial mount when one is present", () => {
@@ -24,7 +14,7 @@ describe("useStableThreadId — chat-history-deep-fixes-2 Bug A' fix", () => {
 
   it("mints a fresh UUID on initial mount when URL has no session", () => {
     const { result } = renderHook(() => useStableThreadId(null));
-    expect(result.current).toMatch(/^mock-uuid-\d+$/);
+    expect(result.current).toMatch(UUID_V4);
   });
 
   it("STAYS STABLE across URL writeback (URL gains the threadId we already had) — closes the visible flicker", () => {
@@ -35,7 +25,7 @@ describe("useStableThreadId — chat-history-deep-fixes-2 Bug A' fix", () => {
       { initialProps: { urlSessionId: null as string | null } },
     );
     const initialThreadId = result.current;
-    expect(initialThreadId).toMatch(/^mock-uuid-\d+$/);
+    expect(initialThreadId).toMatch(UUID_V4);
 
     // URL writeback effect (in real chat page) rewrites ?session=<initialThreadId>
     rerender({ urlSessionId: initialThreadId });
@@ -71,7 +61,7 @@ describe("useStableThreadId — chat-history-deep-fixes-2 Bug A' fix", () => {
     rerender({ urlSessionId: null });
 
     expect(result.current).not.toBe(idBefore);
-    expect(result.current).toMatch(/^mock-uuid-\d+$/);
+    expect(result.current).toMatch(UUID_V4);
   });
 
   it("never commits the previous thread under a new URL", () => {
@@ -86,7 +76,7 @@ describe("useStableThreadId — chat-history-deep-fixes-2 Bug A' fix", () => {
     expect(committed).toEqual([
       { urlSessionId: "session-A", threadId: "session-A" },
       { urlSessionId: "session-B", threadId: "session-B" },
-      { urlSessionId: null, threadId: expect.stringMatching(/^mock-uuid-/) },
+      { urlSessionId: null, threadId: expect.stringMatching(UUID_V4) },
     ]);
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { v4 as createUuid } from "uuid";
 import { ChatMessageListWithSurfaces } from "@/components/chat/ChatMessageList";
 import type { DocTabData } from "@/components/doc-browser/DocTab";
 import { DocListView } from "@/components/doc-browser/DocListView";
@@ -196,7 +197,7 @@ function WorkspaceA2uiEventRouter() {
         const sourceId =
           typeof v.sourceId === "string" && v.sourceId
             ? v.sourceId
-            : `custom-a2ui-${surfaceId}-${crypto.randomUUID()}`;
+            : `custom-a2ui-${surfaceId}-${createUuid()}`;
         // 7.5: optional artifact metadata drives the workbench tab title + index.
         const artifact =
           v.artifact && typeof v.artifact === "object" ? (v.artifact as A2uiArtifact) : null;
