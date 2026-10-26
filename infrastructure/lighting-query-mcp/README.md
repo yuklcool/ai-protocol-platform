@@ -22,6 +22,8 @@
 
 ## 验证
 
-本地只编辑。`.github/workflows/lighting-skill-adapter.yml` 在GitHub托管Runner用一次性PostgreSQL验证真实SQL、全部六场景/四能耗视图、截断、累计读数复位、重复日报、自然日配对、零/空值、主链路、契约、令牌和Skill包；常规CI验证后台授权与前端回归。
+本地只编辑。`.github/workflows/lighting-skill-adapter.yml` 在GitHub托管Runner用一次性PostgreSQL验证真实SQL、全部六场景/四能耗视图、截断、累计读数复位、重复日报、自然日配对、零/空值、主链路、契约、令牌和Skill包；常规CI验证后台授权与前端回归。完整链路通过真实HTTP连接有状态SQL MCP与照明MCP，覆盖SQL工具的结构化封装和文本JSON返回。照明工具显式声明`LightingResult`，返回结构化`lighting-query/v1`并保留SDK输出校验。
+
+SQL执行失败、截断、缺少完整性标记及畸形返回均作为失败处理，不转换为空结果。日志仅记录参考号和固定失败类别；嵌套transport异常展开到类型，避免只留下`ExceptionGroup`，不记录异常原文、SQL、业务行或凭据。
 
 服务器联调应通过手动GitHub工作流和临时自托管Runner执行。Runner只接受已审核的本任务提交，验收结束后注销清理，不向PR暴露生产凭据，日志只保留计数、状态及调用链。原型合成数据不得替代生产返回。

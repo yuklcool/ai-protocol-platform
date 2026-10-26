@@ -26,7 +26,7 @@ from lighting.results import LightingResult
 from presenter import present
 from queries import build_query, literal, scope_query
 from request import LightingRequest
-from serve import LightingService, RequireToken, create_server, unwrap_sql
+from serve import LightingService, RequireToken, SqlResultError, create_server, error_categories, unwrap_sql
 
 NOW = datetime.fromisoformat("2026-10-26T12:00:00+08:00")
 
@@ -171,12 +171,13 @@ async def running_app(app, port=0):
             await asyncio.wait_for(task, timeout=10)
 
 
-def test_all_scenes_through_stateful_sql_mcp_and_real_postgres():
+@pytest.mark.parametrize("structured_output", [True, False])
+def test_all_scenes_through_stateful_sql_mcp_and_real_postgres(structured_output):
     async def verify():
         upstream = FastMCP("sql-runtime-ci", host="127.0.0.1", log_level="WARNING")
         calls = []
 
-        @upstream.tool()
+        @upstream.tool(structured_output=structured_output)
         async def sql_query_readonly(sql: str, max_rows: int = 1, request_id: str = None) -> Dict[str, Any]:
             calls.append({"sql": sql, "max_rows": max_rows, "request_id": request_id})
             data = await read(sql)
@@ -188,6 +189,8 @@ def test_all_scenes_through_stateful_sql_mcp_and_real_postgres():
                 async with streamablehttp_client(adapter_url, headers={"Authorization": "Bearer " + "a" * 48}) as (reader, writer, _):
                     async with ClientSession(reader, writer) as client:
                         await client.initialize()
+                        tools = await client.list_tools()
+                        assert tools.tools[0].outputSchema["properties"]["schema_version"]["const"] == "lighting-query/v1"
                         for scene, view in [("night", None), ("lamp_alarms", None), ("rtu", None), ("rtu_alarms", None), ("reconcile", None), ("energy", "night"), ("energy", "week"), ("energy", "volatility"), ("energy", "saving")]:
                             params = request(scene, energy_view=view).model_dump(mode="json")
                             response = await client.call_tool("query_lighting", {"request": params})
@@ -209,6 +212,59 @@ def test_sql_errors_and_truncation_cannot_become_zero_results():
         unwrap_sql(CallToolResult(isError=True, content=[TextContent(type="text", text="database error")]))
     with pytest.raises(ValueError):
         unwrap_sql(CallToolResult(content=[], structuredContent={"result": {"ok": True, "meta": {"truncated": True}, "rows": []}}))
+
+
+@pytest.mark.parametrize("failure,category", [
+    (CallToolResult(isError=True, content=[TextContent(type="text", text="private-database-detail")]), "SQL MCP 执行失败"),
+    (CallToolResult(content=[], structuredContent={"ok": False, "error": "private-database-detail"}), "SQL MCP 返回失败"),
+    (CallToolResult(content=[], structuredContent={"ok": True, "meta": {"truncated": True}, "rows": []}), "SQL MCP 返回截断或缺少完整性标记"),
+    (CallToolResult(content=[TextContent(type="text", text="private-database-detail")]), "SQL MCP 返回非 JSON 文本"),
+])
+def test_upstream_failures_remain_errors_and_diagnostics_do_not_expose_data(failure, category, caplog):
+    async def verify():
+        upstream = FastMCP("sql-runtime-error-ci", host="127.0.0.1", log_level="WARNING")
+
+        @upstream.tool()
+        async def sql_query_readonly(sql: str, max_rows: int, request_id: str) -> CallToolResult:
+            return failure
+
+        async with running_app(upstream.streamable_http_app()) as upstream_url:
+            adapter = RequireToken(create_server(LightingService(upstream_url, {})).streamable_http_app(), "a" * 48)
+            async with running_app(adapter, port=8012) as adapter_url:
+                async with streamablehttp_client(adapter_url, headers={"Authorization": "Bearer " + "a" * 48}) as (reader, writer, _):
+                    async with ClientSession(reader, writer) as client:
+                        await client.initialize()
+                        response = await client.call_tool("query_lighting", {"request": {"scene": "night"}})
+                        assert response.isError
+                        assert response.structuredContent is None
+                        assert "照明查询未完成" in response.content[0].text
+                        assert "private-database-detail" not in response.content[0].text
+
+    asyncio.run(verify())
+    entries = [entry.message for entry in caplog.records if entry.name == "lighting-query"]
+    assert len(entries) == 1 and "category=" + category in entries[0]
+    assert "private-database-detail" not in entries[0]
+
+
+@pytest.mark.parametrize("body", [
+    {"ok": True, "rows": [{"payload": {}}]},
+    {"ok": True, "meta": None, "rows": [{"payload": {}}]},
+    {"ok": True, "meta": {"truncated": False}, "rows": None},
+    {"ok": True, "meta": {"truncated": False}, "rows": [None]},
+    {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": None}]},
+    {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": "private-database-detail"}]},
+])
+def test_incomplete_or_malformed_sql_envelopes_are_rejected(body):
+    with pytest.raises(ValueError):
+        unwrap_sql(CallToolResult(content=[], structuredContent=body))
+
+
+def test_nested_transport_errors_log_only_safe_categories():
+    error = ExceptionGroup("private-transport-detail", [
+        ExceptionGroup("private-session-detail", [ValueError("private-schema-detail")]),
+        SqlResultError("SQL MCP 执行失败"),
+    ])
+    assert error_categories(error) == "SQL MCP 执行失败,ValueError"
 
 
 def test_skill_packages_have_no_old_protocol_or_unavailable_command_requirement():

@@ -16,6 +16,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.responses import JSONResponse
 
+from lighting.results import LightingResult
 from presenter import present
 from queries import build_query, scope_query
 from request import LightingRequest
@@ -23,24 +24,47 @@ from request import LightingRequest
 log = logging.getLogger("lighting-query")
 
 
+class SqlResultError(ValueError):
+    """Only fixed messages; SQL server details must never enter the logs."""
+
+
 def unwrap_sql(response) -> dict:
     if response.isError:
-        raise ValueError("SQL MCP 执行失败")
+        raise SqlResultError("SQL MCP 执行失败")
     value = response.structuredContent
     if value is None:
         texts = [item.text for item in response.content if item.type == "text"]
         if len(texts) != 1:
-            raise ValueError("SQL MCP 返回不明确")
-        value = json.loads(texts[0])
+            raise SqlResultError("SQL MCP 返回不明确")
+        try:
+            value = json.loads(texts[0])
+        except json.JSONDecodeError:
+            raise SqlResultError("SQL MCP 返回非 JSON 文本") from None
     if isinstance(value, dict) and set(value) == {"result"}:
         value = value["result"]
-    if not isinstance(value, dict) or value.get("ok") is not True or value.get("meta", {}).get("truncated"):
-        raise ValueError("SQL MCP 返回失败或截断")
-    records = value.get("rows", [])
-    if len(records) != 1 or "payload" not in records[0]:
-        raise ValueError("固定查询未返回唯一结果")
+    if not isinstance(value, dict) or value.get("ok") is not True:
+        raise SqlResultError("SQL MCP 返回失败")
+    meta = value.get("meta")
+    if not isinstance(meta, dict) or meta.get("truncated") is not False:
+        raise SqlResultError("SQL MCP 返回截断或缺少完整性标记")
+    records = value.get("rows")
+    if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict) or "payload" not in records[0]:
+        raise SqlResultError("固定查询未返回唯一结果")
     payload = records[0]["payload"]
-    return json.loads(payload) if isinstance(payload, str) else payload
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            raise SqlResultError("固定查询返回非 JSON 结果") from None
+    if not isinstance(payload, dict):
+        raise SqlResultError("固定查询未返回对象")
+    return payload
+
+
+def error_categories(exc: BaseException) -> str:
+    if isinstance(exc, BaseExceptionGroup):
+        return ",".join(sorted({error_categories(child) for child in exc.exceptions}))
+    return str(exc) if isinstance(exc, SqlResultError) else type(exc).__name__
 
 
 class LightingService:
@@ -55,7 +79,7 @@ class LightingService:
                 result = await session.call_tool("sql_query_readonly", {
                     "sql": sql, "max_rows": 1, "request_id": "lighting-" + uuid.uuid4().hex,
                 })
-                return unwrap_sql(result)
+        return unwrap_sql(result)
 
     async def query(self, request: dict) -> dict:
         now = datetime.now(ZoneInfo("Asia/Shanghai"))
@@ -84,8 +108,8 @@ def create_server(service: LightingService) -> FastMCP:
                      transport_security=TransportSecuritySettings(allowed_hosts=[
                          "lighting-query-mcp:8012", "127.0.0.1:8012", "localhost:8012"]))
 
-    @server.tool()
-    async def query_lighting(request: LightingRequest) -> dict:
+    @server.tool(structured_output=True)
+    async def query_lighting(request: LightingRequest) -> LightingResult:
         """Query real lighting data and display the six prototype result views.
 
         Load the relevant lighting Skill first. Default scope is 全系统, timezone
@@ -96,11 +120,11 @@ def create_server(service: LightingService) -> FastMCP:
         lighting-query/v1 facts. Missing evidence remains explicitly unknown.
         """
         try:
-            return await service.query(request.model_dump(mode="json"))
+            return LightingResult.model_validate(await service.query(request.model_dump(mode="json")))
         except Exception as exc:
             # Do not echo SQL MCP errors, credentials, schema or business rows.
             reference = uuid.uuid4().hex[:12]
-            log.warning("query_failed reference=%s category=%s", reference, type(exc).__name__)
+            log.warning("query_failed reference=%s category=%s", reference, error_categories(exc))
             raise ValueError(f"照明查询未完成（参考号 {reference}）。请检查时间口径、精确范围及数据源连接；不能据此判断正常。") from None
 
     @server.custom_route("/healthz", methods=["GET"])
