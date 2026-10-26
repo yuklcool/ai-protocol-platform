@@ -51,7 +51,7 @@ interface BandDecl {
   label?: string;
 }
 
-interface SeriesRoot {
+export interface SeriesRoot {
   kind?: string;
   title?: string;
   x?: AxisDecl;
@@ -107,9 +107,10 @@ function toNum(v: unknown): number | null {
   return null;
 }
 
-/** x → a number for positioning. `type: "time"` parses ISO; otherwise numeric.
- *  Unparseable (e.g. a category axis) → null, and the row index is used. */
+/** Category positions use row order; time parses ISO, otherwise numeric.
+ *  Null falls back to the row index. */
 function toX(v: unknown, type?: string): number | null {
+  if (type === "category") return null;
   if (type === "time") {
     const t = Date.parse(String(v ?? ""));
     return Number.isFinite(t) ? t : null;
@@ -196,7 +197,7 @@ interface Series {
 // hardcoded name, so the alternate-columns fixture (wind_mw/solar_mw) works
 // with zero code change here too.
 
-interface ColumnDecl {
+export interface ColumnDecl {
   key: string;
   label: string;
   unit?: string;
@@ -225,7 +226,7 @@ function sortValue(v: unknown, type?: string): number | string | null {
 
 /** Nulls sort last regardless of direction — a null return happens BEFORE
  *  the asc/desc flip below, so it can never be reordered by clicking twice. */
-function compareRows(
+export function compareRows(
   a: Record<string, unknown>,
   b: Record<string, unknown>,
   key: string,
@@ -242,7 +243,7 @@ function compareRows(
 }
 
 /** Cell text for the table — formatted for reading (units, "—" for null). */
-function fmtCell(v: unknown, col: ColumnDecl): string {
+export function fmtCell(v: unknown, col: ColumnDecl): string {
   if (v == null) return "—";
   if (col.type === "time") {
     const t = Date.parse(String(v));
@@ -257,7 +258,9 @@ function fmtCell(v: unknown, col: ColumnDecl): string {
 /** RFC 4180 escaping — quote a field that contains a comma, quote, or
  *  newline, doubling any embedded quotes. */
 function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
+  // Keep numeric negatives numeric, but stop textual spreadsheet formulas.
+  const raw = v == null ? "" : String(v);
+  const s = typeof v === "string" && /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -285,6 +288,11 @@ function csvFilename(title: string): string {
 export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string; className?: string }) {
   const state = useSurfaceState(surfaceId);
   const root = (state?.surface?.dataModel?.get("/") ?? null) as SeriesRoot | null;
+  return <SeriesView root={root} className={className} />;
+}
+
+/** Host datasets reuse the same chart, gaps and declared axes as series tabs. */
+export function SeriesView({ root, className, compact = false, onSelectRow }: { root: SeriesRoot | null; className?: string; compact?: boolean; onSelectRow?: (row: Record<string, unknown>) => void }) {
   const [hover, setHover] = useState<number | null>(null);
 
   const rows = useMemo(() => (Array.isArray(root?.rows) ? root.rows : []), [root]);
@@ -557,7 +565,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
       <div className={`flex h-full flex-col overflow-auto ${className ?? ""}`}>
         {header}
         <p data-testid="series-empty" className="p-4 text-sm text-muted-foreground">
-          No data has been returned for this query yet.
+          {compact ? "当前查询尚未返回可绘图数据。" : "No data has been returned for this query yet."}
         </p>
       </div>
     );
@@ -572,11 +580,11 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
         {header}
         {citation}
         <div data-testid="series-empty" className="px-4 py-3">
-          <p className="text-sm font-medium text-foreground">No settled prices in this range.</p>
+          <p className="text-sm font-medium text-foreground">{compact ? "当前范围没有有效数值,缺失没有补零或插值。" : "No settled prices in this range."}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {rows.length > 0
+            {!compact && (rows.length > 0
               ? `${rows.length.toLocaleString("en-US")} rows were returned, but none carry a settled value — the range may not be settled yet. Try an earlier range.`
-              : "The query returned no rows. Check the range and try again."}
+              : "The query returned no rows. Check the range and try again.")}
           </p>
         </div>
       </div>
@@ -587,11 +595,11 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
 
   return (
     <div className={`flex h-full flex-col overflow-auto ${SERIES_VARS} ${className ?? ""}`}>
-      {header}
+      {!compact && header}
 
       {/* Stat row — server-computed values ONLY. The agent quotes these same
           numbers in prose; re-deriving them here is how the two disagree. */}
-      <div data-testid="series-stats" className="grid grid-cols-3 gap-2 px-4 pt-3">
+      {!compact && <div data-testid="series-stats" className="grid grid-cols-3 gap-2 px-4 pt-3">
         {(
           [
             ["Average", stats?.avg],
@@ -610,7 +618,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
             </div>
           </div>
         ))}
-      </div>
+      </div>}
 
       {/* Chart */}
       <div className="relative px-4 py-3">
@@ -684,7 +692,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
                 textAnchor={i === 0 ? "start" : i === xs.length - 1 ? "end" : "middle"}
                 className="fill-muted-foreground text-[10px] tabular-nums"
               >
-                {fmtX(xs[i], xDecl?.type, chart.xSpan)}
+                {xDecl?.type === "category" ? String(rows[i]?.[String(xDecl?.key)] ?? "—") : fmtX(xs[i], xDecl?.type, chart.xSpan)}
               </text>
             ))}
 
@@ -765,6 +773,9 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
                 />
               );
             })}
+          {onSelectRow && rows.map((row, i) => (
+            <rect key={i} x={chart.px(xs[i]) - 8} y={M.top} width={16} height={PLOT_H} fill="transparent" tabIndex={0} role="button" aria-label={`筛选 ${String(row[String(xDecl?.key)] ?? i)}`} onClick={() => onSelectRow(row)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectRow(row); } }} />
+          ))}
         </svg>
 
         {hoverRow != null && (
@@ -776,7 +787,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
               transform: chart.px(xs[hoverRow]) > W / 2 ? "translateX(-105%)" : "translateX(5%)",
             }}
           >
-            <div className="font-medium text-foreground">{fmtX(xs[hoverRow], xDecl?.type, 0)}</div>
+            <div className="font-medium text-foreground">{xDecl?.type === "category" ? String(rows[hoverRow]?.[String(xDecl?.key)] ?? "—") : fmtX(xs[hoverRow], xDecl?.type, 0)}</div>
             {chart.paths.map((s) => (
               <div key={s.key} className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} aria-hidden="true" />
@@ -819,7 +830,7 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
       {/* Table + CSV — beneath the chart. Columns are the DECLARED axes (never
           a hardcoded column name), sortable by click, rendered through a
           fixed-height window so the DOM stays small even at the 1000-row cap. */}
-      <div className="flex flex-col gap-2 px-4 pb-3 pt-2">
+      {!compact && <div className="flex flex-col gap-2 px-4 pb-3 pt-2">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rows</h3>
           <button
@@ -890,9 +901,9 @@ export function SeriesArtefactTab({ surfaceId, className }: { surfaceId: string;
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
-      {citation}
+      {!compact && citation}
     </div>
   );
 }

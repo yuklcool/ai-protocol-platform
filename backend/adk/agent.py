@@ -58,6 +58,9 @@ from adk import (
     a2ui_entsoe_render as _a2ui_entsoe_render,  # noqa: F401 — registers the ENTSO-E prices tab mapping + offload exemption (6.12)
 )
 from adk import (
+    a2ui_lighting_render as _a2ui_lighting_render,  # noqa: F401 — read-only lighting query mapping
+)
+from adk import (
     a2ui_maps_render as _a2ui_maps_render,  # noqa: F401 — registers the Maps Grounding Lite attribution mapping + offload exemption (6.23). NOT optional: attribution is a licence condition.
 )
 from adk import (

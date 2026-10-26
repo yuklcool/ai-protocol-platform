@@ -65,6 +65,7 @@ import { ObligationArtefactTab } from "@/components/workspace/ObligationArtefact
 import { SourcesArtefactTab } from "@/components/workspace/SourcesArtefactTab";
 import { ClausesArtefactTab } from "@/components/workspace/ClausesArtefactTab";
 import { SeriesArtefactTab } from "@/components/workspace/SeriesArtefactTab";
+import { LightingArtefactTab } from "@/components/workspace/LightingArtefactTab";
 import { shouldShowCompareLauncher } from "@/lib/compareLauncher";
 import { DocumentPanel } from "@/components/document/DocumentPanel";
 import { LatencyHUD } from "@/components/dev/LatencyHUD";
@@ -276,6 +277,7 @@ function WorkbenchPane({
   onOpenLauncherDoc,
   onOpenSource,
   onSurfaceChatMessage,
+  onDraftMessage,
   compareOptedIn,
   allowCompareLauncher,
   allowObligationsLauncher,
@@ -366,6 +368,7 @@ function WorkbenchPane({
   docTabs: DocTabData[];
   /** `chat:send` surface action → post a chat message (diff "Explain this"). */
   onSurfaceChatMessage?: (text: string) => void;
+  onDraftMessage?: (text: string) => void;
   /** Override the Workbench's default 4-breakpoint width scale. Pass ""
    * to let the parent control the width (used when WorkbenchPane sits
    * inside the resizable chat-row introduced 2026-06-11). */
@@ -539,6 +542,8 @@ function WorkbenchPane({
         // 6.11: PPA clause extraction renders as a professional table with
         // confidence badges, from the surface data model. See ClausesArtefactTab.
         <ClausesArtefactTab surfaceId={a.surfaceId} className="h-full" />
+      ) : a.kind === "lighting" ? (
+        <LightingArtefactTab surfaceId={a.surfaceId} sessionId={sessionId} skillId={skillId} onDraftMessage={onDraftMessage} busy={Boolean(actionRunning) || isThinking} />
       ) : a.kind === "prices" ? (
         // 6.12 PRICES-WORKSPACE M4: a market price query renders as a chart +
         // sortable table + CSV, read from the DECLARED SERIES envelope in the
@@ -931,6 +936,7 @@ function ChatShellContent({
   // content AND the user hasn't collapsed it. When collapsed, the thin
   // expand strip renders instead.
   const workbenchVisible = workbenchHasContent && !workbenchCollapsed;
+  const lightingResultVisible = workbenchVisible && workbenchTabId.startsWith("lighting:");
 
   // Session routing: read ?session= from URL, allow programmatic navigation
   // Effective thread id — the value threaded to the surface mounts
@@ -1580,20 +1586,22 @@ function ChatShellContent({
     {/* SkillsBar (top nav) lifted to ShellChrome in ShellRouter so every shell
         mode shares it — see components/shells/ShellChrome.tsx. This shell body
         fills the height remaining below that bar. */}
-    <main className="chat-shell flex min-h-0 flex-1 flex-col overflow-hidden">
-      <DocTabsBar
-        tabs={openTabs}
-        activeTabId={activeTabId}
-        showBrowser={showDocBrowser}
-        onSelect={(id) => {
-          setActiveTabId(id);
-          setWorkbenchTabId("document");
-          setWorkbenchCollapsed(false);
-        }}
-        onClose={handleTabClose}
-        onToggleInclude={handleTabToggleInclude}
-        onToggleBrowser={toggleDocBrowser}
-      />
+    <main className={`chat-shell flex min-h-0 flex-1 flex-col overflow-hidden ${lightingResultVisible ? "lighting-result-visible" : ""}`}>
+      <div className="chat-resource-bar shrink-0">
+        <DocTabsBar
+          tabs={openTabs}
+          activeTabId={activeTabId}
+          showBrowser={showDocBrowser}
+          onSelect={(id) => {
+            setActiveTabId(id);
+            setWorkbenchTabId("document");
+            setWorkbenchCollapsed(false);
+          }}
+          onClose={handleTabClose}
+          onToggleInclude={handleTabToggleInclude}
+          onToggleBrowser={toggleDocBrowser}
+        />
+      </div>
 
       <div className="workspace-row relative flex min-h-0 flex-1 overflow-hidden" data-workspace-row>
         <ChatSidebar open={showDocBrowser} onOpenChange={setDocBrowserOpen}
@@ -1785,13 +1793,14 @@ function ChatShellContent({
           </button>
         )}
         <WorkbenchPane
-          workbenchClassName=""
+          workbenchClassName="min-h-0 flex-1"
           onContentChange={setWorkbenchHasContent}
           activeTabId={activeTabId}
           sessionId={sessionId ?? agentSessionId}
           skillId={skillId}
           userUid={user.uid}
           onSurfaceChatMessage={handleSurfaceChatMessage}
+          onDraftMessage={(text) => { setDraft(current => text || current); setWorkbenchCollapsed(true); requestAnimationFrame(() => draftRef.current?.focus()); }}
           workbenchTabId={workbenchTabId}
           onWorkbenchTabChange={setWorkbenchTabId}
           toolCalls={mergedToolCalls}

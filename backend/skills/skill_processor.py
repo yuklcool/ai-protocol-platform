@@ -193,6 +193,7 @@ async def process_skill_request(
     # when the user returns to ordinary chat.
     initial_state: dict[str, Any] = {
         "a2ui_action_trigger": None,
+        "lighting_query_action": None,
         "a2ui_surface_state": a2ui_surface_state or {},
     }
     initial_state["document_ids"] = list(document_ids or [])

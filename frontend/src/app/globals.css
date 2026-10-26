@@ -962,6 +962,16 @@
   .workspace-row > [role="separator"] {
     display: none;
   }
+  .lighting-result-visible > .chat-resource-bar,
+  .lighting-result-visible .workspace-row > .chat-pane {
+    display: none;
+  }
+  .lighting-result-visible .workspace-row > .workbench-pane-visible {
+    flex: 1 1 0% !important;
+    min-height: 0;
+    border-top: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
   .page-container :is(button, select),
   .page-container :is(.button-primary, .button-secondary, .button-ghost, .button-danger),
   .chat-shell :is(.button-primary, .button-secondary, .button-ghost),

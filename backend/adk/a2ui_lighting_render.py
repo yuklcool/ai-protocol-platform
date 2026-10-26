@@ -1,0 +1,105 @@
+"""Authorized query_lighting MCP results → v0.9 Basic fallback + host result.
+
+The rich table/chart is host-rendered from a declared data model, just like
+series artefacts. No custom catalog, model-authored HTML or new channel.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from pydantic import ValidationError
+
+from adk.a2ui_ppa_render import _Tree
+from adk.a2ui_result_render import register
+from lighting.results import ACTION_NAME, QUERY_TOOL, TITLES, LightingResult, normalize
+
+PROVENANCE_KEY = "temp:_lighting_mcp_server"
+
+
+def unwrap(result: Any) -> dict:
+    """Bounded MCP/result/text envelopes; errors never fall through to data."""
+    for _ in range(8):
+        if isinstance(result, str):
+            result = json.loads(result)
+        elif isinstance(result, dict):
+            if result.get("isError") or (result.get("error") and "schema_version" not in result):
+                raise ValueError("MCP 查询失败,请核对连接与授权后显式重试。")
+            if result.get("schema_version") == "lighting-query/v1":
+                return result
+            if "structuredContent" in result and result["structuredContent"] is not None:
+                result = result["structuredContent"]
+            elif set(result) == {"result"}:
+                result = result["result"]
+            elif isinstance(result.get("content"), list):
+                texts = [
+                    item["text"]
+                    for item in result["content"]
+                    if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str)
+                ]
+                if len(texts) != 1:
+                    raise ValueError("查询返回多个文本块,无法确定结构化结果。")
+                result = texts[0]
+            else:
+                break
+        else:
+            break
+    raise ValueError("查询结果不符合 lighting-query/v1,不能据此判断正常。")
+
+
+def _root(result: Any, tool_context: Any = None) -> dict:
+    try:
+        if len(json.dumps(result, ensure_ascii=False)) > 2_000_000:
+            raise ValueError("lighting result exceeds the bounded UI payload")
+        root = normalize(LightingResult.model_validate(unwrap(result))).model_dump(mode="json")
+        root.update(kind="lighting", title=TITLES[root["scene"]])
+        state = getattr(tool_context, "state", None)
+        root["server_id"] = state.get(PROVENANCE_KEY) if state is not None else None
+        return root
+    except (ValidationError, ValueError, TypeError, KeyError):
+        return {
+            "kind": "lighting",
+            "title": "照明查询",
+            "status": "error",
+            "error": "照明查询失败或返回格式不完整,请核对数据源、时间口径及授权后重新查询。",
+            "actions": [],
+        }
+
+
+def lighting_to_a2ui(result: Any, tool_context: Any = None) -> list[dict]:
+    root = _root(result, tool_context)
+    tree = _Tree()
+    children = [tree.text(root["title"], variant="h5")]
+    children.append(tree.text(root.get("error") or root["summary"]))
+    query = root.get("query")
+    if query:
+        children.append(
+            tree.text(
+                f"{query['window']['start']} → {query['window']['end']} · {query['timezone']} · {query['coverage']}"
+            )
+        )
+    for action in root["actions"]:
+        children.append(
+            tree.button(action["label"], {"event": {"name": ACTION_NAME, "context": {"actionId": action["id"]}}})
+        )
+    tree.root(children)
+    messages = tree.messages()
+    messages.append({"version": "v0.9", "updateDataModel": {"surfaceId": "workspace", "path": "/", "value": root}})
+    return messages
+
+
+def _surface(result: Any) -> str:
+    try:
+        return "lighting:" + LightingResult.model_validate(unwrap(result)).query.id
+    except (ValidationError, ValueError, TypeError):
+        return "lighting:error"
+
+
+register(
+    lighting_to_a2ui,
+    tool_names=[QUERY_TOOL],
+    name="lighting_query",
+    surface=_surface,
+    artifact_meta=lambda result: {"kind": "lighting", "title": _root(result)["title"]},
+)

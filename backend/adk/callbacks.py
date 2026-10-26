@@ -131,6 +131,21 @@ def make_permission_enforcer(
             logger.info("perm: blocked %s for %s (tool=%s)", user_email, tool_context.agent_name, tool_name)
             raise ToolPermissionDenied(user_email, tool_name)
 
+        trigger = tool_context.state.get("a2ui_action_trigger") or {}
+        if trigger.get("name") == "run:lighting.query":
+            # An action can reference only the source MCP service and the
+            # server-resolved request. Neither model arguments nor a browser
+            # snapshot may replace device/time/relationship context.
+            canonical = tool_context.state.get("lighting_query_action")
+            if (
+                tool_name != "query_lighting"
+                or not isinstance(canonical, dict)
+                or canonical.get("server_id") != server_id
+            ):
+                raise ToolPermissionDenied(user_email, tool_name)
+            args.clear()
+            args["request"] = canonical["request"]
+
         if not server_id and tool_name in {
             "get_document_content",
             "read_attached_document",
@@ -847,6 +862,17 @@ def make_a2ui_result_emitter() -> Callable[..., Any]:
             if not isinstance(tool_name, str) or not tool_name:
                 return None
             typed = _coerce_typed_result(tool_response)
+            if tool_name == "query_lighting":
+                from adk.a2ui_lighting_render import PROVENANCE_KEY
+                from tools.mcp.registry import SERVER_ID_ATTR
+
+                server_id = getattr(tool, SERVER_ID_ATTR, None)
+                if not isinstance(server_id, str) or not server_id:
+                    return None  # A model-authored FunctionTool is not a data source.
+                tool_context.state[PROVENANCE_KEY] = server_id
+                # Free-text MCP errors must still produce a visible failure.
+                if typed is None:
+                    typed = {"error": "invalid_lighting_response"}
             if typed is None:
                 # Some mapped tools (the web/enterprise search AgentTools) return
                 # free TEXT but carry renderable side-data in tool_context.state

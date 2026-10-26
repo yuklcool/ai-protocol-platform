@@ -141,6 +141,8 @@ async def post_surface_action(
 
     # Gate 7: size cap
     size_bytes = _enforce_size_cap(body.action.context)
+    if body.surface_id.startswith("lighting:") or body.action.name.startswith("run:lighting."):
+        raise HTTPException(422, "照明查询动作须通过已授权的 action-run 链路执行。")
 
     # Build the namespaced state key. Two levels:
     # `a2ui_surface_context.{surfaceId}.lastAction`. Storing under

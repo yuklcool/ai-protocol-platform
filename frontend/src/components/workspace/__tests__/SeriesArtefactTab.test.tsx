@@ -43,6 +43,27 @@ function pathYs(d: string): number[] {
 }
 
 describe("SeriesArtefactTab (6.12 M2)", () => {
+  it("keeps numeric category labels in row order across midnight", () => {
+    setData({
+      kind: "series",
+      x: { key: "hour", label: "Hour", type: "category" },
+      y: [{ key: "count", label: "Alarms" }],
+      rows: ["18", "19", "23", "00", "01", "07"].map(hour => ({ hour, count: 1 })),
+    });
+    render(<SeriesArtefactTab surfaceId="night" />);
+    const d = screen.getByTestId("series-path-count").getAttribute("d") || "";
+    const xs = [...d.matchAll(/[ML]\s*([\d.-]+)\s+[\d.-]+/g)].map(match => Number(match[1]));
+    expect(xs).toHaveLength(6);
+    for (let i = 1; i < xs.length; i++) {
+      expect(xs[i] - xs[i - 1]).toBeCloseTo(xs[1] - xs[0], 1);
+      expect(xs[i]).toBeGreaterThan(xs[i - 1]);
+    }
+    const svg = screen.getByRole("img", { name: /line chart of alarms/i });
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({ left: 0, width: 720 } as DOMRect);
+    fireEvent(svg, new MouseEvent("pointermove", { bubbles: true, clientX: xs[3] }));
+    expect(screen.getByTestId("series-tooltip")).toHaveTextContent("00");
+  });
+
   it("charts a path for the declared y key against the declared x", () => {
     setData(pricesFixture());
     render(<SeriesArtefactTab surfaceId="entsoe_prices" />);

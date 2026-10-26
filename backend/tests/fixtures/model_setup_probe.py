@@ -8,6 +8,40 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 EVIDENCE = []
 
 
+def lighting_reply(messages):
+    """Deterministic model selection; facts still come from the real MCP call."""
+    user_index = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "user"), -1)
+    if user_index < 0:
+        return None
+    text = str(messages[user_index].get("content", ""))
+    marker = re.search(r"LIGHTING-([a-z_]+)-[a-f0-9]{8}", text)
+    action = "run:lighting.query" in text
+    if not marker and not action:
+        return None
+    if any(message.get("role") == "tool" for message in messages[user_index + 1 :]):
+        return {
+            "role": "assistant",
+            "content": "合成查询已返回。请查看历史证据与缺口,不能据此认定生产运行正常。",
+        }, "stop"
+    scene = marker.group(1) if marker else "night"
+    request = {"scene": scene}
+    if scene.startswith("energy_"):
+        request = {"scene": "energy", "energy_view": scene.removeprefix("energy_")}
+    if scene in {"empty", "error"}:
+        request = {"scene": "night", "fixture_status": scene}
+    return {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_lighting",
+                "type": "function",
+                "function": {"name": "query_lighting", "arguments": json.dumps({"request": request})},
+            }
+        ],
+    }, "tool_calls"
+
+
 def plan_reply(messages):
     """Deterministic function calls through the REAL ADK tool/callback pipeline."""
     user_index = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "user"), -1)
@@ -117,6 +151,9 @@ class Handler(BaseHTTPRequestHandler):
         plan = plan_reply(body.get("messages", []))
         if plan:
             message, finish = plan
+        lighting = lighting_reply(body.get("messages", []))
+        if lighting:
+            message, finish = lighting
         EVIDENCE.append(
             {
                 "model": body["model"],

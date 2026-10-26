@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - .github/release-candidate.json
+      - backend/lighting/**
+      - backend/adk/a2ui_lighting_render.py
+      - backend/tests/fixtures/lighting*.py
+      - backend/tests/unit/test_lighting_results.py
+      - frontend/src/lib/lighting.ts
+      - frontend/e2e/lighting-live.spec.js
       - frontend/src/app/admin/model-providers/**
       - frontend/src/app/skills/studio/**
       - frontend/src/components/studio/**
@@ -96,6 +102,12 @@ on:
     branches: [main]
     paths:
       - .github/release-candidate.json
+      - backend/lighting/**
+      - backend/adk/a2ui_lighting_render.py
+      - backend/tests/fixtures/lighting*.py
+      - backend/tests/unit/test_lighting_results.py
+      - frontend/src/lib/lighting.ts
+      - frontend/e2e/lighting-live.spec.js
       - frontend/src/app/admin/model-providers/**
       - frontend/src/app/skills/studio/**
       - frontend/src/components/studio/**
@@ -352,6 +364,19 @@ jobs:
             -e SESSION_SEARCH_E2E_RUN_ID=search-${{ github.run_id }} \
             backend uv run python -m tests.support.seed_session_search
 
+      - name: Start isolated read-only lighting MCP fixture
+        run: |
+          docker compose run -d --name lighting-mcp --no-deps \
+            -p 127.0.0.1:7957:8090 \
+            -v "$PWD/backend/tests:/app/tests:ro" \
+            backend uv run python -m tests.fixtures.lighting_mcp
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:7957/evidence >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs lighting-mcp
+          exit 1
+
       - name: Install Chromium acceptance runner
         working-directory: frontend
         run: |
@@ -367,7 +392,7 @@ jobs:
           MODEL_STUDIO_E2E_RUN_ID: studio-${{ github.run_id }}
           MODEL_STUDIO_FRONTEND_URL: http://localhost:3456
           MODEL_STUDIO_BACKEND_URL: http://127.0.0.1:1956
-        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/model-setup-live.spec.js e2e/chat-files-live.spec.js e2e/ui-responsive-live.spec.js e2e/session-search-live.spec.js e2e/in-chat-execution.spec.js e2e/task-plan-live.spec.js e2e/v3-workspace-live.spec.js e2e/chat-layout-live.spec.js e2e/http-selfhost-live.spec.js --reporter=line --workers=1
+        run: npx playwright test e2e/model-provider-studio-live.spec.js e2e/root-console-live.spec.js e2e/model-setup-live.spec.js e2e/chat-files-live.spec.js e2e/ui-responsive-live.spec.js e2e/session-search-live.spec.js e2e/in-chat-execution.spec.js e2e/task-plan-live.spec.js e2e/v3-workspace-live.spec.js e2e/chat-layout-live.spec.js e2e/lighting-live.spec.js e2e/http-selfhost-live.spec.js --reporter=line --workers=1
 
       - name: Preserve model Root and Skill browser evidence
         if: always()
@@ -386,4 +411,5 @@ jobs:
         if: always()
         run: |
           docker rm -f model-setup-probe || true
+          docker rm -f lighting-mcp || true
           docker compose down -v --remove-orphans

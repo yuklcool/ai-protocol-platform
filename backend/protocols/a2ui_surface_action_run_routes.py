@@ -363,6 +363,17 @@ async def post_surface_action_run(
     # Gate 8: per-skill opt-in for action-triggered runs (new)
     _enforce_root_interaction(idx, user, request, "allow_action_triggered_runs")
 
+    from lighting.actions import validate_action
+
+    lighting_action = await validate_action(idx, user, body.surface_id, body.action.name, body.action.context)
+    if lighting_action:
+        if not body.request_id:
+            raise HTTPException(422, "照明查询动作需要 requestId 以防止传输重放。")
+        # Discard the entire client snapshot for these read-only queries.
+        # A saved opaque action id is the only client-supplied input.
+        body.forwarded_props = None
+        body.action.context = lighting_action["request"]
+
     # 表单触发的轮次也读取已保存的当前选择,不能继承 ADK 的上一轮附件。
     from tools.documents.access import DocumentUnavailable, validate_selection
 
@@ -380,6 +391,7 @@ async def post_surface_action_run(
     agent = _resolve_agent(run_skill_id, user, request, idx)
     agui_agent = build_agui_adk_agent(agent, user_id=user.uid, app_name=session_app_name)
     run_input = _build_run_input(session_id, body)
+    run_input.state["lighting_query_action"] = lighting_action
     run_input.state["document_ids"] = selected_documents
     from protocols.action_claims import claim_action
 
