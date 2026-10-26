@@ -113,6 +113,9 @@ class Query(Contract):
                 local = stamp.astimezone(zone)
                 if any((local.hour, local.minute, local.second, local.microsecond)):
                     raise ValueError("daily boundaries must be local midnight")
+            latest_complete_end = self.generated_at.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
+            if self.window.end > latest_complete_end:
+                raise ValueError("daily queries cannot include an unfinished natural day")
         return self
 
 
@@ -218,6 +221,14 @@ class LightingResult(Contract):
                 raise ValueError("energy requires an explicit view")
             if (self.energy_view == "night") != (self.query.basis == "night"):
                 raise ValueError("night energy and daily views cannot mix time bases")
+            days = {"week": 7, "saving": 7, "volatility": 30}.get(self.energy_view)
+            if days is not None:
+                zone = ZoneInfo(self.query.timezone)
+                actual_days = (
+                    self.query.window.end.astimezone(zone).date() - self.query.window.start.astimezone(zone).date()
+                ).days
+                if actual_days != days:
+                    raise ValueError("energy view and natural-day range do not agree")
         if self.report:
             expected = (
                 RTU_REPORT if self.scene == "rtu" else LAMP_REPORT if self.scene in {"night", "lamp_alarms"} else None

@@ -11,7 +11,8 @@ def fixture(scene="night", view="night", *, query_id=None, status="success"):
     now = datetime.now(ZoneInfo("Asia/Shanghai"))
     day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     daily = scene == "reconcile" or (scene == "energy" and view != "night")
-    start, end = (day - timedelta(days=1), day) if daily else (day - timedelta(hours=6), day + timedelta(hours=7))
+    days = {"week": 7, "saving": 7, "volatility": 30}.get(view, 1) if scene == "energy" else 1
+    start, end = (day - timedelta(days=days), day) if daily else (day - timedelta(hours=6), day + timedelta(hours=7))
 
     def stamp(value):
         return value.isoformat()

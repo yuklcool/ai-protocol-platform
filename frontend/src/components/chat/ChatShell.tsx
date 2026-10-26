@@ -1797,7 +1797,7 @@ function ChatShellContent({
           skillId={skillId}
           userUid={user.uid}
           onSurfaceChatMessage={handleSurfaceChatMessage}
-          onDraftMessage={(text) => { setDraft(text); setWorkbenchCollapsed(true); draftRef.current?.focus(); }}
+          onDraftMessage={(text) => { setDraft(text); setWorkbenchCollapsed(true); requestAnimationFrame(() => draftRef.current?.focus()); }}
           workbenchTabId={workbenchTabId}
           onWorkbenchTabChange={setWorkbenchTabId}
           toolCalls={mergedToolCalls}

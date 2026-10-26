@@ -165,6 +165,16 @@ def test_day_report_and_fixed_report_template_are_validated():
         LightingResult.model_validate(result)
 
 
+@pytest.mark.parametrize("view,days", [("week", 7), ("saving", 7), ("volatility", 30)])
+def test_energy_views_require_complete_natural_day_ranges(view, days):
+    result = fixture("energy", view)
+    parsed = LightingResult.model_validate(result)
+    assert (parsed.query.window.end - parsed.query.window.start).days == days
+    result["query"]["window"]["start"] = (parsed.query.window.end - timedelta(days=1)).isoformat()
+    with pytest.raises(ValidationError):
+        LightingResult.model_validate(result)
+
+
 def test_specialized_alarm_evidence_is_not_inferred_from_one_reading():
     result = root(fixture("rtu_alarms"))
     assert any("trip_record" in gap for gap in result["rows"][0]["missing"])

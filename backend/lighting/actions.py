@@ -59,6 +59,8 @@ def resolve_saved_action(saved: dict, context: dict | None, *, now: datetime | N
     }.get(action.intent)
     if required and (row is None or getattr(row, required) is None):
         raise HTTPException(409, "追查缺少必要设备或报警标识,请重新查询。")
+    if action.intent in {"compare_circuit", "inspect_rtu_alarm"} and (row is None or not row.rtu_id):
+        raise HTTPException(409, "回路与报警追查需要明确的 RTU 归属。")
     request = {
         "intent": action.intent,
         "source_query_id": result.query.id,
