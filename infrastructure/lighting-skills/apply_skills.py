@@ -11,7 +11,7 @@ ROOT = Path('/opt/ai-protocol-platform')
 SOURCE = Path(__file__).resolve().parents[2]
 
 
-def main(commit):
+def main(commit, skills_commit):
     container = json.loads(subprocess.check_output(['docker', 'inspect', 'ai-protocol-platform-backend-1']))[0]
     assert container['Config']['Labels']['org.opencontainers.image.revision'] == commit
     env = dict(item.split('=', 1) for item in container['Config']['Env'] if '=' in item)
@@ -44,7 +44,8 @@ def main(commit):
         records.append({'skillId': old['skillId'], 'slug': source.parent.name})
     replacement = '''### 照明六场景原型技能
 
-所有照明业务查询先加载 sql-safe-query 和相关 lighting-* 技能，根据当前对话检索可信案例、核实口径、动态生成只读 SQL。SQL 唯一执行入口是 sql_query_readonly，不调用 query_lighting 或固定场景查询服务。
+所有照明业务查询先加载 sql-safe-query 和相关 lighting-* 技能，根据当前对话检索可信案例、核实口径、动态生成只读 SQL。案例查找只使用技能指定的 find/read/grep，不调用 search；无可信案例时用 sql_retrieve_examples。SQL 唯一执行入口是 sql_query_readonly，不调用 query_lighting 或固定场景查询服务。
+展示时间字段保留真实时区，generated_at 直接用 CURRENT_TIMESTAMP 写入 JSON，不用 AT TIME ZONE 后拼 OF 或 to_char 造偏移。
 只要数字时返回实际聚合结果；需要原型页面时，按业务技能 runtime.md 由本次动态 SQL 返回 lighting-query/v1 payload，平台从真实 SQL 回包自动展示，不调用展示工具重新填写事实。先完成安全查询，再处理展示；查询失败不能用零值或编造卡片掩盖。
 保留安全 SQL 技能的案例复用与沉淀流程；交互追查或用户明确要求只读时不写案例。时间、范围、报警状态、分组和指标都以当前对话及可信业务口径为准，不能用固定模板覆盖用户条件。未核实的历史恢复、在线标准和历史归属明确留缺口。
 '''
@@ -63,10 +64,10 @@ def main(commit):
         api('/api/admin/mcp-servers/lighting-query', 'PUT', {**body, 'enabled': False})
     record_path = ROOT / 'lighting-a2ui-deployment.json'
     record = json.loads(record_path.read_text())
-    record.update(commit=commit, skills=records, query_mode='sql-safe-query', status='awaiting-github-acceptance')
+    record.update(commit=commit, skills_commit=skills_commit, skills=records, query_mode='sql-safe-query', status='awaiting-github-acceptance')
     record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2))
     print('Six Skills now use dynamic safe SQL; legacy query service unbound and disabled.')
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2])

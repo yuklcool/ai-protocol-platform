@@ -36,12 +36,12 @@ def stream(path, data):
         for line in result:
             if line.startswith(b'data: '):
                 events.append(json.loads(line[6:]))
-    assert any(event.get('type') == 'RUN_FINISHED' for event in events), 'run_incomplete'
-    assert not any(event.get('type') == 'RUN_ERROR' for event in events), 'agent_run_error'
     return events
 
 
 def inspect(events, expected_scene, skills, *, followup=False):
+    assert not any(event.get('type') == 'RUN_ERROR' for event in events), 'agent_run_error'
+    assert any(event.get('type') == 'RUN_FINISHED' for event in events), 'run_incomplete'
     calls = {}
     for event in events:
         call_id = event.get('toolCallId')
@@ -96,7 +96,7 @@ def main():
     record_path = ROOT / 'lighting-a2ui-deployment.json'
     record = json.loads(record_path.read_text())
     assert os.environ.get('GITHUB_ACTIONS') == 'true', 'github_only'
-    assert os.environ.get('GITHUB_SHA') == record['commit'], 'deployed_commit_mismatch'
+    assert os.environ.get('GITHUB_SHA') == record['skills_commit'], 'deployed_skills_commit_mismatch'
     container = json.loads(subprocess.check_output(['docker', 'inspect', 'ai-protocol-platform-backend-1']))[0]
     assert container['Config']['Labels']['org.opencontainers.image.revision'] == record['commit'], 'image_mismatch'
     env = dict(item.split('=', 1) for item in container['Config']['Env'] if '=' in item)
