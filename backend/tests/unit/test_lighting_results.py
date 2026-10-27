@@ -443,11 +443,8 @@ async def test_model_receives_contract_errors_and_can_correct_the_dynamic_query(
     ctx = SimpleNamespace(state={}, invocation_id="contract-repair")
     payload = fixture()
     payload["rows"][0]["anchor"] = "2026-10-25T22:00:00"
-    response = {
-        "structuredContent": {
-            "result": {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
-        }
-    }
+    sql_result = {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
+    response = {"structuredContent": {"result": sql_result}}
     args = {"sql": "SELECT 'lighting-query/v1'"}
     rewritten = await callback(tool=tool, args=args, tool_context=ctx, tool_response=response)
     assert rewritten["result"] is response
