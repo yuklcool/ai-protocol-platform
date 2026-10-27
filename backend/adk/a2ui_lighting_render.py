@@ -66,15 +66,15 @@ def presentation_feedback(result: Any) -> dict | None:
         return {
             "errors": exc.errors(include_input=False, include_context=False, include_url=False)[:20],
             "instruction": (
-                "SQL 已返回，但照明原型契约校验失败，页面尚未成功展示。"
-                "按已加载技能 presentation.schema.json 和 runtime.md 修正本次动态 SQL，"
-                "仅通过 sql_query_readonly 重查；不得修改业务事实、猜时区或编造缺失值。"
+                "SQL 已返回,但照明原型契约校验失败,页面尚未成功展示。"
+                "按已加载技能 presentation.schema.json 和 runtime.md 修正本次动态 SQL,"
+                "仅通过 sql_query_readonly 重查;不得修改业务事实、猜时区或编造缺失值。"
             ),
         }
     except (ValueError, TypeError, KeyError):
         return {
             "errors": [{"type": "invalid_presentation_payload"}],
-            "instruction": "照明原型尚未成功展示。检查原始 SQL 回包、截断状态和唯一 payload，按安全 SQL 技能修正查询。",
+            "instruction": "照明原型尚未成功展示。检查原始 SQL 回包、截断状态和唯一 payload,按安全 SQL 技能修正查询。",
         }
     return None
 
