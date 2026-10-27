@@ -8,11 +8,11 @@ from db.models.root_agent import RootAgentConfig
 
 
 def test_server_account_restriction_applies_to_agent_and_direct_mcp_calls():
-    config = RootAgentConfig(mcpServers=["lighting-query", "shared"])
+    config = RootAgentConfig(mcpServers=["mcp-sql-http", "shared"])
     repository = MagicMock()
     repository.get_document.side_effect = lambda collection, ref: {
         "enabled": True,
-        **({"allowedUserIds": ["owner"]} if ref == "lighting-query" else {}),
+        **({"allowedUserIds": ["owner"]} if ref == "mcp-sql-http" else {}),
     }
     with (
         patch("auth.capability_access.refresh_authorization", side_effect=lambda user: user),
@@ -23,7 +23,7 @@ def test_server_account_restriction_applies_to_agent_and_direct_mcp_calls():
     ):
         owner = User(uid="owner", email="owner@example.com")
         other = User(uid="other", email="other@example.com")
-        assert authorized_root_config(config, owner).mcp_servers == ["lighting-query", "shared"]
+        assert authorized_root_config(config, owner).mcp_servers == ["mcp-sql-http", "shared"]
         assert authorized_root_config(config, other).mcp_servers == ["shared"]
-        assert mcp_call_allowed(owner, "lighting-query", "query_lighting")
-        assert not mcp_call_allowed(other, "lighting-query", "query_lighting")
+        assert mcp_call_allowed(owner, "mcp-sql-http", "sql_query_readonly")
+        assert not mcp_call_allowed(other, "mcp-sql-http", "sql_query_readonly")

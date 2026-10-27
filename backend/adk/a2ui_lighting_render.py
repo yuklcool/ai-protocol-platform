@@ -1,4 +1,4 @@
-"""Authorized query_lighting MCP results → v0.9 Basic fallback + host result.
+"""Authorized SQL MCP results → v0.9 Basic fallback + lighting workbench.
 
 The rich table/chart is host-rendered from a declared data model, just like
 series artefacts. No custom catalog, model-authored HTML or new channel.
@@ -28,7 +28,15 @@ def unwrap(result: Any) -> dict:
                 raise ValueError("MCP 查询失败,请核对连接与授权后显式重试。")
             if result.get("schema_version") == "lighting-query/v1":
                 return result
-            if "structuredContent" in result and result["structuredContent"] is not None:
+            if "ok" in result:
+                meta = result.get("meta")
+                if result["ok"] is not True or not isinstance(meta, dict) or meta.get("truncated") is not False:
+                    raise ValueError("SQL 查询失败或返回不完整。")
+                rows = result.get("rows")
+                if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+                    raise ValueError("照明展示查询必须返回唯一 payload。")
+                result = rows[0].get("payload")
+            elif "structuredContent" in result and result["structuredContent"] is not None:
                 result = result["structuredContent"]
             elif set(result) == {"result"}:
                 result = result["result"]
@@ -67,7 +75,13 @@ def _root(result: Any, tool_context: Any = None) -> dict:
         }
 
 
-def lighting_to_a2ui(result: Any, tool_context: Any = None) -> list[dict]:
+def lighting_to_a2ui(result: Any, tool_context: Any = None) -> list[dict] | None:
+    if tool_context is not None:
+        from adk.callbacks import A2UI_TOOL_ARGS_STATE_KEY
+
+        sql = tool_context.state.get(A2UI_TOOL_ARGS_STATE_KEY, {}).get("sql", "")
+        if not isinstance(sql, str) or "lighting-query/v1" not in sql:
+            return None  # Ordinary queries and schema checks do not open a lighting tab.
     root = _root(result, tool_context)
     tree = _Tree()
     children = [tree.text(root["title"], variant="h5")]

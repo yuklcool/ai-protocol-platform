@@ -1,10 +1,10 @@
 name: Lighting Skill adapter
 on:
   pull_request:
-    paths: ['skills/lighting-*/**', 'infrastructure/lighting-query-mcp/**', '.github/workflows/lighting-skill-adapter.yml']
+    paths: ['skills/lighting-*/**', 'infrastructure/lighting-skills/**', 'backend/lighting/**', 'backend/adk/**', 'backend/tests/fixtures/lighting*', 'backend/tests/unit/test_lighting*', '.github/workflows/lighting-skill-adapter.yml']
   push:
-    branches: [main, codex/lighting-a2ui-skills]
-    paths: ['skills/lighting-*/**', 'infrastructure/lighting-query-mcp/**', '.github/workflows/lighting-skill-adapter.yml']
+    branches: [main]
+    paths: ['skills/lighting-*/**', 'infrastructure/lighting-skills/**', 'backend/lighting/**', 'backend/adk/**', 'backend/tests/fixtures/lighting*', 'backend/tests/unit/test_lighting*', '.github/workflows/lighting-skill-adapter.yml']
   workflow_dispatch:
     inputs:
       verify_server:
@@ -13,7 +13,6 @@ on:
         default: false
 permissions:
   contents: read
-  packages: write
 jobs:
   lighting-skills:
     runs-on: ubuntu-latest
@@ -31,49 +30,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync --project backend --dev
-      - name: PostgreSQL fixed queries, business edges, MCP authorization and Skill packages
+      - name: Dynamic SQL results, six scene contracts and authorization
+        working-directory: backend
         env:
           LIGHTING_TEST_DATABASE_URL: postgres://lighting:disposable-ci-password@localhost:5432/lighting_ci
-        run: timeout --signal=TERM --kill-after=15s 180s uv run --project backend pytest infrastructure/lighting-query-mcp/test_service.py -vv -o faulthandler_timeout=30 -o log_cli=true -o log_cli_level=INFO
-  deployment-images:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/lighting-a2ui-skills'
-    needs: lighting-skills
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    strategy:
-      matrix:
-        image: [backend, frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
-        with:
-          context: ./${{ matrix.image }}
-          file: ./${{ matrix.image }}/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/yuklcool/ai-protocol-platform-${{ matrix.image }}:lighting-skills-${{ github.sha }}
-          build-args: |
-            SKIP_QUALITY_CHECKS=true
-            NEXT_PUBLIC_LOCAL_MODE=0
-            NEXT_PUBLIC_ENABLE_SKILL_STUDIO=true
-            NEXT_PUBLIC_AUTH_MODE=__aip_auth_mode_runtime__
-            NEXT_PUBLIC_MCP_SANDBOX_URL=https://mcp-sandbox.runtime.invalid
-            NEXT_PUBLIC_BRAND_APP_NAME=AI Protocol Platform
-          cache-from: type=gha,scope=${{ matrix.image }}-amd64
+          GOOGLE_CLOUD_PROJECT: test-project
+          AUTH_BACKEND: local-jwt
+          JWT_SIGNING_KEY: ci-test-only-signing-key-at-least-32-characters
+          DATA_BACKEND: memory
+          SESSION_BACKEND: memory
+          MEMORY_BACKEND: memory
+          OBJECT_STORAGE_BACKEND: local
+          ARTIFACT_BACKEND: memory
+          SELF_HOSTED_MODE: '1'
+          GOOGLE_GENAI_USE_VERTEXAI: 'false'
+          TRACE_EXPORT_ENABLED: '0'
+          CLOUD_LOGGING_ENABLED: '0'
+        run: uv run pytest tests/unit/test_lighting_results.py tests/unit/test_lighting_mcp_account_scope.py ../infrastructure/lighting-skills/test_dynamic_sql.py -q --tb=short
   deployment-acceptance:
-    if: github.event_name == 'workflow_dispatch' && inputs.verify_server
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.verify_server
     needs: lighting-skills
     runs-on: [self-hosted, lighting-a2ui-129-20261026]
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Real authorized deployment acceptance, no raw data in logs
-        run: python3 infrastructure/lighting-query-mcp/verify_live.py
+      - name: Real Agent, safety Skill, dynamic SQL and A2UI; no raw data in logs
+        run: python3 infrastructure/lighting-skills/verify_live.py

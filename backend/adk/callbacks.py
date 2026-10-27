@@ -133,18 +133,24 @@ def make_permission_enforcer(
 
         trigger = tool_context.state.get("a2ui_action_trigger") or {}
         if trigger.get("name") == "run:lighting.query":
-            # An action can reference only the source MCP service and the
-            # server-resolved request. Neither model arguments nor a browser
-            # snapshot may replace device/time/relationship context.
+            # Follow-ups use the safety Skill; only the original SQL service
+            # may execute their dynamically generated queries.
             canonical = tool_context.state.get("lighting_query_action")
             if (
-                tool_name != "query_lighting"
-                or not isinstance(canonical, dict)
-                or canonical.get("server_id") != server_id
+                not isinstance(canonical, dict)
+                or tool_name
+                not in {
+                    "load_skill",
+                    "find",
+                    "read",
+                    "grep",
+                    "sql_retrieve_examples",
+                    "sql_service_health",
+                    "sql_query_readonly",
+                }
+                or (tool_name == "sql_query_readonly" and canonical.get("server_id") != server_id)
             ):
                 raise ToolPermissionDenied(user_email, tool_name)
-            args.clear()
-            args["request"] = canonical["request"]
 
         if not server_id and tool_name in {
             "get_document_content",
@@ -862,7 +868,7 @@ def make_a2ui_result_emitter() -> Callable[..., Any]:
             if not isinstance(tool_name, str) or not tool_name:
                 return None
             typed = _coerce_typed_result(tool_response)
-            if tool_name == "query_lighting":
+            if tool_name == "sql_query_readonly":
                 from adk.a2ui_lighting_render import PROVENANCE_KEY
                 from tools.mcp.registry import SERVER_ID_ATTR
 

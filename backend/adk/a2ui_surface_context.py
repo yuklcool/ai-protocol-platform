@@ -183,11 +183,13 @@ def _format_action_trigger_clause(trigger: dict[str, Any]) -> str:
     component_id = trigger.get("componentId")
     if name == "run:lighting.query":
         return (
-            "The user explicitly requested a read-only lighting follow-up. Call the authorized "
-            "query_lighting MCP tool with request from this surface's server-validated lastAction.context. "
-            "Do not render or invent query results yourself. Device, alarm, time and membership context "
-            "are enforced server-side. Summarize the returned evidence conversationally; if the query "
-            "fails or the tool is unavailable, report that failure and do not claim normal operation."
+            "The user requested a read-only lighting follow-up. Load sql-safe-query and the relevant "
+            "lighting Skill. Read this surface's server-validated lastAction.context for device, scope, "
+            "time and intent, then retrieve applicable examples and generate SQL for this request. "
+            "Execute only through the authorized sql_query_readonly MCP tool; return the Skill's "
+            "lighting-query/v1 payload from that SQL so the workbench renders the actual result. "
+            "Do not call query_lighting, write cases, control devices or invent missing evidence. "
+            "If the query fails, report the failure and do not claim normal operation."
         )
     component_clause = f" on component `{component_id}`" if component_id else ""
     return (

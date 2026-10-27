@@ -29,6 +29,17 @@ def lighting_reply(messages):
         request = {"scene": "energy", "energy_view": scene.removeprefix("energy_")}
     if scene in {"empty", "error"}:
         request = {"scene": "night", "fixture_status": scene}
+    if action:
+        for message in messages:
+            body = str(message.get("content", ""))
+            for match in re.finditer(r'"context"\s*:\s*', body):
+                try:
+                    context, _ = json.JSONDecoder().raw_decode(body[match.end() :])
+                except ValueError:
+                    continue
+                if isinstance(context, dict) and "source_query_id" in context:
+                    request = context
+    sql = "/* fixture:" + json.dumps(request) + " */ SELECT 'lighting-query/v1'"
     return {
         "role": "assistant",
         "content": None,
@@ -36,7 +47,7 @@ def lighting_reply(messages):
             {
                 "id": "call_lighting",
                 "type": "function",
-                "function": {"name": "query_lighting", "arguments": json.dumps({"request": request})},
+                "function": {"name": "sql_query_readonly", "arguments": json.dumps({"sql": sql, "max_rows": 1})},
             }
         ],
     }, "tool_calls"

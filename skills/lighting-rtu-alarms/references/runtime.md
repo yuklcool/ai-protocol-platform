@@ -1,23 +1,60 @@
-# 平台运行契约
-
-来源：10.10.50.129 的 nanobot 业务技能，按 ai-protocol-platform v2.4.3 的六场景宿主适配。源目录不修改。原型：outputs/lighting-a2ui-2026-10-26/index.html；生产结果契约：lighting-query/v1。
+# 查询与原型展示契约
 
 ## 执行顺序
 
-Root 通过 load_skill 按需加载业务规则，调用获授权的 query_lighting。SQL、聚合、有效值过滤和基础计算在受控服务侧完成；仍经原 sql_query_readonly 执行，不接受模型自由SQL。服务结果经平台已有 after_tool_callback 自动生成 A2UI v0.9 与 Workbench 结果。不要输出旧 nanobot v0.9.1、另一个Catalog、任意HTML、自定义Table/Chart组件或伪造指标。
+1. 加载本业务技能和已绑定的 `sql-safe-query`。根据当前对话确认对象、指标、范围、时间、分组和追查意图；使用该技能的案例检索、Schema 核验和只读约束动态生成 SQL。
+2. SQL 的唯一执行工具是 `sql_query_readonly`。禁止调用 `query_lighting`，禁止使用固定场景服务替代安全 SQL 技能，不直连数据库，不使用 shell/exec，不执行设备控制。
+3. 只要数字或简单文字时直接执行紧凑聚合并回答。需要原型页面时，在本次动态 SQL 中将真实结果组织成下面的 JSON 对象，输出为唯一一行、唯一 `payload` 列，调用 `sql_query_readonly(sql=完整查询,max_rows=1,request_id=本次唯一标识)`。
+4. 平台从本次 SQL MCP 的成功回包自动生成六场景 A2UI 和 Workbench。无需也不得另调展示工具重填数值，不输出 A2UI JSON、HTML 或内部表字段。查询失败、截断或契约不完整不能视作正常或零报警。
+5. 查询成功后按 `sql-safe-query` 判断是否沉淀案例；交互按钮触发或用户明确只读验收时不写案例。查询和展示不绕过账号的 SQL 服务权限。
 
-首次请求可省略窗口，服务计算最近已完成的夜间18:00–07:00；日报取之前完整自然日。时间均 Asia/Shanghai，显式窗口要带+08:00。夜间最多48小时，日报最多31天；week/saving严格7天、volatility严格30天。默认返回200项，最多500项，范围统计由独立聚合取得，截断不冒充全量。
+## payload（展示元数据可用 SQL 常量，业务数值必须来自本次真实 SELECT）
 
-scope默认“全系统”。单灯场景支持精确RTU编号/名称、道路名、灯源编码或灯杆编码；RTU和日报场景支持精确RTU编号/名称。名称有歧义先确认，不按模糊相似名自动挑选。未匹配不能当作无异常。
+```json
+{
+  "schema_version":"lighting-query/v1",
+  "scene":"night",
+  "status":"partial",
+  "query":{
+    "id":"本次唯一ASCII短标识","scope":"用户确认的业务范围","timezone":"Asia/Shanghai",
+    "window":{"start":"带偏移的真实开始时间","end":"带偏移的真实结束时间"},
+    "cutoff":"真实截止时间","generated_at":"数据库当前带偏移时间",
+    "basis":"night","report_type":null,
+    "source":"授权照明数据查询","coverage":"实际范围与返回覆盖情况",
+    "filters":[],"missing":["本次确实缺失的证据"]
+  },
+  "summary":"本次查询的简短业务结论",
+  "metrics":[{"label":"业务指标名称","value":null,"unit":"","note":"缺失原因"}],
+  "columns":[{"key":"status","label":"状态","type":"text","unit":""}],
+  "rows":[{"id":"真实业务ID","values":{"status":"实际查询值"},"evidence":[],"missing":[],"relationship_verified":false}],
+  "row_count":0,"complete":false,"actions":[],"report":[]
+}
+```
 
-远端动作只使用返回的actionId，宿主与服务重建范围、锚点和窗口；不自行伪造动作。当前未证实历史挂载时，不提供跨回路/上下游按钮。四种能耗切换重新查询，不把夜间值挪作日报。清单筛选、证据查看和CSV为宿主本地读操作。恢复历史卡片不重放查询。
+这只是字段说明，不能执行或照抄其中占位符/示例行。实际 SQL 根据安全查询技能检索到的可信 Schema 和当前问题生成；不在程序中预写业务 SQL。可用 PostgreSQL `json_build_object`、`row_to_json`、`json_agg` 组织已查询事实。明细显式 LIMIT，范围总量和指标独立聚合，不能从截断明细外推；不要把所有历史数据和无关关联塞进一条扫描。SQL 本身必须含字面量 `lighting-query/v1`，健康检查和结构核验不加此展示契约。
 
-## 业务真实性
+`row_count` 是实际查询范围总量，必须≥返回行数；只有已确认总量等于返回行数时 complete=true。零记录用 empty 且 complete=true；非空但证据不足用 partial。不能为了通过契约编造数字或缺口。未查询到的指标用 null，业务字段只给实际查到的列。
 
-事实以本次工具回包为准。部分结果、空记录、错误、缺测、有效零值和截断分别表达。不得复制参考中的历史数值或设备名单充当本次数据。当前处理状态不等于历史恢复；当前台账不等于历史归属；有夜间样本不叫整晚在线。未知生产阈值、目标、相位映射、单位及保护动作不猜测。
+scene 为 night、lamp_alarms、rtu、rtu_alarms、energy、reconcile。energy 必须另带 energy_view=night/week/volatility/saving。night 使用实际照明夜间口径，daily 使用已完成自然日、report_type=D；week/saving严格7天，volatility严格30天。用户问其他范围则按实际问题查询，不能偷偷改成固定窗口；不符合固定视图时直接返回普通查询结果。
 
-标准场景调用失败时说明未完成，不自动改自由SQL补成貌似成功的同一结果。用户要求固定场景之外的查询，才加载既有sql-safe-query，遵循其检索、确认、只读执行规则，返回真实文本/表格；不能宣称已进入六场景宿主。
+## 原型字段
 
-仅提供运行分析和只读查询，不控制设备、消警、复电、下发参数、自动派单、写案例或承诺定时监控。默认不在业务回答显示SQL、表字段、内部地址或调试信息。平台未配置Word生成时仅提供正文或已有CSV，不承诺附件。
+- 单灯运行：行带 lamp_id；values 按已取得事实提供 lamp_code、pole、road、rtu_code、status、alarms、minutes、actual_kwh、rated_power、previous_kwh、previous_minutes、matched。在线、开灯、故障和巡测覆盖分别表述；能耗首末累计差不足两点、复位或缺测为 null。
+- RTU运行：行带 rtu_id；values 可含 rtu_code、name、last_report、status、voltage_a/b/c、current_a/b/c、is_succeeded。evidence 每项给 label/value/unit/at/source/note，失败采样不当有效零值。
+- 报警：行带 alarm_id 和查到的 lamp_id/rtu_id；values 可含 alarm_type、triggered_at、last_trigger、recorded_state、recorded_conduct_at、history_complete、restored_at、status_at_cutoff。历史恢复流水未核实则 history_complete=false、restored_at=null，不从末态倒推过去。当前未解除查询按实际当前状态执行，不强行改成历史窗口。
+- 能耗：values 可含 date、actual_kwh、previous_kwh、theoretical_kwh、recorded_rate、recorded_saving、source_records。日报仅D，重复日报不擅自选一条。30日上升需同时≥50kWh且≥30%，必须相邻自然日且前日非零。节能率合计有效配对值后算，不平均百分比；没有目标不判断达标。
+- 对账：values 可含 date、rtu_code、name、poles、lamps、lamp_kwh、rtu_kwh、lamp_filter_applied、ledger_difference_kwh。当前台账关系未证实历史归属时 relationship_verified=false，不给已验证差额、比值或倒挂结论。
 
-business.md的原规则只用于核查逻辑，旧文件读取、shell、exec、脚本、附件及其他nanobot工具不视为本平台已配置能力；执行入口以本文件及SKILL.md为准。报告模板中的当前状态判法与本次历史证据有冲突时，以服务的明确缺口为准，不拿末态倒推过去。
+columns 使用上述 key 或查询明确返回的业务别名，label 必须是对用户有意义的业务名称，最多24列。values 值为字符串、数字、布尔或 null，不嵌套对象。
+
+可选 chart 为 {title,x_key,x_label,y:[{key,label,type:"number",unit}],rows:[真实聚合点],filter_key:日期列}。缺日期保留 null，不补零。
+
+可选 report 为 [{title,content}]，所有内容必须来自本次已查结果及明确缺口。单灯九章与 RTU 七章标题、业务规则见 business.md；没有查询依据就不生成假报告。
+
+## 交互与边界
+
+actions 使用唯一 ASCII id，可含 row_id、label、intent；支持 inspect_lamp、inspect_rtu_alarm、inspect_rtu、energy_view、retry 等宿主意图，切换能耗带 energy_view。只为真实存在且具备标识的行提供动作；当前台账未经历史核实不开放跨回路/上下游动作。行的 anchor/evidence_window 只填真实采样锚点和证据窗。
+
+点击动作后宿主从已保存的真实结果解析范围、设备和时间。再次加载安全 SQL 技能，基于这个上下文动态生成新的只读查询；不调用旧固定工具，不把夜间值挪作日报。清单搜索、排序、证据查看和 CSV 复用宿主已有组件，恢复卡片不重放查询。
+
+不执行控制、消警、复电、参数下发、派单；不伪造缺测、阈值、目标、相位映射、单位、保护动作和历史归属。默认不显示 SQL、内部表字段、地址、凭据或调试信息。business.md 中旧 nanobot 的 shell、exec、文件读取和附件能力不等于本平台已配置能力。

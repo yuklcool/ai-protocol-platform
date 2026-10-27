@@ -27,8 +27,8 @@ test("照明六场景真实协议闭环、追查权限、恢复与三档布局�
     await api(`/api/admin/mcp-servers/${mcp}`, "PUT", { url: "http://lighting-mcp:8090/mcp", transport: "http", enabled: true, description: "CI 合成照明 MCP,无生产访问" }); createdMcp = true;
     expect((await api(`/api/admin/mcp-servers/${mcp}/health`, "POST", {})).ok).toBe(true);
     const discovered = await api(`/api/admin/mcp-servers/${mcp}/discover`, "POST", {});
-    expect(discovered.tools.some(tool => tool.name === "query_lighting")).toBe(true);
-    const agent = { ...original.agent, model, skills: [], tools: [], mcpServers: [mcp], instructions: "使用已授权的 query_lighting 查询照明数据。结果与证据由工具给出,不猜测生产在线或保护定值。", interaction: { ...original.agent.interaction, a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true } };
+    expect(discovered.tools.some(tool => tool.name === "sql_query_readonly")).toBe(true);
+    const agent = { ...original.agent, model, skills: [], tools: [], mcpServers: [mcp], instructions: "使用已授权的 sql_query_readonly 查询照明数据。结果与证据由工具给出,不猜测生产在线或保护定值。", interaction: { ...original.agent.interaction, a2uiEnabled: true, allowSurfaceContextWrites: true, allowActionTriggeredRuns: true } };
     await api("/api/admin/platform-config", "PUT", { agent }); changedRoot = true;
     const page = await context.newPage(); page.setDefaultTimeout(30_000);
     page.on("pageerror", error => errors.push(error.message));
@@ -44,7 +44,7 @@ test("照明六场景真实协议闭环、追查权限、恢复与三档布局�
       const pending = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/api/agent/stream"));
       await composer.fill(`LIGHTING-${scene}-${tag}`); await composer.press("Enter");
       const stream = await pending; expect(stream.ok()).toBe(true);
-      const wire = await stream.text(); expect(wire).toContain("query_lighting"); expect(wire).toContain("A2UI_SURFACE"); expect(wire).toContain("RUN_FINISHED"); expect(wire).not.toMatch(/"type"\s*:\s*"RUN_ERROR"/);
+      const wire = await stream.text(); expect(wire).toContain("sql_query_readonly"); expect(wire).toContain("A2UI_SURFACE"); expect(wire).toContain("RUN_FINISHED"); expect(wire).not.toMatch(/"type"\s*:\s*"RUN_ERROR"/);
       await openResult();
       evidence.push({ scene, session, source: "deterministic model + real MCP fixture", emitted: true });
       return session;

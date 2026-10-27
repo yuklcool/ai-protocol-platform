@@ -1,7 +1,7 @@
 """Versioned, service-authored results for the six lighting query scenes.
 
-Only the authorized MCP query tool supplies these facts. The model selects
-queries, never supplies a result to a render tool. Missing evidence stays null.
+Facts come from SQL MCP results, after the safety Skill generates the query.
+The renderer never executes SQL or accepts a second model-authored result.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ Intent = Literal[
     "retry",
 ]
 Scalar = StrictStr | StrictInt | StrictFloat | StrictBool | None
-QUERY_TOOL = "query_lighting"
+QUERY_TOOL = "sql_query_readonly"
 ACTION_NAME = "run:lighting.query"
 TITLES = {
     "night": "整夜单灯运行",
