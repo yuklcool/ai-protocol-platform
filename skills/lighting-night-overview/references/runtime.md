@@ -10,6 +10,8 @@
 
 ## payload（展示元数据可用 SQL 常量，业务数值必须来自本次真实 SELECT）
 
+完整字段、必填项、枚举和嵌套结构以本技能 references/presentation.schema.json 为准，它直接来自平台现有 LightingResult。生成查询前核对该 Schema；不得新增字段、猜字段类型或用近义词替换枚举。列 columns[].type（包括 chart.y）只能是 text、number、time，布尔状态用 text；不能写 integer、numeric、boolean、datetime 等数据库类型。
+
 ```json
 {
   "schema_version":"lighting-query/v1",
