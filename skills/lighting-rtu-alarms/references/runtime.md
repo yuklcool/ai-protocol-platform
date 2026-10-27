@@ -45,6 +45,9 @@
 
 scene 为 night、lamp_alarms、rtu、rtu_alarms、energy、reconcile。energy 必须另带 energy_view=night/week/volatility/saving。night 使用实际照明夜间口径，daily 使用已完成自然日、report_type=D；week/saving严格7天，volatility严格30天。用户问其他范围则按实际问题查询，不能偷偷改成固定窗口；不符合固定视图时直接返回普通查询结果。
 
+
+证据缺口应按影响范围分别处理。检索资料不充分时先通过 sql_query_readonly 做必要的最小只读 Schema/字段注释核验，不得把“尚未查询”当成“数据库没有证据”。缺历史恢复流水只限制截止时点恢复结论，不阻断已有可信时间口径下的报警发生记录数、受影响对象和清单；history_complete=false、restored_at=null，并明确不能判断历史是否已恢复。查询当前未解除且不按发生时间过滤时，不因选填历史时间未核实而拒绝整个当前状态查询。历史时间筛选确实依赖未知业务时区时，向用户询问时区，不猜测、不把缺口冒充查询成功。
+
 ## 原型字段
 
 - 单灯运行：行带 lamp_id；values 按已取得事实提供 lamp_code、pole、road、rtu_code、status、alarms、minutes、actual_kwh、rated_power、previous_kwh、previous_minutes、matched。在线、开灯、故障和巡测覆盖分别表述；能耗首末累计差不足两点、复位或缺测为 null。

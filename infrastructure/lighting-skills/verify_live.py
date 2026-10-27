@@ -123,6 +123,7 @@ def main():
     start = (end - timedelta(days=1)).replace(hour=18)
     day_end = end.replace(hour=0)
     checks = []
+    failures = []
     night_queries = []
     cases = [
         ('night', '整夜单灯运行与巡测覆盖', start, end),
@@ -170,14 +171,21 @@ def main():
             category = str(exc)
             private_diagnostics(scene, events)
             # Assertion messages above are fixed categories, never database errors.
+            failures.append({'scene': scene, 'category': category})
             print(json.dumps({'scene': scene, 'passed': False, 'category': category}), flush=True)
-            raise SystemExit(1) from None
         except Exception:
             private_diagnostics(scene, events)
+            failures.append({'scene': scene, 'category': category})
             print(json.dumps({'scene': scene, 'passed': False, 'category': category}), flush=True)
-            raise SystemExit(1) from None
         finally:
             api('/api/sessions/' + session, 'DELETE')
+    if failures:
+        record.update(status='github-acceptance-failed', live_acceptance={
+            'status': 'failed', 'checks': checks, 'failures': failures,
+            'url': os.environ['GITHUB_SERVER_URL'] + '/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
+        })
+        record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2))
+        raise SystemExit(1)
     assert night_queries[0] != night_queries[1], 'different_dates_reused_fixed_sql'
     record.update(status='complete', query_mode='sql-safe-query', live_acceptance={
         'status': 'passed', 'checks': checks,
