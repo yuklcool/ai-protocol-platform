@@ -2,7 +2,7 @@
 
 ## 执行顺序
 
-1. 加载本业务技能和已绑定的 `sql-safe-query`。根据当前对话确认对象、指标、范围、时间、分组和追查意图；使用该技能的案例检索、Schema 核验和只读约束动态生成 SQL。
+1. 加载本业务技能和已绑定的 `sql-safe-query`。根据当前对话确认对象、指标、范围、时间、分组和追查意图；使用该技能的案例检索、Schema 核验和只读约束动态生成 SQL。案例查找按技能使用 find/read/grep，不使用 search；无可信案例再用 sql_retrieve_examples。
 2. SQL 的唯一执行工具是 `sql_query_readonly`。禁止调用 `query_lighting`，禁止使用固定场景服务替代安全 SQL 技能，不直连数据库，不使用 shell/exec，不执行设备控制。
 3. 只要数字或简单文字时直接执行紧凑聚合并回答。需要原型页面时，在本次动态 SQL 中将真实结果组织成下面的 JSON 对象，输出为唯一一行、唯一 `payload` 列，调用 `sql_query_readonly(sql=完整查询,max_rows=1,request_id=本次唯一标识)`。
 4. 平台从本次 SQL MCP 的成功回包自动生成六场景 A2UI 和 Workbench。无需也不得另调展示工具重填数值，不输出 A2UI JSON、HTML 或内部表字段。查询失败、截断或契约不完整不能视作正常或零报警。
