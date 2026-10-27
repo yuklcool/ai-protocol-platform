@@ -427,3 +427,26 @@ def test_plain_sql_and_schema_probes_do_not_open_lighting_tabs():
         state={"temp:_a2ui_tool_args": {"sql": "SELECT column_name FROM information_schema.columns"}}
     )
     assert lighting_to_a2ui({"ok": True, "rows": []}, plain) is None
+
+
+def test_repeated_followup_uses_the_triggered_surface_not_an_older_action():
+    from adk.a2ui_surface_context import render_instruction_with_a2ui_surface_context
+    from tests.fixtures.model_setup_probe import lighting_reply
+
+    current = {"source_query_id": "current", "intent": "energy_view", "energy_view": "volatility"}
+    old = {"source_query_id": "old", "intent": "energy_view", "energy_view": "week"}
+    prompt = render_instruction_with_a2ui_surface_context(
+        "Fixture instructions",
+        {
+            "a2ui_action_trigger": {"name": "run:lighting.query", "surfaceId": "lighting:current"},
+            "a2ui_surface_context.lighting:current.lastAction": {"context": current},
+            "a2ui_surface_context.lighting:old.lastAction": {"context": old},
+        },
+    )
+    assert "a2ui_surface_context.lighting:current.lastAction.context" in prompt
+    reply, _ = lighting_reply(
+        [{"role": "system", "content": prompt}, {"role": "user", "content": "run:lighting.query"}]
+    )
+    args = json.loads(reply["tool_calls"][0]["function"]["arguments"])
+    assert '"energy_view": "volatility"' in args["sql"]
+    assert '"source_query_id": "old"' not in args["sql"]

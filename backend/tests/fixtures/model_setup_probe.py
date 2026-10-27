@@ -31,14 +31,16 @@ def lighting_reply(messages):
         request = {"scene": "night", "fixture_status": scene}
     if action:
         for message in messages:
-            body = str(message.get("content", ""))
-            for match in re.finditer(r'"context"\s*:\s*', body):
-                try:
-                    context, _ = json.JSONDecoder().raw_decode(body[match.end() :])
-                except ValueError:
-                    continue
-                if isinstance(context, dict) and "source_query_id" in context:
-                    request = context
+            content = message.get("content", "")
+            body = content if isinstance(content, str) else "\n".join(item.get("text", "") for item in content)
+            reference = re.search(r"a2ui_surface_context\.(lighting:[\w-]+)\.lastAction\.context", body)
+            if not reference:
+                continue
+            entry = re.search(r"## " + re.escape(reference.group(1)) + r"\n", body)
+            if entry:
+                surface, _ = json.JSONDecoder().raw_decode(body[entry.end() :].lstrip())
+                request = surface["lastAction"]["context"]
+                break
     sql = "/* fixture:" + json.dumps(request) + " */ SELECT 'lighting-query/v1'"
     return {
         "role": "assistant",
