@@ -45,6 +45,7 @@ def main(commit, skills_commit):
     replacement = '''### 照明六场景原型技能
 
 所有照明业务查询先加载 sql-safe-query 和相关 lighting-* 技能，根据当前对话检索可信案例、核实口径、动态生成只读 SQL。案例查找只使用技能指定的 find/read/grep，不调用 search；无可信案例时用 sql_retrieve_examples。SQL 唯一执行入口是 sql_query_readonly，不调用 query_lighting 或固定场景查询服务。
+项目所有者已于 2026-10-27 明确确认：本照明库报警和巡测历史时间统一按 Asia/Shanghai 存储，不再重复询问。无时区历史字段显式 AT TIME ZONE 'Asia/Shanghai' 后展示；已带时区字段直接保留。该确认不替代历史恢复流水证据。
 原型结构严格遵循已加载技能 references/presentation.schema.json，列类型只能为 text/number/time，不写 integer/numeric/boolean/datetime。
 展示时间字段保留真实时区，generated_at 直接用 CURRENT_TIMESTAMP 写入 JSON，不用 AT TIME ZONE 后拼 OF 或 to_char 造偏移。
 历史 anchor/evidence.at 等必须带经可信资料确认的时区；无时区且口径未核实则置 null 并记 missing，不能猜测或隐式强转。lighting_presentation_error 表示页面校验失败，按字段错误修正动态 SQL 后重查，不另填事实。

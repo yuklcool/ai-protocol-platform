@@ -2,6 +2,15 @@
 
 load_skill 回包已经包含当前技能的 instructions 和 references，直接读取其中 runtime.md、business.md 和 presentation.schema.json。它们不是用户附件，不调用 read_attached_document；没有附件时不制造 doc_id，不调用无关工具。
 
+
+## 已确认的业务时间口径
+
+项目所有者于 2026-10-27 明确确认：本照明数据库的报警和巡测历史时间统一按北京时间（Asia/Shanghai）存储。这是本项目已确认的业务依据，不再要求用户重复确认；不能套用到其他系统。
+
+报警/巡测字段为 timestamp without time zone 时，动态 SQL 使用 `该字段 AT TIME ZONE 'Asia/Shanghai'` 得到真实 timestamptz 后再写入 anchor、evidence.at 等展示字段。按用户窗口过滤时，可将窗口显式转换为北京时间的 timestamp 与原字段比较，或将字段显式转换为带时区值再比较，优先采用可利用既有索引的写法。原字段已是 timestamptz 时直接保留，不再转成无时区值；D 日报业务日期仍是自然日，不对 date 字段制造时区偏移。generated_at 仍直接用 CURRENT_TIMESTAMP。
+
+时间口径已确认不等于历史恢复流水已确认：缺恢复流水仍用 history_complete=false、restored_at=null，照常查询报警发生事实，不能推断截止时点恢复状态。只读权限、检索和 Schema 核验规则保持适用。
+
 ## 执行顺序
 
 1. 加载本业务技能和已绑定的 `sql-safe-query`。根据当前对话确认对象、指标、范围、时间、分组和追查意图；使用该技能的案例检索、Schema 核验和只读约束动态生成 SQL。案例查找按技能使用 find/read/grep，不使用 search；无可信案例再用 sql_retrieve_examples。
