@@ -29,6 +29,19 @@ def lighting_reply(messages):
         request = {"scene": "energy", "energy_view": scene.removeprefix("energy_")}
     if scene in {"empty", "error"}:
         request = {"scene": "night", "fixture_status": scene}
+    if action:
+        for message in messages:
+            content = message.get("content", "")
+            body = content if isinstance(content, str) else "\n".join(item.get("text", "") for item in content)
+            reference = re.search(r"a2ui_surface_context\.(lighting:[\w-]+)\.lastAction\.context", body)
+            if not reference:
+                continue
+            entry = re.search(r"## " + re.escape(reference.group(1)) + r"\n", body)
+            if entry:
+                surface, _ = json.JSONDecoder().raw_decode(body[entry.end() :].lstrip())
+                request = surface["lastAction"]["context"]
+                break
+    sql = "/* fixture:" + json.dumps(request) + " */ SELECT 'lighting-query/v1'"
     return {
         "role": "assistant",
         "content": None,
@@ -36,7 +49,7 @@ def lighting_reply(messages):
             {
                 "id": "call_lighting",
                 "type": "function",
-                "function": {"name": "query_lighting", "arguments": json.dumps({"request": request})},
+                "function": {"name": "sql_query_readonly", "arguments": json.dumps({"sql": sql, "max_rows": 1})},
             }
         ],
     }, "tool_calls"

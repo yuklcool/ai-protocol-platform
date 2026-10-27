@@ -16,15 +16,22 @@ from tests.fixtures.lighting_results import fixture
 
 
 def root(result):
-    return lighting_to_a2ui(result, SimpleNamespace(state={"temp:_lighting_mcp_server": "lighting-mcp"}))[-1][
-        "updateDataModel"
-    ]["value"]
+    return lighting_to_a2ui(result, context())[-1]["updateDataModel"]["value"]
+
+
+def context():
+    return SimpleNamespace(
+        state={
+            "temp:_lighting_mcp_server": "lighting-mcp",
+            "temp:_a2ui_tool_args": {"sql": "SELECT 'lighting-query/v1'"},
+        }
+    )
 
 
 def saved(result):
     return {
-        "toolName": "query_lighting",
-        "messages": lighting_to_a2ui(result, SimpleNamespace(state={"temp:_lighting_mcp_server": "lighting-mcp"})),
+        "toolName": "sql_query_readonly",
+        "messages": lighting_to_a2ui(result, context()),
     }
 
 
@@ -196,14 +203,14 @@ def test_energy_views_require_complete_natural_day_ranges(view, days):
 @pytest.mark.parametrize("source_view", ["night", "week", "saving", "volatility"])
 @pytest.mark.parametrize("target_view", ["night", "week", "saving", "volatility"])
 def test_energy_switch_sends_a_valid_target_window_to_mcp(source_view, target_view):
-    from tests.fixtures.lighting_mcp import query_lighting
+    from tests.fixtures.lighting_mcp import result_for
 
     result = fixture("energy", source_view)
     request = resolve_saved_action(saved(result), {"actionId": f"energy-{target_view}"})["request"]
     assert request["scope"] == result["query"]["scope"]
     assert request["cutoff"] == result["query"]["cutoff"]
     assert request["source_query_id"] == result["query"]["id"]
-    returned = LightingResult.model_validate(query_lighting(request))
+    returned = LightingResult.model_validate(result_for(request))
     assert returned.energy_view == target_view
     assert returned.query.window.model_dump(mode="json") == request["window"]
     if source_view == target_view:
@@ -336,20 +343,26 @@ def test_main_callback_emits_and_stashes_only_a_tagged_mcp_result(monkeypatch):
     tracker = MagicMock()
     monkeypatch.setattr("observability.timing.get_current_tracker", lambda: tracker)
     payload = fixture(query_id="callback-result")
+    response = {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
     context = SimpleNamespace(state={}, invocation_id="fixture")
-    tool = SimpleNamespace(name="query_lighting", _aitana_mcp_server_id="lighting-mcp")
-    make_a2ui_result_emitter()(tool=tool, args={}, tool_context=context, tool_response={"structuredContent": payload})
+    tool = SimpleNamespace(name="sql_query_readonly", _aitana_mcp_server_id="lighting-mcp")
+    make_a2ui_result_emitter()(
+        tool=tool,
+        args={"sql": "SELECT 'lighting-query/v1'"},
+        tool_context=context,
+        tool_response={"structuredContent": {"result": response}},
+    )
     tracker.emit_a2ui_surface.assert_called_once()
     assert "a2ui_surface:lighting:callback-result" in context.state
     assert not any(key.startswith("app:") for key in context.state)
     other = SimpleNamespace(state={}, invocation_id="untrusted")
     make_a2ui_result_emitter()(
-        tool=SimpleNamespace(name="query_lighting"), args={}, tool_context=other, tool_response=payload
+        tool=SimpleNamespace(name="sql_query_readonly"), args={}, tool_context=other, tool_response=payload
     )
     assert not other.state
 
 
-def test_tool_boundary_overrides_forged_model_arguments_and_rejects_other_tools(monkeypatch):
+def test_followup_allows_dynamic_sql_only_on_the_original_source(monkeypatch):
     from unittest.mock import MagicMock
 
     from adk.callbacks import make_permission_enforcer
@@ -357,17 +370,83 @@ def test_tool_boundary_overrides_forged_model_arguments_and_rejects_other_tools(
 
     monkeypatch.setattr("auth.capability_access.mcp_call_allowed", lambda *_args: True)
     monkeypatch.setattr("observability.timing.get_current_tracker", lambda: MagicMock())
-    canonical = {"server_id": "lighting-mcp", "request": {"intent": "compare_circuit", "device": {"rtu_id": "RTU-017"}}}
+    canonical = {
+        "server_id": "lighting-mcp",
+        "request": {"intent": "compare_circuit", "device": {"rtu_id": "RTU-017"}},
+    }
     context = SimpleNamespace(
         state={"a2ui_action_trigger": {"name": "run:lighting.query"}, "lighting_query_action": canonical}
     )
     enforcer = make_permission_enforcer(
         "owner@example.com", "example.com", user=SimpleNamespace(uid="owner"), root_agent=True
     )
-    args = {"request": {"device": {"rtu_id": "FORGED"}}, "extra": "untrusted"}
-    enforcer(SimpleNamespace(name="query_lighting", _aitana_mcp_server_id="lighting-mcp"), args, context)
-    assert args == {"request": canonical["request"]}
+    args = {"sql": "SELECT 42 AS count", "max_rows": 1}
+    enforcer(SimpleNamespace(name="sql_query_readonly", _aitana_mcp_server_id="lighting-mcp"), args, context)
+    assert args == {"sql": "SELECT 42 AS count", "max_rows": 1}
+    enforcer(
+        SimpleNamespace(name="sql_retrieve_examples", _aitana_mcp_server_id="examples"), {"question": "RTU"}, context
+    )
     with pytest.raises(ToolPermissionDenied):
         enforcer(SimpleNamespace(name="control_device", _aitana_mcp_server_id="lighting-mcp"), {}, context)
     with pytest.raises(ToolPermissionDenied):
-        enforcer(SimpleNamespace(name="query_lighting", _aitana_mcp_server_id="different-source"), {}, context)
+        enforcer(SimpleNamespace(name="sql_query_readonly", _aitana_mcp_server_id="different-source"), {}, context)
+
+
+@pytest.mark.parametrize(
+    "wrap",
+    [
+        lambda payload: {"structuredContent": {"result": payload}},
+        lambda payload: {"content": [{"type": "text", "text": json.dumps(payload)}]},
+    ],
+)
+def test_dynamic_sql_payload_preserves_database_values(wrap):
+    payload = fixture()
+    response = {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
+    assert unwrap(wrap(response)) == payload
+    assert root(wrap(response))["query"]["id"] == payload["query"]["id"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"ok": False, "error": "private database error"},
+        {"ok": True, "meta": {"truncated": True}, "rows": [{"payload": fixture()}]},
+        {"ok": True, "meta": None, "rows": []},
+        {"ok": True, "meta": {"truncated": False}, "rows": []},
+    ],
+)
+def test_failed_or_incomplete_sql_never_becomes_lighting_facts(response):
+    value = root({"structuredContent": {"result": response}})
+    assert value["status"] == "error"
+    assert value["actions"] == []
+    assert "private database error" not in json.dumps(value)
+
+
+def test_plain_sql_and_schema_probes_do_not_open_lighting_tabs():
+    plain = SimpleNamespace(
+        state={"temp:_a2ui_tool_args": {"sql": "SELECT column_name FROM information_schema.columns"}}
+    )
+    assert lighting_to_a2ui({"ok": True, "rows": []}, plain) is None
+
+
+def test_repeated_followup_uses_the_triggered_surface_not_an_older_action():
+    from adk.a2ui_surface_context import render_instruction_with_a2ui_surface_context
+    from tests.fixtures.model_setup_probe import lighting_reply
+
+    current = {"source_query_id": "current", "intent": "energy_view", "energy_view": "volatility"}
+    old = {"source_query_id": "old", "intent": "energy_view", "energy_view": "week"}
+    prompt = render_instruction_with_a2ui_surface_context(
+        "Fixture instructions",
+        {
+            "a2ui_action_trigger": {"name": "run:lighting.query", "surfaceId": "lighting:current"},
+            "a2ui_surface_context.lighting:current.lastAction": {"context": current},
+            "a2ui_surface_context.lighting:old.lastAction": {"context": old},
+        },
+    )
+    assert "a2ui_surface_context.lighting:current.lastAction.context" in prompt
+    reply, _ = lighting_reply(
+        [{"role": "system", "content": prompt}, {"role": "user", "content": "run:lighting.query"}]
+    )
+    args = json.loads(reply["tool_calls"][0]["function"]["arguments"])
+    assert '"energy_view": "volatility"' in args["sql"]
+    assert '"source_query_id": "old"' not in args["sql"]
