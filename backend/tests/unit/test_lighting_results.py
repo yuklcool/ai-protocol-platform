@@ -429,6 +429,53 @@ def test_plain_sql_and_schema_probes_do_not_open_lighting_tabs():
     assert lighting_to_a2ui({"ok": True, "rows": []}, plain) is None
 
 
+@pytest.mark.asyncio
+async def test_model_receives_contract_errors_and_can_correct_the_dynamic_query(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from adk.callbacks import _handle_large_output, make_a2ui_result_emitter
+    from adk.mcp_observability import compose_after_tool_callbacks
+
+    tracker = MagicMock()
+    monkeypatch.setattr("observability.timing.get_current_tracker", lambda: tracker)
+    callback = compose_after_tool_callbacks(_handle_large_output, make_a2ui_result_emitter())
+    tool = SimpleNamespace(name="sql_query_readonly", _aitana_mcp_server_id="lighting-mcp")
+    ctx = SimpleNamespace(state={}, invocation_id="contract-repair")
+    payload = fixture()
+    payload["rows"][0]["anchor"] = "2026-10-25T22:00:00"
+    response = {
+        "structuredContent": {
+            "result": {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
+        }
+    }
+    args = {"sql": "SELECT 'lighting-query/v1'"}
+    rewritten = await callback(tool=tool, args=args, tool_context=ctx, tool_response=response)
+    assert rewritten["result"] is response
+    feedback = rewritten["lighting_presentation_error"]
+    assert feedback["errors"][0]["loc"] == ("rows", 0, "anchor")
+    assert feedback["errors"][0]["type"] == "timezone_aware"
+    assert "2026-10-25" not in json.dumps(feedback)
+    assert all("input" not in error and "ctx" not in error for error in feedback["errors"])
+    assert tracker.emit_a2ui_surface.call_args.args[1][-1]["updateDataModel"]["value"]["status"] == "error"
+    # The querying model corrects its SQL; the callback never invents a timezone.
+    payload["rows"][0]["anchor"] = "2026-10-25T22:00:00+08:00"
+    corrected = await callback(tool=tool, args=args, tool_context=ctx, tool_response=response)
+    assert corrected is response
+    assert tracker.emit_a2ui_surface.call_args.args[1][-1]["updateDataModel"]["value"]["status"] != "error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tagged,sql", [(False, "SELECT 'lighting-query/v1'"), (True, "SELECT 1")])
+async def test_feedback_never_changes_ordinary_sql_or_untrusted_tools(tagged, sql):
+    from adk.callbacks import _handle_large_output
+
+    tool = SimpleNamespace(name="sql_query_readonly")
+    if tagged:
+        tool._aitana_mcp_server_id = "lighting-mcp"
+    response = {"ok": True, "rows": []}
+    assert await _handle_large_output(tool, {"sql": sql}, SimpleNamespace(state={}), response) is response
+
+
 def test_repeated_followup_uses_the_triggered_surface_not_an_older_action():
     from adk.a2ui_surface_context import render_instruction_with_a2ui_surface_context
     from tests.fixtures.model_setup_probe import lighting_reply
