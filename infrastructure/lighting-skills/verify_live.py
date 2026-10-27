@@ -83,6 +83,14 @@ def inspect(events, expected_scene, skills, *, followup=False):
     return surface, root, sql_calls
 
 
+def private_diagnostics(scene, events):
+    directory = Path(__file__).parent / '_diagnostics'
+    directory.mkdir(mode=0o700, exist_ok=True)
+    target = directory / (scene + '.json')
+    target.touch(mode=0o600)
+    target.write_text(json.dumps(events, ensure_ascii=False))
+
+
 def main():
     global token, installed
     record_path = ROOT / 'lighting-a2ui-deployment.json'
@@ -128,6 +136,8 @@ def main():
     for scene, goal, window_start, window_end in cases:
         session = 'lighting-acceptance-' + uuid.uuid4().hex
         category = 'agent_request_failed'
+        events = []
+        print(json.dumps({'scene': scene, 'status': 'running'}), flush=True)
         try:
             api('/api/sessions/' + session + '/bootstrap', 'POST', {'skill_id': 'root-agent', 'document_ids': []})
             prompt = (f'查询全系统{goal}，时间严格为{window_start.isoformat()}至{window_end.isoformat()}。'
@@ -158,10 +168,12 @@ def main():
             print(json.dumps(checks[-1]), flush=True)
         except AssertionError as exc:
             category = str(exc)
+            private_diagnostics(scene, events)
             # Assertion messages above are fixed categories, never database errors.
             print(json.dumps({'scene': scene, 'passed': False, 'category': category}), flush=True)
             raise SystemExit(1) from None
         except Exception:
+            private_diagnostics(scene, events)
             print(json.dumps({'scene': scene, 'passed': False, 'category': category}), flush=True)
             raise SystemExit(1) from None
         finally:

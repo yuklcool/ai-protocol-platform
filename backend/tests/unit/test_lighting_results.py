@@ -343,17 +343,14 @@ def test_main_callback_emits_and_stashes_only_a_tagged_mcp_result(monkeypatch):
     tracker = MagicMock()
     monkeypatch.setattr("observability.timing.get_current_tracker", lambda: tracker)
     payload = fixture(query_id="callback-result")
+    response = {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
     context = SimpleNamespace(state={}, invocation_id="fixture")
     tool = SimpleNamespace(name="sql_query_readonly", _aitana_mcp_server_id="lighting-mcp")
     make_a2ui_result_emitter()(
         tool=tool,
         args={"sql": "SELECT 'lighting-query/v1'"},
         tool_context=context,
-        tool_response={
-            "structuredContent": {
-                "result": {"ok": True, "meta": {"truncated": False}, "rows": [{"payload": payload}]}
-            }
-        },
+        tool_response={"structuredContent": {"result": response}},
     )
     tracker.emit_a2ui_surface.assert_called_once()
     assert "a2ui_surface:lighting:callback-result" in context.state
