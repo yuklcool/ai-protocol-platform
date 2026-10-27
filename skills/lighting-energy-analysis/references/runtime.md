@@ -33,6 +33,9 @@
 
 这只是字段说明，不能执行或照抄其中占位符/示例行。实际 SQL 根据安全查询技能检索到的可信 Schema 和当前问题生成；不在程序中预写业务 SQL。可用 PostgreSQL `json_build_object`、`row_to_json`、`json_agg` 组织已查询事实。明细显式 LIMIT，范围总量和指标独立聚合，不能从截断明细外推；不要把所有历史数据和无关关联塞进一条扫描。SQL 本身必须含字面量 `lighting-query/v1`，健康检查和结构核验不加此展示契约。
 
+
+时间字段必须由 PostgreSQL 带时区类型直接写入 JSON：generated_at 使用 CURRENT_TIMESTAMP，窗口与截止值使用明确的 timestamptz。不要先 AT TIME ZONE 转成无时区时间再用 OF 格式化，也不要用 to_char 生成偏移只有 +00/+08 的时间字符串；这既可能丢失真实偏移，也不符合 RFC 3339。不要由模型手填数据库当前时间。
+
 `row_count` 是实际查询范围总量，必须≥返回行数；只有已确认总量等于返回行数时 complete=true。零记录用 empty 且 complete=true；非空但证据不足用 partial。不能为了通过契约编造数字或缺口。未查询到的指标用 null，业务字段只给实际查到的列。
 
 scene 为 night、lamp_alarms、rtu、rtu_alarms、energy、reconcile。energy 必须另带 energy_view=night/week/volatility/saving。night 使用实际照明夜间口径，daily 使用已完成自然日、report_type=D；week/saving严格7天，volatility严格30天。用户问其他范围则按实际问题查询，不能偷偷改成固定窗口；不符合固定视图时直接返回普通查询结果。
