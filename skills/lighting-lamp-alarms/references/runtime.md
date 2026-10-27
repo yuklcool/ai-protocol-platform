@@ -37,6 +37,9 @@
 
 
 时间字段必须由 PostgreSQL 带时区类型直接写入 JSON：generated_at 使用 CURRENT_TIMESTAMP，窗口与截止值使用明确的 timestamptz。不要先 AT TIME ZONE 转成无时区时间再用 OF 格式化，也不要用 to_char 生成偏移只有 +00/+08 的时间字符串；这既可能丢失真实偏移，也不符合 RFC 3339。不要由模型手填数据库当前时间。
+所有嵌套时间也遵循该规则，包括 rows[].anchor、evidence[].at、evidence_window 和 RTU 能耗窗口。数据库 timestamp without time zone 不能直接写到这些字段，也不能依赖会话默认时区或直接 ::timestamptz 强转。先按安全 SQL 技能核实字段的业务时区：只有可信资料确认后，才能以该已确认时区将原始 timestamp 转成 timestamptz；不能从 query.timezone 反推历史字段时区。无法确认时，选填时间置 null，在对应 missing 中说明“历史时间时区未核实”，保留可确认事实，不开放依赖该时间的追查动作。
+
+若工具回包附带 lighting_presentation_error，代表 SQL 执行结果保留但原型校验失败。读取 errors 中的字段路径和错误类型，对照本技能 Schema 修正动态 SQL后通过 sql_query_readonly 重查；不要声称页面已成功展示，不手填另一份数据，不移除证据来掩盖错误。必要资料不足时明确保留缺口或向用户澄清。
 
 `row_count` 是实际查询范围总量，必须≥返回行数；只有已确认总量等于返回行数时 complete=true。零记录用 empty 且 complete=true；非空但证据不足用 partial。不能为了通过契约编造数字或缺口。未查询到的指标用 null，业务字段只给实际查到的列。
 

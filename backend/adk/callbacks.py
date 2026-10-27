@@ -708,6 +708,15 @@ async def _handle_large_output(
     so making this async + awaiting the save is the fix.
     """
     tool_name = getattr(tool, "name", "tool")
+    if tool_name == "sql_query_readonly" and "lighting-query/v1" in str(args.get("sql", "")):
+        from adk.a2ui_lighting_render import presentation_feedback
+        from tools.mcp.registry import SERVER_ID_ATTR
+
+        if getattr(tool, SERVER_ID_ATTR, None):
+            feedback = presentation_feedback(tool_response)
+            if feedback is not None:
+                # Preserve the SQL response; only add validation feedback for self-correction.
+                return {"result": tool_response, "lighting_presentation_error": feedback}
     # Tools whose result IS a UI render payload must NOT be offloaded: the
     # server-side result→A2UI transform (or the legacy frontend workbench) reads
     # the typed JSON to draw the surface, so replacing the body with an artifact

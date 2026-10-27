@@ -38,7 +38,7 @@ def unwrap(result: Any) -> dict:
                 result = rows[0].get("payload")
             elif "structuredContent" in result and result["structuredContent"] is not None:
                 result = result["structuredContent"]
-            elif set(result) == {"result"}:
+            elif set(result) in ({"result"}, {"result", "lighting_presentation_error"}):
                 result = result["result"]
             elif isinstance(result.get("content"), list):
                 texts = [
@@ -54,6 +54,29 @@ def unwrap(result: Any) -> dict:
         else:
             break
     raise ValueError("查询结果不符合 lighting-query/v1,不能据此判断正常。")
+
+
+def presentation_feedback(result: Any) -> dict | None:
+    """Report contract failures to the querying model without echoing input values."""
+    try:
+        if len(json.dumps(result, ensure_ascii=False)) > 2_000_000:
+            raise ValueError("lighting result exceeds the bounded UI payload")
+        normalize(LightingResult.model_validate(unwrap(result)))
+    except ValidationError as exc:
+        return {
+            "errors": exc.errors(include_input=False, include_context=False, include_url=False)[:20],
+            "instruction": (
+                "SQL 已返回,但照明原型契约校验失败,页面尚未成功展示。"
+                "按已加载技能 presentation.schema.json 和 runtime.md 修正本次动态 SQL,"
+                "仅通过 sql_query_readonly 重查;不得修改业务事实、猜时区或编造缺失值。"
+            ),
+        }
+    except (ValueError, TypeError, KeyError):
+        return {
+            "errors": [{"type": "invalid_presentation_payload"}],
+            "instruction": "照明原型尚未成功展示。检查原始 SQL 回包、截断状态和唯一 payload,按安全 SQL 技能修正查询。",
+        }
+    return None
 
 
 def _root(result: Any, tool_context: Any = None) -> dict:
