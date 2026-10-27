@@ -48,5 +48,5 @@ def test_all_six_skills_use_the_existing_safety_skill():
         runtime = (source.parent / 'references/runtime.md').read_text()
         assert 'sql-safe-query' in instructions
         assert 'sql_query_readonly' in instructions
-        assert 'lighting-query/v1' in instructions
+        assert 'lighting-query/v1' in runtime
         assert 'payload' in runtime and 'max_rows=1' in runtime

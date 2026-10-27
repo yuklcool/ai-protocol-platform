@@ -31,7 +31,7 @@ def result_for(request: dict) -> dict:
 
 
 @server.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
-def sql_query_readonly(sql: str, max_rows: int = 1, request_id: str = None) -> dict:
+def sql_query_readonly(sql: str, max_rows: int = 1, request_id: str | None = None) -> dict:
     """CI SQL boundary; metadata chooses synthetic evidence, never a business DB."""
     match = re.search(r"/\* fixture:(.*?) \*/", sql)
     if not match or "lighting-query/v1" not in sql or max_rows != 1:
