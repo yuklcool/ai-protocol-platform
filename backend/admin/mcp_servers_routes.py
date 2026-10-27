@@ -38,6 +38,7 @@ class McpServerWrite(BaseModel):
         description="Write-only upstream headers. Values may use ${ENV_VAR} secret references.",
     )
     description: str = ""
+    allowedUserIds: list[str] | None = Field(default=None, max_length=100)
 
 
 class McpServerView(BaseModel):
@@ -48,6 +49,7 @@ class McpServerView(BaseModel):
     description: str = ""
     header_names: list[str] = []
     has_credentials: bool = False
+    allowedUserIds: list[str] = []
 
 
 class McpHealthView(BaseModel):
@@ -107,6 +109,7 @@ def _to_view(server_id: str, data: dict[str, Any]) -> McpServerView:
         description=str(data.get("description") or ""),
         header_names=sorted(str(k) for k in headers),
         has_credentials=bool(headers),
+        allowedUserIds=data.get("allowedUserIds") or [],
     )
 
 
@@ -196,6 +199,10 @@ def upsert_mcp_server(server_id: str, body: McpServerWrite, scope: Scope) -> Mcp
         "enabled": body.enabled,
         "description": body.description.strip(),
     }
+    if body.allowedUserIds is not None:
+        data["allowedUserIds"] = list(dict.fromkeys(body.allowedUserIds))
+    elif before is not None and before.get("allowedUserIds"):
+        data["allowedUserIds"] = list(before["allowedUserIds"])
     if body.headers is not None:
         data["headers"] = {str(k).strip(): str(v) for k, v in body.headers.items() if str(k).strip()}
     elif before is not None and isinstance(before.get("headers"), dict):

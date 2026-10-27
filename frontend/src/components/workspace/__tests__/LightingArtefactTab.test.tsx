@@ -19,6 +19,13 @@ function fixture(): LightingRoot {
 beforeEach(() => { root = fixture(); replayed = false; vi.clearAllMocks(); trigger.mockResolvedValue(undefined); });
 
 describe("照明宿主视图", () => {
+  it("历史恢复状态未知时默认显示证据不足记录", () => {
+    root.scene = "lamp_alarms";
+    root.rows.forEach(row => { row.values.status_at_cutoff = "证据不足"; });
+    render(<LightingArtefactTab surfaceId="lighting:q1" sessionId="s1" skillId="root-agent" />);
+    expect(screen.getAllByTestId("lighting-row")).toHaveLength(2);
+    expect(screen.getByLabelText("筛选状态")).toHaveValue("all");
+  });
   it("RTU 运行筛选使用表格的运行状态,不混用同一行的报警解除状态", () => {
     root.scene = "rtu";
     root.columns = [{ key: "rtu_id", label: "RTU" }, { key: "status", label: "判定时点状态" }];
