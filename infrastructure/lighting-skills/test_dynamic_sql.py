@@ -9,6 +9,7 @@ import asyncpg
 import pytest
 
 from adk.a2ui_lighting_render import lighting_to_a2ui
+from lighting.results import LightingResult
 from tests.fixtures.lighting_results import fixture
 
 
@@ -46,6 +47,8 @@ def test_all_six_skills_use_the_existing_safety_skill():
     for source in sources:
         instructions = source.read_text()
         runtime = (source.parent / 'references/runtime.md').read_text()
+        schema = json.loads((source.parent / 'references/presentation.schema.json').read_text())
+        assert schema == LightingResult.model_json_schema()
         assert 'sql-safe-query' in instructions
         assert 'sql_query_readonly' in instructions
         assert 'lighting-query/v1' in runtime
