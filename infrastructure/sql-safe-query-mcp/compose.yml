@@ -1,0 +1,35 @@
+name: aip-sql-safe-query
+
+services:
+  sql-safe-query-mcp:
+    image: "${SQL_SKILL_RUNTIME_IMAGE:-ghcr.io/yuklcool/ai-protocol-platform-backend:v2.4.3}"
+    pull_policy: missing
+    command: ["/app/.venv/bin/python", "/adapter/serve.py"]
+    user: "65534:65534"
+    environment:
+      PYTHONPATH: /skill-dependencies
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./serve.py:/adapter/serve.py:ro
+      - ./dependencies:/skill-dependencies:ro
+      - ../../skills/sql-safe-query:/skill:ro
+    networks: [platform]
+    read_only: true
+    tmpfs:
+      - /tmp:size=67108864,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8011/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+networks:
+  platform:
+    external: true
+    name: ai-protocol-platform
