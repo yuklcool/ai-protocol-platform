@@ -1,5 +1,7 @@
 # 查询与原型展示契约
 
+load_skill 回包已经包含当前技能的 instructions 和 references，直接读取其中 runtime.md、business.md 和 presentation.schema.json。它们不是用户附件，不调用 read_attached_document；没有附件时不制造 doc_id，不调用无关工具。
+
 ## 执行顺序
 
 1. 加载本业务技能和已绑定的 `sql-safe-query`。根据当前对话确认对象、指标、范围、时间、分组和追查意图；使用该技能的案例检索、Schema 核验和只读约束动态生成 SQL。案例查找按技能使用 find/read/grep，不使用 search；无可信案例再用 sql_retrieve_examples。
@@ -47,6 +49,10 @@ scene 为 night、lamp_alarms、rtu、rtu_alarms、energy、reconcile。energy �
 
 
 证据缺口应按影响范围分别处理。检索资料不充分时先通过 sql_query_readonly 做必要的最小只读 Schema/字段注释核验，不得把“尚未查询”当成“数据库没有证据”。缺历史恢复流水只限制截止时点恢复结论，不阻断已有可信时间口径下的报警发生记录数、受影响对象和清单；history_complete=false、restored_at=null，并明确不能判断历史是否已恢复。查询当前未解除且不按发生时间过滤时，不因选填历史时间未核实而拒绝整个当前状态查询。历史时间筛选确实依赖未知业务时区时，向用户询问时区，不猜测、不把缺口冒充查询成功。
+
+`complete` 仅表示当前 rows 清单是否完整返回，不表示日期覆盖、数据质量、日报完整或聚合是否完成。row_count 按清单同一粒度在 LIMIT 之前计数，不是底层原始记录数；只返回 5 行而范围共有 7 行时，必须 row_count=7、complete=false，即使趋势图含全部7天、指标已汇总全范围。日期覆盖和证据质量写在 coverage/missing 中。校验提示 row coverage is inconsistent 时，核对真实总量与清单长度，修正 complete；不能改掉真实总量、增补假行或丢弃有效证据。
+
+PostgreSQL 明细先在独立 SELECT 中 ORDER BY 并 LIMIT，再由外层 json_agg/jsonb_agg 聚合该子查询；LIMIT 不写进聚合函数的 ORDER BY。rows 是 JSON 属性名，不把未加引号的 rows 用作 SQL 别名。复杂查询按事实聚合、受限明细、JSON 组装分 CTE，优先复用检索中验证过的结构；语法失败时先读 SQL 原始错误并修正对应位置，不用健康检查代替语法修复，也不反复原样执行。
 
 ## 原型字段
 
